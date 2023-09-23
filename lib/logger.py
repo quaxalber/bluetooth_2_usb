@@ -1,19 +1,19 @@
 import logging
 
+_logger = logging.getLogger('bluetooth_2_usb')
+_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%y-%m-%d %H:%M:%S')
+
 def get_logger() -> logging.Logger:
-    logger = logging.getLogger('bluetooth_2_usb')
+    if not _logger.handlers:
+        _logger.setLevel(logging.INFO)
 
-    if not logger.handlers:
-        logger.setLevel(logging.INFO)
-
-        file_handler = logging.FileHandler('/var/log/bluetooth_2_usb/bluetooth_2_usb.log')
         stdout_handler = logging.StreamHandler()
+        stdout_handler.setFormatter(_formatter)
+        _logger.addHandler(stdout_handler)
 
-        formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%y-%m-%d %H:%M:%S')
-        file_handler.setFormatter(formatter)
-        stdout_handler.setFormatter(formatter)
+    return _logger
 
-        logger.addHandler(file_handler)
-        logger.addHandler(stdout_handler)
-
-    return logger
+def add_file_handler(log_path: str):
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setFormatter(_formatter)
+    _logger.addHandler(file_handler)

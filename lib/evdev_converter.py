@@ -1,8 +1,7 @@
 from evdev import ecodes
-from adafruit_hid.keycode import Keycode
-from adafruit_hid.mouse import Mouse
 
 import lib.logger
+from lib.constants import Keycode, MouseButton
 
 logger = lib.logger.get_logger()
 
@@ -165,17 +164,17 @@ _EVDEV_TO_HID_MAPPING  = {
     ecodes.KEY_SLEEP: 0xF8,
     ecodes.KEY_REFRESH: 0xFA,
     ecodes.KEY_CALC: 0xFB,
-    ecodes.BTN_LEFT: Mouse.LEFT_BUTTON,
-    ecodes.BTN_RIGHT: Mouse.RIGHT_BUTTON,
-    ecodes.BTN_MIDDLE: Mouse.MIDDLE_BUTTON,    
+    ecodes.BTN_LEFT: MouseButton.LEFT,
+    ecodes.BTN_RIGHT: MouseButton.RIGHT,
+    ecodes.BTN_MIDDLE: MouseButton.MIDDLE,    
 }
-"""
+'''
 Mapping from evdev ecode to HID Keycode
-"""
+'''
 
 def to_hid_key(ecode : int) -> int:
     hid_key = _EVDEV_TO_HID_MAPPING.get(ecode, None)
-    logger.debug(f"Converted ecode {ecode} to HID keycode {hid_key}")
+    logger.debug(f'Converted ecode {ecode} to HID keycode {hid_key}')
     if hid_key is None:
-        logger.warning(f"Unsupported key pressed: {ecode}")
+        logger.warning(f'Unsupported key pressed: {ecode}')
     return hid_key

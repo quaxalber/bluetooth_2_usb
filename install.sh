@@ -21,17 +21,11 @@ append_if_not_exist() {
   fi
 }
 
-# Check if pip3 is installed, if not, install it
-if ! command -v pip3 &> /dev/null; then
-    apt-get update
-    apt-get install -y python3-pip
-fi
-
 append_if_not_exist "dtoverlay=dwc2" "/boot/config.txt"
 append_if_not_exist "dwc2" "/etc/modules"
 append_if_not_exist "libcomposite" "/etc/modules"
 
-pip3 install evdev adafruit-circuitpython-hid
+pip3.11 install evdev
 
 currentScriptDirectory=$(dirname $(readlink -f $0))
 
