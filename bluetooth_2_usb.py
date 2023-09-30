@@ -35,12 +35,12 @@ class ComboDeviceHidProxy:
 
     def __init__(
         self,
-        keyboard_path: Optional[str] = None,
-        mouse_path: Optional[str] = None,
+        keyboard_paths: Optional[List[str]] = None,
+        mouse_paths: Optional[List[str]] = None,
         is_sandbox: Optional[bool] = False,
     ) -> None:
         self._init_variables()
-        self._init_devices(keyboard_path, mouse_path, is_sandbox)
+        self._init_devices(keyboard_paths, mouse_paths, is_sandbox)
 
     def _init_variables(self) -> None:
         # Device links, that have been registered to this instance, but not
@@ -51,11 +51,11 @@ class ComboDeviceHidProxy:
         self._task_group = None
 
     def _init_devices(
-        self, keyboard_path: str, mouse_path: str, is_sandbox: bool
+        self, keyboard_paths: List[str], mouse_paths: List[str], is_sandbox: bool
     ) -> None:
         try:
             self.enable_usb_gadgets()
-            self._create_and_register_links(keyboard_path, mouse_path)
+            self._create_and_register_links(keyboard_paths, mouse_paths)
             self.enable_sandbox(is_sandbox)
             self._log_registered_links()
         except Exception as e:
@@ -89,10 +89,13 @@ class ComboDeviceHidProxy:
         else:
             logger.warning(f"All output devices disabled!")
 
-    def _create_and_register_links(self, keyboard_path: str, mouse_path: str) -> None:
-        mouse = self.create_mouse_link(mouse_path)
-        keyboard = self.create_keyboard_link(keyboard_path)
-        self.register_device_links(mouse, keyboard)
+    def _create_and_register_links(
+        self, keyboard_paths: List[str], mouse_paths: List[str]
+    ) -> None:
+        keyboards = [self.create_keyboard_link(path) for path in keyboard_paths]
+        mice = [self.create_mouse_link(path) for path in mouse_paths]
+        # Use list unpacking to get a nice comma-separated sequence of all devices
+        self.register_device_links(*keyboards, *mice)
 
     def register_device_links(self, *device_links: DeviceLink) -> None:
         for link in device_links:
@@ -102,11 +105,11 @@ class ComboDeviceHidProxy:
         if link and link not in self._registered_links:
             self._registered_links.append(link)
 
-    def create_mouse_link(self, mouse_path: str) -> DeviceLink:
-        return self._create_device_link(mouse_path, MouseGadget())
-
     def create_keyboard_link(self, keyboard_path: str) -> DeviceLink:
         return self._create_device_link(keyboard_path, KeyboardGadget())
+
+    def create_mouse_link(self, mouse_path: str) -> DeviceLink:
+        return self._create_device_link(mouse_path, MouseGadget())
 
     def _create_device_link(
         self, device_in_path: str, device_out: GadgetDevice
@@ -145,15 +148,10 @@ class ComboDeviceHidProxy:
             logger.debug(f"Registered device link: {link}")
 
     async def async_connect_registered_links(self) -> NoReturn:
-        while True:
-            await self._async_create_task_group()
-            logger.critical("Event loop closed. Trying to restart.")
-            await asyncio.sleep(5)
-
-    async def _async_create_task_group(self) -> None:
         try:
             async with TaskGroup() as self._task_group:
                 self._connect_device_links(self._registered_links)
+            logger.critical("Event loop closed.")
         except* Exception as e:
             logger.error(f"Error(s) in TaskGroup: [{e.exceptions}]")
 
@@ -311,18 +309,22 @@ def _parse_args() -> Namespace:
     )
 
     parser.add_argument(
-        "--keyboard",
+        "--keyboards",
         "-k",
-        type=str,
+        type=lambda input: [item.strip() for item in input.split(",")],
         default=None,
-        help="Input device path for keyboard. Default is None.",
+        help="Comma-separated list of input device paths for keyboards to be registered and connected. \
+          Default is None. \
+          Example: --keyboards /dev/input/event2,/dev/input/event4",
     )
     parser.add_argument(
-        "--mouse",
+        "--mice",
         "-m",
-        type=str,
+        type=lambda input: [item.strip() for item in input.split(",")],
         default=None,
-        help="Input device path for mouse. Default is None.",
+        help="Comma-separated list of input device paths for mice to be registered and connected. \
+          Default is None. \
+          Example: --mice /dev/input/event3,/dev/input/event5",
     )
     parser.add_argument(
         "--sandbox",
@@ -368,13 +370,13 @@ signal.signal(signal.SIGTERM, _signal_handler)
 
 async def _main(args: Namespace) -> NoReturn:
     """
-    Run the main event loop to read events from the input device 
+    Run the main event loop to read events from the input device
     and forward them to the corresponding USB device.
 
     Parameters:
         args (Namespace): Command-line arguments.
     """
-    proxy = ComboDeviceHidProxy(args.keyboard, args.mouse, args.sandbox)
+    proxy = ComboDeviceHidProxy(args.keyboards, args.mice, args.sandbox)
     await proxy.async_connect_registered_links()
 
 

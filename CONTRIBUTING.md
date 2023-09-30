@@ -75,9 +75,9 @@ This will automatically reformat your code to conform to the project's coding st
 ## 4. Pull Requests
 
 - Create a new branch for each feature or bugfix you are working on.
-- Commit your changes following the [coding style](#3-coding-style) guidelines.
+- Commit your changes following the [coding style](#3-coding-style) guidelines. Add concise commit messages. 
 - Push your changes to your fork.
-- Create a new Pull Request targeting the main branch of the official repository.
+- Create a new Pull Request targeting the main branch of the official repository. A short description helps the maintainers reviewing the changes. 
 
 ## 5. Reporting Issues
 
