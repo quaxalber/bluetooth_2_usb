@@ -79,7 +79,7 @@ sed -i 's/modules-load=[^[:space:]]* //g' /boot/cmdline.txt || abort_install "Fa
 sed -i 's/rootwait/rootwait modules-load=dwc2/g' /boot/cmdline.txt || abort_install "Failed writing to /boot/cmdline.txt."
 
 chmod 744 "$baseDirectory/bluetooth_2_usb.py" || abort_install "Failed making script executable."
-ln -s "$baseDirectory/bluetooth_2_usb.py /usr/bin/" || colored_output ${RED} "Failed creating symlink."
+ln -s "$baseDirectory/bluetooth_2_usb.py" /usr/bin/ || colored_output ${RED} "Failed creating symlink."
 ln -s "$baseDirectory/bluetooth_2_usb.service" /etc/systemd/system/ || colored_output ${RED} "Failed creating symlink."
 
 # The expression ${baseDirectory//\//\\/} is used to replace all occurrences of slashes (/) in the variable baseDirectory with escaped slashes (\/)
