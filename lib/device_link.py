@@ -49,19 +49,14 @@ class DummyGadget:
 class DeviceLink:
     def __init__(
         self,
-        input_device: InputDevice,
+        input_device_path: str,
         keyboard_gadget: Keyboard = None,
         mouse_gadget: Mouse = None,
         consumer_gadget: ConsumerControl = None,
     ):
         self._input_device = None
-        self._input_device_name = None
-        self._input_device_path = None
-
-        if input_device:
-            self._input_device = input_device
-            self._input_device_name = input_device.name
-            self._input_device_path = input_device.path
+        self._input_device_name = f"[Disconnected] {input_device_path}"
+        self._input_device_path = input_device_path
 
         self._keyboard_gadget = keyboard_gadget
         self._mouse_gadget = mouse_gadget
@@ -84,18 +79,38 @@ class DeviceLink:
         return f"[{self._input_device_name}]>>[{'+'.join(active_gadgets_str)}]"
 
     @property
+    def input_device_connected(self) -> bool:
+        return not (self._input_device is None)
+    
+    @property
     def input_device(self) -> InputDevice:
         return self._input_device
 
+    @property
+    def path(self) -> str:
+        return self._input_device_path
+
+    @property
+    def name(self) -> str:
+        return self._input_device_name
+
+    def reset_input_device(self) -> None:
+        self._input_device = None
+        self._input_device_name = f"[Disconnected] {self._input_device_path}"
+        self._input_device = InputDevice(self._input_device_path)
+        self._input_device_name = self._input_device.name
+
     async def async_reset_input_device(self) -> None:
         self._input_device = None
+        self._input_device_name = f"[Disconnected] {self._input_device_path}"
         while True:
             try:
                 self._input_device = InputDevice(self._input_device_path)
+                self._input_device_name = self._input_device.name
                 break
             except Exception:
                 _logger.exception(f"Error resetting input {self._input_device_path}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(1)
 
     @property
     def keyboard_gadget(self) -> Keyboard | DummyGadget | None:
