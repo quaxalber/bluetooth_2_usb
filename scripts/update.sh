@@ -39,20 +39,10 @@ base_directory=$(dirname "${scripts_directory}")
 cd "${base_directory}"
 
 colored_output "${GREEN}" "Fetching updates from GitHub..."
-
 remote_name="origin"
 current_branch=$(git symbolic-ref --short HEAD || abort_update "Failed retrieving currently checked out branch.")
-
-# Force Git to use English for its messages, regardless of the user's language settings.
-user_lang=$LANG
-export LANG=C
-
 # Fetch the latest changes from the remote
-{ git fetch ${remote_name} || colored_output "${RED}" "Failed fetching changes from ${remote_name}." ; } | tee .tmpfile
-fetch_output=$(<.tmpfile)
-rm .tmpfile
-
-export LANG=${user_lang}
+git fetch ${remote_name} || colored_output "${RED}" "Failed fetching changes from ${remote_name}." ; 
 
 # Compare the local branch with the remote branch
 if [ $(git rev-parse HEAD) != $(git rev-parse ${remote_name}/${current_branch}) ]; then
@@ -66,15 +56,21 @@ git stash || abort_update "Failed stashing local changes."
 git merge || abort_update "Failed merging changes from ${remote_name}."
 git stash pop --index || abort_update "Failed applying local changes from stash."
 
-# Check if there are changes in any submodule 
-if echo "${fetch_output}" | grep -q "Fetching submodule"; then
-  colored_output "${GREEN}" "Updating submodules..."
-  git submodule update --init --recursive || abort_update "Failed updating submodules."
-  venv/bin/pip3.11 install submodules/* || abort_update "Failed installing submodules."
-fi
+# Loop through each package in requirements.txt
+while read package; do
+    # Check if the package is outdated
+    outdated=$(venv/bin/pip list --outdated | grep -q "${package}")
+    
+    if [ ! -z "${outdated}" ]; then
+        # If the package is outdated, update it
+        echo "Updating ${package}"
+        venv/bin/pip install --upgrade "${package}"
+    else
+        echo "${package} is up to date"
+    fi
+done < requirements.txt
 
 colored_output "${GREEN}" "Restarting service..."
-
 { systemctl daemon-reload && systemctl restart bluetooth_2_usb.service ; } || abort_update "Failed restarting service."
 
 colored_output "${GREEN}" "Update successful. Now running $(venv/bin/python3.11 bluetooth_2_usb.py -v)"
