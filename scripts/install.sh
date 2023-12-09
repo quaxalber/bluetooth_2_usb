@@ -83,7 +83,7 @@ main() {
 
   # Make script executable and create symlinks. 
   chmod 744 "${base_directory}/bluetooth_2_usb.py" || abort_install "Failed making script executable."
-  chmod 744 "${base_directory}/scripts/*" || abort_install "Failed making scripts executable."  ln -s "${base_directory}/bluetooth_2_usb.py" /usr/bin/bluetooth_2_usb || colored_output "${YELLOW}" "Failed creating symlink."
+  ln -s "${base_directory}/bluetooth_2_usb.py" /usr/bin/bluetooth_2_usb || colored_output "${YELLOW}" "Failed creating symlink."
   ln -s "${base_directory}/bluetooth_2_usb.service" /etc/systemd/system/ || colored_output "${YELLOW}" "Failed creating symlink."
 
   # Replace placeholder with actual path to venv.
