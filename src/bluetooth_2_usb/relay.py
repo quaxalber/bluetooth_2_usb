@@ -106,8 +106,10 @@ class DeviceIdentifier:
 
 
 class DeviceRelay:
-    def __init__(self, input_device: InputDevice):
+    def __init__(self, input_device: InputDevice, grab_device: bool = False):
         self._input_device = input_device
+        if grab_device:
+            self._input_device.grab()
         if not all_gadgets_ready():
             init_usb_gadgets()
 
@@ -178,12 +180,16 @@ class RelayController:
     """
 
     def __init__(
-        self, device_identifiers: list[str] = None, auto_discover: bool = False
+        self,
+        device_identifiers: list[str] = None,
+        auto_discover: bool = False,
+        grab_devices: bool = False,
     ) -> None:
         if not device_identifiers:
             device_identifiers = []
         self._device_ids = [DeviceIdentifier(id) for id in device_identifiers]
         self._auto_discover = auto_discover
+        self._grab_devices = grab_devices
         self._cancelled = False
         self._device_relay_paths: list[str] = []
 
@@ -230,7 +236,7 @@ class RelayController:
 
     async def _async_relay_events(self, device: InputDevice) -> NoReturn:
         try:
-            relay = DeviceRelay(device)
+            relay = DeviceRelay(device, self._grab_devices)
             self._device_relay_paths.append(device.path)
             _logger.info(f"Activated {repr(relay)}")
             await relay.async_relay_events_loop()

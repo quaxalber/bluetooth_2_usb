@@ -73,6 +73,13 @@ def parse_args() -> Namespace:
         default=False,
         help="List all available input devices and exit.",
     )
+    parser.add_argument(
+        "--grab_devices",
+        "-g",
+        action="store_true",
+        default=False,
+        help="Grab the input devices, i.e., suppress any events on your relay device (RPi).",
+    )
 
     args = parser.parse_args()
 

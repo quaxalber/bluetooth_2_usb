@@ -13,7 +13,7 @@ from src.bluetooth_2_usb.relay import RelayController, list_input_devices
 
 
 _logger = get_logger()
-_VERSION = "0.6.7"
+_VERSION = "0.7.0"
 _VERSIONED_NAME = f"Bluetooth 2 USB v{_VERSION}"
 
 
@@ -48,7 +48,7 @@ async def _main() -> NoReturn:
     _logger.debug(log_handlers_message)
     _logger.info(f"Launching {_VERSIONED_NAME}")
 
-    controller = RelayController(args.device_ids, args.auto_discover)
+    controller = RelayController(args.device_ids, args.auto_discover, args.grab_devices)
     await controller.async_relay_devices()
 
 
