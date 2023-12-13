@@ -142,20 +142,20 @@ Follow these steps to install and configure the project:
     user@pi0w:~ $ service bluetooth_2_usb status
     ● bluetooth_2_usb.service - Bluetooth to USB HID relay
         Loaded: loaded (/etc/systemd/system/bluetooth_2_usb.service; enabled; preset: enabled)
-        Active: active (running) since Sat 2023-12-02 23:16:37 CET; 15s ago
-      Main PID: 1319 (bash)
-         Tasks: 2 (limit: 389)
-           CPU: 2.526s
+        Active: active (running) since Wed 2023-12-13 10:33:00 CET; 44min ago
+      Main PID: 5865 (bash)
+          Tasks: 4 (limit: 389)
+            CPU: 2min 49.448s
         CGroup: /system.slice/bluetooth_2_usb.service
-                 ├─1319 bash /usr/bin/bluetooth_2_usb --auto_discover
-                 └─1326 python3.11 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover
+                ├─5865 bash /usr/bin/bluetooth_2_usb --auto_discover --grab_devices
+                └─5869 python3.11 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
 
-    Dec 02 23:16:37 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Dec 02 23:16:39 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:39 [INFO] Launching Bluetooth 2 USB v0.7.0
-    Dec 02 23:16:39 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:39 [INFO] Discovering input devices...
-    Dec 02 23:16:42 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:42 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "a1:b2:c3:d4:e5:f6"
-    Dec 02 23:16:45 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:45 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "a1:b2:c3:d4:e5:f6"
-    Dec 02 23:16:48 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:48 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
+    Dec 13 10:33:00 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
+    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Launching Bluetooth 2 USB v0.7.0
+    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Discovering input devices...
+    Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+    Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+    Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
     ```
 
 > [!NOTE]
