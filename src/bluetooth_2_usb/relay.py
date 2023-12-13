@@ -11,10 +11,10 @@ import usb_hid
 from usb_hid import Device
 
 from .evdev import (
+    evdev_to_usb_hid,
     get_mouse_movement,
     is_consumer_key,
     is_mouse_button,
-    evdev_to_usb_hid,
 )
 from .logging import get_logger
 
@@ -49,7 +49,7 @@ def init_usb_gadgets() -> None:
     _logger.debug(f"Enabled USB gadgets: {usb_hid.devices}")
 
 
-def all_gadgets_ready():
+def all_gadgets_ready() -> bool:
     return all(
         dev is not None for dev in (_keyboard_gadget, _mouse_gadget, _consumer_gadget)
     )
@@ -73,10 +73,10 @@ class DeviceIdentifier:
     def type(self) -> str:
         return self._type
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.type} "{self.value}"'
 
     def _determine_identifier_type(self) -> str:
@@ -106,7 +106,7 @@ class DeviceIdentifier:
 
 
 class DeviceRelay:
-    def __init__(self, input_device: InputDevice, grab_device: bool = False):
+    def __init__(self, input_device: InputDevice, grab_device: bool = False)->None:
         self._input_device = input_device
         if grab_device:
             self._input_device.grab()
@@ -117,10 +117,10 @@ class DeviceRelay:
     def input_device(self) -> InputDevice:
         return self._input_device
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"relay for {self.input_device.name}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"relay for {self.input_device}"
 
     async def async_relay_events_loop(self) -> NoReturn:
@@ -236,13 +236,13 @@ class RelayController:
     async def _async_relay_events(self, device: InputDevice) -> NoReturn:
         try:
             relay = DeviceRelay(device, self._grab_devices)
-            _logger.info(f"Activated {repr(relay)}")
+            _logger.info(f"Activated {relay!r}")
             await relay.async_relay_events_loop()
         except CancelledError:
             self._cancelled = True
             _logger.critical(f"{device.name} was cancelled")
         except (OSError, FileNotFoundError) as ex:
-            _logger.critical(f"Connection to {device.name} lost [{repr(ex)}]")
+            _logger.critical(f"Connection to {device.name} lost [{ex!r}]")
         except Exception:
             _logger.exception(f"{device.name} failed!")
             await asyncio.sleep(1)

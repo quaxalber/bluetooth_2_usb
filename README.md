@@ -151,7 +151,7 @@ Follow these steps to install and configure the project:
                 └─5869 python3.11 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
 
     Dec 13 10:33:00 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Launching Bluetooth 2 USB v0.7.0
+    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Launching Bluetooth 2 USB v0.7.1
     Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Discovering input devices...
     Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
     Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
@@ -182,26 +182,29 @@ Currently you can provide the following CLI arguments:
 
 ```console
 user@pi0w:~ $ bluetooth_2_usb -h
-usage: bluetooth_2_usb.py [-h] [--device_ids DEVICE_IDS] [--auto_discover] [--debug] [--log_to_file] [--log_path LOG_PATH]
-                          [--version] [--list_devices] [--grab_devices]
+usage: bluetooth_2_usb.py [--device_ids DEVICE_IDS] [--auto_discover] [--grab_devices] [--list_devices] [--log_to_file] [--log_path LOG_PATH] [--debug] [--version] [--help]
 
-Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to
-USB using Linux's gadget mode.
+Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.
 
 options:
-  -h, --help            show this help message and exit
   --device_ids DEVICE_IDS, -i DEVICE_IDS
-                        Comma-separated list of identifiers for input devices to be relayed. An identifier is either the
-                        input device path, the MAC address or any case-insensitive substring of the device name. Default is
-                        None. Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'
+                        Comma-separated list of identifiers for input devices to be relayed.
+                        An identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.
+                        Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'
+                        Default: None
   --auto_discover, -a   Enable auto-discovery mode. All readable input devices will be relayed automatically.
-  --debug, -d           Enable debug mode. Increases log verbosity
-  --log_to_file, -f     Add a handler that logs to file additionally to stdout.
-  --log_path LOG_PATH, -p LOG_PATH
-                        The path of the log file. Default is /var/log/bluetooth_2_usb/bluetooth_2_usb.log.
-  --version, -v         Display the version number of this software and exit.
+                        Default: disabled
+  --grab_devices, -g    Grab the input devices, i.e., suppress any events on your relay device.
+                        Devices are not grabbed by default.
   --list_devices, -l    List all available input devices and exit.
-  --grab_devices, -g    Grab the input devices, i.e., suppress any events on your relay device (RPi).
+  --log_to_file, -f     Add a handler that logs to file, additionally to stdout.
+  --log_path LOG_PATH, -p LOG_PATH
+                        The path of the log file
+                        Default: /var/log/bluetooth_2_usb/bluetooth_2_usb.log
+  --debug, -d           Enable debug mode (Increases log verbosity)
+                        Default: disabled
+  --version, -v         Display the version number of this software and exit.
+  --help, -h            Show this help message and exit.
 ```
 
 ### 5.3. Consuming the API from your Python code
@@ -373,7 +376,7 @@ Here's a few things you could try:
   user@pi0w:~ $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -ad ; sudo service bluetooth_2_usb start
   23-12-12 13:03:28 [DEBUG] CLI args: Namespace(device_ids=None, auto_discover=True, debug=True, log_to_file=False, log_path='/var/log/bluetooth_2_usb/bluetooth_2_usb.log', version=False, list_devices=False)
   23-12-12 13:03:28 [DEBUG] Logging to stdout
-  23-12-12 13:03:28 [INFO] Launching Bluetooth 2 USB v0.7.0
+  23-12-12 13:03:28 [INFO] Launching Bluetooth 2 USB v0.7.1
   23-12-12 13:03:28 [INFO] Discovering input devices...
   23-12-12 13:03:28 [DEBUG] Auto-discovery enabled. Relaying all input devices.
   23-12-12 13:03:28 [DEBUG] Initializing USB gadgets...
