@@ -182,14 +182,18 @@ Currently you can provide the following CLI arguments:
 
 ```console
 user@pi0w:~ $ bluetooth_2_usb -h
-usage: bluetooth_2_usb [-h] [--device_ids DEVICE_IDS] [--auto_discover] [--debug] [--log_to_file] [--log_path LOG_PATH] [--version] [--list_devices]
+usage: bluetooth_2_usb.py [-h] [--device_ids DEVICE_IDS] [--auto_discover] [--debug] [--log_to_file] [--log_path LOG_PATH]
+                          [--version] [--list_devices] [--grab_devices]
 
-Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.
+Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to
+USB using Linux's gadget mode.
 
 options:
   -h, --help            show this help message and exit
   --device_ids DEVICE_IDS, -i DEVICE_IDS
-                        Comma-separated list of identifiers for input devices to be relayed. An identifier is either the input device path, the MAC address or any case-insensitive substring of the device name. Default is None. Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'
+                        Comma-separated list of identifiers for input devices to be relayed. An identifier is either the
+                        input device path, the MAC address or any case-insensitive substring of the device name. Default is
+                        None. Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'
   --auto_discover, -a   Enable auto-discovery mode. All readable input devices will be relayed automatically.
   --debug, -d           Enable debug mode. Increases log verbosity
   --log_to_file, -f     Add a handler that logs to file additionally to stdout.
@@ -197,6 +201,7 @@ options:
                         The path of the log file. Default is /var/log/bluetooth_2_usb/bluetooth_2_usb.log.
   --version, -v         Display the version number of this software and exit.
   --list_devices, -l    List all available input devices and exit.
+  --grab_devices, -g    Grab the input devices, i.e., suppress any events on your relay device (RPi).
 ```
 
 ### 5.3. Consuming the API from your Python code
