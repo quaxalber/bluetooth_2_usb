@@ -8,10 +8,17 @@ from usb_hid import disable
 
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, add_help=False, **kwargs)
-        self.register("action", "help", _HelpAction)  # Register the help action
+        super().__init__(
+            *args,
+            add_help=False,
+            description="Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
+            formatter_class=argparse.RawTextHelpFormatter,
+            **kwargs,
+        )
+        self.register("action", "help", _HelpAction)
+        self._add_arguments()
 
-    def add_arguments(self):
+    def _add_arguments(self):
         self.add_argument(
             "--device_ids",
             "-i",
@@ -68,9 +75,6 @@ class CustomArgumentParser(argparse.ArgumentParser):
             default=False,
             help="Display the version number of this software and exit.",
         )
-
-    def add_help_argument(self):
-        # Add the help argument last
         self.add_argument(
             "--help",
             "-h",
@@ -172,13 +176,8 @@ class Arguments:
 
 
 def parse_args() -> Arguments:
-    parser = CustomArgumentParser(
-        description="Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
+    parser = CustomArgumentParser()
 
-    parser.add_arguments()
-    parser.add_help_argument()
     args = parser.parse_args()
 
     # Check if no arguments were provided
