@@ -151,7 +151,7 @@ Follow these steps to install and configure the project:
                 └─5869 python3.11 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
 
     Dec 13 10:33:00 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Launching Bluetooth 2 USB v0.7.2
+    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Launching Bluetooth 2 USB v0.7.4
     Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Discovering input devices...
     Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "0a:1b:2c:3d:4e:5f"
     Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "0a:1b:2c:3d:4e:5f"
@@ -370,7 +370,7 @@ Here's a few things you could try:
   user@pi0w:~ $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -d -i hdmi,a1:b2:c3:d4:e5:f6,/dev/input/event3 ; sudo service bluetooth_2_usb start
   23-12-15 13:16:01 [DEBUG] CLI args: Arguments(device_ids=['hdmi', 'a1:b2:c3:d4:e5:f6', '/dev/input/event3'], auto_discover=False, grab_devices=False, list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False)
   23-12-15 13:16:01 [DEBUG] Logging to stdout
-  23-12-15 13:16:01 [INFO] Launching Bluetooth 2 USB v0.7.2
+  23-12-15 13:16:01 [INFO] Launching Bluetooth 2 USB v0.7.4
   23-12-15 13:16:01 [INFO] Discovering input devices...
   23-12-15 13:16:01 [DEBUG] Relaying devices with matching name "hdmi" or MAC "a1:b2:c3:d4:e5:f6" or path "/dev/input/event3"
   23-12-15 13:16:01 [DEBUG] Initializing USB gadgets...

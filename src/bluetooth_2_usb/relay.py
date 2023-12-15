@@ -47,7 +47,7 @@ def init_usb_gadgets() -> None:
     _keyboard_gadget = Keyboard(enabled_devices)
     _mouse_gadget = Mouse(enabled_devices)
     _consumer_gadget = ConsumerControl(enabled_devices)
-    _logger.debug(f"Enabled USB gadgets: {(str(dev) for dev in enabled_devices)}")
+    _logger.debug(f"Enabled USB gadgets: {enabled_devices}")
 
 
 def all_gadgets_ready() -> bool:
@@ -146,7 +146,7 @@ def _move_mouse(event: RelEvent) -> None:
     x, y, mwheel = get_mouse_movement(event)
     coordinates = f"(x={x}, y={y}, mwheel={mwheel})"
     try:
-        _logger.debug(f"Moving mouse {_mouse_gadget} {coordinates}")
+        _logger.debug(f"Moving {_mouse_gadget} {coordinates}")
         _mouse_gadget.move(x, y, mwheel)
     except Exception:
         _logger.exception(f"Failed moving mouse {_mouse_gadget} {coordinates}")
