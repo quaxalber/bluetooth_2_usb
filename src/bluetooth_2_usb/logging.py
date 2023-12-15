@@ -15,7 +15,7 @@ def get_logger() -> logging.Logger:
     return _logger
 
 
-def add_file_handler(log_path: str):
+def add_file_handler(log_path: str) -> None:
     file_handler = logging.FileHandler(log_path)
     file_handler.setFormatter(_formatter)
     get_logger().addHandler(file_handler)

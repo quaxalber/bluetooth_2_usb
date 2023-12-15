@@ -1473,13 +1473,13 @@ _MOUSE_BUTTONS = set(
 """Mouse button ecodes"""
 
 
-def evdev_to_usb_hid(event: KeyEvent) -> int | None:
+def evdev_to_usb_hid(event: KeyEvent) -> tuple[int | None, str | None]:
     scancode: int = event.scancode
-    hid_usage_id = _EVDEV_TO_USB_HID.get(scancode, None)
     key_name = find_key_name(event)
+    hid_usage_id = _EVDEV_TO_USB_HID.get(scancode, None)
     hid_usage_name = find_usage_name(event, hid_usage_id)
-    if hid_usage_id is None:
-        _logger.debug(f"Unsupported key pressed: 0x{scancode:02X}")
+    if any(item is None for item in (key_name, hid_usage_id, hid_usage_name)):
+        _logger.warning(f"Unsupported key pressed: 0x{scancode:02X}")
     else:
         _logger.debug(
             f"Converted evdev scancode 0x{scancode:02X} ({key_name}) to HID UsageID 0x{hid_usage_id:02X} ({hid_usage_name})"
@@ -1497,7 +1497,7 @@ def find_key_name(event: KeyEvent) -> str | None:
     return None
 
 
-def find_usage_name(event: KeyEvent, hid_usage_id: int) -> str | None:
+def find_usage_name(event: KeyEvent, hid_usage_id: int | None) -> str | None:
     code_type = _get_hid_code_type(event)
     for attribute in _cached_dir(code_type):
         if _cached_getattr(code_type, attribute) == hid_usage_id:

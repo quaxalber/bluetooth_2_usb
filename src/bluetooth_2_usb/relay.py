@@ -1,7 +1,7 @@
 import asyncio
 from asyncio import CancelledError, TaskGroup
 import re
-from typing import AsyncGenerator, NoReturn
+from typing import AsyncGenerator, NoReturn, Optional
 
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.keyboard import Keyboard
@@ -20,9 +20,9 @@ from .logging import get_logger
 
 
 _logger = get_logger()
-_keyboard_gadget: Keyboard = None
-_mouse_gadget: Mouse = None
-_consumer_gadget: ConsumerControl = None
+_keyboard_gadget: Optional[Keyboard] = None
+_mouse_gadget: Optional[Mouse] = None
+_consumer_gadget: Optional[ConsumerControl] = None
 
 PATH = "path"
 MAC = "MAC"
@@ -40,13 +40,14 @@ def init_usb_gadgets() -> None:
             Device.MOUSE,
             Device.KEYBOARD,
             Device.CONSUMER_CONTROL,
-        ]
+        ]  # type: ignore
     )
     global _keyboard_gadget, _mouse_gadget, _consumer_gadget
-    _keyboard_gadget = Keyboard(usb_hid.devices)
-    _mouse_gadget = Mouse(usb_hid.devices)
-    _consumer_gadget = ConsumerControl(usb_hid.devices)
-    _logger.debug(f"Enabled USB gadgets: {usb_hid.devices}")
+    enabled_devices: list[Device] = list(usb_hid.devices)  # type: ignore
+    _keyboard_gadget = Keyboard(enabled_devices)
+    _mouse_gadget = Mouse(enabled_devices)
+    _consumer_gadget = ConsumerControl(enabled_devices)
+    _logger.debug(f"Enabled USB gadgets: {enabled_devices}")
 
 
 def all_gadgets_ready() -> bool:
@@ -74,10 +75,10 @@ class DeviceIdentifier:
         return self._type
 
     def __str__(self) -> str:
-        return self.value
+        return f'{self.type} "{self.value}"'
 
     def __repr__(self) -> str:
-        return f'{self.type} "{self.value}"'
+        return f"{self.__class__.__name__}({self.value})"
 
     def _determine_identifier_type(self) -> str:
         mac_regex = r"^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})$"
@@ -89,25 +90,24 @@ class DeviceIdentifier:
         return NAME
 
     def _normalize_identifier(self) -> str:
-        if self.type == PATH:
-            return self.value
-        if self.type == NAME:
-            return self.value.lower()
         if self.type == MAC:
             return self.value.lower().replace("-", ":")
+        if self.type == PATH:
+            return self.value
+        return self.value.lower()
 
     def matches(self, device: InputDevice) -> bool:
-        if self.type == PATH:
-            return self.value == device.path
-        if self.type == NAME:
-            return self.normalized_value in device.name.lower()
         if self.type == MAC:
             return self.normalized_value == device.uniq
+        if self.type == PATH:
+            return self.value == device.path
+        return self.normalized_value in device.name.lower()
 
 
 class DeviceRelay:
-    def __init__(self, input_device: InputDevice, grab_device: bool = False)->None:
+    def __init__(self, input_device: InputDevice, grab_device: bool = False) -> None:
         self._input_device = input_device
+        self._grab_device = grab_device
         if grab_device:
             self._input_device.grab()
         if not all_gadgets_ready():
@@ -118,10 +118,10 @@ class DeviceRelay:
         return self._input_device
 
     def __str__(self) -> str:
-        return f"relay for {self.input_device.name}"
+        return f"relay for {self.input_device}"
 
     def __repr__(self) -> str:
-        return f"relay for {self.input_device}"
+        return f"{self.__class__.__name__}({self.input_device!r}, {self._grab_device})"
 
     async def async_relay_events_loop(self) -> NoReturn:
         async for event in self.input_device.async_read_loop():
@@ -141,6 +141,8 @@ class DeviceRelay:
 
 
 def _move_mouse(event: RelEvent) -> None:
+    if _mouse_gadget is None:
+        return
     x, y, mwheel = get_mouse_movement(event)
     coordinates = f"(x={x}, y={y}, mwheel={mwheel})"
     try:
@@ -152,9 +154,9 @@ def _move_mouse(event: RelEvent) -> None:
 
 def _send_key(event: KeyEvent) -> None:
     key_id, key_name = evdev_to_usb_hid(event)
-    if key_id is None:
-        return
     device_out = _get_output_device(event)
+    if key_id is None or key_name is None or device_out is None:
+        return
     try:
         if event.keystate == KeyEvent.key_down:
             _logger.debug(f"Pressing {key_name} (0x{key_id:02X}) on {device_out}")
@@ -166,7 +168,7 @@ def _send_key(event: KeyEvent) -> None:
         _logger.exception(f"Failed sending 0x{key_id:02X} to {device_out}")
 
 
-def _get_output_device(event: KeyEvent) -> ConsumerControl | Keyboard | Mouse:
+def _get_output_device(event: KeyEvent) -> ConsumerControl | Keyboard | Mouse | None:
     if is_consumer_key(event):
         return _consumer_gadget
     elif is_mouse_button(event):
@@ -181,7 +183,7 @@ class RelayController:
 
     def __init__(
         self,
-        device_identifiers: list[str] = None,
+        device_identifiers: Optional[list[str]] = None,
         auto_discover: bool = False,
         grab_devices: bool = False,
     ) -> None:
@@ -210,7 +212,7 @@ class RelayController:
         if self._auto_discover:
             _logger.debug("Auto-discovery enabled. Relaying all input devices.")
         else:
-            all_device_ids = " or ".join(repr(id) for id in self._device_ids)
+            all_device_ids = " or ".join(str(id) for id in self._device_ids)
             _logger.debug(f"Relaying devices with matching {all_device_ids}")
         while True:
             for device in list_input_devices():
@@ -236,7 +238,7 @@ class RelayController:
     async def _async_relay_events(self, device: InputDevice) -> NoReturn:
         try:
             relay = DeviceRelay(device, self._grab_devices)
-            _logger.info(f"Activated {relay!r}")
+            _logger.info(f"Activated {relay}")
             await relay.async_relay_events_loop()
         except CancelledError:
             self._cancelled = True

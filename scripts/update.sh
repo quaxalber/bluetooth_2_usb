@@ -45,6 +45,7 @@ scripts_directory=$(dirname $(readlink -f "$0"))
 base_directory=$(dirname "${scripts_directory}")
 cd "${base_directory}"
 
+git fetch origin
 current_version=$(/usr/bin/bluetooth_2_usb -v)
 latest_vesion=$(git tag -l | sort -V | tail -n1)
 colored_output "${GREEN}" "Updating ${current_version} -> ${latest_vesion}..."

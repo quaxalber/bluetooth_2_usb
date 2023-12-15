@@ -1,13 +1,13 @@
 import argparse
 import atexit
 import sys
-from typing import Optional, List
+from typing import Optional
 
 from usb_hid import disable
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(
             *args,
             add_help=False,
@@ -18,7 +18,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         self.register("action", "help", _HelpAction)
         self._add_arguments()
 
-    def _add_arguments(self):
+    def _add_arguments(self) -> None:
         self.add_argument(
             "--device_ids",
             "-i",
@@ -93,7 +93,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
 
 class _HelpAction(argparse._HelpAction):
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
         parser.print_help()
         parser.exit()
 
@@ -112,7 +112,7 @@ class Arguments:
 
     def __init__(
         self,
-        device_ids: Optional[List[str]],
+        device_ids: Optional[list[str]],
         auto_discover: bool,
         grab_devices: bool,
         list_devices: bool,
@@ -120,7 +120,7 @@ class Arguments:
         log_path: str,
         debug: bool,
         version: bool,
-    ):
+    ) -> None:
         self._device_ids = device_ids
         self._auto_discover = auto_discover
         self._grab_devices = grab_devices
@@ -131,7 +131,7 @@ class Arguments:
         self._version = version
 
     @property
-    def device_ids(self) -> Optional[List[str]]:
+    def device_ids(self) -> Optional[list[str]]:
         return self._device_ids
 
     @property
