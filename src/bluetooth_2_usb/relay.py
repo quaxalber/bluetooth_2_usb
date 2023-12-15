@@ -47,7 +47,7 @@ def init_usb_gadgets() -> None:
     _keyboard_gadget = Keyboard(enabled_devices)
     _mouse_gadget = Mouse(enabled_devices)
     _consumer_gadget = ConsumerControl(enabled_devices)
-    _logger.debug(f"Enabled USB gadgets: {enabled_devices}")
+    _logger.debug(f"Enabled USB gadgets: {(str(dev) for dev in enabled_devices)}")
 
 
 def all_gadgets_ready() -> bool:
