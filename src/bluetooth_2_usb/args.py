@@ -163,16 +163,8 @@ class Arguments:
         return self._version
 
     def __str__(self) -> str:
-        return (
-            f"Arguments(device_ids={self.device_ids}, "
-            f"auto_discover={self.auto_discover}, "
-            f"grab_devices={self.grab_devices}, "
-            f"list_devices={self.list_devices}, "
-            f"log_to_file={self.log_to_file}, "
-            f"log_path={self.log_path}, "
-            f"debug={self.debug}, "
-            f"version={self.version})"
-        )
+        slot_values = [f"{slot[1:]}={getattr(self, slot)}" for slot in self.__slots__]
+        return ", ".join(slot_values)
 
 
 def parse_args() -> Arguments:

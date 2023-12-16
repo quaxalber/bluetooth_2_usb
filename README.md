@@ -368,7 +368,7 @@ Here's a few things you could try:
 
   ```console
   user@pi0w:~/bluetooth_2_usb $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -i hdmi,a1:b2:c3:d4:e5:f6,/dev/input/event3 -d ; sudo service bluetooth_2_usb start
-  23-12-16 15:52:21 [DEBUG] CLI args: Arguments(device_ids=['hdmi', 'a1:b2:c3:d4:e5:f6', '/dev/input/event3'], auto_discover=False, grab_devices=False, list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False)
+  23-12-16 15:52:21 [DEBUG] CLI args: device_ids=['hdmi', 'a1:b2:c3:d4:e5:f6', '/dev/input/event3'], auto_discover=False, grab_devices=False, list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
   23-12-16 15:52:21 [DEBUG] Logging to stdout
   23-12-16 15:52:21 [INFO] Launching Bluetooth 2 USB v0.7.4
   23-12-16 15:52:21 [INFO] Discovering input devices...
