@@ -142,7 +142,7 @@ class DeviceRelay:
 
 def _move_mouse(event: RelEvent) -> None:
     if _mouse_gadget is None:
-        return
+        raise RuntimeError("Mouse gadget not initialized")
     x, y, mwheel = get_mouse_movement(event)
     coordinates = f"(x={x}, y={y}, mwheel={mwheel})"
     try:
@@ -153,9 +153,11 @@ def _move_mouse(event: RelEvent) -> None:
 
 
 def _send_key(event: KeyEvent) -> None:
-    key_id, key_name = evdev_to_usb_hid(event)
     device_out = _get_output_device(event)
-    if key_id is None or key_name is None or device_out is None:
+    if device_out is None:
+        raise RuntimeError("USB gadget not initialized")
+    key_id, key_name = evdev_to_usb_hid(event)
+    if key_id is None or key_name is None:
         return
     try:
         if event.keystate == KeyEvent.key_down:
