@@ -3,36 +3,6 @@
 
 ![Connection overview](assets/overview.png)
 
-<!-- omit in toc -->
-## Table of Contents
-
-- [1. Introduction](#1-introduction)
-- [2. Features](#2-features)
-- [3. Requirements](#3-requirements)
-- [4. Installation](#4-installation)
-  - [4.1. Prerequisites](#41-prerequisites)
-  - [4.2. Setup](#42-setup)
-- [5. Usage](#5-usage)
-  - [5.1. Connection to target device / host](#51-connection-to-target-device--host)
-    - [5.1.1. Raspberry Pi 4 Model B](#511-raspberry-pi-4-model-b)
-    - [5.1.2. Raspberry Pi Zero (2) W(H)](#512-raspberry-pi-zero-2-wh)
-  - [5.2. Command-line arguments](#52-command-line-arguments)
-  - [5.3. Consuming the API from your Python code](#53-consuming-the-api-from-your-python-code)
-- [6. Updating](#6-updating)
-- [7. Uninstallation](#7-uninstallation)
-- [8. Troubleshooting](#8-troubleshooting)
-  - [8.1. The Pi keeps rebooting or crashes randomly](#81-the-pi-keeps-rebooting-or-crashes-randomly)
-  - [8.2. The installation was successful, but I don't see any output on the target device](#82-the-installation-was-successful-but-i-dont-see-any-output-on-the-target-device)
-  - [8.3. In bluetoothctl, my device is constantly switching on/off](#83-in-bluetoothctl-my-device-is-constantly-switching-onoff)
-  - [8.4. I have a different issue](#84-i-have-a-different-issue)
-  - [8.5. Everything is working, but can it help me with Bitcoin mining?](#85-everything-is-working-but-can-it-help-me-with-bitcoin-mining)
-- [9. Bonus points](#9-bonus-points)
-- [10. Contributing](#10-contributing)
-- [11. License](#11-license)
-- [12. Acknowledgments](#12-acknowledgments)
-
-## 1. Introduction
-
 Convert a Raspberry Pi into a HID relay that translates Bluetooth keyboard and mouse input to USB. Minimal configuration. Zero hassle.
 
 The issue with Bluetooth devices is that you usually can't use them to:
@@ -44,7 +14,34 @@ Sounds familiar? Congratulations! **You just found the solution!**
 
 Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Device). Therefore, from the host's perspective, it appears like a regular USB keyboard or mouse. You may think of your Pi as a multi-device Bluetooth dongle.
 
-## 2. Features
+<!-- omit in toc -->
+## Table of Contents
+
+- [1. Features](#1-features)
+- [2. Requirements](#2-requirements)
+- [3. Installation](#3-installation)
+  - [3.1. Prerequisites](#31-prerequisites)
+  - [3.2. Setup](#32-setup)
+- [4. Usage](#4-usage)
+  - [4.1. Connection to target device / host](#41-connection-to-target-device--host)
+    - [4.1.1. Raspberry Pi 4 Model B](#411-raspberry-pi-4-model-b)
+    - [4.1.2. Raspberry Pi Zero (2) W(H)](#412-raspberry-pi-zero-2-wh)
+  - [4.2. Command-line arguments](#42-command-line-arguments)
+  - [4.3. Consuming the API from your Python code](#43-consuming-the-api-from-your-python-code)
+- [5. Updating](#5-updating)
+- [6. Uninstallation](#6-uninstallation)
+- [7. Troubleshooting](#7-troubleshooting)
+  - [7.1. The Pi keeps rebooting or crashes randomly](#71-the-pi-keeps-rebooting-or-crashes-randomly)
+  - [7.2. The installation was successful, but I don't see any output on the target device](#72-the-installation-was-successful-but-i-dont-see-any-output-on-the-target-device)
+  - [7.3. In bluetoothctl, my device is constantly switching on/off](#73-in-bluetoothctl-my-device-is-constantly-switching-onoff)
+  - [7.4. I have a different issue](#74-i-have-a-different-issue)
+  - [7.5. Everything is working, but can it help me with Bitcoin mining?](#75-everything-is-working-but-can-it-help-me-with-bitcoin-mining)
+- [8. Bonus points](#8-bonus-points)
+- [9. Contributing](#9-contributing)
+- [10. License](#10-license)
+- [11. Acknowledgments](#11-acknowledgments)
+
+## 1. Features
 
 - Simple installation and highly automated setup
 - Supports multiple input devices (currently keyboard and mouse - more than one of each kind simultaneously)
@@ -56,13 +53,13 @@ Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Dev
 - Reliable concurrency using state-of-the-art [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups)
 - Clean and actively maintained code base
 
-## 3. Requirements
+## 2. Requirements
 
 - A Raspberry Pi with Bluetooth and [USB OTG support](https://en.wikipedia.org/wiki/USB_On-The-Go) required for [USB gadgets](https://www.kernel.org/doc/html/latest/driver-api/usb/gadget.html) in so-called device mode. Supported models include:
   - **Raspberry Pi Zero W(H)**: Includes Bluetooth 4.1 and supports USB OTG with the lowest price tag.
   - **Raspberry Pi Zero 2 W**: Similar to the Raspberry Pi Zero W, it has Bluetooth 4.1 and USB OTG support while providing additional processing power.
   - **Raspberry Pi 4 Model B**: Offers Bluetooth 5.0 and USB-C OTG support for device mode, providing the best performance (that is until the Pi 5 is available).
-- Linux OS with systemd support (e.g., [Raspberry Pi OS](https://www.raspberrypi.com/software/), recommended).
+- Raspberry Pi OS ([Bookworm-based](https://www.raspberrypi.com/news/bookworm-the-new-version-of-raspberry-pi-os/))
 - Python 3.11 for using [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups).
 
 > [!NOTE]
@@ -71,13 +68,13 @@ Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Dev
 > [!NOTE]
 > The latest version of Raspberry Pi OS, based on Debian Bookworm, supports Python 3.11 through the official package repositories. For older versions, you may [build it from source](https://github.com/quaxalber/bluetooth_2_usb/blob/main/scripts/build_python_3.11.sh). Note that building may take anything between a few minutes (Pi 4B) and more than an hour (Pi 0W).
 
-## 4. Installation
+## 3. Installation
 
 Follow these steps to install and configure the project:
 
-### 4.1. Prerequisites
+### 3.1. Prerequisites
 
-1. Install an OS on your Raspberry Pi (e.g., using [Pi Imager](https://youtu.be/ntaXWS8Lk34))
+1. Install Raspberry Pi OS on your Raspberry Pi (e.g., using [Pi Imager](https://youtu.be/ntaXWS8Lk34))
   
 2. Connect to a network via Ethernet cable or [Wi-Fi](https://www.raspberrypi.com/documentation/computers/configuration.html#configuring-networking). Make sure this network has Internet access.
   
@@ -110,7 +107,7 @@ Follow these steps to install and configure the project:
 > [!NOTE]
 > Replace `A1:B2:C3:D4:E5:F6` by your input device's Bluetooth MAC address
 
-### 4.2. Setup
+### 3.2. Setup
 
 6. On the Pi, clone the repository to your home directory:
   
@@ -159,24 +156,24 @@ Follow these steps to install and configure the project:
     ```
 
 > [!NOTE]
-> Something seems off? Try yourself in [Troubleshooting](#8-troubleshooting)!
+> Something seems off? Try yourself in [Troubleshooting](#7-troubleshooting)!
    
-## 5. Usage
+## 4. Usage
 
-### 5.1. Connection to target device / host
+### 4.1. Connection to target device / host
 
-#### 5.1.1. Raspberry Pi 4 Model B
+#### 4.1.1. Raspberry Pi 4 Model B
 
 Connect the _USB-C power port_ of your Pi 4B via cable with a USB port on your target device. You should hear the USB connection sound (depending on the target device) and be able to access your target device wirelessly using your Bluetooth keyboard or mouse. In case the Pi solely draws power from the host, it will take some time for the Pi to boot.
 
 > [!IMPORTANT]
 > It's essential to use the small power port instead of the bigger USB-A ports, since only the power port has the [OTG](https://en.wikipedia.org/wiki/USB_On-The-Go) feature required for [USB gadgets](https://www.kernel.org/doc/html/latest/driver-api/usb/gadget.html).
 
-#### 5.1.2. Raspberry Pi Zero (2) W(H)
+#### 4.1.2. Raspberry Pi Zero (2) W(H)
 
 For the Pi Zero, the situation is quite the opposite: Do _not_ use the power port to connect to the target device, _use_ the other port instead (typically labeled "DATA" or "USB"). You may connect the power port to a stable power supply.
 
-### 5.2. Command-line arguments
+### 4.2. Command-line arguments
 
 Currently you can provide the following CLI arguments:
 
@@ -207,11 +204,11 @@ options:
   --help, -h            Show this help message and exit.
 ```
 
-### 5.3. Consuming the API from your Python code
+### 4.3. Consuming the API from your Python code
 
 The API is designed such that it may be consumed both via CLI and from within external Python code. More details on this [coming soon](https://github.com/quaxalber/bluetooth_2_usb/issues/16)!
 
-## 6. Updating
+## 5. Updating
 
 You may update to the latest stable release by running:
 
@@ -222,7 +219,7 @@ sudo ~/bluetooth_2_usb/scripts/update.sh
 > [!NOTE]
 > The update script performs a clean reinstallation, that is run `uninstall.sh`, delete the repo folder, clone again and run the install script. The current branch will be maintained.
 
-## 7. Uninstallation
+## 6. Uninstallation
 
 You may uninstall Bluetooth 2 USB by running:
 
@@ -230,9 +227,9 @@ You may uninstall Bluetooth 2 USB by running:
 sudo ~/bluetooth_2_usb/scripts/uninstall.sh
 ```
 
-## 8. Troubleshooting
+## 7. Troubleshooting
 
-### 8.1. The Pi keeps rebooting or crashes randomly
+### 7.1. The Pi keeps rebooting or crashes randomly
 
 This is likely due to the limited power the Pi can draw from the host's USB port. Try these steps:
 
@@ -243,7 +240,7 @@ This is likely due to the limited power the Pi can draw from the host's USB port
 >
 > *Do use* the small USB-C power port (in case of Pi 4B). For Pi Zero, use the data port to connect to the host and attach the power port to a dedicated power supply.
 
-- Try to [connect to the Pi via SSH](#41-prerequisites) instead of attaching a display directly and remove any unnecessary peripherals.
+- Try to [connect to the Pi via SSH](#31-prerequisites) instead of attaching a display directly and remove any unnecessary peripherals.
  
 - Install a [lite version](https://downloads.raspberrypi.org/raspios_lite_arm64/images/) of your OS on the Pi (without GUI)
  
@@ -252,7 +249,7 @@ This is likely due to the limited power the Pi can draw from the host's USB port
 > [!NOTE]
 > The Pi Zero is recommended to have a 1.2 A power supply for stable operation, the Pi Zero 2 requires 2.0 A and the Pi 4B even 3.0 A, while hosts may typically only supply up to 0.5/0.9 A through USB-A 2.0/3.0 ports. However, this may be sufficient depending on your specific soft- and hardware configuration. For more information see the [Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#power-supply).
 
-### 8.2. The installation was successful, but I don't see any output on the target device
+### 7.2. The installation was successful, but I don't see any output on the target device
 
 This could be due to a number of reasons. Try these steps:
 
@@ -315,7 +312,7 @@ This could be due to a number of reasons. Try these steps:
  
 - Try connecting to a different host
 
-### 8.3. In bluetoothctl, my device is constantly switching on/off
+### 7.3. In bluetoothctl, my device is constantly switching on/off
 
 This is a common issue, especially when the device gets paired with multiple hosts. One simple fix/workaround is to re-pair the device:
 
@@ -343,7 +340,7 @@ exit
 > [!NOTE]
 > Replace `0A:1B:2C:3D:4E:5F` by your Pi's Bluetooth controller's MAC and `A1:B2:C3:D4:E5:F6` by your input device's MAC
 
-### 8.4. I have a different issue
+### 7.4. I have a different issue
 
 Here's a few things you could try:
 
@@ -423,23 +420,23 @@ Here's a few things you could try:
   23-12-16 15:54:50 [CRITICAL] AceRK Mouse was cancelled
   ```
 
-- Still not resolved? Double-check the [installation instructions](#4-installation)
+- Still not resolved? Double-check the [installation instructions](#3-installation)
  
 - For more help, open an [issue](https://github.com/quaxalber/bluetooth_2_usb/issues) in the [GitHub repository](https://github.com/quaxalber/bluetooth_2_usb)
 
-### 8.5. Everything is working, but can it help me with Bitcoin mining?
+### 7.5. Everything is working, but can it help me with Bitcoin mining?
 
 Absolutely! [Here's how](https://bit.ly/42BTC).
 
-## 9. Bonus points
+## 8. Bonus points
 
 After successfully setting up your Pi as a HID proxy for your Bluetooth devices, you may consider making [Raspberry Pi OS read-only](https://learn.adafruit.com/read-only-raspberry-pi/overview). That helps preventing the SD card from wearing out and the file system from getting corrupted when powering off the Raspberry forcefully.
 
-## 10. Contributing
+## 9. Contributing
 
 Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/quaxalber/bluetooth_2_usb/blob/main/CONTRIBUTING.md) file for guidelines.
 
-## 11. License
+## 10. License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/quaxalber/bluetooth_2_usb/blob/main/LICENSE) file for details.
 
@@ -447,7 +444,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 ![License image.](https://i.creativecommons.org/l/by-nc/4.0/88x31.png)
 
-## 12. Acknowledgments
+## 11. Acknowledgments
 
 * [Mike Redrobe](https://github.com/mikerr/pihidproxy) for the idea and the basic code logic and [HeuristicPerson's bluetooth_2_hid](https://github.com/HeuristicPerson/bluetooth_2_hid) based off this.
 * [Georgi Valkov](https://github.com/gvalkov) for [python-evdev](https://github.com/gvalkov/python-evdev) making reading input devices a walk in the park.
