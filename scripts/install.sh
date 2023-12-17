@@ -72,7 +72,7 @@ main() {
   python3.11 -m venv venv || abort_install "Failed creating Python virtual environment."
 
   colored_output "${GREEN}" "Installing dependencies in venv..."
-  venv/bin/pip3.11 install -r requirements.txt -c constraints.txt || abort_install "Failed installing dependencies."
+  venv/bin/pip3.11 install -r requirements.txt || abort_install "Failed installing dependencies."
 
   # Modify system files.
   colored_output "${GREEN}" "Modifying system files..."

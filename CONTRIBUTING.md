@@ -30,7 +30,7 @@ By participating in this project, you are expected to uphold our [Code of Conduc
   sudo apt update && sudo apt install -y git python3.11 python3.11-venv
   ```
 
-- Clone the forked repository:
+- Clone the forked repository and `cd` into it:
  
   ```console
   git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git && cd bluetooth_2_usb
@@ -42,10 +42,10 @@ By participating in this project, you are expected to uphold our [Code of Conduc
   python3.11 -m venv venv
   ```
  
-- Install dependencies in Python virtual environment:
+- Install dependencies in `venv`:
  
   ```console
-  venv/bin/pip3.11 install -r requirements.txt -c constraints.txt
+  venv/bin/pip3.11 install -r requirements.txt
   ``` 
 
 - Open the repo in your favorite IDE
