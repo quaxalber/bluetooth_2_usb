@@ -3,7 +3,7 @@ import atexit
 import sys
 from typing import Optional
 
-from usb_hid import disable
+import usb_hid
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
@@ -88,7 +88,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         When the script is run with help or version flag, we need to unregister usb_hid.disable() from atexit
         because else an exception occurs if the script is already running, e.g. as service.
         """
-        atexit.unregister(disable)
+        atexit.unregister(usb_hid.disable)
         super().print_help()
 
 
