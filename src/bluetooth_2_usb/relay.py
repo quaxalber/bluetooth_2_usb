@@ -149,16 +149,16 @@ def _move_mouse(event: RelEvent) -> None:
         _logger.debug(f"Moving {_mouse_gadget} {coordinates}")
         _mouse_gadget.move(x, y, mwheel)
     except Exception:
-        _logger.exception(f"Failed moving mouse {_mouse_gadget} {coordinates}")
+        _logger.exception(f"Failed moving {_mouse_gadget} {coordinates}")
 
 
 def _send_key(event: KeyEvent) -> None:
-    device_out = _get_output_device(event)
-    if device_out is None:
-        raise RuntimeError("USB gadget not initialized")
     key_id, key_name = evdev_to_usb_hid(event)
     if key_id is None or key_name is None:
         return
+    device_out = _get_output_device(event)
+    if device_out is None:
+        raise RuntimeError("USB gadget not initialized")
     try:
         if event.keystate == KeyEvent.key_down:
             _logger.debug(f"Pressing {key_name} (0x{key_id:02X}) on {device_out}")

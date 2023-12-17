@@ -2,6 +2,7 @@
 # Gather everything into a single, convenient namespace.
 # --------------------------------------------------------------------------
 
+from .args import Arguments, parse_args
 from .evdev import (
     ecodes,
     evdev_to_usb_hid,
