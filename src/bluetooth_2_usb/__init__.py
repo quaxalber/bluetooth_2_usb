@@ -17,5 +17,5 @@ from .relay import (
     DeviceIdentifier,
     DeviceRelay,
     RelayController,
-    list_input_devices,
+    async_list_input_devices,
 )

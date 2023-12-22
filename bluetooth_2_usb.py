@@ -9,7 +9,7 @@ import usb_hid
 
 from src.bluetooth_2_usb.args import parse_args
 from src.bluetooth_2_usb.logging import add_file_handler, get_logger
-from src.bluetooth_2_usb.relay import RelayController, list_input_devices
+from src.bluetooth_2_usb.relay import RelayController, async_list_input_devices
 
 
 logger = get_logger()
@@ -39,7 +39,7 @@ async def main() -> NoReturn:
     if args.version:
         print_version()
     if args.list_devices:
-        list_devices()
+        await async_list_devices()
 
     log_handlers_message = "Logging to stdout"
     if args.log_to_file:
@@ -53,8 +53,8 @@ async def main() -> NoReturn:
     await controller.async_relay_devices()
 
 
-def list_devices():
-    for dev in list_input_devices():
+async def async_list_devices():
+    for dev in await async_list_input_devices():
         print(f"{dev.name}\t{dev.uniq if dev.uniq else dev.phys}\t{dev.path}")
     exit_safely()
 

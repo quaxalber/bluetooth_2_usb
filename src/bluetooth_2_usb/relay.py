@@ -29,8 +29,14 @@ MAC = "MAC"
 NAME = "name"
 
 
-def list_input_devices() -> list[InputDevice]:
-    return [InputDevice(path) for path in list_devices()]
+async def async_list_input_devices() -> list[InputDevice]:
+    devices = []
+    try:
+        devices = [InputDevice(path) for path in list_devices()]
+    except Exception:
+        _logger.exception("Failed listing devices")
+        await asyncio.sleep(1)
+    return devices
 
 
 def init_usb_gadgets() -> None:
@@ -217,7 +223,7 @@ class RelayController:
             all_device_ids = " or ".join(str(id) for id in self._device_ids)
             _logger.debug(f"Relaying devices with matching {all_device_ids}")
         while True:
-            for device in list_input_devices():
+            for device in await async_list_input_devices():
                 if self._should_relay(device):
                     yield device
             await asyncio.sleep(0.1)
