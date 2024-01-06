@@ -1,7 +1,7 @@
 <!-- omit in toc -->
 # Bluetooth to USB
 
-![Connection overview](assets/overview.png)
+![Bluetooth to USB Overview](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
 
 Convert a Raspberry Pi into a HID relay that translates Bluetooth keyboard and mouse input to USB. Minimal configuration. Zero hassle.
 
@@ -440,7 +440,7 @@ Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/quaxalber/bluetooth_2_usb/blob/main/LICENSE) file for details.
 
-"Bluetooth 2 HID" image [@PixelGordo](https://twitter.com/PixelGordo) is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/).
+[Bluetooth to USB Overview](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png) image by [Laura T.](mailto:design@quaxalber.de) is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/).
 
 ![License image.](https://i.creativecommons.org/l/by-nc/4.0/88x31.png)
 
