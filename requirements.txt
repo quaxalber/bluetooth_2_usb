@@ -4,6 +4,7 @@ Adafruit-PureIO==1.1.11
 evdev==1.6.1
 pyftdi==0.55.0
 pyserial==3.5
+pyudev==0.24.3
 pyusb==1.2.1
 quax-Blinka==8.27.0.post2
 quax-circuitpython-hid==6.0.2.post1

@@ -7,6 +7,7 @@ from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.mouse import Mouse
 from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
+import pyudev
 import usb_hid
 from usb_hid import Device
 
@@ -45,7 +46,7 @@ def init_usb_gadgets() -> None:
     _logger.debug("Initializing USB gadgets...")
     usb_hid.enable(
         [
-            Device.MOUSE,
+            Device.BOOT_MOUSE,
             Device.KEYBOARD,
             Device.CONSUMER_CONTROL,
         ]  # type: ignore
@@ -136,14 +137,11 @@ class DeviceRelay:
     async def _async_relay_event(self, input_event: InputEvent) -> None:
         event = categorize(input_event)
         _logger.debug(f"Received {event} from {self.input_device.name}")
-        func = None
+
         if isinstance(event, RelEvent):
-            func = _move_mouse
+            _move_mouse(event)
         elif isinstance(event, KeyEvent):
-            func = _send_key
-        if func:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, func, event)
+            _send_key(event)
 
 
 def _move_mouse(event: RelEvent) -> None:
@@ -186,7 +184,8 @@ def _get_output_device(event: KeyEvent) -> ConsumerControl | Keyboard | Mouse | 
 
 class RelayController:
     """
-    This class serves as a HID relay to handle Bluetooth keyboard and mouse events from multiple input devices and translate them to USB.
+    Manages the TaskGroup of all active DeviceRelay tasks and handles
+    add/remove events from UdevEventMonitor.
     """
 
     def __init__(
@@ -200,59 +199,116 @@ class RelayController:
         self._device_ids = [DeviceIdentifier(id) for id in device_identifiers]
         self._auto_discover = auto_discover
         self._grab_devices = grab_devices
+        self._task_group: TaskGroup | None = None
+        self._active_tasks: dict[str, asyncio.Task] = {}
         self._cancelled = False
 
-    async def async_relay_devices(self) -> NoReturn:
+    async def async_relay_devices(self) -> None:
+        """
+        Main method that opens a TaskGroup and waits forever,
+        while device add/remove is handled dynamically.
+        """
         try:
             async with TaskGroup() as task_group:
-                await self._async_discover_devices(task_group)
-            _logger.critical("Event loop closed.")
-        except* Exception:
-            _logger.exception("Error(s) in TaskGroup")
+                self._task_group = task_group
+                _logger.debug("RelayController: TaskGroup started.")
 
-    async def _async_discover_devices(self, task_group: TaskGroup) -> NoReturn:
-        async for device in self._async_discover_devices_loop():
-            if not self._cancelled:
-                self._create_task(device, task_group)
+                for dev in await async_list_input_devices():
+                    self.add_device(dev)
 
-    async def _async_discover_devices_loop(self) -> AsyncGenerator[InputDevice, None]:
-        _logger.info("Discovering input devices...")
-        if self._auto_discover:
-            _logger.debug("Auto-discovery enabled. Relaying all input devices.")
+                while not self._cancelled:
+                    await asyncio.sleep(0.1)
+        except* Exception as exc_grp:
+            _logger.exception("RelayController: Exception in TaskGroup", exc_info=exc_grp)
+        finally:
+            self._task_group = None
+            _logger.info("RelayController: TaskGroup exited.")
+
+    def add_device(self, device: InputDevice) -> None:
+        """
+        Called when a new device is detected. Schedules a new relay task if
+        the device passes the _should_relay() check and isn't already tracked.
+        """
+        if not self._should_relay(device):
+            _logger.debug(f"Device {device.path} does not match criteria; ignoring.")
+            return
+
+        if self._task_group is None:
+            _logger.critical(f"No TaskGroup available; ignoring device {device.path}.")
+            return
+
+        if device.path not in self._active_tasks:
+            task = self._task_group.create_task(
+                self._async_relay_events(device),
+                name=device.path
+            )
+            self._active_tasks[device.path] = task
+            _logger.debug(f"Created task for {device.path}.")
         else:
-            all_device_ids = " or ".join(str(id) for id in self._device_ids)
-            _logger.debug(f"Relaying devices with matching {all_device_ids}")
-        while True:
-            for device in await async_list_input_devices():
-                if self._should_relay(device):
-                    yield device
-            await asyncio.sleep(0.1)
+            _logger.debug(f"Device {device.path} is already active.")
 
-    def _should_relay(self, device: InputDevice) -> bool:
-        return not self._has_task(device) and self._matches_criteria(device)
+    def remove_device(self, device_path: str) -> None:
+        """
+        Called when a device is removed. Cancels the associated relay task if running.
+        """
+        task = self._active_tasks.pop(device_path, None)
+        if task and not task.done():
+            _logger.info(f"Cancelling relay for {device_path}.")
+            task.cancel()
+        else:
+            _logger.debug(f"No active task found for {device_path} to remove.")
 
-    def _has_task(self, device: InputDevice) -> bool:
-        return device.path in [task.get_name() for task in asyncio.all_tasks()]
+    async def _async_relay_events(self, device: InputDevice) -> None:
+        """
+        Creates a DeviceRelay, then loops forever reading events.
+        """
+        relay = DeviceRelay(device, self._grab_devices)
+        _logger.info(f"Activated {relay}")
 
-    def _matches_criteria(self, device: InputDevice) -> bool:
-        return self._auto_discover or self._matches_any_identifier(device)
-
-    def _matches_any_identifier(self, device: InputDevice) -> bool:
-        return any(id.matches(device) for id in self._device_ids)
-
-    def _create_task(self, device: InputDevice, task_group: TaskGroup) -> None:
-        task_group.create_task(self._async_relay_events(device), name=device.path)
-
-    async def _async_relay_events(self, device: InputDevice) -> NoReturn:
         try:
-            relay = DeviceRelay(device, self._grab_devices)
-            _logger.info(f"Activated {relay}")
             await relay.async_relay_events_loop()
         except CancelledError:
-            self._cancelled = True
-            _logger.critical(f"{device.name} was cancelled")
+            _logger.debug(f"Relay cancelled for device {device.path}.")
+            raise
         except (OSError, FileNotFoundError) as ex:
-            _logger.critical(f"Connection to {device.name} lost [{ex!r}]")
+            _logger.critical(f"Lost connection to {device.path} [{ex!r}].")
         except Exception:
-            _logger.exception(f"{device.name} failed!")
-            await asyncio.sleep(1)
+            _logger.exception(f"Unhandled exception in relay for {device.path}.")
+
+    def _should_relay(self, device: InputDevice) -> bool:
+        """Return True if we should relay this device (auto_discover or matches)."""
+        return self._auto_discover or any(id.matches(device) for id in self._device_ids)
+
+
+
+class UdevEventMonitor:
+    """
+    Watches for new/removed /dev/input/event* devices and notifies RelayController.
+    """
+
+    def __init__(self, relay_controller: RelayController, loop: asyncio.AbstractEventLoop):
+        self.relay_controller = relay_controller
+        self.loop = loop
+        self.context = pyudev.Context()
+        self.monitor = pyudev.Monitor.from_netlink(self.context)
+        self.monitor.filter_by(subsystem='input')
+
+        # Create an observer that calls _udev_event_callback on add/remove
+        self.observer = pyudev.MonitorObserver(self.monitor, self._udev_event_callback)
+        self.observer.start()
+        _logger.debug("UdevEventMonitor started.")
+
+    def _udev_event_callback(self, action: str, device: pyudev.Device) -> None:
+        """pyudev callback for device add/remove events."""
+        device_node = device.device_node
+        if not device_node or not device_node.startswith("/dev/input/event"):
+            return
+
+        if action == "add":
+            _logger.debug(f"UdevEventMonitor: Added => {device_node}")
+            device = InputDevice(device_node)
+            self.relay_controller.add_device(device)
+
+        elif action == "remove":
+            _logger.debug(f"UdevEventMonitor: Removed => {device_node}")
+            self.relay_controller.remove_device(device_node)
