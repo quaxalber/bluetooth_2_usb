@@ -13,7 +13,7 @@ from src.bluetooth_2_usb.relay import RelayController, async_list_input_devices
 
 
 logger = get_logger()
-VERSION = "0.8.0"
+VERSION = "0.8.2"
 VERSIONED_NAME = f"Bluetooth 2 USB v{VERSION}"
 
 
