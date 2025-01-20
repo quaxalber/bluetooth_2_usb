@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
-# Main entry script for bluetooth_2_usb
+set -e  # Exit immediately on error
 
-script_directory=$(dirname $(readlink -f "$0"))
-source "${script_directory}/venv/bin/activate"
-python3.11 "${script_directory}/bluetooth_2_usb.py" "$@"
+script_directory=$(dirname "$(readlink -f "$0")")
+
+if [ ! -d "${script_directory}/venv" ]; then
+  echo "Error: virtual environment not found."
+  exit 1
+fi
+
+source "${script_directory}/venv/bin/activate" || {
+  echo "Error: failed to activate virtual environment."
+  exit 1
+}
+
+python3 "${script_directory}/bluetooth_2_usb.py" "$@" || {
+  echo "Error: Python script failed."
+  deactivate
+  exit 1
+}
+
 deactivate

@@ -24,7 +24,7 @@ Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Dev
   - [3.2. Setup](#32-setup)
 - [4. Usage](#4-usage)
   - [4.1. Connection to target device / host](#41-connection-to-target-device--host)
-    - [4.1.1. Raspberry Pi 4 Model B](#411-raspberry-pi-4-model-b)
+    - [4.1.1. Raspberry Pi 4B/5](#411-raspberry-pi-4b5)
     - [4.1.2. Raspberry Pi Zero (2) W(H)](#412-raspberry-pi-zero-2-wh)
   - [4.2. Command-line arguments](#42-command-line-arguments)
   - [4.3. Consuming the API from your Python code](#43-consuming-the-api-from-your-python-code)
@@ -58,9 +58,9 @@ Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Dev
 - A Raspberry Pi with Bluetooth and [USB OTG support](https://en.wikipedia.org/wiki/USB_On-The-Go) required for [USB gadgets](https://www.kernel.org/doc/html/latest/driver-api/usb/gadget.html) in so-called device mode. Supported models include:
   - **Raspberry Pi Zero W(H)**: Includes Bluetooth 4.1 and supports USB OTG with the lowest price tag.
   - **Raspberry Pi Zero 2 W**: Similar to the Raspberry Pi Zero W, it has Bluetooth 4.1 and USB OTG support while providing additional processing power.
-  - **Raspberry Pi 4 Model B**: Offers Bluetooth 5.0 and USB-C OTG support for device mode, providing the best performance (that is until the Pi 5 is available).
+  - **Raspberry Pi 4B/5**: Offers Bluetooth 5.0 and USB-C OTG support for device mode, providing the best performance.
 - Raspberry Pi OS ([Bookworm-based](https://www.raspberrypi.com/news/bookworm-the-new-version-of-raspberry-pi-os/))
-- Python 3.11 for using [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups).
+- Python 3.11+ for using [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups).
 
 > [!NOTE]
 > Raspberry Pi 3 Models feature Bluetooth 4.2 but no native USB gadget mode support. Earlier models like Raspberry Pi 1 and 2 do not support Bluetooth natively and have no USB gadget mode support.
@@ -86,7 +86,7 @@ Follow these steps to install and configure the project:
 4. Connect to the Pi and make sure `git` is installed:
   
    ```console
-   sudo apt update && sudo apt upgrade -y && sudo apt install -y git
+   sudo apt update && sudo apt install -y git
    ```
 
 5. Pair and trust any Bluetooth devices you wish to relay, either via GUI or via CLI:
@@ -102,6 +102,7 @@ Follow these steps to install and configure the project:
    trust A1:B2:C3:D4:E5:F6
    pair A1:B2:C3:D4:E5:F6
    connect A1:B2:C3:D4:E5:F6
+   exit
    ```
 
 > [!NOTE]
@@ -136,23 +137,20 @@ Follow these steps to install and configure the project:
     It should look something like this and say `Active: active (running)`:
 
     ```console
-    user@pi0w:~ $ service bluetooth_2_usb status
     ● bluetooth_2_usb.service - Bluetooth to USB HID relay
         Loaded: loaded (/etc/systemd/system/bluetooth_2_usb.service; enabled; preset: enabled)
-        Active: active (running) since Wed 2023-12-13 10:33:00 CET; 44min ago
-      Main PID: 5865 (bash)
-          Tasks: 4 (limit: 389)
-            CPU: 2min 49.448s
+        Active: active (running) since Mon 2025-01-20 23:10:33 CET; 12min ago
+      Main PID: 15598 (bash)
+          Tasks: 3 (limit: 374)
+            CPU: 13.454s
         CGroup: /system.slice/bluetooth_2_usb.service
-                ├─5865 bash /usr/bin/bluetooth_2_usb --auto_discover --grab_devices
-                └─5869 python3.11 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
+                ├─15598 bash /usr/bin/bluetooth_2_usb --auto_discover --grab_devices
+                └─15601 python3 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
 
-    Dec 13 10:33:00 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Launching Bluetooth 2 USB v0.8.2
-    Dec 13 10:33:06 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:06 [INFO] Discovering input devices...
-    Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "0a:1b:2c:3d:4e:5f"
-    Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "0a:1b:2c:3d:4e:5f"
-    Dec 13 10:33:09 pi0w bluetooth_2_usb[5869]: 23-12-13 10:33:09 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
+    Jan 20 23:10:33 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
+    Jan 20 23:10:35 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:35 [INFO] Launching Bluetooth 2 USB v0.8.3
+    Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+    Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
     ```
 
 > [!NOTE]
@@ -162,9 +160,9 @@ Follow these steps to install and configure the project:
 
 ### 4.1. Connection to target device / host
 
-#### 4.1.1. Raspberry Pi 4 Model B
+#### 4.1.1. Raspberry Pi 4B/5
 
-Connect the _USB-C power port_ of your Pi 4B via cable with a USB port on your target device. You should hear the USB connection sound (depending on the target device) and be able to access your target device wirelessly using your Bluetooth keyboard or mouse. In case the Pi solely draws power from the host, it will take some time for the Pi to boot.
+Connect the _USB-C power port_ of your Pi 4B/5 via cable with a USB port on your target device. You should hear the USB connection sound (depending on the target device) and be able to access your target device wirelessly using your Bluetooth keyboard or mouse. In case the Pi solely draws power from the host, it will take some time for the Pi to boot.
 
 > [!IMPORTANT]
 > It's essential to use the small power port instead of the bigger USB-A ports, since only the power port has the [OTG](https://en.wikipedia.org/wiki/USB_On-The-Go) feature required for [USB gadgets](https://www.kernel.org/doc/html/latest/driver-api/usb/gadget.html).
@@ -238,16 +236,16 @@ This is likely due to the limited power the Pi can draw from the host's USB port
 > [!IMPORTANT]
 > *Do not use* the blue (or black) USB-A ports *of your Pi* to connect. **This won't work.**
 >
-> *Do use* the small USB-C power port (in case of Pi 4B). For Pi Zero, use the data port to connect to the host and attach the power port to a dedicated power supply.
+> *Do use* the small USB-C power port (in case of Pi 4B/5). For Pi Zero, use the data port to connect to the host and attach the power port to a dedicated power supply.
 
 - Try to [connect to the Pi via SSH](#31-prerequisites) instead of attaching a display directly and remove any unnecessary peripherals.
  
 - Install a [lite version](https://downloads.raspberrypi.org/raspios_lite_arm64/images/) of your OS on the Pi (without GUI)
  
-- For Pi 4B: Get a [USB-C Data/Power Splitter](https://thepihut.com/products/usb-c-data-power-splitter) and draw power from a dedicated power supply. This should ultimately resolve any power-related issues, and your Pi 4B will no longer be dependent on the host's power supply.
+- For Pi 4B/5: Get a [USB-C Data/Power Splitter](https://thepihut.com/products/usb-c-data-power-splitter) and draw power from a dedicated power supply. This should ultimately resolve any power-related issues, and your Pi 4B will no longer be dependent on the host's power supply.
  
 > [!NOTE]
-> The Pi Zero is recommended to have a 1.2 A power supply for stable operation, the Pi Zero 2 requires 2.0 A and the Pi 4B even 3.0 A, while hosts may typically only supply up to 0.5/0.9 A through USB-A 2.0/3.0 ports. However, this may be sufficient depending on your specific soft- and hardware configuration. For more information see the [Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#power-supply).
+> The Pi Zero is recommended to have a 1.2 A power supply for stable operation, the Pi Zero 2 requires 2.0 A, the Pi 4B 3.0 A and the Pi 5 even 5.0 A, while hosts may typically only supply up to 0.5/0.9 A through USB-A 2.0/3.0 ports. However, this may be sufficient depending on your specific soft- and hardware configuration. For more information see the [Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#power-supply).
 
 ### 7.2. The installation was successful, but I don't see any output on the target device
 
@@ -326,6 +324,7 @@ scan on
 trust A1:B2:C3:D4:E5:F6
 pair A1:B2:C3:D4:E5:F6
 connect A1:B2:C3:D4:E5:F6
+exit
 ```
 
 If the issue persists, it's worth trying to delete the cache:
@@ -364,60 +363,51 @@ Here's a few things you could try:
 - When you interact with your Bluetooth devices with `-d` set, you should see debug output in the logs such as:
 
   ```console
-  user@pi0w:~/bluetooth_2_usb $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -i hdmi,a1:b2:c3:d4:e5:f6,/dev/input/event3 -d ; sudo service bluetooth_2_usb start
-  23-12-16 15:52:21 [DEBUG] CLI args: device_ids=['hdmi', 'a1:b2:c3:d4:e5:f6', '/dev/input/event3'], auto_discover=False, grab_devices=False, list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
-  23-12-16 15:52:21 [DEBUG] Logging to stdout
-  23-12-16 15:52:21 [INFO] Launching Bluetooth 2 USB v0.8.2
-  23-12-16 15:52:21 [INFO] Discovering input devices...
-  23-12-16 15:52:21 [DEBUG] Relaying devices with matching name "hdmi" or MAC "a1:b2:c3:d4:e5:f6" or path "/dev/input/event3"
-  23-12-16 15:52:21 [DEBUG] Initializing USB gadgets...
-  23-12-16 15:52:24 [DEBUG] Enabled USB gadgets: [mouse gadget (/dev/hidg0), keyboard gadget (/dev/hidg1), consumer control gadget (/dev/hidg2)]
-  23-12-16 15:52:24 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "0a:1b:2c:3d:4e:5f"
-  23-12-16 15:52:24 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "0a:1b:2c:3d:4e:5f"
-  23-12-16 15:52:24 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
-  ### Manually switched Pi's Bluetooth off ###
-  23-12-16 15:53:27 [CRITICAL] Connection to AceRK Keyboard lost [OSError(19, 'No such device')]
-  23-12-16 15:53:27 [CRITICAL] Connection to AceRK Mouse lost [OSError(19, 'No such device')]
-  ### Manually switched Pi's Bluetooth back on ###
-  23-12-16 15:53:31 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "0a:1b:2c:3d:4e:5f"
-  23-12-16 15:53:31 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "0a:1b:2c:3d:4e:5f"
-  23-12-16 15:54:20 [DEBUG] Received event at 1702738460.417525, code 04, type 04, val 458827 from AceRK Keyboard
-  23-12-16 15:54:20 [DEBUG] Received key event at 1702738460.417525, 104 (KEY_PAGEUP), down from AceRK Keyboard
-  23-12-16 15:54:20 [DEBUG] Converted evdev scancode 0x68 (KEY_PAGEUP) to HID UsageID 0x4B (PAGE_UP)
-  23-12-16 15:54:20 [DEBUG] Pressing PAGE_UP (0x4B) on keyboard gadget (/dev/hidg1)
-  23-12-16 15:54:20 [DEBUG] Received synchronization event at 1702738460.417525, SYN_REPORT from AceRK Keyboard
-  23-12-16 15:54:20 [DEBUG] Received event at 1702738460.466388, code 04, type 04, val 458827 from AceRK Keyboard
-  23-12-16 15:54:20 [DEBUG] Received key event at 1702738460.466388, 104 (KEY_PAGEUP), up from AceRK Keyboard
-  23-12-16 15:54:20 [DEBUG] Converted evdev scancode 0x68 (KEY_PAGEUP) to HID UsageID 0x4B (PAGE_UP)
-  23-12-16 15:54:20 [DEBUG] Releasing PAGE_UP (0x4B) on keyboard gadget (/dev/hidg1)
-  23-12-16 15:54:20 [DEBUG] Received synchronization event at 1702738460.466388, SYN_REPORT from AceRK Keyboard
-  23-12-16 15:54:34 [DEBUG] Received event at 1702738474.116380, code 04, type 04, val 786665 from AceRK Keyboard
-  23-12-16 15:54:34 [DEBUG] Received key event at 1702738474.116380, 115 (KEY_VOLUMEUP), down from AceRK Keyboard
-  23-12-16 15:54:34 [DEBUG] Converted evdev scancode 0x73 (KEY_VOLUMEUP) to HID UsageID 0xE9 (VOLUME_INCREMENT)
-  23-12-16 15:54:34 [DEBUG] Pressing VOLUME_INCREMENT (0xE9) on consumer control gadget (/dev/hidg2)
-  23-12-16 15:54:34 [DEBUG] Received synchronization event at 1702738474.116380, SYN_REPORT from AceRK Keyboard
-  23-12-16 15:54:34 [DEBUG] Received event at 1702738474.117192, code 04, type 04, val 786665 from AceRK Keyboard
-  23-12-16 15:54:34 [DEBUG] Received key event at 1702738474.117192, 115 (KEY_VOLUMEUP), up from AceRK Keyboard
-  23-12-16 15:54:34 [DEBUG] Converted evdev scancode 0x73 (KEY_VOLUMEUP) to HID UsageID 0xE9 (VOLUME_INCREMENT)
-  23-12-16 15:54:34 [DEBUG] Releasing VOLUME_INCREMENT (0xE9) on consumer control gadget (/dev/hidg2)
-  23-12-16 15:54:34 [DEBUG] Received synchronization event at 1702738474.117192, SYN_REPORT from AceRK Keyboard
-  23-12-16 15:54:36 [DEBUG] Received event at 1702738476.895033, code 04, type 04, val 589826 from AceRK Mouse
-  23-12-16 15:54:36 [DEBUG] Received key event at 1702738476.895033, 273 (BTN_RIGHT), down from AceRK Mouse
-  23-12-16 15:54:36 [DEBUG] Converted evdev scancode 0x111 (BTN_RIGHT) to HID UsageID 0x02 (RIGHT)
-  23-12-16 15:54:36 [DEBUG] Pressing RIGHT (0x02) on mouse gadget (/dev/hidg0)
-  23-12-16 15:54:36 [DEBUG] Received synchronization event at 1702738476.895033, SYN_REPORT from AceRK Mouse
-  23-12-16 15:54:36 [DEBUG] Received event at 1702738476.943781, code 04, type 04, val 589826 from AceRK Mouse
-  23-12-16 15:54:36 [DEBUG] Received key event at 1702738476.943781, 273 (BTN_RIGHT), up from AceRK Mouse
-  23-12-16 15:54:36 [DEBUG] Converted evdev scancode 0x111 (BTN_RIGHT) to HID UsageID 0x02 (RIGHT)
-  23-12-16 15:54:36 [DEBUG] Releasing RIGHT (0x02) on mouse gadget (/dev/hidg0)
-  23-12-16 15:54:36 [DEBUG] Received synchronization event at 1702738476.943781, SYN_REPORT from AceRK Mouse
-  23-12-16 15:54:37 [DEBUG] Received relative axis event at 1702738477.675038, REL_X from AceRK Mouse
-  23-12-16 15:54:37 [DEBUG] Moving mouse gadget (/dev/hidg0) (x=125, y=0, mwheel=0)
-  23-12-16 15:54:37 [DEBUG] Received synchronization event at 1702738477.675038, SYN_REPORT from AceRK Mouse
-  ^C23-12-16 15:54:50 [INFO] Received signal: SIGINT, frame: <frame at 0xb5ec9930, file '/usr/lib/python3.11/selectors.py', line 468, code select>
-  23-12-16 15:54:50 [CRITICAL] vc4-hdmi was cancelled
-  23-12-16 15:54:50 [CRITICAL] AceRK Keyboard was cancelled
-  23-12-16 15:54:50 [CRITICAL] AceRK Mouse was cancelled
+  user@pi0w:~/bluetooth_2_usb $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -ad ; sudo service bluetooth_2_usb start
+  25-01-20 23:09:26 [DEBUG] CLI args: device_ids=None, auto_discover=True, grab_devices=False, list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
+  25-01-20 23:09:26 [DEBUG] Logging to stdout
+  25-01-20 23:09:26 [INFO] Launching Bluetooth 2 USB v0.8.3
+  25-01-20 23:09:30 [DEBUG] USB HID gadgets re-initialized: [boot mouse gadget (/dev/hidg0), keyboard gadget (/dev/hidg1), consumer control gadget (/dev/hidg2)]
+  25-01-20 23:09:30 [DEBUG] UdevEventMonitor initialized (observer not started yet).
+  25-01-20 23:09:30 [DEBUG] UdevEventMonitor started observer.
+  25-01-20 23:09:30 [DEBUG] RelayController: TaskGroup started.
+  25-01-20 23:09:30 [DEBUG] Created task for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81".
+  25-01-20 23:09:30 [DEBUG] Created task for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81".
+  25-01-20 23:09:30 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+  25-01-20 23:09:30 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+  25-01-20 23:09:50 [DEBUG] Received event at 1737410990.909361, code 04, type 04, val 458832 from AceRK Keyboard
+  25-01-20 23:09:50 [DEBUG] Received key event at 1737410990.909361, 105 (KEY_LEFT), down from AceRK Keyboard
+  25-01-20 23:09:50 [DEBUG] Converted evdev scancode 0x69 (KEY_LEFT) to HID UsageID 0x50 (LEFT_ARROW)
+  25-01-20 23:09:50 [DEBUG] Pressing LEFT_ARROW (0x50)
+  25-01-20 23:09:50 [DEBUG] Received synchronization event at 1737410990.909361, SYN_REPORT from AceRK Keyboard
+  25-01-20 23:09:50 [DEBUG] Received event at 1737410990.958636, code 04, type 04, val 458832 from AceRK Keyboard
+  25-01-20 23:09:50 [DEBUG] Received key event at 1737410990.958636, 105 (KEY_LEFT), up from AceRK Keyboard
+  25-01-20 23:09:50 [DEBUG] Converted evdev scancode 0x69 (KEY_LEFT) to HID UsageID 0x50 (LEFT_ARROW)
+  25-01-20 23:09:50 [DEBUG] Releasing LEFT_ARROW (0x50)
+  25-01-20 23:09:50 [DEBUG] Received synchronization event at 1737410990.958636, SYN_REPORT from AceRK Keyboard
+  25-01-20 23:09:53 [DEBUG] Received event at 1737410993.639160, code 04, type 04, val 786666 from AceRK Keyboard
+  25-01-20 23:09:53 [DEBUG] Received key event at 1737410993.639160, 114 (KEY_VOLUMEDOWN), down from AceRK Keyboard
+  25-01-20 23:09:53 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
+  25-01-20 23:09:53 [DEBUG] Pressing VOLUME_DECREMENT (0xEA)
+  25-01-20 23:09:53 [DEBUG] Received synchronization event at 1737410993.639160, SYN_REPORT from AceRK Keyboard
+  25-01-20 23:09:53 [DEBUG] Received event at 1737410993.640037, code 04, type 04, val 786666 from AceRK Keyboard
+  25-01-20 23:09:53 [DEBUG] Received key event at 1737410993.640037, 114 (KEY_VOLUMEDOWN), up from AceRK Keyboard
+  25-01-20 23:09:53 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
+  25-01-20 23:09:53 [DEBUG] Releasing VOLUME_DECREMENT (0xEA)
+  25-01-20 23:09:53 [DEBUG] Received synchronization event at 1737410993.640037, SYN_REPORT from AceRK Keyboard
+  25-01-20 23:09:56 [DEBUG] Received relative axis event at 1737410996.466730, REL_X from AceRK Mouse
+  25-01-20 23:09:56 [DEBUG] Moving mouse (x=125, y=0, mwheel=0)
+  25-01-20 23:09:56 [DEBUG] Received relative axis event at 1737410996.466730, REL_Y from AceRK Mouse
+  25-01-20 23:09:56 [DEBUG] Moving mouse (x=0, y=-125, mwheel=0)
+  25-01-20 23:09:56 [DEBUG] Received synchronization event at 1737410996.466730, SYN_REPORT from AceRK Mouse
+  ^C25-01-20 23:10:21 [DEBUG] Received signal: SIGINT. Requesting graceful shutdown.
+  25-01-20 23:10:21 [DEBUG] Shutdown event triggered. Cancelling relay task...
+  25-01-20 23:10:21 [DEBUG] Relay cancelled for device device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81".
+  25-01-20 23:10:21 [DEBUG] Cancelling relay for /dev/input/event2.
+  25-01-20 23:10:21 [DEBUG] Relay cancelled for device device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81".
+  25-01-20 23:10:21 [DEBUG] Cancelling relay for /dev/input/event3.
+  25-01-20 23:10:21 [DEBUG] RelayController: TaskGroup exited.
+  25-01-20 23:10:21 [DEBUG] UdevEventMonitor stopped observer.
   ```
 
 - Still not resolved? Double-check the [installation instructions](#3-installation)
