@@ -9,14 +9,15 @@ import usb_hid
 from src.bluetooth_2_usb.args import parse_args
 from src.bluetooth_2_usb.logging import add_file_handler, get_logger
 from src.bluetooth_2_usb.relay import (
+    GadgetManager,
     RelayController,
+    ShortcutToggler,
     UdevEventMonitor,
-    UsbHidManager,
     async_list_input_devices,
 )
 
 logger = get_logger()
-VERSION = "0.8.3"
+VERSION = "0.9.0"
 VERSIONED_NAME = f"Bluetooth 2 USB v{VERSION}"
 
 shutdown_event = asyncio.Event()
@@ -61,14 +62,27 @@ async def main() -> None:
     logger.debug(log_handlers_message)
     logger.info(f"Launching {VERSIONED_NAME}")
 
-    usb_manager = UsbHidManager()
-    usb_manager.enable_devices()
+    relay_active_event = asyncio.Event()
+    relay_active_event.set()
+
+    shortcut_toggler = None
+    if args.interrupt_shortcut:
+        shortcut_keys = validate_shortcut(args.interrupt_shortcut)
+        if shortcut_keys:
+            logger.debug(f"Configuring global interrupt shortcut: {shortcut_keys}")
+
+            shortcut_toggler = ShortcutToggler(shortcut_keys, relay_active_event)
+
+    gadget_manager = GadgetManager()
+    gadget_manager.enable_gadgets()
 
     relay_controller = RelayController(
-        usb_manager=usb_manager,
+        gadget_manager=gadget_manager,
         device_identifiers=args.device_ids,
         auto_discover=args.auto_discover,
         grab_devices=args.grab_devices,
+        relay_active_event=relay_active_event,
+        shortcut_toggler=shortcut_toggler,
     )
 
     event_loop = asyncio.get_event_loop()
@@ -110,6 +124,51 @@ def exit_safely():
     """
     atexit.unregister(usb_hid.disable)
     sys.exit(0)
+
+
+def validate_shortcut(shortcut: list[str]) -> set[str]:
+    """
+    Converts a list of raw key strings (e.g. ["SHIFT", "CTRL", "Q"]) into a set of
+    valid evdev-style names (e.g. {"KEY_LEFTSHIFT", "KEY_LEFTCTRL", "KEY_Q"}).
+
+    This function:
+      - Uppercases each entry,
+      - Maps certain aliases (LSHIFT -> LEFTSHIFT, SHIFT -> LEFTSHIFT, etc.),
+      - Prefixes with "KEY_" if missing,
+      - Checks membership in ECodes.__members__.
+
+    Raises ValueError if you want to enforce membership in your ECodes, but here it's commented out.
+    """
+    ALIAS_MAP = {
+        "SHIFT": "LEFTSHIFT",
+        "LSHIFT": "LEFTSHIFT",
+        "RSHIFT": "RIGHTSHIFT",
+        "CTRL": "LEFTCTRL",
+        "LCTRL": "LEFTCTRL",
+        "RCTRL": "RIGHTCTRL",
+        "ALT": "LEFTALT",
+        "LALT": "LEFTALT",
+        "RALT": "RIGHTALT",
+        "GUI": "LEFTMETA",
+        "LMETA": "LEFTMETA",
+        "RMETA": "RIGHTMETA",
+    }
+
+    valid_keys = set()
+    for raw_key in shortcut:
+        key_upper = raw_key.strip().upper()
+
+        if key_upper in ALIAS_MAP:
+            key_upper = ALIAS_MAP[key_upper]
+
+        key_name = key_upper if key_upper.startswith("KEY_") else f"KEY_{key_upper}"
+
+        # if key_name not in ECodes.__members__:
+        #     raise ValueError(f"Invalid key '{raw_key}' -> '{key_name}' is not a recognized ECode")
+
+        valid_keys.add(key_name)
+
+    return valid_keys
 
 
 if __name__ == "__main__":

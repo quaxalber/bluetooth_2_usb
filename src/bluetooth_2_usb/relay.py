@@ -14,6 +14,7 @@ from usb_hid import Device
 
 from .evdev import (
     evdev_to_usb_hid,
+    find_key_name,
     get_mouse_movement,
     is_consumer_key,
     is_mouse_button,
@@ -30,14 +31,14 @@ PATH_REGEX = r"^/dev/input/event.*$"
 MAC_REGEX = r"^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})$"
 
 
-class UsbHidManager:
+class GadgetManager:
     """
-    Manages enabling, disabling, and providing references to USB HID devices.
+    Manages enabling, disabling, and providing references to USB HID gadget devices.
     """
 
     def __init__(self) -> None:
         """
-        The actual HID devices remain uninitialized until enable_devices() is called.
+        The actual HID gadget devices remain uninitialized until enable_gadgets() is called.
         """
         self._gadgets = {
             "keyboard": None,
@@ -46,9 +47,9 @@ class UsbHidManager:
         }
         self._enabled = False
 
-    def enable_devices(self) -> None:
+    def enable_gadgets(self) -> None:
         """
-        Disables and re-enables usb_hid devices to attach as mouse, keyboard, and consumer control.
+        Disables and re-enables usb_hid gadget devices to attach as mouse, keyboard, and consumer control.
         """
         try:
             usb_hid.disable()
@@ -85,6 +86,64 @@ class UsbHidManager:
         return self._gadgets["consumer"]
 
 
+class ShortcutToggler:
+    """
+    Tracks a user-defined shortcut and toggles relaying on/off when
+    that shortcut is fully pressed. Once toggled, you must release
+    at least one of the shortcut keys to toggle again.
+    """
+
+    def __init__(
+        self,
+        shortcut_keys: set[str],
+        relaying_active: asyncio.Event,
+    ) -> None:
+        """
+        Args:
+            shortcut_keys: set of evdev-style key names, e.g. {"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_Q"}
+            relaying_active: an asyncio.Event controlling whether relaying is active.
+                If .is_set(), relaying is ON; if .is_clear(), relaying is OFF.
+        """
+        self.shortcut_keys = shortcut_keys
+        self.relay_active_event = relaying_active
+
+        self.currently_pressed: set[str] = set()
+        self.shortcut_triggered = False
+
+    def handle_key_event(self, event: KeyEvent) -> None:
+        """
+        Called on every key press/release.
+        """
+        key_name = find_key_name(event)
+        if key_name is None:
+            return
+
+        if event.keystate == KeyEvent.key_down:
+            self.currently_pressed.add(key_name)
+        elif event.keystate == KeyEvent.key_up:
+            if key_name in self.currently_pressed:
+                self.currently_pressed.remove(key_name)
+
+            if key_name in self.shortcut_keys:
+                self.shortcut_triggered = False
+
+        if self.shortcut_keys and self.shortcut_keys.issubset(self.currently_pressed):
+            if not self.shortcut_triggered:
+                self.shortcut_triggered = True
+                self.toggle_relaying()
+
+    def toggle_relaying(self) -> None:
+        """
+        Toggle the global relaying state: if it was on, turn it off, and vice versa.
+        """
+        if self.relay_active_event.is_set():
+            self.relay_active_event.clear()
+            _logger.info("ShortcutToggler: Relaying is now OFF.")
+        else:
+            self.relay_active_event.set()
+            _logger.info("ShortcutToggler: Relaying is now ON.")
+
+
 class RelayController:
     """
     Manages the TaskGroup of all active DeviceRelay tasks and handles
@@ -96,19 +155,21 @@ class RelayController:
 
     def __init__(
         self,
-        usb_manager: UsbHidManager,
+        gadget_manager: GadgetManager,
         device_identifiers: Optional[list[str]] = None,
         auto_discover: bool = False,
         skip_name_prefixes: Optional[list[str]] = None,
         grab_devices: bool = False,
         max_blockingio_retries: int = 2,
         blockingio_retry_delay: float = 0.01,
+        relay_active_event: Optional[asyncio.Event] = None,
+        shortcut_toggler: Optional["ShortcutToggler"] = None,
     ) -> None:
         """
         Args:
-            usb_manager:
+            gadget_manager:
                 A UsbHidManager instance that should already be enabled, or the caller
-                can call usb_manager.enable_devices() as needed.
+                can call gadget_manager.enable_devices() as needed.
             device_identifiers:
                 A list of path, MAC, or name fragments to identify devices to relay.
             auto_discover:
@@ -120,11 +181,13 @@ class RelayController:
             max_blockingio_retries, blockingio_retry_delay:
                 Control how many times we retry a blocking HID write and the delay between retries.
         """
-        self._usb_manager = usb_manager
+        self._gadget_manager = gadget_manager
         self._device_ids = [DeviceIdentifier(id) for id in (device_identifiers or [])]
         self._auto_discover = auto_discover
         self._skip_name_prefixes = skip_name_prefixes or ["vc4-hdmi"]
         self._grab_devices = grab_devices
+        self._relay_active_event = relay_active_event
+        self._shortcut_toggler = shortcut_toggler
 
         self._max_blockingio_retries = max_blockingio_retries
         self._blockingio_retry_delay = blockingio_retry_delay
@@ -170,7 +233,7 @@ class RelayController:
 
         try:
             device = InputDevice(device_path)
-        except OSError:
+        except (OSError, FileNotFoundError):
             _logger.debug(f"{device_path} vanished before we could open it.")
             return
 
@@ -206,10 +269,12 @@ class RelayController:
         try:
             async with DeviceRelay(
                 device,
-                self._usb_manager,
+                self._gadget_manager,
                 grab_device=self._grab_devices,
                 max_blockingio_retries=self._max_blockingio_retries,
                 blockingio_retry_delay=self._blockingio_retry_delay,
+                relay_active_event=self._relay_active_event,
+                shortcut_toggler=self._shortcut_toggler,
             ) as relay:
                 _logger.info(f"Activated {relay}")
                 await relay.async_relay_events_loop()
@@ -252,31 +317,38 @@ class DeviceRelay:
     def __init__(
         self,
         input_device: InputDevice,
-        usb_manager: UsbHidManager,
+        gadget_manager: GadgetManager,
         grab_device: bool = False,
         max_blockingio_retries: int = 2,
         blockingio_retry_delay: float = 0.01,
+        relay_active_event: Optional[asyncio.Event] = None,
+        shortcut_toggler: Optional["ShortcutToggler"] = None,
     ) -> None:
         """
         Args:
             input_device: The evdev input device to be relayed.
-            usb_manager: Provides access to keyboard/mouse/consumer HID gadgets.
+            gadget_manager: Provides access to keyboard/mouse/consumer HID gadgets.
             grab_device: If True, grabs exclusive access to input_device.
             max_blockingio_retries: How many times to retry a blocked HID write.
             blockingio_retry_delay: Delay between retries in seconds.
         """
         self._input_device = input_device
-        self._usb_manager = usb_manager
+        self._gadget_manager = gadget_manager
         self._grab_device = grab_device
         self._max_blockingio_retries = max_blockingio_retries
         self._blockingio_retry_delay = blockingio_retry_delay
+        self._relay_active_event = relay_active_event
+        self._shortcut_toggler = shortcut_toggler
+
+        self._currently_grabbed = False
 
     async def __aenter__(self) -> "DeviceRelay":
         if self._grab_device:
             try:
                 self._input_device.grab()
-            except OSError as ex:
-                _logger.debug(f"Could not grab {self._input_device.path}: {ex}")
+                self._currently_grabbed = True
+            except Exception as ex:
+                _logger.warning(f"Could not grab {self._input_device.path}: {ex}")
         return self
 
     async def __aexit__(
@@ -288,8 +360,9 @@ class DeviceRelay:
         if self._grab_device:
             try:
                 self._input_device.ungrab()
+                self._currently_grabbed = False
             except Exception as ex:
-                _logger.debug(f"Unable to ungrab {self._input_device.path}: {ex}")
+                _logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
 
         # Returning False means any exceptions are not suppressed.
         return False
@@ -312,7 +385,33 @@ class DeviceRelay:
         """
         async for input_event in self._input_device.async_read_loop():
             event = categorize(input_event)
+
+            if self._shortcut_toggler and isinstance(event, KeyEvent):
+                self._shortcut_toggler.handle_key_event(event)
+
+            active = self._relay_active_event and self._relay_active_event.is_set()
+
+            if self._grab_device and active and not self._currently_grabbed:
+                try:
+                    self._input_device.grab()
+                    self._currently_grabbed = True
+                    _logger.debug(f"Grabbed {self._input_device}")
+                except Exception as ex:
+                    _logger.warning(f"Could not grab {self._input_device}: {ex}")
+
+            elif self._grab_device and not active and self._currently_grabbed:
+                try:
+                    self._input_device.ungrab()
+                    self._currently_grabbed = False
+                    _logger.debug(f"Ungrabbed {self._input_device}")
+                except Exception as ex:
+                    _logger.warning(f"Could not ungrab {self._input_device}: {ex}")
+
+            if not active:
+                continue
+
             _logger.debug(f"Received {event} from {self._input_device.name}")
+
             await self._process_event_with_retry(event)
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
@@ -322,7 +421,7 @@ class DeviceRelay:
         """
         for attempt in range(self._max_blockingio_retries):
             try:
-                relay_event(event, self._usb_manager)
+                relay_event(event, self._gadget_manager)
                 return
             except BlockingIOError:
                 if attempt < self._max_blockingio_retries - 1:
@@ -411,23 +510,23 @@ async def async_list_input_devices() -> list[InputDevice]:
         return []
 
 
-def relay_event(event: InputEvent, usb_manager: UsbHidManager) -> None:
+def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:
     """
     Relay an event to the correct USB HID function.
     May raise BlockingIOError if the HID device is busy.
     """
     if isinstance(event, RelEvent):
-        move_mouse(event, usb_manager)
+        move_mouse(event, gadget_manager)
     elif isinstance(event, KeyEvent):
-        send_key_event(event, usb_manager)
+        send_key_event(event, gadget_manager)
 
 
-def move_mouse(event: RelEvent, usb_manager: UsbHidManager) -> None:
+def move_mouse(event: RelEvent, gadget_manager: GadgetManager) -> None:
     """
     Relay relative movement events to the USB HID Mouse gadget.
     Raises BlockingIOError if the HID write cannot be completed.
     """
-    mouse = usb_manager.get_mouse()
+    mouse = gadget_manager.get_mouse()
     if mouse is None:
         raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
 
@@ -443,7 +542,7 @@ def move_mouse(event: RelEvent, usb_manager: UsbHidManager) -> None:
         _logger.exception(f"Failed moving mouse {coords}")
 
 
-def send_key_event(event: KeyEvent, usb_manager: UsbHidManager) -> None:
+def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
     """
     Relay key press/release events to the appropriate USB HID gadget
     (keyboard, mouse-button, or consumer control).
@@ -453,7 +552,7 @@ def send_key_event(event: KeyEvent, usb_manager: UsbHidManager) -> None:
     if key_id is None or key_name is None:
         return
 
-    output_gadget = get_output_device(event, usb_manager)
+    output_gadget = get_output_device(event, gadget_manager)
     if output_gadget is None:
         raise RuntimeError("No appropriate USB gadget found (manager not enabled?).")
 
@@ -471,7 +570,7 @@ def send_key_event(event: KeyEvent, usb_manager: UsbHidManager) -> None:
 
 
 def get_output_device(
-    event: KeyEvent, usb_manager: UsbHidManager
+    event: KeyEvent, gadget_manager: GadgetManager
 ) -> Union[ConsumerControl, Keyboard, Mouse, None]:
     """
     Decide which HID gadget to use based on the event type:
@@ -480,10 +579,10 @@ def get_output_device(
       - Otherwise: Keyboard
     """
     if is_consumer_key(event):
-        return usb_manager.get_consumer()
+        return gadget_manager.get_consumer()
     elif is_mouse_button(event):
-        return usb_manager.get_mouse()
-    return usb_manager.get_keyboard()
+        return gadget_manager.get_mouse()
+    return gadget_manager.get_keyboard()
 
 
 class UdevEventMonitor:

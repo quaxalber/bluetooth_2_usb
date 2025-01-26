@@ -48,6 +48,7 @@ Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Dev
 - Supports [146 multimedia keys](https://github.com/quaxalber/bluetooth_2_usb/blob/8b1c5f8097bbdedfe4cef46e07686a1059ea2979/lib/evdev_adapter.py#L142) (e.g., mute, volume up/down, launch browser, etc.)
 - Auto-discovery feature for input devices
 - Auto-reconnect feature for input devices (power off, energy saving mode, out of range, etc.)
+- Pause/resume relaying input devices via configurable shortcut
 - Robust error handling and logging
 - Installation as a systemd service
 - Reliable concurrency using state-of-the-art [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups)
@@ -148,7 +149,7 @@ Follow these steps to install and configure the project:
                 └─15601 python3 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
 
     Jan 20 23:10:33 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Jan 20 23:10:35 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:35 [INFO] Launching Bluetooth 2 USB v0.8.3
+    Jan 20 23:10:35 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:35 [INFO] Launching Bluetooth 2 USB v0.9.0
     Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
     Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
     ```
@@ -177,7 +178,7 @@ Currently you can provide the following CLI arguments:
 
 ```console
 user@pi0w:~ $ bluetooth_2_usb -h
-usage: bluetooth_2_usb.py [--device_ids DEVICE_IDS] [--auto_discover] [--grab_devices] [--list_devices] [--log_to_file] [--log_path LOG_PATH] [--debug] [--version] [--help]
+usage: bluetooth_2_usb.py [--device_ids DEVICE_IDS] [--auto_discover] [--grab_devices] [--interrupt_shortcut INTERRUPT_SHORTCUT] [--list_devices] [--log_to_file] [--log_path LOG_PATH] [--debug] [--version] [--help]
 
 Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.
 
@@ -191,6 +192,9 @@ options:
                         Default: disabled
   --grab_devices, -g    Grab the input devices, i.e., suppress any events on your relay device.
                         Devices are not grabbed by default.
+  --interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT
+                        A plus-separated list of key names to press simultaneously in order to toggle relaying (pause/resume). Example: CTRL+SHIFT+Q
+                        Default: None (feature disabled)
   --list_devices, -l    List all available input devices and exit.
   --log_to_file, -f     Add a handler that logs to file, additionally to stdout.
   --log_path LOG_PATH, -p LOG_PATH
@@ -363,51 +367,78 @@ Here's a few things you could try:
 - When you interact with your Bluetooth devices with `-d` set, you should see debug output in the logs such as:
 
   ```console
-  user@pi0w:~/bluetooth_2_usb $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -ad ; sudo service bluetooth_2_usb start
-  25-01-20 23:09:26 [DEBUG] CLI args: device_ids=None, auto_discover=True, grab_devices=False, list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
-  25-01-20 23:09:26 [DEBUG] Logging to stdout
-  25-01-20 23:09:26 [INFO] Launching Bluetooth 2 USB v0.8.3
-  25-01-20 23:09:30 [DEBUG] USB HID gadgets re-initialized: [boot mouse gadget (/dev/hidg0), keyboard gadget (/dev/hidg1), consumer control gadget (/dev/hidg2)]
-  25-01-20 23:09:30 [DEBUG] UdevEventMonitor initialized (observer not started yet).
-  25-01-20 23:09:30 [DEBUG] UdevEventMonitor started observer.
-  25-01-20 23:09:30 [DEBUG] RelayController: TaskGroup started.
-  25-01-20 23:09:30 [DEBUG] Created task for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81".
-  25-01-20 23:09:30 [DEBUG] Created task for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81".
-  25-01-20 23:09:30 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
-  25-01-20 23:09:30 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
-  25-01-20 23:09:50 [DEBUG] Received event at 1737410990.909361, code 04, type 04, val 458832 from AceRK Keyboard
-  25-01-20 23:09:50 [DEBUG] Received key event at 1737410990.909361, 105 (KEY_LEFT), down from AceRK Keyboard
-  25-01-20 23:09:50 [DEBUG] Converted evdev scancode 0x69 (KEY_LEFT) to HID UsageID 0x50 (LEFT_ARROW)
-  25-01-20 23:09:50 [DEBUG] Pressing LEFT_ARROW (0x50)
-  25-01-20 23:09:50 [DEBUG] Received synchronization event at 1737410990.909361, SYN_REPORT from AceRK Keyboard
-  25-01-20 23:09:50 [DEBUG] Received event at 1737410990.958636, code 04, type 04, val 458832 from AceRK Keyboard
-  25-01-20 23:09:50 [DEBUG] Received key event at 1737410990.958636, 105 (KEY_LEFT), up from AceRK Keyboard
-  25-01-20 23:09:50 [DEBUG] Converted evdev scancode 0x69 (KEY_LEFT) to HID UsageID 0x50 (LEFT_ARROW)
-  25-01-20 23:09:50 [DEBUG] Releasing LEFT_ARROW (0x50)
-  25-01-20 23:09:50 [DEBUG] Received synchronization event at 1737410990.958636, SYN_REPORT from AceRK Keyboard
-  25-01-20 23:09:53 [DEBUG] Received event at 1737410993.639160, code 04, type 04, val 786666 from AceRK Keyboard
-  25-01-20 23:09:53 [DEBUG] Received key event at 1737410993.639160, 114 (KEY_VOLUMEDOWN), down from AceRK Keyboard
-  25-01-20 23:09:53 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
-  25-01-20 23:09:53 [DEBUG] Pressing VOLUME_DECREMENT (0xEA)
-  25-01-20 23:09:53 [DEBUG] Received synchronization event at 1737410993.639160, SYN_REPORT from AceRK Keyboard
-  25-01-20 23:09:53 [DEBUG] Received event at 1737410993.640037, code 04, type 04, val 786666 from AceRK Keyboard
-  25-01-20 23:09:53 [DEBUG] Received key event at 1737410993.640037, 114 (KEY_VOLUMEDOWN), up from AceRK Keyboard
-  25-01-20 23:09:53 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
-  25-01-20 23:09:53 [DEBUG] Releasing VOLUME_DECREMENT (0xEA)
-  25-01-20 23:09:53 [DEBUG] Received synchronization event at 1737410993.640037, SYN_REPORT from AceRK Keyboard
-  25-01-20 23:09:56 [DEBUG] Received relative axis event at 1737410996.466730, REL_X from AceRK Mouse
-  25-01-20 23:09:56 [DEBUG] Moving mouse (x=125, y=0, mwheel=0)
-  25-01-20 23:09:56 [DEBUG] Received relative axis event at 1737410996.466730, REL_Y from AceRK Mouse
-  25-01-20 23:09:56 [DEBUG] Moving mouse (x=0, y=-125, mwheel=0)
-  25-01-20 23:09:56 [DEBUG] Received synchronization event at 1737410996.466730, SYN_REPORT from AceRK Mouse
-  ^C25-01-20 23:10:21 [DEBUG] Received signal: SIGINT. Requesting graceful shutdown.
-  25-01-20 23:10:21 [DEBUG] Shutdown event triggered. Cancelling relay task...
-  25-01-20 23:10:21 [DEBUG] Relay cancelled for device device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81".
-  25-01-20 23:10:21 [DEBUG] Cancelling relay for /dev/input/event2.
-  25-01-20 23:10:21 [DEBUG] Relay cancelled for device device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81".
-  25-01-20 23:10:21 [DEBUG] Cancelling relay for /dev/input/event3.
-  25-01-20 23:10:21 [DEBUG] RelayController: TaskGroup exited.
-  25-01-20 23:10:21 [DEBUG] UdevEventMonitor stopped observer.
+  user@pi0w:~ $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -gads "CTRL+SHIFT+F12" ; sudo service bluetooth_2_usb start
+  25-01-26 13:21:39 [DEBUG] CLI args: device_ids=None, auto_discover=True, grab_devices=True, interrupt_shortcut=['CTRL', 'SHIFT', 'F12'], list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
+  25-01-26 13:21:39 [DEBUG] Logging to stdout
+  25-01-26 13:21:39 [INFO] Launching Bluetooth 2 USB v0.9.0
+  25-01-26 13:21:39 [DEBUG] Configuring global interrupt shortcut: {'KEY_F12', 'KEY_LEFTCTRL', 'KEY_LEFTSHIFT'}
+  25-01-26 13:21:42 [DEBUG] USB HID gadgets re-initialized: [boot mouse gadget (/dev/hidg0), keyboard gadget (/dev/hidg1), consumer control gadget (/dev/hidg2)]
+  25-01-26 13:21:42 [DEBUG] UdevEventMonitor initialized (observer not started yet).
+  25-01-26 13:21:42 [DEBUG] UdevEventMonitor started observer.
+  25-01-26 13:21:42 [DEBUG] RelayController: TaskGroup started.
+  25-01-26 13:21:42 [DEBUG] Created task for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81".
+  25-01-26 13:21:42 [DEBUG] Created task for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81".
+  25-01-26 13:21:42 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+  25-01-26 13:21:42 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+  25-01-26 13:21:53 [DEBUG] Received event at 1737894113.194308, code 04, type 04, val 458756 from AceRK Keyboard
+  25-01-26 13:21:53 [DEBUG] Received key event at 1737894113.194308, 30 (KEY_A), down from AceRK Keyboard
+  25-01-26 13:21:53 [DEBUG] Converted evdev scancode 0x1E (KEY_A) to HID UsageID 0x04 (A)
+  25-01-26 13:21:53 [DEBUG] Pressing A (0x04)
+  25-01-26 13:21:53 [DEBUG] Received synchronization event at 1737894113.194308, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:21:53 [DEBUG] Received event at 1737894113.243246, code 04, type 04, val 458756 from AceRK Keyboard
+  25-01-26 13:21:53 [DEBUG] Received key event at 1737894113.243246, 30 (KEY_A), up from AceRK Keyboard
+  25-01-26 13:21:53 [DEBUG] Converted evdev scancode 0x1E (KEY_A) to HID UsageID 0x04 (A)
+  25-01-26 13:21:53 [DEBUG] Releasing A (0x04)
+  25-01-26 13:21:53 [DEBUG] Received synchronization event at 1737894113.243246, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:02 [DEBUG] Received relative axis event at 1737894122.359603, REL_X from AceRK Mouse
+  25-01-26 13:22:02 [DEBUG] Moving mouse (x=125, y=0, mwheel=0)
+  25-01-26 13:22:02 [DEBUG] Received synchronization event at 1737894122.359603, SYN_REPORT from AceRK Mouse
+  25-01-26 13:22:21 [DEBUG] Received event at 1737894141.518490, code 04, type 04, val 458977 from AceRK Keyboard
+  25-01-26 13:22:21 [DEBUG] Received key event at 1737894141.518490, 42 (KEY_LEFTSHIFT), down from AceRK Keyboard
+  25-01-26 13:22:21 [DEBUG] Converted evdev scancode 0x2A (KEY_LEFTSHIFT) to HID UsageID 0xE1 (LEFT_SHIFT)
+  25-01-26 13:22:21 [DEBUG] Pressing LEFT_SHIFT (0xE1)
+  25-01-26 13:22:21 [DEBUG] Received synchronization event at 1737894141.518490, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:22 [DEBUG] Received event at 1737894142.444821, code 04, type 04, val 458976 from AceRK Keyboard
+  25-01-26 13:22:22 [DEBUG] Received key event at 1737894142.444821, 29 (KEY_LEFTCTRL), down from AceRK Keyboard
+  25-01-26 13:22:22 [DEBUG] Converted evdev scancode 0x1D (KEY_LEFTCTRL) to HID UsageID 0xE0 (CONTROL)
+  25-01-26 13:22:22 [DEBUG] Pressing CONTROL (0xE0)
+  25-01-26 13:22:22 [DEBUG] Received synchronization event at 1737894142.444821, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:24 [INFO] ShortcutToggler: Relaying is now OFF.
+  25-01-26 13:22:24 [DEBUG] Ungrabbed device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+  25-01-26 13:22:34 [DEBUG] Ungrabbed device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+  25-01-26 13:22:46 [INFO] ShortcutToggler: Relaying is now ON.
+  25-01-26 13:22:46 [DEBUG] Grabbed device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+  25-01-26 13:22:46 [DEBUG] Received key event at 1737894166.576799, 88 (KEY_F12), down from AceRK Keyboard
+  25-01-26 13:22:46 [DEBUG] Converted evdev scancode 0x58 (KEY_F12) to HID UsageID 0x45 (F12)
+  25-01-26 13:22:46 [DEBUG] Pressing F12 (0x45)
+  25-01-26 13:22:46 [DEBUG] Received synchronization event at 1737894166.576799, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:46 [DEBUG] Received event at 1737894166.625320, code 04, type 04, val 458821 from AceRK Keyboard
+  25-01-26 13:22:46 [DEBUG] Received key event at 1737894166.625320, 88 (KEY_F12), up from AceRK Keyboard
+  25-01-26 13:22:46 [DEBUG] Converted evdev scancode 0x58 (KEY_F12) to HID UsageID 0x45 (F12)
+  25-01-26 13:22:46 [DEBUG] Releasing F12 (0x45)
+  25-01-26 13:22:46 [DEBUG] Received synchronization event at 1737894166.625320, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:49 [DEBUG] Received event at 1737894169.452812, code 04, type 04, val 458976 from AceRK Keyboard
+  25-01-26 13:22:49 [DEBUG] Received key event at 1737894169.452812, 29 (KEY_LEFTCTRL), up from AceRK Keyboard
+  25-01-26 13:22:49 [DEBUG] Converted evdev scancode 0x1D (KEY_LEFTCTRL) to HID UsageID 0xE0 (CONTROL)
+  25-01-26 13:22:49 [DEBUG] Releasing CONTROL (0xE0)
+  25-01-26 13:22:49 [DEBUG] Received synchronization event at 1737894169.452812, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:50 [DEBUG] Received event at 1737894170.378918, code 04, type 04, val 458977 from AceRK Keyboard
+  25-01-26 13:22:50 [DEBUG] Received key event at 1737894170.378918, 42 (KEY_LEFTSHIFT), up from AceRK Keyboard
+  25-01-26 13:22:50 [DEBUG] Converted evdev scancode 0x2A (KEY_LEFTSHIFT) to HID UsageID 0xE1 (LEFT_SHIFT)
+  25-01-26 13:22:50 [DEBUG] Releasing LEFT_SHIFT (0xE1)
+  25-01-26 13:22:50 [DEBUG] Received synchronization event at 1737894170.378918, SYN_REPORT from AceRK Keyboard
+  25-01-26 13:22:52 [DEBUG] Grabbed device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+  25-01-26 13:22:52 [DEBUG] Received relative axis event at 1737894172.475360, REL_X from AceRK Mouse
+  25-01-26 13:22:52 [DEBUG] Moving mouse (x=50, y=0, mwheel=0)
+  25-01-26 13:22:52 [DEBUG] Received synchronization event at 1737894172.475360, SYN_REPORT from AceRK Mouse
+  25-01-26 13:23:07 [DEBUG] Received signal: SIGINT. Requesting graceful shutdown.
+  25-01-26 13:23:07 [DEBUG] Shutdown event triggered. Cancelling relay task...
+  25-01-26 13:23:07 [DEBUG] Relay cancelled for device device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81".
+  25-01-26 13:23:07 [DEBUG] Cancelling relay for /dev/input/event3.
+  25-01-26 13:23:07 [DEBUG] Relay cancelled for device device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81".
+  25-01-26 13:23:07 [DEBUG] Cancelling relay for /dev/input/event2.
+  25-01-26 13:23:07 [DEBUG] RelayController: TaskGroup exited.
+  25-01-26 13:23:07 [DEBUG] UdevEventMonitor stopped observer.
   ```
 
 - Still not resolved? Double-check the [installation instructions](#3-installation)

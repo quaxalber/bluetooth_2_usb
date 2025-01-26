@@ -22,7 +22,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "--device_ids",
             "-i",
-            type=lambda input: [item.strip() for item in input.split(",")],
+            type=lambda input: [id.strip() for id in input.split(",")],
             default=None,
             help="Comma-separated list of identifiers for input devices to be relayed.\nAn identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\nExample: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\nDefault: None",
         )
@@ -39,6 +39,19 @@ class CustomArgumentParser(argparse.ArgumentParser):
             action="store_true",
             default=False,
             help="Grab the input devices, i.e., suppress any events on your relay device.\nDevices are not grabbed by default.",
+        )
+        self.add_argument(
+            "--interrupt_shortcut",
+            "-s",
+            type=lambda input: [
+                key.strip().upper() for key in input.split("+") if key.strip()
+            ],
+            default=None,
+            help=(
+                "A plus-separated list of key names to press simultaneously in order to "
+                "toggle relaying (pause/resume). Example: CTRL+SHIFT+Q\n"
+                "Default: None (feature disabled)"
+            ),
         )
         self.add_argument(
             "--list_devices",
@@ -103,6 +116,7 @@ class Arguments:
         "_device_ids",
         "_auto_discover",
         "_grab_devices",
+        "_interrupt_shortcut",
         "_list_devices",
         "_log_to_file",
         "_log_path",
@@ -115,6 +129,7 @@ class Arguments:
         device_ids: Optional[list[str]],
         auto_discover: bool,
         grab_devices: bool,
+        interrupt_shortcut: Optional[list[str]],
         list_devices: bool,
         log_to_file: bool,
         log_path: str,
@@ -124,6 +139,7 @@ class Arguments:
         self._device_ids = device_ids
         self._auto_discover = auto_discover
         self._grab_devices = grab_devices
+        self._interrupt_shortcut = interrupt_shortcut
         self._list_devices = list_devices
         self._log_to_file = log_to_file
         self._log_path = log_path
@@ -141,6 +157,10 @@ class Arguments:
     @property
     def grab_devices(self) -> bool:
         return self._grab_devices
+
+    @property
+    def interrupt_shortcut(self) -> Optional[list[str]]:
+        return self._interrupt_shortcut
 
     @property
     def list_devices(self) -> bool:
@@ -181,6 +201,7 @@ def parse_args() -> Arguments:
         device_ids=args.device_ids,
         auto_discover=args.auto_discover,
         grab_devices=args.grab_devices,
+        interrupt_shortcut=args.interrupt_shortcut,
         list_devices=args.list_devices,
         log_to_file=args.log_to_file,
         log_path=args.log_path,
