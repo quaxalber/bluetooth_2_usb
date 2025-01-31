@@ -150,7 +150,7 @@ Follow these steps to install and configure the project:
                 └─15601 python3 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
 
     Jan 20 23:10:33 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Jan 20 23:10:35 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:35 [INFO] Launching Bluetooth 2 USB v0.9.0
+    Jan 20 23:10:35 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:35 [INFO] Launching Bluetooth 2 USB v0.9.1
     Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
     Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
     ```
@@ -375,7 +375,7 @@ Here's a few things you could try:
   user@pi0w:~ $ { sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -gads CTRL+SHIFT+F12 ; } ; sudo service bluetooth_2_usb start
   25-01-31 13:16:14 [DEBUG] CLI args: device_ids=None, auto_discover=True, grab_devices=True, interrupt_shortcut=['CTRL', 'SHIFT', 'F12'], list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
   25-01-31 13:16:14 [DEBUG] Logging to stdout
-  25-01-31 13:16:14 [INFO] Launching Bluetooth 2 USB v0.9.0
+  25-01-31 13:16:14 [INFO] Launching Bluetooth 2 USB v0.9.1
   25-01-31 13:16:17 [DEBUG] USB HID gadgets re-initialized: [boot mouse gadget (/dev/hidg0), keyboard gadget (/dev/hidg1), consumer control gadget (/dev/hidg2)]
   25-01-31 13:16:17 [DEBUG] Configuring global interrupt shortcut: {'KEY_LEFTCTRL', 'KEY_LEFTSHIFT', 'KEY_F12'}
   25-01-31 13:16:17 [DEBUG] Detected UDC state file: /sys/class/udc/fe980000.usb/state

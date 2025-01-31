@@ -475,7 +475,7 @@ class DeviceIdentifier:
 
     def _normalize_identifier(self) -> str:
         if self._type == "path":
-            return self.value
+            return self._value
         if self._type == "mac":
             return self._value.lower().replace("-", ":")
         return self._value.lower()
