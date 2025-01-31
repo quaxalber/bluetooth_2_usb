@@ -1,6 +1,7 @@
 import asyncio
 import atexit
 from logging import DEBUG
+from pathlib import Path
 import signal
 import sys
 
@@ -12,6 +13,7 @@ from src.bluetooth_2_usb.relay import (
     GadgetManager,
     RelayController,
     ShortcutToggler,
+    UdcStateMonitor,
     UdevEventMonitor,
     async_list_input_devices,
 )
@@ -24,6 +26,12 @@ shutdown_event = asyncio.Event()
 
 
 def signal_handler(sig, frame):
+    """
+    Signal handler that sets the global shutdown_event.
+
+    :param sig: Integer signal number
+    :param frame: Unused stack frame object
+    """
     sig_name = signal.Signals(sig).name
     logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
     shutdown_event.set()
@@ -35,8 +43,15 @@ for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
 
 async def main() -> None:
     """
-    Parses command-line arguments, sets up logging, starts the event loop
-    to forward input-device events to USB gadgets, and then waits for a shutdown signal.
+    Main entry point for Bluetooth 2 USB.
+
+    1. Parses command-line arguments.
+    2. Sets up logging according to the supplied flags.
+    3. Optionally lists devices or prints version before exiting.
+    4. Creates and enables the USB HID gadget.
+    5. Creates a RelayController to forward input events to the gadget.
+    6. Monitors for UDC state changes and new/removed /dev/input devices.
+    7. Waits for a shutdown signal to cancel tasks.
     """
     args = parse_args()
 
@@ -62,46 +77,59 @@ async def main() -> None:
     logger.debug(log_handlers_message)
     logger.info(f"Launching {VERSIONED_NAME}")
 
-    relay_active_event = asyncio.Event()
-    relay_active_event.set()
+    relaying_active = asyncio.Event()
+    relaying_active.clear()
+
+    gadget_manager = GadgetManager()
+    gadget_manager.enable_gadgets()
 
     shortcut_toggler = None
     if args.interrupt_shortcut:
         shortcut_keys = validate_shortcut(args.interrupt_shortcut)
         if shortcut_keys:
             logger.debug(f"Configuring global interrupt shortcut: {shortcut_keys}")
-
-            shortcut_toggler = ShortcutToggler(shortcut_keys, relay_active_event)
-
-    gadget_manager = GadgetManager()
-    gadget_manager.enable_gadgets()
+            shortcut_toggler = ShortcutToggler(
+                shortcut_keys=shortcut_keys,
+                relaying_active=relaying_active,
+                gadget_manager=gadget_manager,
+            )
 
     relay_controller = RelayController(
         gadget_manager=gadget_manager,
         device_identifiers=args.device_ids,
         auto_discover=args.auto_discover,
         grab_devices=args.grab_devices,
-        relay_active_event=relay_active_event,
+        relaying_active=relaying_active,
         shortcut_toggler=shortcut_toggler,
     )
 
-    event_loop = asyncio.get_event_loop()
+    udc_path = get_udc_path()
+    if udc_path is None:
+        logger.error("No UDC detected! USB Gadget mode may not be enabled.")
+        return
+    logger.debug(f"Detected UDC state file: {udc_path}")
 
-    with UdevEventMonitor(relay_controller, event_loop):
+    async with (
+        UdevEventMonitor(relay_controller),
+        UdcStateMonitor(
+            relaying_active=relaying_active,
+            udc_path=udc_path,
+        ),
+    ):
         relay_task = asyncio.create_task(relay_controller.async_relay_devices())
-
         await shutdown_event.wait()
 
         logger.debug("Shutdown event triggered. Cancelling relay task...")
         relay_task.cancel()
-
         await asyncio.gather(relay_task, return_exceptions=True)
 
 
 async def async_list_devices():
     """
-    Prints a list of available input devices. This is a helper function for
-    the --list-devices CLI argument.
+    Prints a list of available input devices and exits.
+
+    :return: None
+    :raises SystemExit: Always exits after listing devices
     """
     for dev in await async_list_input_devices():
         print(f"{dev.name}\t{dev.uniq if dev.uniq else dev.phys}\t{dev.path}")
@@ -111,6 +139,9 @@ async def async_list_devices():
 def print_version():
     """
     Prints the version of Bluetooth 2 USB and exits.
+
+    :return: None
+    :raises SystemExit: Always exits after printing version
     """
     print(VERSIONED_NAME)
     exit_safely()
@@ -118,9 +149,11 @@ def print_version():
 
 def exit_safely():
     """
-    When the script is run with help or version flag, we need to unregister usb_hid.disable()
-    from atexit because else an exception occurs if the script is already running,
-    e.g. as service.
+    Safely exits the script. Unregisters usb_hid.disable()
+    from atexit handlers to avoid potential exceptions.
+
+    :return: None
+    :raises SystemExit: Always exits
     """
     atexit.unregister(usb_hid.disable)
     sys.exit(0)
@@ -128,16 +161,13 @@ def exit_safely():
 
 def validate_shortcut(shortcut: list[str]) -> set[str]:
     """
-    Converts a list of raw key strings (e.g. ["SHIFT", "CTRL", "Q"]) into a set of
-    valid evdev-style names (e.g. {"KEY_LEFTSHIFT", "KEY_LEFTCTRL", "KEY_Q"}).
+    Convert a list of raw key strings (e.g. ["SHIFT", "CTRL", "Q"])
+    into a set of valid evdev-style names (e.g. {"KEY_LEFTSHIFT", "KEY_LEFTCTRL", "KEY_Q"}).
 
-    This function:
-      - Uppercases each entry,
-      - Maps certain aliases (LSHIFT -> LEFTSHIFT, SHIFT -> LEFTSHIFT, etc.),
-      - Prefixes with "KEY_" if missing,
-      - Checks membership in ECodes.__members__.
-
-    Raises ValueError if you want to enforce membership in your ECodes, but here it's commented out.
+    :param shortcut: List of key strings to convert
+    :type shortcut: list[str]
+    :return: A set of normalized key names
+    :rtype: set[str]
     """
     ALIAS_MAP = {
         "SHIFT": "LEFTSHIFT",
@@ -157,18 +187,31 @@ def validate_shortcut(shortcut: list[str]) -> set[str]:
     valid_keys = set()
     for raw_key in shortcut:
         key_upper = raw_key.strip().upper()
-
         if key_upper in ALIAS_MAP:
             key_upper = ALIAS_MAP[key_upper]
-
         key_name = key_upper if key_upper.startswith("KEY_") else f"KEY_{key_upper}"
-
-        # if key_name not in ECodes.__members__:
-        #     raise ValueError(f"Invalid key '{raw_key}' -> '{key_name}' is not a recognized ECode")
-
         valid_keys.add(key_name)
 
     return valid_keys
+
+
+def get_udc_path() -> Path | None:
+    """
+    Dynamically find the UDC state file for the USB Device Controller.
+
+    :return: The path to the "state" file for the first UDC or None if not found
+    :rtype: Path | None
+    """
+    udc_root = Path("/sys/class/udc")
+
+    if not udc_root.exists() or not udc_root.is_dir():
+        return None
+
+    controllers = [entry for entry in udc_root.iterdir() if entry.is_dir()]
+    if not controllers:
+        return None
+
+    return controllers[0] / "state"
 
 
 if __name__ == "__main__":
