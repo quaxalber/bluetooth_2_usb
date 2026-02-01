@@ -1206,6 +1206,11 @@ _MOUSE_BUTTONS = set(
         ecodes.BTN_LEFT,
         ecodes.BTN_RIGHT,
         ecodes.BTN_MIDDLE,
+        ecodes.BTN_SIDE,
+        ecodes.BTN_EXTRA,
+        ecodes.BTN_FORWARD,
+        ecodes.BTN_BACK,
+        ecodes.BTN_TASK,
     )
 )
 """Mouse button ecodes"""
@@ -1429,6 +1434,11 @@ def _evdev_to_usb_hid_map() -> dict[int, int]:
         ecodes.BTN_LEFT: MouseButton.LEFT,
         ecodes.BTN_RIGHT: MouseButton.RIGHT,
         ecodes.BTN_MIDDLE: MouseButton.MIDDLE,
+        ecodes.BTN_SIDE: MouseButton.SIDE,
+        ecodes.BTN_EXTRA: MouseButton.EXTRA,
+        ecodes.BTN_FORWARD: MouseButton.FORWARD,
+        ecodes.BTN_BACK: MouseButton.BACK,
+        ecodes.BTN_TASK: MouseButton.TASK,
         ecodes.KEY_POWER: ConsumerControlCode.POWER,
         ecodes.KEY_RESTART: ConsumerControlCode.RESET,
         ecodes.KEY_SLEEP: ConsumerControlCode.SLEEP,
