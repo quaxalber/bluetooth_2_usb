@@ -1278,16 +1278,18 @@ def is_consumer_key(event: KeyEvent) -> bool:
     return event.scancode in _CONSUMER_KEYS
 
 
-def get_mouse_movement(event: RelEvent) -> tuple[int, int, int]:
+def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, int]:
     input_event: InputEvent = event.event
-    x, y, mwheel = 0, 0, 0
+    x, y, mwheel, pan = 0, 0, 0, 0
     if input_event.code == ecodes.REL_X:
         x = input_event.value
     elif input_event.code == ecodes.REL_Y:
         y = input_event.value
     elif input_event.code == ecodes.REL_WHEEL:
         mwheel = input_event.value
-    return x, y, mwheel
+    elif input_event.code == ecodes.REL_HWHEEL:
+        pan = input_event.value
+    return x, y, mwheel, pan
 
 
 @lru_cache(maxsize=1)
