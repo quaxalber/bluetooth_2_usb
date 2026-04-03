@@ -4,10 +4,9 @@ After=multi-user.target
 
 [Service]
 User=root
-ExecStart=python3.11 /usr/bin/bluetooth_2_usb.py -k /dev/input/event2 -m /dev/input/event3
+ExecStart={python3.11-venv} /usr/bin/bluetooth_2_usb.py -k /dev/input/event2 -m /dev/input/event3
 Environment=PYTHONUNBUFFERED=1
 Restart=on-failure
-Documentation=https://github.com/quaxalber/bluetooth_2_usb
 
 [Install]
 WantedBy=multi-user.target

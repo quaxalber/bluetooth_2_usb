@@ -15,7 +15,6 @@ Thank you for considering contributing to Bluetooth 2 USB! We value your effort 
   - [3.2. Code Formatting with Black](#32-code-formatting-with-black)
 - [4. Pull Requests](#4-pull-requests)
 - [5. Reporting Issues](#5-reporting-issues)
-- [6. Additional Resources](#6-additional-resources)
 
 ## 1. Code of Conduct
 
@@ -23,9 +22,43 @@ By participating in this project, you are expected to uphold our [Code of Conduc
 
 ## 2. Getting Started
 
-- Fork the repository on GitHub
-- Clone the forked repository to your machine
+- [Fork the repository](https://docs.github.com/en/get-started/quickstart/fork-a-repo) on GitHub
+  
+- Install required packages to your Linux machine:
+  
+  ```console 
+  sudo apt update && sudo apt install -y git python3.11 python3.11-venv python3.11-dev
+  ```
+
+- Clone the forked repository:
+  
+  ```console
+  git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git
+  ```
+
+- Initialize submodules:
+  
+  ```console 
+  cd bluetooth_2_usb && git submodule update --init --recursive
+  ```
+
+- Create a virtual Python environment:
+  
+  ```console 
+  python3.11 -m venv venv 
+  ```
+  
+- Install submodules in virtual Python environment:
+  
+  ```console 
+  venv/bin/pip3.11 install submodules/* 
+  ```  
+
 - Open the repo in your favorite IDE
+  
+- Make sure that your IDE is using python3.11 from `bluetooth_2_usb/venv/bin/`, e.g. in VS Code:
+  
+  `CTRL + SHIFT + P` > type `Python Select Interpreter` > `Enter interpreter path` 
 
 ## 3. Coding Style
 
@@ -38,17 +71,17 @@ Adherence to widely accepted best practices is crucial for creating code that is
 #### 3.1.1. General Guidelines
 
 - Opt for readability over compact code: make sure your code is easy to read and understand.
-- Use meaningful variable and function names.
-- Keep functions small and focused.
-- Document your code properly with comments and docstrings.
+- Use [meaningful](https://www.youtube.com/watch?v=-J3wNP6u5YU) variable and function names.
+- Keep functions [small and focused](https://www.youtube.com/watch?v=CFRhGnuXG-4).
+- Document your code [properly](https://www.youtube.com/watch?v=Bf7vDBBOBUA) with comments and docstrings.
 
 #### 3.1.2. Object-Oriented Programming (OOP) Guidelines
 
 - Use encapsulation by limiting the direct manipulation of object attributes and using methods instead.
 - Employ inheritance [wisely](https://www.youtube.com/watch?v=hxGOiiR9ZKg) to reuse code and create a logical relationship between classes.
-- Leverage polymorphism to allow objects to take on more than one form.
+- Leverage [polymorphism](https://www.youtube.com/watch?v=rQlMtztiAoA) to allow objects to take on more than one form.
 - Follow the Single Responsibility Principle: a class should have only one reason to change.
-- Make use of design patterns where appropriate.
+- Make use of [design patterns](https://www.youtube.com/watch?v=J1f5b4vcxCQ) where appropriate.
 
 To learn more about OOP and best practices, consider reviewing:
 
@@ -80,16 +113,11 @@ This will automatically reformat your code to conform to the project's coding st
 - Create a new branch for each feature or bugfix you are working on.
 - Commit your changes following the [coding style](#3-coding-style) guidelines. Add concise commit messages. 
 - Push your changes to your fork.
-- Create a new Pull Request targeting the main branch of the official repository. A short description helps the maintainers reviewing the changes. 
+- [Create a new Pull Request](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests) targeting the main branch of the official repository. A short description helps the maintainers reviewing the changes. 
 
 ## 5. Reporting Issues
 
 Please use the GitHub [issue tracker](https://github.com/quaxalber/bluetooth_2_usb/issues) to report any bugs or to request new features. Make sure to check for existing issues that are related to yours before creating a new one.
-
-## 6. Additional Resources
-
-- [GitHub Pull Request documentation](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests)
-- [GitHub Forking a repo documentation](https://docs.github.com/en/get-started/quickstart/fork-a-repo)
 
 ---
 

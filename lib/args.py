@@ -67,7 +67,14 @@ def parse_args() -> Namespace:
         "-v",
         action="store_true",
         default=False,
-        help="Display the version number of this software.",
+        help="Display the version number of this software and exit.",
+    )
+    parser.add_argument(
+        "--list_devices",
+        "-l",
+        action="store_true",
+        default=False,
+        help="List all available input devices and exit.",
     )
 
     args = parser.parse_args()
