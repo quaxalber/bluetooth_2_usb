@@ -5,7 +5,7 @@ from lib.constants import Keycode, MouseButton
 
 logger = lib.logger.get_logger()
 
-_EVDEV_TO_HID_MAPPING  = {
+_EVDEV_TO_HID_MAPPING = {
     ecodes.KEY_RESERVED: 0x00,
     ecodes.KEY_A: Keycode.A,
     ecodes.KEY_B: Keycode.B,
@@ -166,15 +166,16 @@ _EVDEV_TO_HID_MAPPING  = {
     ecodes.KEY_CALC: 0xFB,
     ecodes.BTN_LEFT: MouseButton.LEFT,
     ecodes.BTN_RIGHT: MouseButton.RIGHT,
-    ecodes.BTN_MIDDLE: MouseButton.MIDDLE,    
+    ecodes.BTN_MIDDLE: MouseButton.MIDDLE,
 }
-'''
+"""
 Mapping from evdev ecode to HID Keycode
-'''
+"""
 
-def to_hid_key(ecode : int) -> int:
+
+def to_hid_key(ecode: int) -> int:
     hid_key = _EVDEV_TO_HID_MAPPING.get(ecode, None)
-    logger.debug(f'Converted ecode {ecode} to HID keycode {hid_key}')
+    logger.debug(f"Converted ecode {ecode} to HID keycode {hid_key}")
     if hid_key is None:
-        logger.warning(f'Unsupported key pressed: {ecode}')
+        logger.warning(f"Unsupported key pressed: {ecode}")
     return hid_key
