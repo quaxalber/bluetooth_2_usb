@@ -1,25 +1,51 @@
-#!/bin/bash
-echo "dtoverlay=dwc2" | sudo tee -a /boot/config.txt
-echo "dwc2" | sudo tee -a /etc/modules
-echo "libcomposite" | sudo tee -a /etc/modules
+#!/usr/bin/env bash
 
-pip3 install evdev
+# Check for superuser privileges
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root. Attempting to elevate privileges..."
+    # Re-run the script as root
+    exec sudo bash "$0" "$@"
+fi
+
+# Function to append text to a file if the text doesn't already exist in the file
+append_if_not_exist() {
+  TEXT="$1"
+  FILE="$2"
+  BACKUP="$FILE.bak"
+
+  # Create a backup of the original file
+  cp "$FILE" "$BACKUP"
+
+  if ! grep -q "^$TEXT" "$FILE"; then
+    echo "$TEXT" | tee -a "$FILE" > /dev/null
+  fi
+}
+
+# Check if pip3 is installed, if not, install it
+if ! command -v pip3 &> /dev/null; then
+    apt-get update
+    apt-get install -y python3-pip
+fi
+
+append_if_not_exist "dtoverlay=dwc2" "/boot/config.txt"
+append_if_not_exist "dwc2" "/etc/modules"
+append_if_not_exist "libcomposite" "/etc/modules"
+
+pip3 install evdev adafruit-circuitpython-hid
 
 currentScriptDirectory=$(dirname $(readlink -f $0))
 
-mkdir /tmp/usb_hid
+mkdir /var/log/bluetooth_2_usb
 
-chmod 744 $currentScriptDirectory/usb_hid.sh
-ln -s $currentScriptDirectory/usb_hid.sh /usr/bin/
-ln -s $currentScriptDirectory/usb_hid.service /etc/systemd/system/
+chmod 744 $currentScriptDirectory/bluetooth_2_usb.py
+ln -s $currentScriptDirectory/bluetooth_2_usb.py /usr/bin/
+ln -s $currentScriptDirectory/bluetooth_2_usb.service /etc/systemd/system/
 
-mkdir /tmp/bluetooth_2_hid
+systemctl enable bluetooth_2_usb.service
 
-chmod 744 $currentScriptDirectory/bluetooth_2_hid.py
-ln -s $currentScriptDirectory/bluetooth_2_hid.py /usr/bin/
-ln -s $currentScriptDirectory/bluetooth_2_hid.service /etc/systemd/system/
-
-systemctl enable usb_hid.service
-systemctl enable bluetooth_2_hid.service
-
-reboot
+# Notify user about the reboot
+read -p "The system needs to reboot to complete the installation. Reboot now? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    reboot
+fi
