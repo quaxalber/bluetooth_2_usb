@@ -30,19 +30,15 @@ colored_output "${YELLOW}" "Stopping and disabling bluetooth_2_usb service..."
 systemctl stop bluetooth_2_usb.service
 systemctl disable bluetooth_2_usb.service
 
-colored_output "${YELLOW}" "Removing symlinks and restoring backup files..."
+colored_output "${YELLOW}" "Removing files and restoring backup files..."
 rm /usr/bin/bluetooth_2_usb
-rm /etc/systemd/system/bluetooth_2_usb.service
+rm -rf /var/log/bluetooth_2_usb
 mv /boot/config.txt.bak /boot/config.txt
 mv /etc/modules.bak /etc/modules
 mv /boot/cmdline.txt.bak /boot/cmdline.txt
 
-colored_output "${YELLOW}" "Removing the virtual environment and log directory..."
-rm -rf venv
-rm -rf /var/log/bluetooth_2_usb
-
 # Optionally, remove installed packages (if they were not previously installed)
 # colored_output "${YELLOW}" "Removing installed packages..."
-# apt remove -y git python3.11 python3.11-venv python3.11-dev
+# apt remove -y git python3.11 python3.11-venv
 
 colored_output "${GREEN}" "Uninstallation complete."

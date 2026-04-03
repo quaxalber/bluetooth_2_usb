@@ -1,0 +1,2 @@
+Adafruit-Blinka==none
+Adafruit-circuitpython-hid==none

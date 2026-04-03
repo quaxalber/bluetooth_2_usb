@@ -1,24 +1,19 @@
-#!{python3.11-venv}
-"""
-Reads incoming Bluetooth mouse and keyboard events and forwards them to USB
-using Linux's gadget mode.
-"""
-
 import asyncio
+import atexit
 from logging import DEBUG
 import signal
 import sys
 from typing import NoReturn
 
-from usb_hid import unregister_disable
+from usb_hid import disable
 
 from src.bluetooth_2_usb.args import parse_args
 from src.bluetooth_2_usb.logging import add_file_handler, get_logger
-from src.bluetooth_2_usb.relay import RelayController, list_readable_devices
+from src.bluetooth_2_usb.relay import RelayController, list_input_devices
 
 
 _logger = get_logger()
-_VERSION = "0.6.4"
+_VERSION = "0.6.7"
 _VERSIONED_NAME = f"Bluetooth 2 USB v{_VERSION}"
 
 
@@ -58,7 +53,7 @@ async def _main() -> NoReturn:
 
 
 def _list_devices():
-    for dev in list_readable_devices():
+    for dev in list_input_devices():
         print(f"{dev.name}\t{dev.uniq if dev.uniq else dev.phys}\t{dev.path}")
     _exit_safely()
 
@@ -69,7 +64,11 @@ def _print_version():
 
 
 def _exit_safely():
-    unregister_disable()
+    """
+    When the script is run with help or version flag, we need to unregister usb_hid.disable() from atexit
+    because else an exception occurs if the script is already running, e.g. as service.
+    """
+    atexit.unregister(disable)
     sys.exit(0)
 
 

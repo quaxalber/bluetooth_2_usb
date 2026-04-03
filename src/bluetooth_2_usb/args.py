@@ -1,13 +1,18 @@
 from argparse import Namespace
 import argparse
+import atexit
 import sys
 
-from usb_hid import unregister_disable
+from usb_hid import disable
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
     def print_help(self) -> None:
-        unregister_disable()
+        """
+        When the script is run with help or version flag, we need to unregister usb_hid.disable() from atexit
+        because else an exception occurs if the script is already running, e.g. as service.
+        """
+        atexit.unregister(disable)
         super().print_help()
 
 

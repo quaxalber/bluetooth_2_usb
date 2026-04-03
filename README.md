@@ -143,18 +143,19 @@ Follow these steps to install and configure the project:
     ● bluetooth_2_usb.service - Bluetooth to USB HID relay
         Loaded: loaded (/etc/systemd/system/bluetooth_2_usb.service; enabled; preset: enabled)
         Active: active (running) since Sat 2023-12-02 23:16:37 CET; 15s ago
-      Main PID: 9424 (bluetooth_2_usb)
-          Tasks: 1 (limit: 389)
-            CPU: 1.891s
+      Main PID: 1319 (bash)
+         Tasks: 2 (limit: 389)
+           CPU: 2.526s
         CGroup: /system.slice/bluetooth_2_usb.service
-                └─9424 /home/user/bluetooth_2_usb/venv/bin/python3.11 /usr/bin/bluetooth_2_usb --auto_discover
+                 ├─1319 bash /usr/bin/bluetooth_2_usb --auto_discover
+                 └─1326 python3.11 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover
 
     Dec 02 23:16:37 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Dec 02 23:16:39 pi0w bluetooth_2_usb[9424]: 23-12-02 23:16:39 [INFO] Launching Bluetooth 2 USB v0.6.4
-    Dec 02 23:16:39 pi0w bluetooth_2_usb[9424]: 23-12-02 23:16:39 [INFO] Discovering input devices...
-    Dec 02 23:16:42 pi0w bluetooth_2_usb[9424]: 23-12-02 23:16:42 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "a1:b2:c3:d4:e5:f6"
-    Dec 02 23:16:45 pi0w bluetooth_2_usb[9424]: 23-12-02 23:16:45 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "a1:b2:c3:d4:e5:f6"
-    Dec 02 23:16:48 pi0w bluetooth_2_usb[9424]: 23-12-02 23:16:48 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
+    Dec 02 23:16:39 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:39 [INFO] Launching Bluetooth 2 USB v0.6.7
+    Dec 02 23:16:39 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:39 [INFO] Discovering input devices...
+    Dec 02 23:16:42 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:42 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "a1:b2:c3:d4:e5:f6"
+    Dec 02 23:16:45 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:45 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "a1:b2:c3:d4:e5:f6"
+    Dec 02 23:16:48 pi0w bluetooth_2_usb[1326]: 23-12-02 23:16:48 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
     ```
 
 > [!NOTE]
@@ -211,7 +212,7 @@ sudo ~/bluetooth_2_usb/scripts/update.sh
 ```
 
 > [!NOTE]
-> The update script doesn't cover all possible edge cases. In case you experience odd behavior after running the update script, it is recommended to delete the repo folder, clone again and run the install script.
+> The update script performs a clean reinstallation, that is run `uninstall.sh`, delete the repo folder, clone again and run the install script. The current branch will be maintained.
 
 ## 7. Uninstallation
 
@@ -364,58 +365,55 @@ Here's a few things you could try:
   <p> 
   
   ```console
-  user@pi0w:~ $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -i logi,a1:b2:c3:d4:e5:f6,/dev/input/event3 -d ; sudo service bluetooth_2_usb start
-  23-12-06 14:19:36 [DEBUG] CLI args: Namespace(device_ids=['logi', 'a1:b2:c3:d4:e5:f6', '/dev/input/event3'], auto_discover=False, debug=True, log_to_file=False, log_path='/var/log/bluetooth_2_usb/bluetooth_2_usb.log', version=False, list_devices=False)
-  23-12-06 14:19:36 [DEBUG] Logging to stdout
-  23-12-06 14:19:36 [INFO] Launching Bluetooth 2 USB v0.6.4
-  23-12-06 14:19:36 [DEBUG] Available USB devices: [Mouse gadget (/dev/hidg0), Keyboard gadget (/dev/hidg1), Consumer control gadget (/dev/hidg2)]
-  23-12-06 14:19:36 [INFO] Discovering input devices...
-  23-12-06 14:19:36 [DEBUG] Relaying devices with matching name "logi" or MAC "a1:b2:c3:d4:e5:f6" or path "/dev/input/event3"
-  23-12-06 14:19:39 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "a1:b2:c3:d4:e5:f6"
-  23-12-06 14:19:42 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "a1:b2:c3:d4:e5:f6"
+  user@pi0w:~ $ sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -ad ; sudo service bluetooth_2_usb start
+  23-12-12 13:03:28 [DEBUG] CLI args: Namespace(device_ids=None, auto_discover=True, debug=True, log_to_file=False, log_path='/var/log/bluetooth_2_usb/bluetooth_2_usb.log', version=False, list_devices=False)
+  23-12-12 13:03:28 [DEBUG] Logging to stdout
+  23-12-12 13:03:28 [INFO] Launching Bluetooth 2 USB v0.6.7
+  23-12-12 13:03:28 [INFO] Discovering input devices...
+  23-12-12 13:03:28 [DEBUG] Auto-discovery enabled. Relaying all input devices.
+  23-12-12 13:03:28 [DEBUG] Initializing USB gadgets...
+  23-12-12 13:03:31 [DEBUG] Enabled USB gadgets: [Mouse gadget (/dev/hidg0), Keyboard gadget (/dev/hidg1), Consumer control gadget (/dev/hidg2)]
+  23-12-12 13:03:31 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+  23-12-12 13:03:31 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+  23-12-12 13:03:31 [INFO] Activated relay for device /dev/input/event0, name "vc4-hdmi", phys "vc4-hdmi/input0"
   >>> Manually switched Pi's Bluetooth off <<<
-  23-12-06 14:20:44 [CRITICAL] Connection to AceRK Keyboard lost [OSError(19, 'No such device')]
-  23-12-06 14:20:44 [CRITICAL] Connection to AceRK Mouse lost [OSError(19, 'No such device')]
+  23-12-12 13:04:28 [CRITICAL] Connection to AceRK Keyboard lost [OSError(19, 'No such device')]
+  23-12-12 13:04:28 [CRITICAL] Connection to AceRK Mouse lost [OSError(19, 'No such device')]
   >>> Manually switched Pi's Bluetooth back on <<<
-  23-12-06 14:20:53 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "a1:b2:c3:d4:e5:f6"
-  23-12-06 14:20:56 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "a1:b2:c3:d4:e5:f6"
-  23-12-06 14:21:08 [DEBUG] Received event at 1701868868.638665, code 02, type 17, val 01 from AceRK Keyboard
-  23-12-06 14:21:08 [DEBUG] Received event at 1701868868.638665, code 04, type 04, val 458756 from AceRK Keyboard
-  23-12-06 14:21:08 [DEBUG] Received key event at 1701868868.638665, 30 (KEY_A), down from AceRK Keyboard
-  23-12-06 14:21:08 [DEBUG] Converted evdev scancode 0x1E (KEY_A) to HID UsageID 0x04 (A)
-  23-12-06 14:21:08 [DEBUG] Pressing A (0x04) on /dev/hidg1
-  23-12-06 14:21:08 [DEBUG] Received synchronization event at 1701868868.638665, SYN_REPORT from AceRK Keyboard
-  23-12-06 14:21:08 [DEBUG] Received event at 1701868868.639487, code 04, type 04, val 458756 from AceRK Keyboard
-  23-12-06 14:21:08 [DEBUG] Received key event at 1701868868.639487, 30 (KEY_A), up from AceRK Keyboard
-  23-12-06 14:21:08 [DEBUG] Converted evdev scancode 0x1E (KEY_A) to HID UsageID 0x04 (A)
-  23-12-06 14:21:08 [DEBUG] Releasing A (0x04) on /dev/hidg1
-  23-12-06 14:21:08 [DEBUG] Received synchronization event at 1701868868.639487, SYN_REPORT from AceRK Keyboard
-  23-12-06 14:21:58 [DEBUG] Received event at 1701868918.851380, code 04, type 04, val 786666 from AceRK Keyboard
-  23-12-06 14:21:58 [DEBUG] Received key event at 1701868918.851380, 114 (KEY_VOLUMEDOWN), down from AceRK Keyboard
-  23-12-06 14:21:58 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
-  23-12-06 14:21:58 [DEBUG] Pressing VOLUME_DECREMENT (0xEA) on /dev/hidg2
-  23-12-06 14:21:58 [DEBUG] Received synchronization event at 1701868918.851380, SYN_REPORT from AceRK Keyboard
-  23-12-06 14:21:58 [DEBUG] Received event at 1701868918.852051, code 04, type 04, val 786666 from AceRK Keyboard
-  23-12-06 14:21:58 [DEBUG] Received key event at 1701868918.852051, 114 (KEY_VOLUMEDOWN), up from AceRK Keyboard
-  23-12-06 14:21:58 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
-  23-12-06 14:21:58 [DEBUG] Releasing VOLUME_DECREMENT (0xEA) on /dev/hidg2
-  23-12-06 14:21:58 [DEBUG] Received synchronization event at 1701868918.852051, SYN_REPORT from AceRK Keyboard
-  23-12-06 14:22:00 [DEBUG] Received event at 1701868920.411452, code 04, type 04, val 589826 from AceRK Mouse
-  23-12-06 14:22:00 [DEBUG] Received key event at 1701868920.411452, 273 (BTN_RIGHT), down from AceRK Mouse
-  23-12-06 14:22:00 [DEBUG] Converted evdev scancode 0x111 (BTN_RIGHT) to HID UsageID 0x02 (RIGHT)
-  23-12-06 14:22:00 [DEBUG] Pressing RIGHT (0x02) on /dev/hidg0
-  23-12-06 14:22:00 [DEBUG] Received synchronization event at 1701868920.411452, SYN_REPORT from AceRK Mouse
-  23-12-06 14:22:00 [DEBUG] Received event at 1701868920.460166, code 04, type 04, val 589826 from AceRK Mouse
-  23-12-06 14:22:00 [DEBUG] Received key event at 1701868920.460166, 273 (BTN_RIGHT), up from AceRK Mouse
-  23-12-06 14:22:00 [DEBUG] Converted evdev scancode 0x111 (BTN_RIGHT) to HID UsageID 0x02 (RIGHT)
-  23-12-06 14:22:00 [DEBUG] Releasing RIGHT (0x02) on /dev/hidg0
-  23-12-06 14:22:00 [DEBUG] Received synchronization event at 1701868920.460166, SYN_REPORT from AceRK Mouse
-  23-12-06 14:22:01 [DEBUG] Received relative axis event at 1701868921.288916, REL_X from AceRK Mouse
-  23-12-06 14:22:01 [DEBUG] Moving mouse /dev/hidg0 (x=125, y=0, mwheel=0)
-  23-12-06 14:22:01 [DEBUG] Received synchronization event at 1701868921.288916, SYN_REPORT from AceRK Mouse
-  ^C23-12-06 14:22:12 [INFO] Exiting gracefully. Received signal: 2, frame: <frame at 0xb5f40df8, file '/usr/lib/python3.11/selectors.py', line 468, code select>
-  23-12-06 14:22:12 [CRITICAL] AceRK Keyboard was cancelled
-  23-12-06 14:22:12 [CRITICAL] AceRK Mouse was cancelled
+  23-12-12 13:04:32 [INFO] Activated relay for device /dev/input/event2, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
+  23-12-12 13:04:32 [INFO] Activated relay for device /dev/input/event1, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
+  23-12-12 13:05:17 [DEBUG] Received event at 1702382717.714878, code 04, type 04, val 458807 from AceRK Keyboard
+  23-12-12 13:05:17 [DEBUG] Received key event at 1702382717.714878, 52 (KEY_DOT), down from AceRK Keyboard
+  23-12-12 13:05:17 [DEBUG] Converted evdev scancode 0x34 (KEY_DOT) to HID UsageID 0x37 (PERIOD)
+  23-12-12 13:05:17 [DEBUG] Pressing PERIOD (0x37) on /dev/hidg1
+  23-12-12 13:05:17 [DEBUG] Received synchronization event at 1702382717.714878, SYN_REPORT from AceRK Keyboard
+  .23-12-12 13:05:17 [DEBUG] Received event at 1702382717.763608, code 04, type 04, val 458807 from AceRK Keyboard
+  23-12-12 13:05:17 [DEBUG] Received key event at 1702382717.763608, 52 (KEY_DOT), up from AceRK Keyboard
+  23-12-12 13:05:17 [DEBUG] Converted evdev scancode 0x34 (KEY_DOT) to HID UsageID 0x37 (PERIOD)
+  23-12-12 13:05:17 [DEBUG] Releasing PERIOD (0x37) on /dev/hidg1
+  23-12-12 13:05:17 [DEBUG] Received synchronization event at 1702382717.763608, SYN_REPORT from AceRK Keyboard
+  23-12-12 13:05:41 [DEBUG] Received relative axis event at 1702382741.553669, REL_X from AceRK Mouse
+  23-12-12 13:05:41 [DEBUG] Moving mouse /dev/hidg0 (x=50, y=0, mwheel=0)
+  23-12-12 13:05:41 [DEBUG] Received synchronization event at 1702382741.553669, SYN_REPORT from AceRK Mouse
+  23-12-12 13:05:42 [DEBUG] Received event at 1702382742.382372, code 04, type 04, val 589826 from AceRK Mouse
+  23-12-12 13:05:42 [DEBUG] Received key event at 1702382742.382372, 273 (BTN_RIGHT), down from AceRK Mouse
+  23-12-12 13:05:42 [DEBUG] Converted evdev scancode 0x111 (BTN_RIGHT) to HID UsageID 0x02 (RIGHT)
+  23-12-12 13:05:42 [DEBUG] Pressing RIGHT (0x02) on /dev/hidg0
+  23-12-12 13:05:42 [DEBUG] Received synchronization event at 1702382742.382372, SYN_REPORT from AceRK Mouse
+  23-12-12 13:05:42 [DEBUG] Received event at 1702382742.383094, code 04, type 04, val 589826 from AceRK Mouse
+  23-12-12 13:05:42 [DEBUG] Received key event at 1702382742.383094, 273 (BTN_RIGHT), up from AceRK Mouse
+  23-12-12 13:05:42 [DEBUG] Converted evdev scancode 0x111 (BTN_RIGHT) to HID UsageID 0x02 (RIGHT)
+  23-12-12 13:05:42 [DEBUG] Releasing RIGHT (0x02) on /dev/hidg0
+  23-12-12 13:05:42 [DEBUG] Received synchronization event at 1702382742.383094, SYN_REPORT from AceRK Mouse
+  23-12-12 13:05:43 [DEBUG] Received relative axis event at 1702382743.259934, REL_WHEEL from AceRK Mouse
+  23-12-12 13:05:43 [DEBUG] Moving mouse /dev/hidg0 (x=0, y=0, mwheel=1)
+  23-12-12 13:05:43 [DEBUG] Received relative axis event at 1702382743.259934, REL_WHEEL_HI_RES from AceRK Mouse
+  23-12-12 13:05:43 [DEBUG] Moving mouse /dev/hidg0 (x=0, y=0, mwheel=0)
+  23-12-12 13:05:43 [DEBUG] Received synchronization event at 1702382743.259934, SYN_REPORT from AceRK Mouse
+  ^C23-12-12 13:06:26 [INFO] Exiting gracefully. Received signal: 2, frame: <frame at 0xb5ed5028, file '/usr/lib/python3.11/selectors.py', line 468, code select>
+  23-12-12 13:06:26 [CRITICAL] vc4-hdmi was cancelled
+  23-12-12 13:06:26 [CRITICAL] AceRK Keyboard was cancelled
+  23-12-12 13:06:26 [CRITICAL] AceRK Mouse was cancelled
   ```
 
   </p>

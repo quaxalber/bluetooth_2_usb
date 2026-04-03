@@ -1,2 +1,4 @@
 evdev
+quax-Blinka
 quax-circuitpython-hid
+adafruit-circuitpython-typing==1.2.0

@@ -52,7 +52,6 @@ append_if_not_exist() {
 cleanup() {
   # Re-enable history expansion
   set -H
-  colored_output "${YELLOW}" "Exiting the script."
 }
 
 main() {
@@ -65,33 +64,40 @@ main() {
   base_directory=$(dirname "${scripts_directory}")
   cd "${base_directory}"
 
-  colored_output "${GREEN}" "Creating virtual Python environment..."
-  python3.11 -m venv venv || abort_install "Failed creating virtual Python environment."
+  # Capture the current user and group ownership 
+  current_user=$(stat -c '%U' .) || abort_update "Failed retrieving current user ownership."
+  current_group=$(stat -c '%G' .) || abort_update "Failed retrieving current group ownership."
 
-  colored_output "${GREEN}" "Installing dependencies in virtual Python environment..."
-  venv/bin/pip3.11 install -r requirements.txt || abort_install "Failed installing dependencies."
+  colored_output "${GREEN}" "Creating Python virtual environment \"${base_directory}/.venv\"..."
+  python3.11 -m venv .venv || abort_install "Failed creating Python virtual environment."
+
+  colored_output "${GREEN}" "Installing dependencies in venv..."
+  .venv/bin/pip3.11 install -r requirements.txt -c constraints.txt || abort_install "Failed installing dependencies."
 
   # Modify system files.
   colored_output "${GREEN}" "Modifying system files..."
   append_if_not_exist "dtoverlay=dwc2" "/boot/config.txt"
   append_if_not_exist "dwc2" "/etc/modules"
   append_if_not_exist "libcomposite" "/etc/modules"
-
   cp /boot/cmdline.txt /boot/cmdline.txt.bak || colored_output "${YELLOW}" "Failed creating backup of /boot/cmdline.txt."
   sed -i 's/modules-load=[^[:space:]]* //g' /boot/cmdline.txt || abort_install "Failed writing to /boot/cmdline.txt."
   sed -i 's/rootwait/rootwait modules-load=dwc2/g' /boot/cmdline.txt || abort_install "Failed writing to /boot/cmdline.txt."
-
-  # Make script executable and create symlinks. 
-  chmod 744 "${base_directory}/bluetooth_2_usb.py" || abort_install "Failed making script executable."
-  ln -s "${base_directory}/bluetooth_2_usb.py" /usr/bin/bluetooth_2_usb || colored_output "${YELLOW}" "Failed creating symlink."
+  ln -s "${base_directory}/bluetooth_2_usb.sh" /usr/bin/bluetooth_2_usb || colored_output "${YELLOW}" "Failed creating symlink."
   ln -s "${base_directory}/bluetooth_2_usb.service" /etc/systemd/system/ || colored_output "${YELLOW}" "Failed creating symlink."
-
-  # Replace placeholder with actual path to venv.
-  sed -i "s|{python3.11-venv}|${base_directory}/venv/bin/python3.11|g" "${base_directory}/bluetooth_2_usb.py" || abort_install "Failed writing to bluetooth_2_usb.py."
 
   # Enable service.
   systemctl enable bluetooth_2_usb.service || abort_install "Failed enabling service."
-  colored_output "${GREEN}" "Installation successful."
+  systemctl start bluetooth_2_usb.service || abort_install "Failed starting service."
+
+  chown -R ${current_user}:${current_group} "${base_directory}"
+
+  version=$(/usr/bin/bluetooth_2_usb -v)
+  if [[ $version == *"Bluetooth 2 USB"* ]]; then
+    colored_output "${GREEN}" "Installation successful. Now running ${version}"
+    colored_output "${YELLOW}" "A reboot might be required."
+  else
+    colored_output "${RED}" "Installation failed. The version information could not be retrieved."
+  fi
 }
 
 # Trap EXIT signal and call cleanup function

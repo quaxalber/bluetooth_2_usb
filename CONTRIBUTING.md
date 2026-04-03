@@ -27,38 +27,32 @@ By participating in this project, you are expected to uphold our [Code of Conduc
 - Install required packages to your Linux machine:
  
   ```console
-  sudo apt update && sudo apt install -y git python3.11 python3.11-venv python3.11-dev
+  sudo apt update && sudo apt install -y git python3.11 python3.11-venv
   ```
 
 - Clone the forked repository:
  
   ```console
-  git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git
+  git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git && cd bluetooth_2_usb
   ```
 
-- Initialize submodules:
+- Create a Python virtual environment:
  
   ```console
-  cd bluetooth_2_usb && git submodule update --init --recursive
-  ```
-
-- Create a virtual Python environment:
- 
-  ```console
-  python3.11 -m venv venv
+  python3.11 -m venv .venv
   ```
  
-- Install submodules in virtual Python environment:
+- Install dependencies in Python virtual environment:
  
   ```console
-  venv/bin/pip3.11 install submodules/*
+  .venv/bin/pip3.11 install -r requirements.txt -c constraints.txt
   ``` 
 
 - Open the repo in your favorite IDE
  
-- Make sure that your IDE is using python3.11 from `bluetooth_2_usb/venv/bin/`, e.g. in VS Code:
+- Make sure that your IDE is using `python3.11` from `bluetooth_2_usb/.venv/bin/`, e.g., in VS Code:
  
-  `CTRL + SHIFT + P` > type `Python Select Interpreter` > select `Enter interpreter path`
+  `CTRL + SHIFT + P` > type `Python Select Interpreter` > select `Enter interpreter path` > select `Find...`
 
 ## 3. Coding Style
 
