@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools >= 61.0", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bluetooth_2_usb"
+dynamic = ["dependencies", "version"]
+description = "Convert a Raspberry Pi into a HID relay translating Bluetooth keyboard and mouse input to USB."
+authors = [
+    { name = "quaxalber", email = "pypi@quaxalber.de" },
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = [
+    "adapter",
+    "proxy",
+    "relay", 
+    "bluetooth",
+    "usb",
+    "hid",
+    "human",
+    "interface",
+    "device",
+    "keyboard",
+    "mouse",
+    "consumer",
+    "keycode",
+    "keypadhardware",
+    "raspberry", 
+    "evdev",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: System :: Hardware :: Universal Serial Bus (USB) :: Human Interface Device (HID)",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Development Status :: 3 - Alpha", 
+]
+
+[project.urls]
+Homepage = "https://github.com/quaxalber/bluetooth_2_usb"
+Issues = "https://github.com/quaxalber/bluetooth_2_usb/issues"
+
+[tool.setuptools_scm]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}

@@ -1,5 +1,6 @@
 from argparse import Namespace
 import argparse
+import sys
 
 from usb_hid import unregister_disable
 
@@ -12,34 +13,25 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
 def parse_args() -> Namespace:
     parser = CustomArgumentParser(
-        description="Bluetooth to USB HID proxy. Reads incoming mouse and keyboard events \
-        (e.g., Bluetooth) and forwards them to USB using Linux's gadget mode.",
+        description="Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
     )
 
     parser.add_argument(
-        "--keyboards",
-        "-k",
+        "--device_ids",
+        "-i",
         type=lambda input: [item.strip() for item in input.split(",")],
         default=None,
-        help="Comma-separated list of input device paths for keyboards to be registered and connected.\n \
-          Default is None.\n \
-          Example: --keyboards /dev/input/event2,/dev/input/event4",
+        help="Comma-separated list of identifiers for input devices to be relayed.\n\n \
+          An identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\n\n \
+          Default is None.\n\n \
+          Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'",
     )
     parser.add_argument(
-        "--mice",
-        "-m",
-        type=lambda input: [item.strip() for item in input.split(",")],
-        default=None,
-        help="Comma-separated list of input device paths for mice to be registered and connected.\n \
-          Default is None.\n \
-          Example: --mice /dev/input/event3,/dev/input/event5",
-    )
-    parser.add_argument(
-        "--sandbox",
-        "-s",
+        "--auto_discover",
+        "-a",
         action="store_true",
         default=False,
-        help="Only read input events but do not forward them to the output devices.",
+        help="Enable auto-discovery mode. All readable input devices will be relayed automatically.",
     )
     parser.add_argument(
         "--debug",
@@ -78,4 +70,10 @@ def parse_args() -> Namespace:
     )
 
     args = parser.parse_args()
+
+    # Check if no arguments were provided
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
     return args

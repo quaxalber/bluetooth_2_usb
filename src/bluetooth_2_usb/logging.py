@@ -9,15 +9,13 @@ _formatter = logging.Formatter(
 def get_logger() -> logging.Logger:
     if not _logger.handlers:
         _logger.setLevel(logging.INFO)
-
         stdout_handler = logging.StreamHandler()
         stdout_handler.setFormatter(_formatter)
         _logger.addHandler(stdout_handler)
-
     return _logger
 
 
 def add_file_handler(log_path: str):
     file_handler = logging.FileHandler(log_path)
     file_handler.setFormatter(_formatter)
-    _logger.addHandler(file_handler)
+    get_logger().addHandler(file_handler)

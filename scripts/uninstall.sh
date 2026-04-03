@@ -15,34 +15,34 @@ colored_output() {
 }
 
 # Determine the current script's directory and the parent directory
-scriptsDirectory=$(dirname $(readlink -f "$0"))
-baseDirectory=$(dirname "$scriptsDirectory")
-cd "$baseDirectory"
+scripts_directory=$(dirname $(readlink -f "$0"))
+base_directory=$(dirname "${scripts_directory}")
+cd "${base_directory}"
 
 # Check for superuser privileges
 if [[ $EUID -ne 0 ]]; then
-    colored_output ${RED} "This script must be run as root. Attempting to elevate privileges..."
+    colored_output "${RED}" "This script must be run as root. Attempting to elevate privileges..."
     # Re-run the script as root
     exec sudo bash "$0" "$@"
 fi
 
-colored_output ${YELLOW} "Stopping and disabling bluetooth_2_usb service..."
+colored_output "${YELLOW}" "Stopping and disabling bluetooth_2_usb service..."
 systemctl stop bluetooth_2_usb.service
 systemctl disable bluetooth_2_usb.service
 
-colored_output ${YELLOW} "Removing symlinks and restoring backup files..."
-rm /usr/bin/bluetooth_2_usb.py
+colored_output "${YELLOW}" "Removing symlinks and restoring backup files..."
+rm /usr/bin/bluetooth_2_usb
 rm /etc/systemd/system/bluetooth_2_usb.service
 mv /boot/config.txt.bak /boot/config.txt
 mv /etc/modules.bak /etc/modules
 mv /boot/cmdline.txt.bak /boot/cmdline.txt
 
-colored_output ${YELLOW} "Removing the virtual environment and log directory..."
-rm -rf "$baseDirectory/venv"
+colored_output "${YELLOW}" "Removing the virtual environment and log directory..."
+rm -rf venv
 rm -rf /var/log/bluetooth_2_usb
 
 # Optionally, remove installed packages (if they were not previously installed)
-# colored_output ${YELLOW} "Removing installed packages..."
+# colored_output "${YELLOW}" "Removing installed packages..."
 # apt remove -y git python3.11 python3.11-venv python3.11-dev
 
-colored_output ${GREEN} "Uninstallation complete."
+colored_output "${GREEN}" "Uninstallation complete."
