@@ -1,9 +1,5 @@
 import argparse
-import atexit
-import sys
 from typing import Optional
-
-import usb_hid
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
@@ -89,20 +85,36 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Display the version number of this software and exit.",
         )
         self.add_argument(
+            "--dry-run",
+            action="store_true",
+            default=False,
+            help="Validate the runtime environment and exit without binding USB gadgets.",
+        )
+        self.add_argument(
+            "--no-bind",
+            action="store_true",
+            default=False,
+            help="Skip USB gadget initialization and only perform diagnostic validation.",
+        )
+        self.add_argument(
+            "--validate-env",
+            action="store_true",
+            default=False,
+            help="Validate the gadget runtime prerequisites and exit.",
+        )
+        self.add_argument(
+            "--hid-profile",
+            choices=["compat", "extended"],
+            default="compat",
+            help="USB HID profile to expose. Default: compat",
+        )
+        self.add_argument(
             "--help",
             "-h",
             action="help",
             default=argparse.SUPPRESS,
             help="Show this help message and exit.",
         )
-
-    def print_help(self) -> None:
-        """
-        When the script is run with help or version flag, we need to unregister usb_hid.disable() from atexit
-        because else an exception occurs if the script is already running, e.g. as service.
-        """
-        atexit.unregister(usb_hid.disable)
-        super().print_help()
 
 
 class _HelpAction(argparse._HelpAction):
@@ -122,6 +134,10 @@ class Arguments:
         "_log_path",
         "_debug",
         "_version",
+        "_dry_run",
+        "_no_bind",
+        "_validate_env",
+        "_hid_profile",
     ]
 
     def __init__(
@@ -135,6 +151,10 @@ class Arguments:
         log_path: str,
         debug: bool,
         version: bool,
+        dry_run: bool,
+        no_bind: bool,
+        validate_env: bool,
+        hid_profile: str,
     ) -> None:
         self._device_ids = device_ids
         self._auto_discover = auto_discover
@@ -145,6 +165,10 @@ class Arguments:
         self._log_path = log_path
         self._debug = debug
         self._version = version
+        self._dry_run = dry_run
+        self._no_bind = no_bind
+        self._validate_env = validate_env
+        self._hid_profile = hid_profile
 
     @property
     def device_ids(self) -> Optional[list[str]]:
@@ -182,20 +206,42 @@ class Arguments:
     def version(self) -> bool:
         return self._version
 
+    @property
+    def dry_run(self) -> bool:
+        return self._dry_run
+
+    @property
+    def no_bind(self) -> bool:
+        return self._no_bind
+
+    @property
+    def validate_env(self) -> bool:
+        return self._validate_env
+
+    @property
+    def hid_profile(self) -> str:
+        return self._hid_profile
+
     def __str__(self) -> str:
         slot_values = [f"{slot[1:]}={getattr(self, slot)}" for slot in self.__slots__]
         return ", ".join(slot_values)
 
 
-def parse_args() -> Arguments:
+def parse_args(argv: Optional[list[str]] = None) -> Arguments:
     parser = CustomArgumentParser()
-
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Check if no arguments were provided
-    if len(sys.argv) == 1:
+    if argv is None:
+        from sys import argv as sys_argv
+
+        provided_argv = sys_argv[1:]
+    else:
+        provided_argv = argv
+
+    if len(provided_argv) == 0:
         parser.print_help()
-        sys.exit(1)
+        raise SystemExit(1)
 
     return Arguments(
         device_ids=args.device_ids,
@@ -207,4 +253,8 @@ def parse_args() -> Arguments:
         log_path=args.log_path,
         debug=args.debug,
         version=args.version,
+        dry_run=args.dry_run,
+        no_bind=args.no_bind,
+        validate_env=args.validate_env,
+        hid_profile=args.hid_profile,
     )

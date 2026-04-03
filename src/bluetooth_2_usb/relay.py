@@ -1,16 +1,15 @@
 import asyncio
 from asyncio import Task, TaskGroup
+from importlib import import_module
 from pathlib import Path
 import re
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.mouse import Mouse
 from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
 import pyudev
-import usb_hid
-from usb_hid import Device
 
 from .evdev import (
     evdev_to_usb_hid,
@@ -32,7 +31,7 @@ class GadgetManager:
     :ivar _enabled: Indicates whether the gadgets have been enabled
     """
 
-    def __init__(self) -> None:
+    def __init__(self, hid_profile: str = "compat") -> None:
         """
         Initialize without enabling devices. Call enable_gadgets() to enable them.
         """
@@ -42,26 +41,42 @@ class GadgetManager:
             "consumer": None,
         }
         self._enabled = False
+        self._hid_profile = hid_profile
+
+    def _requested_devices(self):
+        usb_hid = import_module("usb_hid")
+        device = usb_hid.Device
+
+        if self._hid_profile == "extended":
+            return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
+
+        return [device.BOOT_KEYBOARD, device.BOOT_MOUSE, device.CONSUMER_CONTROL]
 
     def enable_gadgets(self) -> None:
         """
         Disable and re-enable usb_hid devices, then store references
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
+        usb_hid = import_module("usb_hid")
+
         try:
             usb_hid.disable()
         except Exception as ex:
             _logger.debug(f"usb_hid.disable() failed or was already disabled: {ex}")
 
-        usb_hid.enable([Device.BOOT_MOUSE, Device.KEYBOARD, Device.CONSUMER_CONTROL])  # type: ignore
-        enabled_devices = list(usb_hid.devices)  # type: ignore
+        usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
+        enabled_devices = list(usb_hid.devices)  # type: ignore[attr-defined]
 
         self._gadgets["keyboard"] = Keyboard(enabled_devices)
         self._gadgets["mouse"] = Mouse(enabled_devices)
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
         self._enabled = True
 
-        _logger.debug(f"USB HID gadgets re-initialized: {enabled_devices}")
+        _logger.debug(
+            "USB HID gadgets re-initialized for profile %s: %s",
+            self._hid_profile,
+            enabled_devices,
+        )
 
     def get_keyboard(self) -> Optional[Keyboard]:
         """
@@ -112,6 +127,7 @@ class ShortcutToggler:
         self.gadget_manager = gadget_manager
 
         self.currently_pressed: set[str] = set()
+        self._shortcut_armed = True
 
     def handle_key_event(self, event: KeyEvent) -> None:
         """
@@ -128,8 +144,14 @@ class ShortcutToggler:
             self.currently_pressed.add(key_name)
         elif event.keystate == KeyEvent.key_up:
             self.currently_pressed.discard(key_name)
+            self._shortcut_armed = True
 
-        if self.shortcut_keys and self.shortcut_keys.issubset(self.currently_pressed):
+        if (
+            self._shortcut_armed
+            and self.shortcut_keys
+            and self.shortcut_keys.issubset(self.currently_pressed)
+        ):
+            self._shortcut_armed = False
             self.toggle_relaying()
 
     def toggle_relaying(self) -> None:
@@ -145,6 +167,7 @@ class ShortcutToggler:
                 mouse.release_all()
 
             self.currently_pressed.clear()
+            self._shortcut_armed = True
             self.relaying_active.clear()
             _logger.info("ShortcutToggler: Relaying is now OFF.")
         else:
@@ -180,7 +203,13 @@ class RelayController:
         self._gadget_manager = gadget_manager
         self._device_ids = [DeviceIdentifier(id) for id in (device_identifiers or [])]
         self._auto_discover = auto_discover
-        self._skip_name_prefixes = skip_name_prefixes or ["vc4-hdmi"]
+        self._skip_name_prefixes = skip_name_prefixes or [
+            "vc4-hdmi",
+            "vc4",
+            "gpio",
+            "pwr_button",
+            "raspberrypi-ts",
+        ]
         self._grab_devices = grab_devices
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
@@ -188,6 +217,7 @@ class RelayController:
         self._active_tasks: dict[str, Task] = {}
         self._task_group: Optional[TaskGroup] = None
         self._cancelled = False
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def async_relay_devices(self) -> None:
         """
@@ -200,6 +230,7 @@ class RelayController:
         try:
             async with TaskGroup() as task_group:
                 self._task_group = task_group
+                self._loop = asyncio.get_running_loop()
                 _logger.debug("RelayController: TaskGroup started.")
 
                 for device in await async_list_input_devices():
@@ -215,7 +246,20 @@ class RelayController:
             )
         finally:
             self._task_group = None
+            self._loop = None
             _logger.debug("RelayController: TaskGroup exited.")
+
+    def schedule_add_device(self, device_path: str) -> None:
+        if self._loop is None:
+            _logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
+            return
+        self._loop.call_soon_threadsafe(self.add_device, device_path)
+
+    def schedule_remove_device(self, device_path: str) -> None:
+        if self._loop is None:
+            _logger.debug(f"Ignoring remove for {device_path}; event loop is unavailable.")
+            return
+        self._loop.call_soon_threadsafe(self.remove_device, device_path)
 
     def add_device(self, device_path: str) -> None:
         """
@@ -296,7 +340,19 @@ class RelayController:
         if self._auto_discover:
             for prefix in self._skip_name_prefixes:
                 if name_lower.startswith(prefix.lower()):
+                    _logger.debug(
+                        "Skipping %s during auto-discovery: name prefix %s",
+                        device,
+                        prefix,
+                    )
                     return False
+            capabilities = device.capabilities(verbose=False)
+            if not any(code in capabilities for code in (1, 2)):
+                _logger.debug(
+                    "Skipping %s during auto-discovery: missing EV_KEY/EV_REL capabilities",
+                    device,
+                )
+                return False
             return True
 
         return any(identifier.matches(device) for identifier in self._device_ids)
@@ -714,7 +770,7 @@ class UdevEventMonitor:
 
         if action == "add":
             _logger.debug(f"UdevEventMonitor: Added input => {device_node}")
-            self.relay_controller.add_device(device_node)
+            self.relay_controller.schedule_add_device(device_node)
         elif action == "remove":
             _logger.debug(f"UdevEventMonitor: Removed input => {device_node}")
-            self.relay_controller.remove_device(device_node)
+            self.relay_controller.schedule_remove_device(device_node)

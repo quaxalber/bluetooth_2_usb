@@ -45,6 +45,15 @@ classifiers = [
 Homepage = "https://github.com/quaxalber/bluetooth_2_usb"
 Issues = "https://github.com/quaxalber/bluetooth_2_usb/issues"
 
+[project.scripts]
+bluetooth_2_usb = "bluetooth_2_usb.cli:run"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools_scm]
 
 [tool.setuptools.dynamic]
