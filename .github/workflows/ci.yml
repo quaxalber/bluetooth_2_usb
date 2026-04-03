@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+      - chore/**
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Python compile checks
+        run: |
+          python -m compileall src
+
+      - name: CLI checks
+        run: |
+          python -m bluetooth_2_usb --help
+          python -m bluetooth_2_usb --version
+          python -m bluetooth_2_usb --validate-env || test $? -eq 3
+          python -m bluetooth_2_usb --dry-run || test $? -eq 3
+
+      - name: Shell syntax checks
+        run: |
+          bash -n scripts/*.sh scripts/lib/common.sh

@@ -1,67 +1,78 @@
 #!/usr/bin/env bash
-# Update Bluetooth 2 USB to the latest stable GitHub version. Handles updating submodules, if required. 
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-# Temporarily disable history expansion
-set +H
+source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
-# ANSI escape codes for colored output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-# Reset to default color
-NC='\033[0m'
+INSTALL_DIR="$B2U_DEFAULT_INSTALL_DIR"
+SERVICE_NAME="$B2U_DEFAULT_SERVICE_NAME"
+REPO_URL="$(default_repo_url)"
+REPO_BRANCH="$(default_repo_branch)"
+RESTART=1
 
-colored_output() {
-  local color_code="$1"
-  local message="$2"
-  local colored_message="${color_code}${message}${NC}"
-  echo -e "${colored_message}"
+usage() {
+  cat <<EOF
+Usage: sudo ./update.sh [options]
+  --dir <path>        Install directory. Default: ${B2U_DEFAULT_INSTALL_DIR}
+  --repo <url|path>   Override repository source
+  --branch <name>     Override branch/tag
+  --service <name>    Service name. Default: ${B2U_DEFAULT_SERVICE_NAME}
+  --no-restart        Do not restart the service after update
+EOF
 }
 
-abort_update() {
-  local message="$1"
-  colored_output "${RED}" "Aborting update. ${message}"
-  exit 1
-}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dir) INSTALL_DIR="$2"; shift 2 ;;
+    --repo) REPO_URL="$2"; shift 2 ;;
+    --branch) REPO_BRANCH="$2"; shift 2 ;;
+    --service) SERVICE_NAME="$2"; shift 2 ;;
+    --no-restart) RESTART=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) fail "Unknown option: $1" ;;
+  esac
+done
 
-# Function to cleanup before exiting
-cleanup() {
-  # Re-enable history expansion
-  set -H
-}
+ensure_root
+prepare_log "update"
+require_commands git python3 systemctl
 
-# Check for superuser privileges
-if [[ $EUID -ne 0 ]]; then
-  colored_output "${RED}" "This script must be run as root. Attempting to elevate privileges..."
-  # Re-run the script as root
-  exec sudo bash "$0" "$@"
+[[ -d "$INSTALL_DIR" ]] || fail "Install directory not found: $INSTALL_DIR"
+VENV_DIR="${INSTALL_DIR}/venv"
+
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+  if [[ -n "$REPO_URL" ]]; then
+    git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+  fi
+  info "Updating repository in ${INSTALL_DIR}"
+  git -C "$INSTALL_DIR" fetch --all --tags
+  if [[ -n "$REPO_BRANCH" ]]; then
+    git -C "$INSTALL_DIR" checkout "$REPO_BRANCH"
+  fi
+  git -C "$INSTALL_DIR" pull --ff-only
+elif [[ -n "$REPO_URL" && -n "$REPO_BRANCH" ]]; then
+  info "Replacing non-git installation using ${REPO_URL}@${REPO_BRANCH}"
+  tmpdir="$(mktemp -d)"
+  git clone --branch "$REPO_BRANCH" "$REPO_URL" "${tmpdir}/repo"
+  rm -rf "$INSTALL_DIR"
+  mv "${tmpdir}/repo" "$INSTALL_DIR"
+else
+  fail "Install directory is not a git checkout. Provide --repo and --branch to replace it."
 fi
 
-# Trap EXIT signal and call cleanup function
-trap cleanup EXIT
+info "Recreating virtual environment at ${VENV_DIR}"
+recreate_venv "$VENV_DIR"
 
-# Determine the current script's directory and the parent directory
-scripts_directory=$(dirname $(readlink -f "$0"))
-base_directory=$(dirname "${scripts_directory}")
-cd "${base_directory}"
+"${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel
+"${VENV_DIR}/bin/pip" install --upgrade "$INSTALL_DIR"
+install_service_unit "$INSTALL_DIR"
+write_default_env_file
+install_cli_wrapper "$INSTALL_DIR"
+systemctl daemon-reload
 
-git fetch origin
-current_version=$(/usr/bin/bluetooth_2_usb -v)
-latest_vesion=$(git tag -l | sort -V | tail -n1)
-colored_output "${GREEN}" "Updating ${current_version} -> ${latest_vesion}..."
+if [[ $RESTART -eq 1 ]]; then
+  systemctl restart "${SERVICE_NAME}.service"
+  systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
+fi
 
-# Capture the current user and group ownership and branch
-current_user=$(stat -c '%U' .) || abort_update "Failed retrieving current user ownership."
-current_group=$(stat -c '%G' .) || abort_update "Failed retrieving current group ownership."
-current_branch=$(git symbolic-ref --short HEAD) || abort_update "Failed retrieving currently checked out branch."
-
-{
-  scripts/uninstall.sh && 
-  cd .. &&  
-  rm -rf "${base_directory}" && 
-  git clone https://github.com/quaxalber/bluetooth_2_usb.git &&  
-  cd "${base_directory}" && 
-  git checkout "${current_branch}" &&
-  chown -R ${current_user}:${current_group} "${base_directory}" &&
-  scripts/install.sh ; 
-} || abort_update "Failed updating Bluetooth 2 USB"
+ok "Update complete"

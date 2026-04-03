@@ -3,458 +3,322 @@
 
 ![Bluetooth to USB Overview](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
 
-Convert a Raspberry Pi into a HID relay that translates Bluetooth keyboard and mouse input to USB. Minimal configuration. Zero hassle.
+Turn a Raspberry Pi into a USB HID bridge for Bluetooth keyboards and mice. To the target host it looks like a normal wired USB keyboard/mouse, so it can work in BIOS, boot menus, installers, kiosks, tablets, game consoles and other environments where Bluetooth is unavailable or unreliable.
 
-The issue with Bluetooth devices is that you usually can't use them to:
-- wake up sleeping devices,
-- access the BIOS or OS select menu (e.g., GRUB),
-- access devices without Bluetooth interface (e.g., devices in a restricted environment or most KVM switches).
+## Why people use it
 
-Sounds familiar? Congratulations! **You just found the solution!**
+- Use Bluetooth keyboards and mice on hosts that only accept wired USB HID
+- Control BIOS, boot menus, installers and KVM targets with the same wireless peripherals you already own
+- Leave a Pi attached as a small appliance-like bridge instead of re-pairing each host
+- Build read-mostly or read-only Raspberry Pi setups for embedded and unattended installs
 
-Linux's gadget mode allows a Raspberry Pi to act as USB HID (Human Interface Device). Therefore, from the host's perspective, it appears like a regular USB keyboard or mouse. You may think of your Pi as a multi-device Bluetooth dongle.
+## Typical user stories
 
-<!-- omit in toc -->
-## Table of Contents
+- "I want my Bluetooth keyboard to work before the OS boots."
+- "I want one tiny adapter I can keep on a rack server or retro machine."
+- "I want to use my living-room keyboard on devices with poor Bluetooth support."
+- "I want a setup other people can install and operate without learning USB gadget internals."
 
-- [1. Features](#1-features)
-- [2. Requirements](#2-requirements)
-- [3. Installation](#3-installation)
-  - [3.1. Prerequisites](#31-prerequisites)
-  - [3.2. Setup](#32-setup)
-- [4. Usage](#4-usage)
-  - [4.1. Connection to target device / host](#41-connection-to-target-device--host)
-    - [4.1.1. Raspberry Pi 4B/5](#411-raspberry-pi-4b5)
-    - [4.1.2. Raspberry Pi Zero (2) W(H)](#412-raspberry-pi-zero-2-wh)
-  - [4.2. Command-line arguments](#42-command-line-arguments)
-  - [4.3. Shortcut Feature for Quick Pi Administration](#43-shortcut-feature-for-quick-pi-administration)
-  - [4.4. Consuming the API from your Python code](#44-consuming-the-api-from-your-python-code)
-- [5. Updating](#5-updating)
-- [6. Uninstallation](#6-uninstallation)
-- [7. Troubleshooting](#7-troubleshooting)
-  - [7.1. The Pi keeps rebooting or crashes randomly](#71-the-pi-keeps-rebooting-or-crashes-randomly)
-  - [7.2. The installation was successful, but I don't see any output on the target device](#72-the-installation-was-successful-but-i-dont-see-any-output-on-the-target-device)
-  - [7.3. In bluetoothctl, my device is constantly switching on/off](#73-in-bluetoothctl-my-device-is-constantly-switching-onoff)
-  - [7.4. I have a different issue](#74-i-have-a-different-issue)
-  - [7.5. Everything is working, but can it help me with Bitcoin mining?](#75-everything-is-working-but-can-it-help-me-with-bitcoin-mining)
-- [8. Bonus points](#8-bonus-points)
-- [9. Contributing](#9-contributing)
-- [10. License](#10-license)
-- [11. Acknowledgments](#11-acknowledgments)
+## Features
 
-## 1. Features
+- Managed installation into `/opt/bluetooth_2_usb`
+- systemd-first runtime with configurable flags in `/etc/default/bluetooth_2_usb`
+- Auto-discovery, auto-reconnect and optional input grabbing
+- Host-oriented HID profiles for compatibility-first behavior
+- Diagnostics and smoke tests suitable for issue reports
+- Two read-only modes:
+  - `easy`: minimal effort, best-effort persistence
+  - `persistent`: power-user mode with persistent Bluetooth state
 
-- Simple installation and highly automated setup
-- Supports multiple input devices (currently keyboard and mouse - more than one of each kind simultaneously)
-- Supports [146 multimedia keys](https://github.com/quaxalber/bluetooth_2_usb/blob/8b1c5f8097bbdedfe4cef46e07686a1059ea2979/lib/evdev_adapter.py#L142) (e.g., mute, volume up/down, launch browser, etc.)
-- Auto-discovery feature for input devices
-- Auto-reconnect feature for input devices (power off, energy saving mode, out of range, etc.)
-- Pause/resume relaying input devices via [configurable shortcut](#43-shortcut-feature-for-quick-pi-administration)
-- Robust error handling and logging
-- Installation as a systemd service
-- Reliable concurrency using state-of-the-art [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups)
-- Clean and actively maintained code base
+## Requirements
 
-## 2. Requirements
+- Raspberry Pi with Bluetooth and USB OTG gadget support
+- Recommended boards: Pi Zero W, Pi Zero 2 W, Pi 4B, Pi 5
+- Raspberry Pi OS Bookworm or newer
+- Python 3.11+
 
-- A Raspberry Pi with Bluetooth and [USB OTG support](https://en.wikipedia.org/wiki/USB_On-The-Go) required for [USB gadgets](https://www.kernel.org/doc/html/latest/driver-api/usb/gadget.html) in so-called device mode. Supported models include:
-  - **Raspberry Pi Zero W(H)**: Includes Bluetooth 4.1 and supports USB OTG with the lowest price tag.
-  - **Raspberry Pi Zero 2 W**: Similar to the Raspberry Pi Zero W, it has Bluetooth 4.1 and USB OTG support while providing additional processing power.
-  - **Raspberry Pi 4B/5**: Offers Bluetooth 5.0 and USB-C OTG support for device mode, providing the best performance.
-- Raspberry Pi OS ([Bookworm-based](https://www.raspberrypi.com/news/bookworm-the-new-version-of-raspberry-pi-os/))
-- Python 3.11+ for using [TaskGroups](https://docs.python.org/3/library/asyncio-task.html#task-groups).
+> Raspberry Pi 3B/3B+ do not expose a usable USB device-mode port for this project.
 
-> [!NOTE]
-> Raspberry Pi 3 Models feature Bluetooth 4.2 but no native USB gadget mode support. Earlier models like Raspberry Pi 1 and 2 do not support Bluetooth natively and have no USB gadget mode support.
+## Install
 
-> [!NOTE]
-> The latest version of Raspberry Pi OS, based on Debian Bookworm, supports Python 3.11 through the official package repositories. For older versions, you may [build it from source](https://github.com/quaxalber/bluetooth_2_usb/blob/main/scripts/build_python_3.11.sh). Note that building may take anything between a few minutes (Pi 4B) and more than an hour (Pi 0W).
+### One-line install
 
-## 3. Installation
-
-Follow these steps to install and configure the project:
-
-### 3.1. Prerequisites
-
-1. Install Raspberry Pi OS on your Raspberry Pi (e.g., using [Pi Imager](https://youtu.be/ntaXWS8Lk34))
-  
-2. Connect to a network via Ethernet cable or [Wi-Fi](https://www.raspberrypi.com/documentation/computers/configuration.html#configuring-networking). Make sure this network has Internet access.
-  
-3. (*optional, recommended*) Enable [SSH](https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh), if you intend to access the Pi remotely.
-
-> [!NOTE]
-> These settings above may be configured [during imaging](https://www.raspberrypi.com/documentation/computers/getting-started.html#advanced-options) (recommended), [on first boot](https://www.raspberrypi.com/documentation/computers/getting-started.html#configuration-on-first-boot) or [afterwards](https://www.raspberrypi.com/documentation/computers/configuration.html).
-  
-4. Connect to the Pi and make sure `git` is installed:
-  
-   ```console
-   sudo apt update && sudo apt install -y git
-   ```
-
-5. Pair and trust any Bluetooth devices you wish to relay, either via GUI or via CLI:
-  
-   ```console
-   bluetoothctl
-   scan on
-   ```
-
-   ... wait for your devices to show up and note their MAC addresses (you may also type the first characters and hit `TAB` for auto-completion in the following commands) ...
-
-   ```console
-   trust A1:B2:C3:D4:E5:F6
-   pair A1:B2:C3:D4:E5:F6
-   connect A1:B2:C3:D4:E5:F6
-   exit
-   ```
-
-> [!NOTE]
-> Replace `A1:B2:C3:D4:E5:F6` by your input device's Bluetooth MAC address
-
-### 3.2. Setup
-
-6. On the Pi, clone the repository to your home directory:
-  
-   ```console
-   cd ~ && git clone https://github.com/quaxalber/bluetooth_2_usb.git
-   ```
-
-7. Run the installation script as root:
-   
-   ```console
-   sudo ~/bluetooth_2_usb/scripts/install.sh
-   ```
-
-8.  Reboot:
- 
-    ```console
-    sudo reboot
-    ``` 
-
-9.  Verify that the service is running:
-   
-    ```console
-    service bluetooth_2_usb status
-    ```
-
-    It should look something like this and say `Active: active (running)`:
-
-    ```console
-    ● bluetooth_2_usb.service - Bluetooth to USB HID relay
-        Loaded: loaded (/etc/systemd/system/bluetooth_2_usb.service; enabled; preset: enabled)
-        Active: active (running) since Mon 2025-01-20 23:10:33 CET; 12min ago
-      Main PID: 15598 (bash)
-          Tasks: 3 (limit: 374)
-            CPU: 13.454s
-        CGroup: /system.slice/bluetooth_2_usb.service
-                ├─15598 bash /usr/bin/bluetooth_2_usb --auto_discover --grab_devices
-                └─15601 python3 /home/user/bluetooth_2_usb/bluetooth_2_usb.py --auto_discover --grab_devices
-
-    Jan 20 23:10:33 pi0w systemd[1]: Started bluetooth_2_usb.service - Bluetooth to USB HID relay.
-    Jan 20 23:10:35 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:35 [INFO] Launching Bluetooth 2 USB v0.9.1
-    Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event2, name "AceRK Keyboard", phys "b8:27:eb:be:dc:81"
-    Jan 20 23:10:39 pi0w bluetooth_2_usb[15601]: 25-01-20 23:10:39 [INFO] Activated relay for device /dev/input/event3, name "AceRK Mouse", phys "b8:27:eb:be:dc:81"
-    ```
-
-> [!NOTE]
-> Something seems off? Try yourself in [Troubleshooting](#7-troubleshooting)!
-   
-## 4. Usage
-
-### 4.1. Connection to target device / host
-
-#### 4.1.1. Raspberry Pi 4B/5
-
-Connect the _USB-C power port_ of your Pi 4B/5 via cable with a USB port on your target device. You should hear the USB connection sound (depending on the target device) and be able to access your target device wirelessly using your Bluetooth keyboard or mouse. In case the Pi solely draws power from the host, it will take some time for the Pi to boot.
-
-> [!IMPORTANT]
-> It's essential to use the small power port instead of the bigger USB-A ports, since only the power port has the [OTG](https://en.wikipedia.org/wiki/USB_On-The-Go) feature required for [USB gadgets](https://www.kernel.org/doc/html/latest/driver-api/usb/gadget.html).
-
-#### 4.1.2. Raspberry Pi Zero (2) W(H)
-
-For the Pi Zero, the situation is quite the opposite: Do _not_ use the power port to connect to the target device, _use_ the other port instead (typically labeled "DATA" or "USB"). You may connect the power port to a stable power supply.
-
-### 4.2. Command-line arguments
-
-Currently you can provide the following CLI arguments:
-
-```console
-user@pi0w:~ $ bluetooth_2_usb -h
-usage: bluetooth_2_usb.py [--device_ids DEVICE_IDS] [--auto_discover] [--grab_devices] [--interrupt_shortcut INTERRUPT_SHORTCUT] [--list_devices] [--log_to_file] [--log_path LOG_PATH] [--debug] [--version] [--help]
-
-Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.
-
-options:
-  --device_ids DEVICE_IDS, -i DEVICE_IDS
-                        Comma-separated list of identifiers for input devices to be relayed.
-                        An identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.
-                        Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'
-                        Default: None
-  --auto_discover, -a   Enable auto-discovery mode. All readable input devices will be relayed automatically.
-                        Default: disabled
-  --grab_devices, -g    Grab the input devices, i.e., suppress any events on your relay device.
-                        Devices are not grabbed by default.
-  --interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT
-                        A plus-separated list of key names to press simultaneously in order to toggle relaying (pause/resume). Example: CTRL+SHIFT+Q
-                        Default: None (feature disabled)
-  --list_devices, -l    List all available input devices and exit.
-  --log_to_file, -f     Add a handler that logs to file, additionally to stdout.
-  --log_path LOG_PATH, -p LOG_PATH
-                        The path of the log file
-                        Default: /var/log/bluetooth_2_usb/bluetooth_2_usb.log
-  --debug, -d           Enable debug mode (Increases log verbosity)
-                        Default: disabled
-  --version, -v         Display the version number of this software and exit.
-  --help, -h            Show this help message and exit.
+```bash
+curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh | sudo bash
 ```
 
-### 4.3. Shortcut Feature for Quick Pi Administration
+As with any `curl | bash` installer, inspect the script before running it if you are not comfortable trusting it blindly. A safer pattern is:
 
-A key challenge when using Bluetooth 2 USB on a Raspberry Pi as systemd service is being able to temporarily disable input relaying so you can administer the Pi locally. The shortcut feature solves this by allowing you to specify a keyboard shortcut that toggles the relaying on or off at any time. For example, you might configure `CTRL` + `SHIFT` + `F12` (default set in `bluetooth_2_usb.service`) as a global interrupt shortcut. While relaying is active, pressing that key combination will instantly halt relaying, allowing the Pi to receive keyboard input locally. Pressing the same shortcut again re-enables relaying.
-
-### 4.4. Consuming the API from your Python code
-
-The API is designed such that it may be consumed both via CLI and from within external Python code. More details on this [coming soon](https://github.com/quaxalber/bluetooth_2_usb/issues/16)!
-
-## 5. Updating
-
-You may update to the latest stable release by running:
-
-```console
-sudo ~/bluetooth_2_usb/scripts/update.sh
+```bash
+curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh -o /tmp/bluetooth_2_usb-bootstrap.sh
+less /tmp/bluetooth_2_usb-bootstrap.sh
+sudo bash /tmp/bluetooth_2_usb-bootstrap.sh
 ```
 
-> [!NOTE]
-> The update script performs a clean reinstallation, that is run `uninstall.sh`, delete the repo folder, clone again and run the install script. The current branch will be maintained.
+After installation:
 
-## 6. Uninstallation
-
-You may uninstall Bluetooth 2 USB by running:
-
-```console
-sudo ~/bluetooth_2_usb/scripts/uninstall.sh
+```bash
+sudo reboot
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 ```
 
-## 7. Troubleshooting
+### Clone-and-install
 
-### 7.1. The Pi keeps rebooting or crashes randomly
-
-This is likely due to the limited power the Pi can draw from the host's USB port. Try these steps:
-
-- If available, connect your Pi to a USB 3 port on the host / target device (usually blue) or preferably USB-C.
- 
-> [!IMPORTANT]
-> *Do not use* the blue (or black) USB-A ports *of your Pi* to connect. **This won't work.**
->
-> *Do use* the small USB-C power port (in case of Pi 4B/5). For Pi Zero, use the data port to connect to the host and attach the power port to a dedicated power supply.
-
-- Try to [connect to the Pi via SSH](#31-prerequisites) instead of attaching a display directly and remove any unnecessary peripherals.
- 
-- Install a [lite version](https://downloads.raspberrypi.org/raspios_lite_arm64/images/) of your OS on the Pi (without GUI)
- 
-- For Pi 4B/5: Get a [USB-C Data/Power Splitter](https://thepihut.com/products/usb-c-data-power-splitter) and draw power from a dedicated power supply. This should ultimately resolve any power-related issues, and your Pi 4B will no longer be dependent on the host's power supply.
- 
-> [!NOTE]
-> The Pi Zero is recommended to have a 1.2 A power supply for stable operation, the Pi Zero 2 requires 2.0 A, the Pi 4B 3.0 A and the Pi 5 even 5.0 A, while hosts may typically only supply up to 0.5/0.9 A through USB-A 2.0/3.0 ports. However, this may be sufficient depending on your specific soft- and hardware configuration. For more information see the [Raspberry Pi documentation](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#power-supply).
-
-### 7.2. The installation was successful, but I don't see any output on the target device
-
-This could be due to a number of reasons. Try these steps:
-
-- Verify that the service is running:
- 
-  ```console
-  service bluetooth_2_usb status
-  ```
-
-- Verify that you specified the correct input devices in `bluetooth_2_usb.service`
- 
-- Verify that your Bluetooth devices are paired, trusted, connected and *not* blocked:
- 
-  ```console
-  bluetoothctl
-  info A1:B2:C3:D4:E5:F6
-  ```
- 
-  It should look like this:
-
-  ```console
-  user@pi0w:~ $ bluetoothctl
-  Agent registered
-  [CHG] Controller 0A:1B:2C:3D:4E:5F Pairable: yes
-  [AceRK]# info A1:B2:C3:D4:E5:F6
-  Device A1:B2:C3:D4:E5:F6 (random)
-          Name: AceRK
-          Alias: AceRK
-          Paired: yes     <---
-          Trusted: yes    <---
-          Blocked: no     <---
-          Connected: yes  <---
-          WakeAllowed: no
-          LegacyPairing: no
-          UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
-          UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
-          UUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)
-          UUID: Human Interface Device    (00001812-0000-1000-8000-00805f9b34fb)
-          UUID: Nordic UART Service       (6e400001-b5a3-f393-e0a9-e50e24dcca9e)
-  ```
- 
-> [!NOTE]
-> Replace `A1:B2:C3:D4:E5:F6` by your input device's Bluetooth MAC address
-
-- Reload and restart service:
- 
-  ```console
-  sudo systemctl daemon-reload && sudo service bluetooth_2_usb restart
-  ```
-
-- Reboot Pi
- 
-  ```console
-  sudo reboot
-  ```
-
-- Re-connect the Pi to the host and check that the cable is capable of transmitting data, not power only
- 
-- Try a different USB port on the host
- 
-- Try connecting to a different host
-
-### 7.3. In bluetoothctl, my device is constantly switching on/off
-
-This is a common issue, especially when the device gets paired with multiple hosts. One simple fix/workaround is to re-pair the device:
-
-```console
-bluetoothctl
-power off
-power on
-block A1:B2:C3:D4:E5:F6
-remove A1:B2:C3:D4:E5:F6
-scan on
-trust A1:B2:C3:D4:E5:F6
-pair A1:B2:C3:D4:E5:F6
-connect A1:B2:C3:D4:E5:F6
-exit
+```bash
+git clone https://github.com/quaxalber/bluetooth_2_usb.git
+cd bluetooth_2_usb/scripts
+sudo bash install.sh
 ```
 
-If the issue persists, it's worth trying to delete the cache:
+## Choose your mode
 
-```console
-sudo -i
-cd '/var/lib/bluetooth/0A:1B:2C:3D:4E:5F/cache'
-rm -rf 'A1:B2:C3:D4:E5:F6'
-exit
+| Mode | Best for | Setup effort | Bluetooth persistence |
+| --- | --- | --- | --- |
+| Normal | Everyday use without a read-only root filesystem | Low | Normal writable system behavior |
+| Read-only Easy Mode | Simple appliance-style deployments | Low | Best effort only |
+| Read-only Persistent Mode | Embedded and production-like installs | Medium | Supported persistent Bluetooth state |
+
+### Normal mode
+
+Use this if you just want the Pi to bridge Bluetooth input to USB and you do not care about a read-only root filesystem.
+
+### Read-only Easy Mode
+
+Use this if you want a simple appliance-like setup with minimal effort.
+
+- Activates Raspberry Pi OS OverlayFS
+- Keeps the boot partition writable
+- Stores recovery snapshots of `/etc/machine-id` and `/var/lib/bluetooth` on `/boot`
+- Best-effort only for Bluetooth persistence
+
+Recommended command:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode easy
 ```
 
-> [!NOTE]
-> Replace `0A:1B:2C:3D:4E:5F` by your Pi's Bluetooth controller's MAC and `A1:B2:C3:D4:E5:F6` by your input device's MAC
+### Read-only Persistent Mode
 
-### 7.4. I have a different issue
+Use this if you want reliable Bluetooth identity, pairings and reconnect behavior in read-only operation.
 
-Here's a few things you could try:
+- Activates Raspberry Pi OS OverlayFS
+- Stores Bluetooth state on a separate writable ext4 filesystem
+- Bind-mounts that persistent state to `/var/lib/bluetooth`
+- Intended for power users and production-like setups
 
-- Check the log files (default at `/var/log/bluetooth_2_usb/`) for errors
- 
-> [!NOTE]
-> Logging to file requires the `-f` flag
+Typical flow:
 
-- You may also query the journal to inspect the service logs in real-time:
- 
-  ```console
-  journalctl -u bluetooth_2_usb.service -n 50 -f
-  ```
+```bash
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/your-device
+sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode persistent
+sudo reboot
+```
 
-- For easier degguging, you may temporarily stop the service and run the script manually, modifying arguments as required, e.g., increase log verbosity by appending `-d`:
+## Daily usage
 
-  ```console
-  { sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -gads CTRL+SHIFT+F12 ; } ; sudo service bluetooth_2_usb start
-  ```
+Useful commands:
 
-- When you interact with your Bluetooth devices with `-d` set, you should see debug output in the logs such as:
+```bash
+bluetooth_2_usb --list_devices
+bluetooth_2_usb --validate-env
+bluetooth_2_usb --dry-run --debug
+```
 
-  ```console
-  user@pi0w:~ $ { sudo service bluetooth_2_usb stop && sudo bluetooth_2_usb -gads CTRL+SHIFT+F12 ; } ; sudo service bluetooth_2_usb start
-  25-01-31 13:16:14 [DEBUG] CLI args: device_ids=None, auto_discover=True, grab_devices=True, interrupt_shortcut=['CTRL', 'SHIFT', 'F12'], list_devices=False, log_to_file=False, log_path=/var/log/bluetooth_2_usb/bluetooth_2_usb.log, debug=True, version=False
-  25-01-31 13:16:14 [DEBUG] Logging to stdout
-  25-01-31 13:16:14 [INFO] Launching Bluetooth 2 USB v0.9.1
-  25-01-31 13:16:17 [DEBUG] USB HID gadgets re-initialized: [boot mouse gadget (/dev/hidg0), keyboard gadget (/dev/hidg1), consumer control gadget (/dev/hidg2)]
-  25-01-31 13:16:17 [DEBUG] Configuring global interrupt shortcut: {'KEY_LEFTCTRL', 'KEY_LEFTSHIFT', 'KEY_F12'}
-  25-01-31 13:16:17 [DEBUG] Detected UDC state file: /sys/class/udc/fe980000.usb/state
-  25-01-31 13:16:17 [DEBUG] UdevEventMonitor started observer.
-  25-01-31 13:16:17 [DEBUG] UDC state changed to 'configured'
-  25-01-31 13:16:17 [DEBUG] RelayController: TaskGroup started.
-  25-01-31 13:16:17 [DEBUG] Created task for device /dev/input/event4, name "AceRK Keyboard", phys "e4:5f:01:01:c4:8c".
-  25-01-31 13:16:17 [DEBUG] Created task for device /dev/input/event5, name "AceRK Mouse", phys "e4:5f:01:01:c4:8c".
-  25-01-31 13:16:17 [INFO] Activated relay for device /dev/input/event4, name "AceRK Keyboard", phys "e4:5f:01:01:c4:8c"
-  25-01-31 13:16:17 [INFO] Activated relay for device /dev/input/event5, name "AceRK Mouse", phys "e4:5f:01:01:c4:8c"
-  25-01-31 13:16:38 [DEBUG] Received key event at 1738325798.022707, 30 (KEY_A), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:16:38 [DEBUG] Converted evdev scancode 0x1E (KEY_A) to HID UsageID 0x04 (A)
-  25-01-31 13:16:38 [DEBUG] Pressing A (0x04) via keyboard gadget (/dev/hidg1)
-  a25-01-31 13:16:38 [DEBUG] Received key event at 1738325798.071509, 30 (KEY_A), up from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:16:38 [DEBUG] Converted evdev scancode 0x1E (KEY_A) to HID UsageID 0x04 (A)
-  25-01-31 13:16:38 [DEBUG] Releasing A (0x04) via keyboard gadget (/dev/hidg1)
-  25-01-31 13:16:39 [DEBUG] Received relative axis event at 1738325799.972492, REL_WHEEL from AceRK Mouse (/dev/input/event5)
-  25-01-31 13:16:39 [DEBUG] Received relative axis event at 1738325799.972492, REL_WHEEL_HI_RES from AceRK Mouse (/dev/input/event5)
-  25-01-31 13:16:40 [DEBUG] Received relative axis event at 1738325800.801245, REL_X from AceRK Mouse (/dev/input/event5)
-  25-01-31 13:16:40 [DEBUG] Received relative axis event at 1738325800.801245, REL_Y from AceRK Mouse (/dev/input/event5)
-  25-01-31 13:16:44 [DEBUG] Received key event at 1738325804.311271, 114 (KEY_VOLUMEDOWN), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:16:45 [DEBUG] Received key event at 1738325805.578790, 114 (KEY_VOLUMEDOWN), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:16:45 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
-  25-01-31 13:16:45 [DEBUG] Pressing VOLUME_DECREMENT (0xEA) via consumer control gadget (/dev/hidg2)
-  25-01-31 13:16:45 [DEBUG] Received key event at 1738325805.579166, 114 (KEY_VOLUMEDOWN), up from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:16:45 [DEBUG] Converted evdev scancode 0x72 (KEY_VOLUMEDOWN) to HID UsageID 0xEA (VOLUME_DECREMENT)
-  25-01-31 13:16:45 [DEBUG] Releasing VOLUME_DECREMENT (0xEA) via consumer control gadget (/dev/hidg2)
-  25-01-31 13:16:59 [DEBUG] Received key event at 1738325819.472779, 29 (KEY_LEFTCTRL), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:16:59 [DEBUG] Converted evdev scancode 0x1D (KEY_LEFTCTRL) to HID UsageID 0xE0 (CONTROL)
-  25-01-31 13:16:59 [DEBUG] Pressing CONTROL (0xE0) via keyboard gadget (/dev/hidg1)
-  25-01-31 13:17:00 [DEBUG] Received key event at 1738325820.545488, 42 (KEY_LEFTSHIFT), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:00 [DEBUG] Converted evdev scancode 0x2A (KEY_LEFTSHIFT) to HID UsageID 0xE1 (LEFT_SHIFT)
-  25-01-31 13:17:00 [DEBUG] Pressing LEFT_SHIFT (0xE1) via keyboard gadget (/dev/hidg1)
-  25-01-31 13:17:02 [DEBUG] Received key event at 1738325822.349053, 88 (KEY_F12), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:02 [INFO] ShortcutToggler: Relaying is now OFF.
-  25-01-31 13:17:02 [DEBUG] Ungrabbed device /dev/input/event4, name "AceRK Keyboard", phys "e4:5f:01:01:c4:8c"
-  25-01-31 13:17:02 [DEBUG] Received key event at 1738325822.397839, 88 (KEY_F12), up from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:09 [DEBUG] Received key event at 1738325829.466866, 29 (KEY_LEFTCTRL), up from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:10 [DEBUG] Received key event at 1738325830.441662, 42 (KEY_LEFTSHIFT), up from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:12 [DEBUG] Received key event at 1738325832.781695, 29 (KEY_LEFTCTRL), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:13 [DEBUG] Received key event at 1738325833.756742, 42 (KEY_LEFTSHIFT), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:15 [DEBUG] Received key event at 1738325835.414227, 88 (KEY_F12), down from AceRK Keyboard (/dev/input/event4)
-  25-01-31 13:17:15 [INFO] ShortcutToggler: Relaying is now ON.
-  25-01-31 13:17:15 [DEBUG] Grabbed device /dev/input/event4, name "AceRK Keyboard", phys "e4:5f:01:01:c4:8c"
-  ^C25-01-31 13:17:27 [DEBUG] Received signal: SIGINT. Requesting graceful shutdown.
-  25-01-31 13:17:27 [DEBUG] Shutdown event triggered. Cancelling relay task...
-  25-01-31 13:17:27 [DEBUG] Cancelled relay for /dev/input/event5.
-  25-01-31 13:17:27 [DEBUG] Cancelled relay for /dev/input/event4.
-  25-01-31 13:17:27 [DEBUG] RelayController: TaskGroup exited.
-  25-01-31 13:17:27 [DEBUG] UdevEventMonitor stopped observer.
-  ```
+Most installs use the default service configuration from:
 
-- Still not resolved? Double-check the [installation instructions](#3-installation)
- 
-- For more help, open an [issue](https://github.com/quaxalber/bluetooth_2_usb/issues) in the [GitHub repository](https://github.com/quaxalber/bluetooth_2_usb)
+```bash
+/etc/default/bluetooth_2_usb
+```
 
-### 7.5. Everything is working, but can it help me with Bitcoin mining?
+Default value:
 
-Absolutely! [Here's how](https://bit.ly/42BTC).
+```bash
+BLUETOOTH_2_USB_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12 --hid-profile compat"
+```
 
-## 8. Bonus points
+Important runtime options:
 
-After successfully setting up your Pi as a HID proxy for your Bluetooth devices, you may consider making [Raspberry Pi OS read-only](https://learn.adafruit.com/read-only-raspberry-pi/overview). That helps preventing the SD card from wearing out and the file system from getting corrupted when powering off the Raspberry forcefully.
+- `--auto_discover`: relay readable input devices automatically
+- `--grab_devices`: stop the Pi from also consuming local input events
+- `--interrupt_shortcut CTRL+SHIFT+F12`: toggle relaying on or off
+- `--hid-profile compat|extended`: choose the HID descriptor set
+- `--validate-env`: validate gadget prerequisites and exit
+- `--dry-run`: run a non-binding diagnostic pass
+- `--no-bind`: skip gadget initialization entirely
 
-## 9. Contributing
+### HID profiles
 
-Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/quaxalber/bluetooth_2_usb/blob/main/CONTRIBUTING.md) file for guidelines.
+- `compat`: default profile; exposes boot-compatible keyboard and mouse interfaces first for maximum host compatibility
+- `extended`: keeps the broader keyboard behavior used by earlier releases
 
-## 10. License
+## Updating
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/quaxalber/bluetooth_2_usb/blob/main/LICENSE) file for details.
+```bash
+sudo /opt/bluetooth_2_usb/scripts/update.sh
+```
 
-[Bluetooth to USB Overview](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png) image by [Laura T.](mailto:design@quaxalber.de) is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/).
+## Uninstalling
 
-![License image.](https://i.creativecommons.org/l/by-nc/4.0/88x31.png)
+```bash
+sudo /opt/bluetooth_2_usb/scripts/uninstall.sh --purge --revert-boot
+```
 
-## 11. Acknowledgments
+## Diagnostics
 
-* [Mike Redrobe](https://github.com/mikerr/pihidproxy) for the idea and the basic code logic and [HeuristicPerson's bluetooth_2_hid](https://github.com/HeuristicPerson/bluetooth_2_hid) based off this.
-* [Georgi Valkov](https://github.com/gvalkov) for [python-evdev](https://github.com/gvalkov/python-evdev) making reading input devices a walk in the park.
-* The folks at [Adafruit](https://www.adafruit.com/) for [CircuitPython HID](https://github.com/adafruit/Adafruit_CircuitPython_HID) and [Blinka](https://github.com/quaxalber/Adafruit_Blinka/blob/main/src/usb_hid.py) providing super smooth access to USB gadgets.
-* Special thanks to the open-source community for various other libraries and tools.
+Generate a Markdown debug report:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
+```
+
+`--redact` masks host identifiers such as the hostname, `machine-id`, `PARTUUID` and Bluetooth MAC addresses with explicit placeholders like `<<REDACTED_HOSTNAME>>`, so the report is safer to share in public issues. Omit it only if you explicitly need raw values for local debugging.
+
+Validate the installation:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+```
+
+## Read-only guide
+
+### Easy Mode
+
+Recommended flow:
+
+1. Install `bluetooth_2_usb`
+2. Pair and trust your Bluetooth devices
+3. Confirm everything works normally
+4. Enable easy read-only mode
+5. Reboot
+6. Run `smoke_test.sh --verbose`
+
+Command:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode easy
+```
+
+Important limitations:
+
+- Easy mode is best effort only
+- It does not relocate live Bluetooth state to persistent writable storage
+- It keeps recovery snapshots on `/boot`, but `/boot` is not used as the live Bluetooth state store
+- It is useful for simple setups and recovery snapshots, not as a strong persistence guarantee
+
+### Persistent Mode
+
+Recommended flow:
+
+1. Install `bluetooth_2_usb`
+2. Pair and test your devices in normal mode
+3. Prepare a writable ext4 filesystem for persistent Bluetooth state
+4. Run the persistent-state setup script
+5. Enable persistent read-only mode
+6. Reboot
+7. Run `smoke_test.sh --verbose`
+8. Verify reconnect behavior after a reboot or power-cycle
+
+Prepare persistent Bluetooth state:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/your-device
+```
+
+Enable persistent read-only mode:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode persistent
+```
+
+Default persistent layout:
+
+- Persistent mount: `/mnt/b2u-persist`
+- Bluetooth state dir: `/mnt/b2u-persist/bluetooth`
+- Bind mount target: `/var/lib/bluetooth`
+
+Important notes:
+
+- b2u does not repartition your disk for you
+- The persistent device/filesystem must be provided by the user
+- ext4 is the supported filesystem for persistent Bluetooth state
+- The boot partition is intentionally not used as the live Bluetooth state store
+- `smoke_test.sh --verbose` should report `Read-only mode: persistent` and `Bluetooth state persistent: yes`
+
+### Disable read-only mode
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
+```
+
+This disables OverlayFS again. Persistent Bluetooth-state configuration is intentionally kept in place.
+
+## Troubleshooting
+
+### No UDC detected
+
+- Reboot after installation
+- Check `dtoverlay=dwc2` in `config.txt`
+- Check `modules-load=` in `cmdline.txt`
+- Verify `ls /sys/class/udc`
+
+### Service starts but host does not react
+
+- Verify that you are connected to the correct OTG-capable port
+- Try another cable
+- Run `bluetooth_2_usb --validate-env`
+- Review `journalctl -u bluetooth_2_usb.service -n 100 --no-pager`
+
+### Windows host issues
+
+- Use the default `compat` HID profile first
+- Re-test after reconnecting the USB cable to the host
+- Include `debug.sh --redact` output when opening an issue
+
+### Read-only mode issues
+
+- Check which mode you are actually using:
+  - `easy`
+  - `persistent`
+- In persistent mode, verify that `/var/lib/bluetooth` is a separate bind mount
+- Verify `/etc/machine-id` before and after reboot
+- Treat easy mode as a convenience workflow, not as a persistence guarantee
+
+## Technical details
+
+`install.sh` performs these steps:
+
+1. Detect the correct boot files under `/boot/firmware` or `/boot`
+2. Normalize `dtoverlay=dwc2` and `modules-load=` configuration
+3. Install the project into `/opt/bluetooth_2_usb`
+4. Create a virtual environment at `/opt/bluetooth_2_usb/venv`
+5. Install the Python package into that venv
+6. Install `bluetooth_2_usb.service` into `/etc/systemd/system/`
+7. Install a convenience wrapper at `/usr/local/bin/bluetooth_2_usb`
+
+Persistent read-only mode additionally installs:
+
+- a mount unit for the persistent writable storage
+- `var-lib-bluetooth.mount` to bind persistent Bluetooth state to `/var/lib/bluetooth`
+- a `bluetooth.service` drop-in so BlueZ waits for the bind mount
+
+`smoke_test.sh` distinguishes between:
+
+- `disabled`
+- `easy`
+- `persistent`
+
+In `persistent` mode it fails if Bluetooth state is not actually mounted persistently.
+
+## Development
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -U pip setuptools wheel
+pip install -e .
+```
+
+```bash
+python -m bluetooth_2_usb --list_devices
+python -m bluetooth_2_usb --dry-run --debug
+```
