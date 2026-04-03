@@ -1,7 +1,8 @@
 <!-- omit in toc -->
 # Contributing to Bluetooth 2 USB
 
-Thank you for considering contributing to Bluetooth 2 USB! We value your effort and are happy to provide guidelines to help you get started. Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open-source project.
+Thank you for considering contributing to Bluetooth 2 USB! We value your effort and are happy to provide guidelines to help you get started. Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open-source project. But don't be too concerned if you're still new to all this. The maintainers are happy to assist and guide new contributors! 
+
 <!-- omit in toc -->
 ## Table of Contents
 
@@ -37,19 +38,21 @@ Adherence to widely accepted best practices is crucial for creating code that is
 #### 3.1.1. General Guidelines
 
 - Opt for readability over compact code: make sure your code is easy to read and understand.
-- Use meaningful variable names and keep functions small and focused.
+- Use meaningful variable and function names.
+- Keep functions small and focused.
 - Document your code properly with comments and docstrings.
 
 #### 3.1.2. Object-Oriented Programming (OOP) Guidelines
 
 - Use encapsulation by limiting the direct manipulation of object attributes and using methods instead.
-- Employ inheritance wisely to reuse code and create a logical relationship between classes.
+- Employ inheritance [wisely](https://www.youtube.com/watch?v=hxGOiiR9ZKg) to reuse code and create a logical relationship between classes.
 - Leverage polymorphism to allow objects to take on more than one form.
 - Follow the Single Responsibility Principle: a class should have only one reason to change.
 - Make use of design patterns where appropriate.
 
 To learn more about OOP and best practices, consider reviewing:
 
+- [All videos by CodeAesthetic](https://www.youtube.com/@CodeAesthetic)
 - [Clean Code by Robert C. Martin](https://www.amazon.com/Clean-Code-Handbook-Software-Craftsmanship/dp/0132350882)
 - [Python 3 Object-Oriented Programming by Dusty Phillips](https://www.amazon.com/Python-3-Object-Oriented-Programming/dp/1789615852)
 - [The SOLID Principles in Python](https://realpython.com/tutorials/solid/)

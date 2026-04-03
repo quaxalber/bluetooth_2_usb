@@ -44,6 +44,9 @@ append_if_not_exist() {
 
 colored_output ${GREEN} "Installing bluetooth_2_usb..."
 
+colored_output ${GREEN} "Updating submodules..."
+git submodule update --init --recursive
+
 append_if_not_exist "dtoverlay=dwc2" "/boot/config.txt"
 append_if_not_exist "dwc2" "/etc/modules"
 append_if_not_exist "libcomposite" "/etc/modules"
@@ -54,9 +57,6 @@ if ! (command -v python3.11 && command -v pip3.11) &> /dev/null; then
 else
   colored_output ${GREEN} "$(python3.11 --version) already installed"
 fi
-
-colored_output ${GREEN} "Installing required Python packages..."
-pip3.11 install evdev
 
 currentScriptDirectory=$(dirname $(readlink -f $0))
 

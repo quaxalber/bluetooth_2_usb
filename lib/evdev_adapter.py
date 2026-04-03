@@ -1,12 +1,20 @@
-from evdev import ecodes
+from typing import Tuple
 
+from adafruit_hid.consumer_control import ConsumerControl
+from adafruit_hid.consumer_control_code import ConsumerControlCode
+from adafruit_hid.keyboard import Keyboard
+from adafruit_hid.keycode import Keycode, MouseButton
+from adafruit_hid.mouse import Mouse
+from evdev import ecodes, InputEvent, KeyEvent
+
+from lib.device_link import DeviceLink, DummyGadget
 import lib.logger
-from lib.constants import Keycode, MouseButton
+
 
 logger = lib.logger.get_logger()
 
-_EVDEV_TO_HID_MAPPING = {
-    ecodes.KEY_RESERVED: 0x00,
+_EVDEV_TO_HID_MAPPING: dict[int, int] = {
+    ecodes.KEY_RESERVED: None,
     ecodes.KEY_A: Keycode.A,
     ecodes.KEY_B: Keycode.B,
     ecodes.KEY_C: Keycode.C,
@@ -106,6 +114,7 @@ _EVDEV_TO_HID_MAPPING = {
     ecodes.KEY_COMPOSE: Keycode.APPLICATION,
     ecodes.KEY_POWER: Keycode.POWER,
     ecodes.KEY_KPEQUAL: Keycode.KEYPAD_EQUALS,
+    ecodes.KEY_KPCOMMA: Keycode.KEYPAD_COMMA,
     ecodes.KEY_F13: Keycode.F13,
     ecodes.KEY_F14: Keycode.F14,
     ecodes.KEY_F15: Keycode.F15,
@@ -118,26 +127,6 @@ _EVDEV_TO_HID_MAPPING = {
     ecodes.KEY_F22: Keycode.F22,
     ecodes.KEY_F23: Keycode.F23,
     ecodes.KEY_F24: Keycode.F24,
-    ecodes.KEY_OPEN: 0x74,
-    ecodes.KEY_HELP: 0x75,
-    ecodes.KEY_PROPS: 0x76,
-    ecodes.KEY_FRONT: 0x77,
-    ecodes.KEY_MENU: 0x79,
-    ecodes.KEY_UNDO: 0x7A,
-    ecodes.KEY_CUT: 0x7B,
-    ecodes.KEY_COPY: 0x7C,
-    ecodes.KEY_PASTE: 0x7D,
-    ecodes.KEY_AGAIN: 0x85,
-    ecodes.KEY_RO: 0x87,
-    ecodes.KEY_KATAKANAHIRAGANA: 0x88,
-    ecodes.KEY_YEN: 0x89,
-    ecodes.KEY_HENKAN: 0x8A,
-    ecodes.KEY_HANJA: 0x8B,
-    ecodes.KEY_KPCOMMA: 0x8C,
-    ecodes.KEY_SCALE: 0x91,
-    ecodes.KEY_HIRAGANA: 0x92,
-    ecodes.KEY_KATAKANA: 0x93,
-    ecodes.KEY_MUHENKAN: 0x94,
     ecodes.KEY_LEFTCTRL: Keycode.LEFT_CONTROL,
     ecodes.KEY_LEFTSHIFT: Keycode.LEFT_SHIFT,
     ecodes.KEY_LEFTALT: Keycode.LEFT_ALT,
@@ -146,24 +135,37 @@ _EVDEV_TO_HID_MAPPING = {
     ecodes.KEY_RIGHTSHIFT: Keycode.RIGHT_SHIFT,
     ecodes.KEY_RIGHTALT: Keycode.RIGHT_ALT,
     ecodes.KEY_RIGHTMETA: Keycode.RIGHT_GUI,
-    ecodes.KEY_PLAYPAUSE: 0xE8,
-    ecodes.KEY_STOPCD: 0xE9,
-    ecodes.KEY_PREVIOUSSONG: 0xEA,
-    ecodes.KEY_NEXTSONG: 0xEB,
-    ecodes.KEY_EJECTCD: 0xEC,
-    ecodes.KEY_VOLUMEUP: 0xED,
-    ecodes.KEY_VOLUMEDOWN: 0xEE,
-    ecodes.KEY_WWW: 0xF0,
-    ecodes.KEY_MAIL: 0xF1,
-    ecodes.KEY_FORWARD: 0xF2,
-    ecodes.KEY_STOP: 0xF3,
-    ecodes.KEY_FIND: 0xF4,
-    ecodes.KEY_SCROLLUP: 0xF5,
-    ecodes.KEY_SCROLLDOWN: 0xF6,
-    ecodes.KEY_EDIT: 0xF7,
-    ecodes.KEY_SLEEP: 0xF8,
-    ecodes.KEY_REFRESH: 0xFA,
-    ecodes.KEY_CALC: 0xFB,
+    ecodes.KEY_OPEN: None,
+    ecodes.KEY_HELP: None,
+    ecodes.KEY_PROPS: None,
+    ecodes.KEY_FRONT: None,
+    ecodes.KEY_MENU: None,
+    ecodes.KEY_UNDO: None,
+    ecodes.KEY_CUT: None,
+    ecodes.KEY_COPY: None,
+    ecodes.KEY_PASTE: None,
+    ecodes.KEY_AGAIN: None,
+    ecodes.KEY_PLAYPAUSE: ConsumerControlCode.PLAY_PAUSE,
+    ecodes.KEY_STOPCD: ConsumerControlCode.STOP,
+    ecodes.KEY_PREVIOUSSONG: ConsumerControlCode.SCAN_PREVIOUS_TRACK,
+    ecodes.KEY_NEXTSONG: ConsumerControlCode.SCAN_NEXT_TRACK,
+    ecodes.KEY_EJECTCD: ConsumerControlCode.EJECT,
+    ecodes.KEY_VOLUMEUP: ConsumerControlCode.VOLUME_INCREMENT,
+    ecodes.KEY_VOLUMEDOWN: ConsumerControlCode.VOLUME_DECREMENT,
+    ecodes.KEY_WWW: None,
+    ecodes.KEY_MAIL: None,
+    ecodes.KEY_FORWARD: None,
+    ecodes.KEY_STOP: None,
+    ecodes.KEY_FIND: None,
+    ecodes.KEY_SCROLLUP: None,
+    ecodes.KEY_SCROLLDOWN: None,
+    ecodes.KEY_EDIT: None,
+    ecodes.KEY_SLEEP: None,
+    ecodes.KEY_REFRESH: None,
+    ecodes.KEY_CALC: None,
+    ecodes.KEY_MUTE: ConsumerControlCode.MUTE,
+    ecodes.KEY_COFFEE: None,
+    ecodes.KEY_BACK: None,
     ecodes.BTN_LEFT: MouseButton.LEFT,
     ecodes.BTN_RIGHT: MouseButton.RIGHT,
     ecodes.BTN_MIDDLE: MouseButton.MIDDLE,
@@ -173,9 +175,103 @@ Mapping from evdev ecode to HID Keycode
 """
 
 
-def to_hid_key(ecode: int) -> int:
+def to_hid_key(event: InputEvent):
+    ecode: int = event.code
     hid_key = _EVDEV_TO_HID_MAPPING.get(ecode, None)
+
     logger.debug(f"Converted ecode {ecode} to HID keycode {hid_key}")
     if hid_key is None:
-        logger.warning(f"Unsupported key pressed: {ecode}")
+        logger.debug(f"Unsupported key pressed: {ecode}")
+
     return hid_key
+
+
+def get_output_device(
+    event: InputEvent, device_link: DeviceLink
+) -> ConsumerControl | Keyboard | Mouse | DummyGadget | None:
+    output_device = None
+
+    if is_consumer_control_code(event):
+        output_device = device_link.consumer_gadget()
+    elif is_mouse_button(event):
+        output_device = device_link.mouse_gadget()
+    else:
+        output_device = device_link.keyboard_gadget()
+
+    if output_device is None:
+        logger.debug("Output device not available!")
+
+    return output_device
+
+
+def is_mouse_button(event: InputEvent) -> bool:
+    return event.code in [
+        ecodes.BTN_LEFT,
+        ecodes.BTN_RIGHT,
+        ecodes.BTN_MIDDLE,
+    ]
+
+
+def is_consumer_control_code(event: InputEvent) -> bool:
+    return event.code in [
+        ecodes.KEY_OPEN,
+        ecodes.KEY_HELP,
+        ecodes.KEY_PROPS,
+        ecodes.KEY_FRONT,
+        ecodes.KEY_MENU,
+        ecodes.KEY_UNDO,
+        ecodes.KEY_CUT,
+        ecodes.KEY_COPY,
+        ecodes.KEY_PASTE,
+        ecodes.KEY_AGAIN,
+        ecodes.KEY_PLAYPAUSE,
+        ecodes.KEY_STOPCD,
+        ecodes.KEY_PREVIOUSSONG,
+        ecodes.KEY_NEXTSONG,
+        ecodes.KEY_EJECTCD,
+        ecodes.KEY_VOLUMEUP,
+        ecodes.KEY_VOLUMEDOWN,
+        ecodes.KEY_WWW,
+        ecodes.KEY_MAIL,
+        ecodes.KEY_FORWARD,
+        ecodes.KEY_STOP,
+        ecodes.KEY_FIND,
+        ecodes.KEY_SCROLLUP,
+        ecodes.KEY_SCROLLDOWN,
+        ecodes.KEY_EDIT,
+        ecodes.KEY_SLEEP,
+        ecodes.KEY_REFRESH,
+        ecodes.KEY_CALC,
+        ecodes.KEY_MUTE,
+        ecodes.KEY_COFFEE,
+        ecodes.KEY_BACK,
+    ]
+
+
+def is_key_event(event: InputEvent) -> bool:
+    return event.type == ecodes.EV_KEY
+
+
+def is_key_up(event: InputEvent) -> bool:
+    return event.type == ecodes.EV_KEY and event.value == KeyEvent.key_up
+
+
+def is_key_down(event: InputEvent) -> bool:
+    return event.type == ecodes.EV_KEY and event.value == KeyEvent.key_down
+
+
+def is_mouse_movement(event: InputEvent) -> bool:
+    return event.type == ecodes.EV_REL
+
+
+def get_mouse_movement(event: InputEvent) -> Tuple[int, int, int]:
+    x, y, mwheel = 0, 0, 0
+
+    if event.code == ecodes.REL_X:
+        x = event.value
+    elif event.code == ecodes.REL_Y:
+        y = event.value
+    elif event.code == ecodes.REL_WHEEL:
+        mwheel = event.value
+
+    return x, y, mwheel

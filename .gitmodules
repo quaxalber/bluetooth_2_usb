@@ -1,0 +1,9 @@
+[submodule "submodules/Adafruit_Blinka"]
+	path = submodules/Adafruit_Blinka
+	url = https://github.com/quaxalber/Adafruit_Blinka.git
+[submodule "submodules/Adafruit_CircuitPython_HID"]
+	path = submodules/Adafruit_CircuitPython_HID
+	url = https://github.com/quaxalber/Adafruit_CircuitPython_HID.git
+[submodule "submodules/python-evdev"]
+	path = submodules/python-evdev
+	url = https://github.com/quaxalber/python-evdev.git
