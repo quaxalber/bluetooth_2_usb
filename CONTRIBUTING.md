@@ -39,18 +39,18 @@ By participating in this project, you are expected to uphold our [Code of Conduc
 - Create a Python virtual environment:
  
   ```console
-  python3.11 -m venv .venv
+  python3.11 -m venv venv
   ```
  
 - Install dependencies in Python virtual environment:
  
   ```console
-  .venv/bin/pip3.11 install -r requirements.txt -c constraints.txt
+  venv/bin/pip3.11 install -r requirements.txt -c constraints.txt
   ``` 
 
 - Open the repo in your favorite IDE
  
-- Make sure that your IDE is using `python3.11` from `bluetooth_2_usb/.venv/bin/`, e.g., in VS Code:
+- Make sure that your IDE is using `python3.11` from `bluetooth_2_usb/venv/bin/`, e.g., in VS Code:
  
   `CTRL + SHIFT + P` > type `Python Select Interpreter` > select `Enter interpreter path` > select `Find...`
 

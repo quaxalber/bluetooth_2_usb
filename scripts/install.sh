@@ -68,11 +68,11 @@ main() {
   current_user=$(stat -c '%U' .) || abort_update "Failed retrieving current user ownership."
   current_group=$(stat -c '%G' .) || abort_update "Failed retrieving current group ownership."
 
-  colored_output "${GREEN}" "Creating Python virtual environment \"${base_directory}/.venv\"..."
-  python3.11 -m venv .venv || abort_install "Failed creating Python virtual environment."
+  colored_output "${GREEN}" "Creating Python virtual environment \"${base_directory}/venv\"..."
+  python3.11 -m venv venv || abort_install "Failed creating Python virtual environment."
 
   colored_output "${GREEN}" "Installing dependencies in venv..."
-  .venv/bin/pip3.11 install -r requirements.txt -c constraints.txt || abort_install "Failed installing dependencies."
+  venv/bin/pip3.11 install -r requirements.txt -c constraints.txt || abort_install "Failed installing dependencies."
 
   # Modify system files.
   colored_output "${GREEN}" "Modifying system files..."
