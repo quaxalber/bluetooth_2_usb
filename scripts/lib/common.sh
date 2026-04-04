@@ -325,15 +325,6 @@ snapshot_readonly_state() {
   fi
 }
 
-print_readonly_limitations() {
-  cat <<'EOF'
-This helper enables Raspberry Pi OS OverlayFS only.
-It does not automatically relocate or bind-mount Bluetooth state.
-Bluetooth persistence still depends on /var/lib/bluetooth and /etc/machine-id
-remaining stable across reboot on your system image.
-EOF
-}
-
 readonly_warning_easy_mode() {
   cat <<'EOF'
 Easy Mode only enables Raspberry Pi OS OverlayFS and stores recovery snapshots on /boot.

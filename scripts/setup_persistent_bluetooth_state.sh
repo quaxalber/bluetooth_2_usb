@@ -5,6 +5,7 @@ IFS=$'\n\t'
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 load_readonly_config
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 
 DEVICE="${B2U_PERSIST_DEVICE:-}"
 PERSIST_MOUNT="${B2U_PERSIST_MOUNT:-$B2U_DEFAULT_PERSIST_MOUNT}"
@@ -106,7 +107,7 @@ Next steps:
 2. Run:
    sudo systemctl enable --now $(persist_mount_unit_name "$PERSIST_MOUNT") var-lib-bluetooth.mount
 3. Then enable read-only mode with:
-   sudo ${B2U_DEFAULT_INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode persistent
+   sudo ${SCRIPT_DIR}/enable_readonly_overlayfs.sh --mode persistent
 EOF
   exit 0
 fi
