@@ -47,6 +47,11 @@ fail() {
   exit "${2:-1}"
 }
 
+require_value() {
+  local opt="$1"
+  [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != -* ]] || fail "Missing value for ${opt}"
+}
+
 ensure_root() {
   [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Run this script as root."
 }

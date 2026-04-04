@@ -24,9 +24,9 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo) REPO_URL="$2"; shift 2 ;;
-    --branch) REPO_BRANCH="$2"; shift 2 ;;
-    --dir) INSTALL_DIR="$2"; shift 2 ;;
+    --repo) require_value "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
+    --branch) require_value "$1" "${2:-}"; REPO_BRANCH="$2"; shift 2 ;;
+    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;
     --skip-clone) SKIP_CLONE=1; shift ;;
     --no-reboot) NO_REBOOT=1; shift ;;
     -h|--help) usage; exit 0 ;;

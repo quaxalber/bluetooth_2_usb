@@ -26,10 +26,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode) MODE="$2"; shift 2 ;;
-    --persist-device) PERSIST_DEVICE="$2"; shift 2 ;;
-    --persist-mount) PERSIST_MOUNT="$2"; shift 2 ;;
-    --bluetooth-subdir) BLUETOOTH_SUBDIR="$2"; shift 2 ;;
+    --mode) require_value "$1" "${2:-}"; MODE="$2"; shift 2 ;;
+    --persist-device) require_value "$1" "${2:-}"; PERSIST_DEVICE="$2"; shift 2 ;;
+    --persist-mount) require_value "$1" "${2:-}"; PERSIST_MOUNT="$2"; shift 2 ;;
+    --bluetooth-subdir) require_value "$1" "${2:-}"; BLUETOOTH_SUBDIR="$2"; shift 2 ;;
     --format) FORMAT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "Unknown option: $1" ;;

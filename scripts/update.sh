@@ -21,11 +21,6 @@ Usage: sudo ./update.sh [options]
 EOF
 }
 
-require_value() {
-  local opt="$1"
-  [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != -* ]] || fail "Missing value for ${opt}"
-}
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;

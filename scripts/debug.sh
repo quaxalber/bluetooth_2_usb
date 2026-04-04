@@ -23,10 +23,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dir) INSTALL_DIR="$2"; VENV_DIR="${INSTALL_DIR}/venv"; shift 2 ;;
-    --service) SERVICE_NAME="$2"; shift 2 ;;
-    --venv) VENV_DIR="$2"; shift 2 ;;
-    --duration) DURATION="$2"; shift 2 ;;
+    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; VENV_DIR="${INSTALL_DIR}/venv"; shift 2 ;;
+    --service) require_value "$1" "${2:-}"; SERVICE_NAME="$2"; shift 2 ;;
+    --venv) require_value "$1" "${2:-}"; VENV_DIR="$2"; shift 2 ;;
+    --duration) require_value "$1" "${2:-}"; DURATION="$2"; shift 2 ;;
     --redact) REDACT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "Unknown option: $1" ;;
