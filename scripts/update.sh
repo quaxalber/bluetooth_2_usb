@@ -42,7 +42,11 @@ VENV_DIR="${INSTALL_DIR}/venv"
 
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   if [[ -n "$REPO_URL" ]]; then
-    git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+    if git -C "$INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
+      git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+    else
+      git -C "$INSTALL_DIR" remote add origin "$REPO_URL"
+    fi
   fi
   info "Updating repository in ${INSTALL_DIR}"
   git -C "$INSTALL_DIR" fetch --all --tags

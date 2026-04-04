@@ -215,8 +215,20 @@ import sys
 cmdline_path = Path(sys.argv[1])
 modules = sys.argv[2]
 tokens = cmdline_path.read_text(encoding="utf-8").strip().split()
+existing = []
+for token in tokens:
+    if token.startswith("modules-load="):
+        existing.extend(
+            value for value in token.split("=", 1)[1].split(",") if value
+        )
+
+merged = []
+for value in [*existing, *modules.split(",")]:
+    if value and value not in merged:
+        merged.append(value)
+
 tokens = [token for token in tokens if not token.startswith("modules-load=")]
-tokens.append(f"modules-load={modules}")
+tokens.append("modules-load=" + ",".join(merged))
 cmdline_path.write_text(" ".join(tokens) + "\n", encoding="utf-8")
 PY
 }

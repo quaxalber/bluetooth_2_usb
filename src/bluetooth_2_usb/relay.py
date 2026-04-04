@@ -207,13 +207,17 @@ class RelayController:
         self._gadget_manager = gadget_manager
         self._device_ids = [DeviceIdentifier(id) for id in (device_identifiers or [])]
         self._auto_discover = auto_discover
-        self._skip_name_prefixes = skip_name_prefixes or [
-            "vc4-hdmi",
-            "vc4",
-            "gpio",
-            "pwr_button",
-            "raspberrypi-ts",
-        ]
+        self._skip_name_prefixes = (
+            skip_name_prefixes
+            if skip_name_prefixes is not None
+            else [
+                "vc4-hdmi",
+                "vc4",
+                "gpio",
+                "pwr_button",
+                "raspberrypi-ts",
+            ]
+        )
         self._grab_devices = grab_devices
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
@@ -254,7 +258,8 @@ class RelayController:
             _logger.debug("RelayController: TaskGroup exited.")
 
     def schedule_add_device(self, device_path: str) -> None:
-        if self._loop is None:
+        loop = self._loop
+        if loop is None or self._task_group is None or self._cancelled:
             _logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
             return
 
@@ -274,13 +279,26 @@ class RelayController:
         finally:
             device.close()
 
-        self._loop.call_soon_threadsafe(self.add_device, device_path)
+        try:
+            loop.call_soon_threadsafe(self.add_device, device_path)
+        except RuntimeError:
+            _logger.debug(
+                "Ignoring add for %s; controller is shutting down.",
+                device_path,
+            )
 
     def schedule_remove_device(self, device_path: str) -> None:
-        if self._loop is None:
+        loop = self._loop
+        if loop is None or self._cancelled:
             _logger.debug(f"Ignoring remove for {device_path}; event loop is unavailable.")
             return
-        self._loop.call_soon_threadsafe(self.remove_device, device_path)
+        try:
+            loop.call_soon_threadsafe(self.remove_device, device_path)
+        except RuntimeError:
+            _logger.debug(
+                "Ignoring remove for %s; controller is shutting down.",
+                device_path,
+            )
 
     def add_device(self, device_path: str) -> None:
         """
@@ -313,9 +331,14 @@ class RelayController:
             device.close()
             return
 
-        task = self._task_group.create_task(
-            self._async_relay_events(device), name=device.path
-        )
+        try:
+            task = self._task_group.create_task(
+                self._async_relay_events(device), name=device.path
+            )
+        except RuntimeError:
+            _logger.debug("Ignoring %s; TaskGroup is shutting down.", device)
+            device.close()
+            return
         self._active_tasks[device.path] = task
         _logger.debug(f"Created task for {device}.")
 
