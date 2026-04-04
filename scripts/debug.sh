@@ -44,11 +44,7 @@ REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
 # Load readonly config with error handling to prevent malformed files from aborting report generation
 if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ]; then
   # Parse config manually to handle errors gracefully
-  B2U_READONLY_MODE="disabled"
   B2U_PERSIST_MOUNT="$B2U_DEFAULT_PERSIST_MOUNT"
-  B2U_PERSIST_BLUETOOTH_DIR="${B2U_DEFAULT_PERSIST_MOUNT}/${B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR}"
-  B2U_PERSIST_SPEC=""
-  B2U_PERSIST_DEVICE=""
 
   parse_error=0
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -61,8 +57,11 @@ if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ]; then
     key="${BASH_REMATCH[1]}"
     value="${BASH_REMATCH[2]}"
     case "$key" in
-      B2U_READONLY_MODE|B2U_PERSIST_MOUNT|B2U_PERSIST_BLUETOOTH_DIR|B2U_PERSIST_SPEC|B2U_PERSIST_DEVICE)
+      B2U_PERSIST_MOUNT)
         printf -v "$key" '%s' "$value"
+        ;;
+      B2U_READONLY_MODE|B2U_PERSIST_BLUETOOTH_DIR|B2U_PERSIST_SPEC|B2U_PERSIST_DEVICE)
+        :
         ;;
       *)
         warn "Malformed $B2U_READONLY_ENV_FILE, skipping readonly entries"
@@ -73,11 +72,7 @@ if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ]; then
   done <"$B2U_READONLY_ENV_FILE"
 else
   # Set defaults if file doesn't exist
-  B2U_READONLY_MODE="disabled"
   B2U_PERSIST_MOUNT="$B2U_DEFAULT_PERSIST_MOUNT"
-  B2U_PERSIST_BLUETOOTH_DIR="${B2U_DEFAULT_PERSIST_MOUNT}/${B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR}"
-  B2U_PERSIST_SPEC=""
-  B2U_PERSIST_DEVICE=""
 fi
 
 code_block() {
@@ -153,7 +148,11 @@ run_shell_block() {
 
   echo "## Runtime prerequisites"
   run_shell_block 5 "ls /sys/class/udc 2>/dev/null || true"
-  [[ -d /sys/kernel/config/usb_gadget ]] && echo "/sys/kernel/config/usb_gadget exists" | code_block || echo "configfs missing" | code_block
+  if [[ -d /sys/kernel/config/usb_gadget ]]; then
+    echo "/sys/kernel/config/usb_gadget exists" | code_block
+  else
+    echo "configfs missing" | code_block
+  fi
   printf '%s\n' "overlayfs=$(overlay_status)" | code_block
   # Check readonly mode and bluetooth persistence with error handling for malformed config
   if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ] && [ "${parse_error:-0}" -eq 1 ]; then
@@ -169,7 +168,11 @@ run_shell_block() {
   run_shell_block 5 "findmnt -n '$B2U_PERSIST_MOUNT' 2>/dev/null || true"
   [[ -f /etc/machine-id ]] && run_shell_block 5 "cat /etc/machine-id" || true
   printf '%s\n' "machine_id_valid=$(machine_id_valid && echo yes || echo no)" | code_block
-  [[ -d /var/lib/bluetooth ]] && run_shell_block 5 "find /var/lib/bluetooth -type f | sort" || echo "/var/lib/bluetooth missing" | code_block
+  if [[ -d /var/lib/bluetooth ]]; then
+    run_shell_block 5 "find /var/lib/bluetooth -type f | sort"
+  else
+    echo "/var/lib/bluetooth missing" | code_block
+  fi
 
   echo "## systemd"
   run_shell_block 5 "systemctl is-active '${SERVICE_NAME}.service' 2>/dev/null || true"
