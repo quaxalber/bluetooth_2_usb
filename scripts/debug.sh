@@ -99,8 +99,16 @@ run_shell_block() {
 
   echo "## Boot"
   printf '%s\n' "boot_dir=${BOOT_DIR}" | code_block
-  [[ -f "$CONFIG_TXT" ]] && run_shell_block 5 "grep -nE '^\[all\]|dtoverlay=dwc2.*' '$CONFIG_TXT'" || echo "missing: $CONFIG_TXT" | code_block
-  [[ -f "$CMDLINE_TXT" ]] && run_shell_block 5 "cat '$CMDLINE_TXT'" || echo "missing: $CMDLINE_TXT" | code_block
+  if [[ -f "$CONFIG_TXT" ]]; then
+    run_shell_block 5 "grep -nE '^\[all\]|dtoverlay=dwc2.*' '$CONFIG_TXT'"
+  else
+    echo "missing: $CONFIG_TXT" | code_block
+  fi
+  if [[ -f "$CMDLINE_TXT" ]]; then
+    run_shell_block 5 "cat '$CMDLINE_TXT'"
+  else
+    echo "missing: $CMDLINE_TXT" | code_block
+  fi
 
   echo "## Runtime prerequisites"
   run_shell_block 5 "ls /sys/class/udc 2>/dev/null || true"
