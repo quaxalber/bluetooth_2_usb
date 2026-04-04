@@ -257,6 +257,23 @@ class RelayController:
         if self._loop is None:
             _logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
             return
+
+        try:
+            device = InputDevice(device_path)
+        except (OSError, FileNotFoundError):
+            _logger.debug(f"{device_path} vanished before hotplug filtering.")
+            return
+
+        try:
+            if not self._should_relay(device):
+                _logger.debug(
+                    "Skipping hotplugged device %s because it does not match relay filters.",
+                    device,
+                )
+                return
+        finally:
+            device.close()
+
         self._loop.call_soon_threadsafe(self.add_device, device_path)
 
     def schedule_remove_device(self, device_path: str) -> None:
@@ -281,12 +298,19 @@ class RelayController:
             _logger.debug(f"{device_path} vanished before opening.")
             return
 
+        if not self._should_relay(device):
+            _logger.debug(f"Skipping {device} because it does not match relay filters.")
+            device.close()
+            return
+
         if self._task_group is None:
             _logger.critical(f"No TaskGroup available; ignoring {device}.")
+            device.close()
             return
 
         if device.path in self._active_tasks:
             _logger.debug(f"Device {device} is already active.")
+            device.close()
             return
 
         task = self._task_group.create_task(

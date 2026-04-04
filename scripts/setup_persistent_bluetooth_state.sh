@@ -86,6 +86,7 @@ fi
 
 PERSIST_BLUETOOTH_DIR="${PERSIST_MOUNT}/${BLUETOOTH_SUBDIR}"
 mkdir -p "$PERSIST_MOUNT"
+mkdir -p "$PERSIST_BLUETOOTH_DIR"
 
 write_persist_mount_unit "$PERSIST_SPEC" "$PERSIST_MOUNT" "$FS_TYPE"
 write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR"
@@ -115,7 +116,6 @@ systemctl stop bluetooth.service 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now "$(persist_mount_unit_name "$PERSIST_MOUNT")"
 
-mkdir -p "$PERSIST_BLUETOOTH_DIR"
 if [[ -d /var/lib/bluetooth ]] && [[ -z "$(find "$PERSIST_BLUETOOTH_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]]; then
   cp -a /var/lib/bluetooth/. "$PERSIST_BLUETOOTH_DIR"/
 fi

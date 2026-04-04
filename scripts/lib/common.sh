@@ -243,7 +243,8 @@ PY
 
 install_service_unit() {
   local install_dir="$1"
-  local target="/etc/systemd/system/${B2U_DEFAULT_SERVICE_NAME}.service"
+  local service_name="${2:-$B2U_DEFAULT_SERVICE_NAME}"
+  local target="/etc/systemd/system/${service_name}.service"
   sed "s|@INSTALL_DIR@|${install_dir}|g" "${B2U_REPO_ROOT}/bluetooth_2_usb.service" >"$target"
   chmod 0644 "$target"
 }
@@ -275,7 +276,8 @@ recreate_venv() {
 }
 
 service_installed() {
-  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${B2U_DEFAULT_SERVICE_NAME}.service"
+  local service_name="${1:-$B2U_DEFAULT_SERVICE_NAME}"
+  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${service_name}.service"
 }
 
 overlay_status() {
@@ -337,8 +339,7 @@ load_readonly_config() {
     while IFS= read -r line || [[ -n "$line" ]]; do
       [[ -n "$line" ]] || continue
       if [[ ! "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"$ ]]; then
-        error "Refusing to load invalid read-only config line from ${B2U_READONLY_ENV_FILE}: ${line}"
-        return 1
+        fail "Refusing to load invalid read-only config line from ${B2U_READONLY_ENV_FILE}: ${line}"
       fi
 
       key="${BASH_REMATCH[1]}"
@@ -349,8 +350,7 @@ load_readonly_config() {
           printf -v "$key" '%s' "$value"
           ;;
         *)
-          error "Refusing to load unexpected key from ${B2U_READONLY_ENV_FILE}: ${key}"
-          return 1
+          fail "Refusing to load unexpected key from ${B2U_READONLY_ENV_FILE}: ${key}"
           ;;
       esac
     done <"$B2U_READONLY_ENV_FILE"
@@ -425,9 +425,9 @@ EOF
 }
 
 remove_persist_mount_unit() {
-  load_readonly_config
+  local mount_path="${1:-$B2U_PERSIST_MOUNT}"
   local unit_name
-  unit_name="$(persist_mount_unit_name "$B2U_PERSIST_MOUNT")"
+  unit_name="$(persist_mount_unit_name "$mount_path")"
   rm -f "/etc/systemd/system/${unit_name}"
 }
 

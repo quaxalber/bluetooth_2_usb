@@ -49,7 +49,9 @@ if [[ -d "${INSTALL_DIR}/.git" ]]; then
   if [[ -n "$REPO_BRANCH" ]]; then
     git -C "$INSTALL_DIR" checkout "$REPO_BRANCH"
   fi
-  git -C "$INSTALL_DIR" pull --ff-only
+  if git -C "$INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
+    git -C "$INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
+  fi
 elif [[ -n "$REPO_URL" && -n "$REPO_BRANCH" ]]; then
   info "Replacing non-git installation using ${REPO_URL}@${REPO_BRANCH}"
   tmpdir="$(mktemp -d)"
@@ -65,7 +67,7 @@ recreate_venv "$VENV_DIR"
 
 "${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel
 "${VENV_DIR}/bin/pip" install --upgrade "$INSTALL_DIR"
-install_service_unit "$INSTALL_DIR"
+install_service_unit "$INSTALL_DIR" "$SERVICE_NAME"
 write_default_env_file
 install_cli_wrapper "$INSTALL_DIR"
 systemctl daemon-reload

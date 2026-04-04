@@ -37,7 +37,7 @@ ensure_root
 prepare_log "uninstall"
 load_readonly_config
 
-if service_installed || [[ "$(systemctl show -P LoadState "${SERVICE_NAME}.service" 2>/dev/null || true)" != "not-found" ]]; then
+if service_installed "$SERVICE_NAME" || [[ "$(systemctl show -P LoadState "${SERVICE_NAME}.service" 2>/dev/null || true)" != "not-found" ]]; then
   systemctl stop "${SERVICE_NAME}.service" || true
   if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
     systemctl kill --kill-who=all "${SERVICE_NAME}.service" || true
@@ -52,7 +52,7 @@ rm -f "$B2U_READONLY_ENV_FILE"
 rm -f /usr/local/bin/bluetooth_2_usb
 remove_bluetooth_persist_dropin
 remove_bluetooth_bind_mount_unit
-remove_persist_mount_unit
+remove_persist_mount_unit "$B2U_PERSIST_MOUNT"
 systemctl daemon-reload || true
 if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
   systemctl kill --kill-who=all "${SERVICE_NAME}.service" || true

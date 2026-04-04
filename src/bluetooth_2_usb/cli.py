@@ -215,10 +215,33 @@ async def async_run(args: Arguments) -> int:
             UdcStateMonitor(relaying_active=relaying_active, udc_path=env_status.udc_path),
         ):
             relay_task = asyncio.create_task(relay_controller.async_relay_devices())
-            await shutdown_event.wait()
+            shutdown_task = asyncio.create_task(shutdown_event.wait())
+            done, _ = await asyncio.wait(
+                {relay_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if relay_task in done:
+                if relay_task.cancelled():
+                    logger.error("Relay task was cancelled before shutdown was requested.")
+                else:
+                    relay_exc = relay_task.exception()
+                    if relay_exc is None:
+                        logger.error("Relay task exited unexpectedly before shutdown was requested.")
+                    else:
+                        logger.error(
+                            "Relay task exited unexpectedly before shutdown was requested: %s",
+                            relay_exc,
+                        )
+                if not shutdown_task.done():
+                    shutdown_task.cancel()
+                await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
+                return EXIT_RUNTIME
+
             logger.debug("Shutdown event triggered. Cancelling relay task...")
             relay_task.cancel()
-            await asyncio.gather(relay_task, return_exceptions=True)
+            shutdown_task.cancel()
+            await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
     finally:
         for handled_signal, previous_handler in previous_handlers.items():
             signal.signal(handled_signal, previous_handler)

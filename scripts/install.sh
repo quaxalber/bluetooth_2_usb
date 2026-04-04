@@ -77,7 +77,9 @@ if [[ $SKIP_CLONE -eq 0 ]]; then
     fi
     git -C "$INSTALL_DIR" fetch --all --tags
     git -C "$INSTALL_DIR" checkout "$REPO_BRANCH"
-    git -C "$INSTALL_DIR" pull --ff-only
+    if git -C "$INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
+      git -C "$INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
+    fi
   else
     info "Installing repository into ${INSTALL_DIR}"
     rm -rf "$INSTALL_DIR"
@@ -94,7 +96,7 @@ recreate_venv "$VENV_DIR"
 "${VENV_DIR}/bin/pip" install --upgrade "$INSTALL_DIR"
 ok "Virtual environment updated at ${VENV_DIR}"
 
-install_service_unit "$INSTALL_DIR"
+install_service_unit "$INSTALL_DIR" "$SERVICE_NAME"
 write_default_env_file
 install_cli_wrapper "$INSTALL_DIR"
 systemctl daemon-reload
