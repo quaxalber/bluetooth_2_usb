@@ -257,7 +257,9 @@ install_service_unit() {
   local install_dir="$1"
   local service_name="${2:-$B2U_DEFAULT_SERVICE_NAME}"
   local target="/etc/systemd/system/${service_name}.service"
-  sed "s|@INSTALL_DIR@|${install_dir}|g" "${B2U_REPO_ROOT}/bluetooth_2_usb.service" >"$target"
+  local escaped_install_dir
+  escaped_install_dir="$(printf '%s' "$install_dir" | sed 's/[\\&|]/\\&/g')"
+  sed "s|@INSTALL_DIR@|${escaped_install_dir}|g" "${B2U_REPO_ROOT}/bluetooth_2_usb.service" >"$target"
   chmod 0644 "$target"
 }
 

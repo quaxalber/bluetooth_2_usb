@@ -21,12 +21,17 @@ Usage: sudo ./update.sh [options]
 EOF
 }
 
+require_value() {
+  local opt="$1"
+  [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != -* ]] || fail "Missing value for ${opt}"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dir) INSTALL_DIR="$2"; shift 2 ;;
-    --repo) REPO_URL="$2"; shift 2 ;;
-    --branch) REPO_BRANCH="$2"; shift 2 ;;
-    --service) SERVICE_NAME="$2"; shift 2 ;;
+    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;
+    --repo) require_value "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
+    --branch) require_value "$1" "${2:-}"; REPO_BRANCH="$2"; shift 2 ;;
+    --service) require_value "$1" "${2:-}"; SERVICE_NAME="$2"; shift 2 ;;
     --no-restart) RESTART=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "Unknown option: $1" ;;
