@@ -91,8 +91,8 @@ PERSIST_BLUETOOTH_DIR="${PERSIST_MOUNT}/${BLUETOOTH_SUBDIR}"
 mkdir -p "$PERSIST_MOUNT"
 mkdir -p "$PERSIST_BLUETOOTH_DIR"
 
-write_persist_mount_unit "$PERSIST_SPEC" "$PERSIST_MOUNT" "$FS_TYPE"
-write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR"
+write_persist_mount_unit "$PERSIST_SPEC" "$PERSIST_MOUNT" "$FS_TYPE" "$SERVICE_NAME"
+write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR" "$SERVICE_NAME"
 install_bluetooth_persist_dropin
 write_readonly_config "disabled" "$PERSIST_MOUNT" "$PERSIST_BLUETOOTH_DIR" "$PERSIST_SPEC" "$DEVICE"
 

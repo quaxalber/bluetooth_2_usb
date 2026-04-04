@@ -423,13 +423,14 @@ write_persist_mount_unit() {
   local persist_spec="$1"
   local mount_path="$2"
   local fs_type="$3"
+  local service_name="${4:-$B2U_DEFAULT_SERVICE_NAME}"
   local unit_name
 
   unit_name="$(persist_mount_unit_name "$mount_path")"
   cat >"/etc/systemd/system/${unit_name}" <<EOF
 [Unit]
 Description=bluetooth_2_usb persistent storage mount
-Before=local-fs.target bluetooth.service bluetooth_2_usb.service
+Before=local-fs.target bluetooth.service ${service_name}.service
 
 [Mount]
 What=${persist_spec}
@@ -452,13 +453,14 @@ remove_persist_mount_unit() {
 
 write_bluetooth_bind_mount_unit() {
   local source_dir="$1"
+  local service_name="${2:-$B2U_DEFAULT_SERVICE_NAME}"
   mkdir -p /var/lib/bluetooth
   cat >"$B2U_BLUETOOTH_BIND_MOUNT_UNIT" <<EOF
 [Unit]
 Description=bluetooth_2_usb persistent Bluetooth state bind mount
 After=$(persist_mount_unit_name "$(dirname "$source_dir")")
 Requires=$(persist_mount_unit_name "$(dirname "$source_dir")")
-Before=bluetooth.service bluetooth_2_usb.service
+Before=bluetooth.service ${service_name}.service
 
 [Mount]
 What=${source_dir}
