@@ -144,7 +144,11 @@ class ShortcutToggler:
             self.currently_pressed.add(key_name)
         elif event.keystate == KeyEvent.key_up:
             self.currently_pressed.discard(key_name)
-            self._shortcut_armed = True
+            if self.shortcut_keys and (
+                key_name in self.shortcut_keys
+                or not self.shortcut_keys.issubset(self.currently_pressed)
+            ):
+                self._shortcut_armed = True
 
         if (
             self._shortcut_armed

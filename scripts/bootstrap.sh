@@ -9,7 +9,7 @@ NO_REBOOT=0
 
 usage() {
   cat <<EOF
-Usage: curl .../bootstrap.sh | sudo bash [-- options]
+Usage: curl .../bootstrap.sh | sudo bash -s -- [options]
   --repo <url>       Repository URL. Default: ${REPO_URL}
   --branch <name>    Branch or tag to install. Default: ${REPO_BRANCH}
   --dir <path>       Install directory. Default: ${INSTALL_DIR}

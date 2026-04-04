@@ -65,8 +65,9 @@ require_commands() {
 
 prepare_log() {
   local prefix="$1"
+  local logfile
   mkdir -p "$B2U_DEFAULT_LOG_DIR"
-  local logfile="${B2U_DEFAULT_LOG_DIR}/${prefix}_$(timestamp).log"
+  logfile="${B2U_DEFAULT_LOG_DIR}/${prefix}_$(timestamp).log"
   exec > >(tee -a "$logfile") 2>&1
   info "Logging to $logfile"
 }
@@ -332,7 +333,27 @@ load_readonly_config() {
   B2U_PERSIST_SPEC=""
   B2U_PERSIST_DEVICE=""
   if [[ -f "$B2U_READONLY_ENV_FILE" ]]; then
-    source "$B2U_READONLY_ENV_FILE"
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -n "$line" ]] || continue
+      if [[ ! "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"$ ]]; then
+        error "Refusing to load invalid read-only config line from ${B2U_READONLY_ENV_FILE}: ${line}"
+        return 1
+      fi
+
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+
+      case "$key" in
+        B2U_READONLY_MODE|B2U_PERSIST_MOUNT|B2U_PERSIST_BLUETOOTH_DIR|B2U_PERSIST_SPEC|B2U_PERSIST_DEVICE)
+          printf -v "$key" '%s' "$value"
+          ;;
+        *)
+          error "Refusing to load unexpected key from ${B2U_READONLY_ENV_FILE}: ${key}"
+          return 1
+          ;;
+      esac
+    done <"$B2U_READONLY_ENV_FILE"
   fi
   return 0
 }

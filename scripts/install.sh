@@ -70,6 +70,11 @@ if [[ $SKIP_CLONE -eq 0 ]]; then
     info "Reusing source repository in place at ${INSTALL_DIR}"
   elif [[ -d "${INSTALL_DIR}/.git" ]]; then
     info "Updating repository at ${INSTALL_DIR}"
+    if git -C "$INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
+      git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+    else
+      git -C "$INSTALL_DIR" remote add origin "$REPO_URL"
+    fi
     git -C "$INSTALL_DIR" fetch --all --tags
     git -C "$INSTALL_DIR" checkout "$REPO_BRANCH"
     git -C "$INSTALL_DIR" pull --ff-only

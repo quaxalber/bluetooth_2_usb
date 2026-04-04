@@ -70,7 +70,8 @@ if [[ -n "${B2U_PERSIST_MOUNT:-}" ]] && mountpoint -q "$B2U_PERSIST_MOUNT"; then
 fi
 
 if [[ -d /sys/kernel/config/usb_gadget ]]; then
-  for gadget in /sys/kernel/config/usb_gadget/*; do
+  shopt -s nullglob
+  for gadget in /sys/kernel/config/usb_gadget/adafruit-blinka /sys/kernel/config/usb_gadget/bluetooth_2_usb*; do
     [[ -d "$gadget" ]] || continue
     [[ -f "${gadget}/UDC" ]] && : >"${gadget}/UDC" || true
     find "${gadget}/configs" -type l -exec rm -f {} + 2>/dev/null || true
@@ -78,6 +79,7 @@ if [[ -d /sys/kernel/config/usb_gadget ]]; then
     find "${gadget}/configs" -mindepth 1 -maxdepth 1 -type d -exec rmdir {} + 2>/dev/null || true
     rmdir "$gadget" 2>/dev/null || true
   done
+  shopt -u nullglob
 fi
 
 if [[ $REVERT_BOOT -eq 1 ]]; then

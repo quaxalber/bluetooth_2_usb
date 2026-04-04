@@ -48,6 +48,13 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 ```
 
+Those commands target the installed paths under `/opt/bluetooth_2_usb/` and therefore only work after running the installer. If you are validating directly from your repository checkout instead, run the repo-local equivalents:
+
+```bash
+sudo ./scripts/smoke_test.sh
+sudo ./scripts/debug.sh --duration 10 --redact
+```
+
 If your change touches HID/runtime behavior, validate against a real OTG host, not just CLI checks.
 
 ## Pull requests

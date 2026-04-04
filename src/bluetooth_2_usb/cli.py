@@ -16,7 +16,6 @@ EXIT_RUNTIME = 4
 DEFAULT_VERSION = "0.9.1"
 
 logger = get_logger()
-shutdown_event = asyncio.Event()
 
 
 @dataclass(slots=True)
@@ -28,17 +27,6 @@ class EnvironmentStatus:
     @property
     def ok(self) -> bool:
         return self.configfs and self.udc_present
-
-
-def _signal_handler(sig: int, frame) -> None:
-    del frame
-    sig_name = signal.Signals(sig).name
-    logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
-    shutdown_event.set()
-
-
-for handled_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
-    signal.signal(handled_signal, _signal_handler)
 
 
 def get_versioned_name() -> str:
@@ -208,16 +196,32 @@ async def async_run(args: Arguments) -> int:
     )
 
     logger.debug(f"Detected UDC state file: {env_status.udc_path}")
+    shutdown_event = asyncio.Event()
+    previous_handlers = {}
 
-    async with (
-        UdevEventMonitor(relay_controller),
-        UdcStateMonitor(relaying_active=relaying_active, udc_path=env_status.udc_path),
-    ):
-        relay_task = asyncio.create_task(relay_controller.async_relay_devices())
-        await shutdown_event.wait()
-        logger.debug("Shutdown event triggered. Cancelling relay task...")
-        relay_task.cancel()
-        await asyncio.gather(relay_task, return_exceptions=True)
+    def _signal_handler(sig: int, frame) -> None:
+        del frame
+        sig_name = signal.Signals(sig).name
+        logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
+        shutdown_event.set()
+
+    for handled_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
+        previous_handlers[handled_signal] = signal.getsignal(handled_signal)
+        signal.signal(handled_signal, _signal_handler)
+
+    try:
+        async with (
+            UdevEventMonitor(relay_controller),
+            UdcStateMonitor(relaying_active=relaying_active, udc_path=env_status.udc_path),
+        ):
+            relay_task = asyncio.create_task(relay_controller.async_relay_devices())
+            await shutdown_event.wait()
+            logger.debug("Shutdown event triggered. Cancelling relay task...")
+            relay_task.cancel()
+            await asyncio.gather(relay_task, return_exceptions=True)
+    finally:
+        for handled_signal, previous_handler in previous_handlers.items():
+            signal.signal(handled_signal, previous_handler)
 
     return EXIT_OK
 

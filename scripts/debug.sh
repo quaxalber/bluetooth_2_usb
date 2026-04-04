@@ -126,9 +126,9 @@ run_shell_block() {
 
   echo "## CLI"
   if [[ -x "${VENV_DIR}/bin/python" ]]; then
-    run_shell_block 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --version || true"
-    run_shell_block 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --validate-env || true"
-    run_shell_block "${DURATION}" "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --dry-run --debug 2>&1 || true"
+    run_shell_block 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --version"
+    run_shell_block 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --validate-env"
+    run_shell_block "${DURATION}" "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --dry-run --debug 2>&1"
   else
     echo "missing virtualenv at ${VENV_DIR}" | code_block
   fi

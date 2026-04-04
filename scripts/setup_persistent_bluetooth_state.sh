@@ -53,8 +53,18 @@ if ! machine_id_valid; then
   fail "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
 fi
 
-if [[ -z "$DEVICE" && -z "${B2U_PERSIST_SPEC:-}" && ! -d "$PERSIST_MOUNT" ]]; then
-  fail "Provide --device or prepare an existing persistent mount first."
+if [[ -z "$DEVICE" && -z "${B2U_PERSIST_SPEC:-}" ]]; then
+  if mountpoint -q "$PERSIST_MOUNT"; then
+    source_spec="$(findmnt -n -o SOURCE --target "$PERSIST_MOUNT" 2>/dev/null || true)"
+    [[ -n "$source_spec" ]] || fail "Could not determine the backing source for ${PERSIST_MOUNT}. Provide --device."
+    if [[ -b "$source_spec" ]]; then
+      DEVICE="$source_spec"
+    else
+      PERSIST_SPEC="$source_spec"
+    fi
+  else
+    fail "Provide --device or prepare an existing persistent mount first."
+  fi
 fi
 
 if [[ $FORMAT -eq 1 ]]; then
@@ -69,7 +79,7 @@ if [[ -n "$DEVICE" ]]; then
   [[ "$detected_type" == "$FS_TYPE" ]] || fail "Expected ${FS_TYPE} on ${DEVICE}, got ${detected_type}"
   PERSIST_SPEC="$(persist_spec_from_device "$DEVICE")"
 else
-  PERSIST_SPEC="${B2U_PERSIST_SPEC:-}"
+  PERSIST_SPEC="${PERSIST_SPEC:-${B2U_PERSIST_SPEC:-}}"
 fi
 
 [[ -n "$PERSIST_SPEC" ]] || fail "Could not determine persistent mount source."
