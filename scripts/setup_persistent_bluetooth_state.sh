@@ -9,6 +9,7 @@ load_readonly_config
 DEVICE="${B2U_PERSIST_DEVICE:-}"
 PERSIST_MOUNT="${B2U_PERSIST_MOUNT:-$B2U_DEFAULT_PERSIST_MOUNT}"
 BLUETOOTH_SUBDIR="$B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR"
+SERVICE_NAME="$B2U_DEFAULT_SERVICE_NAME"
 FS_TYPE="ext4"
 FORMAT=0
 LABEL="B2U_PERSIST"
@@ -20,6 +21,7 @@ Usage: sudo ./setup_persistent_bluetooth_state.sh [options]
   --device <path>         Block device to mount persistently
   --mount <path>          Persistent mount point. Default: ${PERSIST_MOUNT}
   --bluetooth-subdir <n>  State directory below the persistent mount. Default: ${BLUETOOTH_SUBDIR}
+  --service <name>        Service name. Default: ${B2U_DEFAULT_SERVICE_NAME}
   --fs-type <type>        Filesystem type. Default: ${FS_TYPE}
   --format                Format the device before use
   --label <name>          Filesystem label used with --format. Default: ${LABEL}
@@ -32,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --device) require_value "$1" "${2:-}"; DEVICE="$2"; shift 2 ;;
     --mount) require_value "$1" "${2:-}"; PERSIST_MOUNT="$2"; shift 2 ;;
     --bluetooth-subdir) require_value "$1" "${2:-}"; BLUETOOTH_SUBDIR="$2"; shift 2 ;;
+    --service) require_value "$1" "${2:-}"; SERVICE_NAME="$2"; shift 2 ;;
     --fs-type) require_value "$1" "${2:-}"; FS_TYPE="$2"; shift 2 ;;
     --format) FORMAT=1; shift ;;
     --label) require_value "$1" "${2:-}"; LABEL="$2"; shift 2 ;;
@@ -108,8 +111,8 @@ EOF
   exit 0
 fi
 
-if service_installed; then
-  systemctl stop "${B2U_DEFAULT_SERVICE_NAME}.service" || true
+if service_installed "$SERVICE_NAME"; then
+  systemctl stop "${SERVICE_NAME}.service" || true
 fi
 systemctl stop bluetooth.service 2>/dev/null || true
 
@@ -131,8 +134,8 @@ mkdir -p /var/lib/bluetooth
 
 systemctl enable --now var-lib-bluetooth.mount
 systemctl start bluetooth.service 2>/dev/null || true
-if service_installed; then
-  systemctl restart "${B2U_DEFAULT_SERVICE_NAME}.service" || true
+if service_installed "$SERVICE_NAME"; then
+  systemctl restart "${SERVICE_NAME}.service" || true
 fi
 
 ok "Persistent Bluetooth state is active at ${PERSIST_BLUETOOTH_DIR}"
