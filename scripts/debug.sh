@@ -122,7 +122,7 @@ run_shell_block() {
   run_shell_block 8 "journalctl -b -u '${SERVICE_NAME}.service' -n 200 --no-pager 2>/dev/null || true"
 
   echo "## dmesg"
-  run_shell_block 8 "dmesg | egrep -i 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"
+  run_shell_block 8 "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"
 
   echo "## CLI"
   if [[ -x "${VENV_DIR}/bin/python" ]]; then

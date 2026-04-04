@@ -141,7 +141,6 @@ if [[ $VERBOSE -eq 1 ]]; then
   cat "$DRY_RUN_LOG"
   echo "## Mount details"
   findmnt -n -T /var/lib/bluetooth 2>/dev/null || true
-  load_readonly_config
   findmnt -n "$B2U_PERSIST_MOUNT" 2>/dev/null || true
   echo "## Service status"
   systemctl --no-pager --full status "${SERVICE_NAME}.service" || true

@@ -54,10 +54,6 @@ remove_bluetooth_persist_dropin
 remove_bluetooth_bind_mount_unit
 remove_persist_mount_unit "$B2U_PERSIST_MOUNT"
 systemctl daemon-reload || true
-if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
-  systemctl kill --kill-who=all "${SERVICE_NAME}.service" || true
-  sleep 1
-fi
 systemctl disable --now var-lib-bluetooth.mount 2>/dev/null || true
 
 if mountpoint -q /var/lib/bluetooth; then
@@ -87,8 +83,8 @@ if [[ $REVERT_BOOT -eq 1 ]]; then
   CMDLINE_TXT="$(boot_cmdline_path)"
   backup_file "$CONFIG_TXT"
   backup_file "$CMDLINE_TXT"
-  remove_dwc2_overlay "$CONFIG_TXT"
-  remove_modules_load_entries "$CMDLINE_TXT"
+  restore_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT"
+  clear_boot_restore_snapshot
   ok "Reverted boot configuration"
 fi
 

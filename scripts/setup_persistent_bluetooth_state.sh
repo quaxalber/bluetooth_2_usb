@@ -120,8 +120,21 @@ systemctl stop bluetooth.service 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now "$(persist_mount_unit_name "$PERSIST_MOUNT")"
 
-if [[ -d /var/lib/bluetooth ]] && [[ -z "$(find "$PERSIST_BLUETOOTH_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]]; then
-  cp -a /var/lib/bluetooth/. "$PERSIST_BLUETOOTH_DIR"/
+if [[ -d /var/lib/bluetooth ]]; then
+  seed_lock_dir="${PERSIST_BLUETOOTH_DIR}/.b2u-seed.lock"
+  seed_marker="${PERSIST_BLUETOOTH_DIR}/.b2u-seeded"
+  if mkdir "$seed_lock_dir" 2>/dev/null; then
+    cleanup_seed_lock() {
+      rmdir "$seed_lock_dir" 2>/dev/null || true
+    }
+    trap cleanup_seed_lock EXIT
+    if [[ ! -e "$seed_marker" ]] && [[ -z "$(find "$PERSIST_BLUETOOTH_DIR" -mindepth 1 -maxdepth 1 ! -name '.b2u-seed.lock' ! -name '.b2u-seeded' ! -name '.b2u-persistent-state' 2>/dev/null | head -n 1)" ]]; then
+      cp -a /var/lib/bluetooth/. "$PERSIST_BLUETOOTH_DIR"/
+      touch "$seed_marker"
+    fi
+    cleanup_seed_lock
+    trap - EXIT
+  fi
 fi
 touch "${PERSIST_BLUETOOTH_DIR}/.b2u-persistent-state"
 

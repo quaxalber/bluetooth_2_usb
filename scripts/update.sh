@@ -62,6 +62,7 @@ elif [[ -n "$REPO_URL" && -n "$REPO_BRANCH" ]]; then
   git clone --branch "$REPO_BRANCH" "$REPO_URL" "${tmpdir}/repo"
   rm -rf "$INSTALL_DIR"
   mv "${tmpdir}/repo" "$INSTALL_DIR"
+  rmdir "$tmpdir" 2>/dev/null || true
 else
   fail "Install directory is not a git checkout. Provide --repo and --branch to replace it."
 fi

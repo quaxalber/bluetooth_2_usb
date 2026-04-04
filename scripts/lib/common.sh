@@ -17,6 +17,9 @@ readonly B2U_DEFAULT_SERVICE_NAME="bluetooth_2_usb"
 readonly B2U_DEFAULT_LOG_DIR="/var/log/bluetooth_2_usb"
 readonly B2U_DEFAULT_ENV_FILE="/etc/default/bluetooth_2_usb"
 readonly B2U_READONLY_ENV_FILE="/etc/default/bluetooth_2_usb_readonly"
+readonly B2U_BOOT_RESTORE_DIR="/var/lib/bluetooth_2_usb/boot_restore"
+readonly B2U_BOOT_RESTORE_CONFIG="${B2U_BOOT_RESTORE_DIR}/config.txt"
+readonly B2U_BOOT_RESTORE_CMDLINE="${B2U_BOOT_RESTORE_DIR}/cmdline.txt"
 readonly B2U_DEFAULT_PERSIST_MOUNT="/mnt/b2u-persist"
 readonly B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR="bluetooth"
 readonly B2U_BLUETOOTH_BIND_MOUNT_UNIT="/etc/systemd/system/var-lib-bluetooth.mount"
@@ -99,6 +102,28 @@ backup_file() {
   cp -a "$file" "${file}.bak.$(timestamp)"
 }
 
+capture_boot_restore_snapshot() {
+  local config_file="$1"
+  local cmdline_file="$2"
+  mkdir -p "$B2U_BOOT_RESTORE_DIR"
+  [[ -f "$B2U_BOOT_RESTORE_CONFIG" ]] || cp -a "$config_file" "$B2U_BOOT_RESTORE_CONFIG"
+  [[ -f "$B2U_BOOT_RESTORE_CMDLINE" ]] || cp -a "$cmdline_file" "$B2U_BOOT_RESTORE_CMDLINE"
+}
+
+restore_boot_restore_snapshot() {
+  local config_file="$1"
+  local cmdline_file="$2"
+  [[ -f "$B2U_BOOT_RESTORE_CONFIG" ]] || fail "No managed config.txt snapshot found for boot restore."
+  [[ -f "$B2U_BOOT_RESTORE_CMDLINE" ]] || fail "No managed cmdline.txt snapshot found for boot restore."
+  cp -a "$B2U_BOOT_RESTORE_CONFIG" "$config_file"
+  cp -a "$B2U_BOOT_RESTORE_CMDLINE" "$cmdline_file"
+}
+
+clear_boot_restore_snapshot() {
+  rm -f "$B2U_BOOT_RESTORE_CONFIG" "$B2U_BOOT_RESTORE_CMDLINE"
+  rmdir "$B2U_BOOT_RESTORE_DIR" 2>/dev/null || true
+}
+
 source_repo_root() {
   printf '%s\n' "${B2U_SOURCE_REPO:-$B2U_REPO_ROOT}"
 }
@@ -171,6 +196,7 @@ board_overlay_line() {
 normalize_dwc2_overlay() {
   local config_file="$1"
   local overlay_line="$2"
+  require_commands python3
   python3 - "$config_file" "$overlay_line" <<'PY'
 from pathlib import Path
 import sys
@@ -197,22 +223,10 @@ config_path.write_text("\n".join(result) + "\n", encoding="utf-8")
 PY
 }
 
-remove_dwc2_overlay() {
-  local config_file="$1"
-  python3 - "$config_file" <<'PY'
-from pathlib import Path
-import sys
-
-config_path = Path(sys.argv[1])
-lines = config_path.read_text(encoding="utf-8").splitlines()
-filtered = [line for line in lines if not line.lstrip().startswith("dtoverlay=dwc2")]
-config_path.write_text("\n".join(filtered).rstrip() + "\n", encoding="utf-8")
-PY
-}
-
 normalize_modules_load() {
   local cmdline_file="$1"
   local modules="$2"
+  require_commands python3
   python3 - "$cmdline_file" "$modules" <<'PY'
 from pathlib import Path
 import sys
@@ -235,26 +249,6 @@ for value in [*existing, *modules.split(",")]:
 tokens = [token for token in tokens if not token.startswith("modules-load=")]
 tokens.append("modules-load=" + ",".join(merged))
 cmdline_path.write_text(" ".join(tokens) + "\n", encoding="utf-8")
-PY
-}
-
-remove_modules_load_entries() {
-  local cmdline_file="$1"
-  python3 - "$cmdline_file" <<'PY'
-from pathlib import Path
-import sys
-
-cmdline_path = Path(sys.argv[1])
-tokens = cmdline_path.read_text(encoding="utf-8").strip().split()
-updated = []
-for token in tokens:
-    if not token.startswith("modules-load="):
-        updated.append(token)
-        continue
-    values = [value for value in token.split("=", 1)[1].split(",") if value and value not in {"dwc2", "libcomposite"}]
-    if values:
-        updated.append("modules-load=" + ",".join(values))
-cmdline_path.write_text(" ".join(updated) + "\n", encoding="utf-8")
 PY
 }
 

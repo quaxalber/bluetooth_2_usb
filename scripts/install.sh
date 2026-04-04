@@ -36,7 +36,7 @@ done
 
 ensure_root
 prepare_log "install"
-require_commands apt-get awk grep install python3 sed systemctl
+require_commands apt-get awk grep install sed systemctl
 
 BOOT_DIR="$(detect_boot_dir)"
 CONFIG_TXT="$(boot_config_path)"
@@ -49,8 +49,13 @@ info "Detected model: ${MODEL:-unknown}"
 info "Using boot directory: ${BOOT_DIR}"
 info "Detected dwc2 mode: ${DWC2_MODE}"
 
+apt-get update -y
+apt-get install -y --no-install-recommends git python3 python3-pip python3-venv python3-dev
+require_commands git python3
+
 backup_file "$CONFIG_TXT"
 backup_file "$CMDLINE_TXT"
+capture_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT"
 normalize_dwc2_overlay "$CONFIG_TXT" "$OVERLAY_LINE"
 
 MODULES="libcomposite"
@@ -59,10 +64,6 @@ if [[ "$DWC2_MODE" == "module" ]]; then
 fi
 normalize_modules_load "$CMDLINE_TXT" "$MODULES"
 ok "Boot configuration updated"
-
-apt-get update -y
-apt-get install -y --no-install-recommends git python3 python3-pip python3-venv python3-dev
-require_commands git
 
 if [[ $SKIP_CLONE -eq 0 ]]; then
   mkdir -p "$(dirname "$INSTALL_DIR")"
@@ -82,7 +83,11 @@ if [[ $SKIP_CLONE -eq 0 ]]; then
     fi
   else
     info "Installing repository into ${INSTALL_DIR}"
-    rm -rf "$INSTALL_DIR"
+    if [[ -e "$INSTALL_DIR" ]]; then
+      backup_path="${INSTALL_DIR}.backup.$(timestamp)"
+      warn "Moving existing path at ${INSTALL_DIR} to ${backup_path} before cloning."
+      mv "$INSTALL_DIR" "$backup_path"
+    fi
     git clone --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
   fi
 fi

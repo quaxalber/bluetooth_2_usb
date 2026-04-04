@@ -41,7 +41,7 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 
-for cmd in bash curl tar mktemp python3; do
+for cmd in bash curl tar mktemp; do
   command -v "$cmd" >/dev/null 2>&1 || {
     printf 'Missing required command: %s\n' "$cmd" >&2
     exit 1
