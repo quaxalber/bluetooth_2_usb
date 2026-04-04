@@ -63,6 +63,7 @@ If your change touches HID/runtime behavior, validate against a real OTG host, n
 - Explain what changed, how you tested it, and what hardware/host setup you used.
 - Link the relevant issue.
 - Include redacted logs or debug output when service or install behavior changed.
+- Maintainers should use squash merge for normal PRs so `main` stays compact and readable.
 
 ## Reporting issues
 
