@@ -20,6 +20,8 @@ Bluetooth-2-USB is designed to be practical for both hobby setups and appliance-
 
 - Auto-discovery and auto-reconnect for supported input devices
 - Optional input grabbing so the Pi does not also consume local keyboard/mouse events
+- Multimedia keys and common consumer-control buttons relay alongside normal keyboard input
+- Pause or resume relaying with a configurable shortcut so you can temporarily use the Pi locally
 - HID compatibility profiles for hosts with stricter USB expectations
 - Diagnostics and smoke tests designed for issue reports and field debugging
 - Optional read-only modes for more appliance-like deployments
@@ -40,10 +42,9 @@ Bluetooth-2-USB is designed to be practical for both hobby setups and appliance-
 - A USB cable that supports data, not power only
 
 > [!NOTE]
-> Raspberry Pi 3 models include Bluetooth, but they do not expose a suitable USB device-mode port for this project.
->
-> [!NOTE]
-> On Pi 4B and Pi 5, the OTG-capable port is the USB-C power port. On Pi Zero boards, the OTG-capable port is the USB data port, not the power-only port.
+> - Raspberry Pi 3 models include Bluetooth, but they do not expose a suitable USB device-mode port for this project.
+> - On Pi 4B and Pi 5, the OTG-capable port is the USB-C power port.
+> - On Pi Zero boards, the OTG-capable port is the USB data port, not the power-only port.
 
 ## Quick start
 
@@ -575,13 +576,26 @@ Things to verify:
 
 Please open an issue and include:
 
-- Pi model
-- Raspberry Pi OS version
-- Kernel version
 - Target host type
 - Exact commands or scripts used
 - Output from `smoke_test.sh --verbose`
 - Output from `debug.sh --duration 10 --redact`
+
+The debug report already includes the Pi model, OS version, kernel, service state, and boot/runtime diagnostics.
+
+To copy the newest debug report off the Pi:
+
+On the Pi:
+
+```bash
+ls -t /var/log/bluetooth_2_usb/debug_*.md | head -n 1
+```
+
+On your workstation:
+
+```bash
+scp pi4b:/var/log/bluetooth_2_usb/debug_YYYYMMDD_HHMMSS.md .
+```
 
 ## Reference
 
@@ -728,12 +742,6 @@ Arguments:
   Choose best-effort mode or persistent mode
 - `--persist-device <path>`
   Device to use for persistent Bluetooth state in persistent mode
-- `--persist-mount <path>`
-  Mount point used for persistent Bluetooth state
-- `--bluetooth-subdir <name>`
-  Subdirectory below the persistent mount that will hold Bluetooth state
-- `--format`
-  Format the persistent device as ext4 before use
 
 #### `disable_readonly_overlayfs.sh`
 
@@ -754,16 +762,6 @@ Purpose:
 Arguments:
 - `--device <path>`
   Block device that backs the persistent filesystem
-- `--mount <path>`
-  Persistent mount point
-- `--bluetooth-subdir <name>`
-  Bluetooth-state directory below the persistent mount
-- `--fs-type <type>`
-  Filesystem type. Currently only `ext4` is supported
-- `--format`
-  Format the given device before use
-- `--label <name>`
-  Filesystem label used when formatting
 - `--no-enable`
   Prepare configuration and units without activating them immediately
 

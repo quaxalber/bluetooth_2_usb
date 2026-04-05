@@ -186,13 +186,8 @@ ssh -4 pi4b '
     "bash scripts/debug.sh --duration" \
     "bash scripts/enable_readonly_overlayfs.sh --mode" \
     "bash scripts/enable_readonly_overlayfs.sh --persist-device" \
-    "bash scripts/enable_readonly_overlayfs.sh --persist-mount" \
-    "bash scripts/enable_readonly_overlayfs.sh --bluetooth-subdir" \
     "bash scripts/setup_persistent_bluetooth_state.sh --device" \
-    "bash scripts/setup_persistent_bluetooth_state.sh --mount" \
-    "bash scripts/setup_persistent_bluetooth_state.sh --bluetooth-subdir" \
-    "bash scripts/setup_persistent_bluetooth_state.sh --fs-type" \
-    "bash scripts/setup_persistent_bluetooth_state.sh --label"
+    "bash scripts/setup_persistent_bluetooth_state.sh --no-enable --device"
   do
     eval "$cmd" >/dev/null 2>&1 || true
   done
@@ -461,8 +456,8 @@ Without a real spare ext4 device, restrict this to error-path validation:
 ```bash
 ssh -4 pi4b '
   cd /opt/bluetooth_2_usb
-  sudo -n bash scripts/setup_persistent_bluetooth_state.sh --format || true
-  sudo -n bash scripts/setup_persistent_bluetooth_state.sh --fs-type xfs --mount /mnt/b2u-persist-test --device /dev/doesnotexist || true
+  sudo -n bash scripts/setup_persistent_bluetooth_state.sh --device /dev/doesnotexist || true
+  sudo -n bash scripts/setup_persistent_bluetooth_state.sh --no-enable || true
   sudo -n bash scripts/enable_readonly_overlayfs.sh --mode persistent || true
 '
 ```
