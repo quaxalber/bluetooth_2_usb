@@ -109,7 +109,7 @@ Connect the Pi's **USB-C power port** to the target host. That is the OTG-capabl
 
 Do **not** use the Pi's USB-A host ports for the connection to the target system.
 
-#### Raspberry Pi Zero / Zero 2 W
+#### Raspberry Pi Zero W / Zero 2 W
 
 Connect the Pi's **USB data port** to the target host.
 
@@ -283,9 +283,6 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 
 Bluetooth-2-USB supports one normal writable mode and two OverlayFS-based operating modes for users who want a more appliance-like Raspberry Pi deployment.
 
-> [!NOTE]
-> `Normal` is the default writable operating mode. It is included here for comparison, but it is not itself a read-only mode.
-
 ### Why use read-only mode?
 
 Read-only mode is mainly useful when you want the Pi to behave more like an appliance:
@@ -297,25 +294,20 @@ Read-only mode is mainly useful when you want the Pi to behave more like an appl
 
 ### What OverlayFS does and does not do
 
-Raspberry Pi OS OverlayFS makes the root filesystem effectively read-only and redirects later changes into an upper writable layer.
+Raspberry Pi OS OverlayFS makes the root filesystem effectively read-only and redirects later changes into an upper writable layer in RAM.
 
 What that helps with:
 
 - fewer persistent writes to the root filesystem
 - less filesystem damage after unclean shutdowns
 - easier recovery of appliance-like systems
+- lower write pressure on the root filesystem of SD-card-based systems
 
 What it does **not** do by itself:
 
 - persist Bluetooth state across reboots
 - preserve new pairings unless the Bluetooth state is stored on separate writable persistent storage
-- eliminate wear on the SD card if your persistent storage is still another partition on the same SD card
-
-| Mode       | Best for                                     | Setup effort | Bluetooth persistence                |
-| ---------- | -------------------------------------------- | ------------ | ------------------------------------ |
-| Normal     | Everyday use on a writable system            | Low          | Standard writable behavior           |
-| Easy       | Simple read-mostly deployments               | Low          | Best effort only                     |
-| Persistent | Embedded or production-like read-only setups | Medium       | Supported persistent Bluetooth state |
+- prevent SD-card wear if your persistent storage is still another partition on the same SD card
 
 ### Easy mode
 
@@ -347,21 +339,30 @@ Persistent mode is the right choice if you need stable Bluetooth identity, pairi
 
 It uses a separate writable ext4 filesystem for Bluetooth state and bind-mounts it to `/var/lib/bluetooth`.
 
+### Mode summary
+
+| Mode       | Best for                                     | Setup effort | Bluetooth persistence                |
+| ---------- | -------------------------------------------- | ------------ | ------------------------------------ |
+| Normal     | Everyday use on a writable system            | Low          | Standard writable behavior           |
+| Easy       | Simple read-mostly deployments               | Low          | Best effort only                     |
+| Persistent | Embedded or production-like read-only setups | Medium       | Supported persistent Bluetooth state |
+
+> [!NOTE]
+> `Normal` is the default writable operating mode. It is included here for comparison, but it is not itself a read-only mode.
+
 #### Choose the persistent storage device
 
 There are two practical ways to provide the writable ext4 filesystem:
 
-- A separate USB storage device
-  Usually the simplest and lowest-risk option. It avoids repartitioning the system SD card and is easy to replace, reformat, or test.
-- A dedicated extra partition on the system SD card
-  Usually the cleanest fully self-contained option. It avoids extra external hardware, but you must plan or create the extra partition yourself.
+- A separate USB storage device: usually the simplest and lowest-risk option. It avoids repartitioning the system SD card and is easy to replace, reformat, or test.
+- A dedicated extra partition on the system SD card: usually the cleanest fully self-contained option. It avoids extra external hardware, but you must plan or create the extra partition yourself.
 
 Recommended rule of thumb:
 
 - Use a separate USB ext4 device when your physical setup allows it and you want the least risky path
 - Use a dedicated extra ext4 partition on the SD card when you prefer an all-in-one setup or external storage is awkward
 
-Special note for Pi Zero and Pi Zero 2 W:
+Special note for Pi Zero W / Zero 2 W:
 
 - These boards often end up using the SD-card partition approach more often because external USB storage typically needs extra adapters, hubs, or split power/data cabling
 
