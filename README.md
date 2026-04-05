@@ -286,6 +286,31 @@ Bluetooth-2-USB supports one normal writable mode and two OverlayFS-based operat
 > [!NOTE]
 > `Normal` is the default writable operating mode. It is included here for comparison, but it is not itself a read-only mode.
 
+### Why use read-only mode?
+
+Read-only mode is mainly useful when you want the Pi to behave more like an appliance:
+
+- tolerate abrupt power loss better
+- reduce accidental writes to the root filesystem
+- make field deployments more predictable
+- keep a small relay box stable over long unattended runtimes
+
+### What OverlayFS does and does not do
+
+Raspberry Pi OS OverlayFS makes the root filesystem effectively read-only and redirects later changes into an upper writable layer.
+
+What that helps with:
+
+- fewer persistent writes to the root filesystem
+- less filesystem damage after unclean shutdowns
+- easier recovery of appliance-like systems
+
+What it does **not** do by itself:
+
+- persist Bluetooth state across reboots
+- preserve new pairings unless the Bluetooth state is stored on separate writable persistent storage
+- eliminate wear on the SD card if your persistent storage is still another partition on the same SD card
+
 | Mode       | Best for                                     | Setup effort | Bluetooth persistence                |
 | ---------- | -------------------------------------------- | ------------ | ------------------------------------ |
 | Normal     | Everyday use on a writable system            | Low          | Standard writable behavior           |
@@ -345,12 +370,12 @@ Special note for Pi Zero and Pi Zero 2 W:
 
 Prepare persistent Bluetooth state:
 
-> [!NOTE]
-> Replace `/dev/YOUR-DEVICE` with the path to your writable ext4 filesystem, for example `/dev/sda1` or `/dev/mmcblk0p3`.
-
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-DEVICE
 ```
+
+> [!NOTE]
+> Replace `/dev/YOUR-DEVICE` with the path to your writable ext4 filesystem, for example `/dev/sda1` or `/dev/mmcblk0p3`.
 
 Enable persistent mode:
 
@@ -401,6 +426,9 @@ sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /
 
 This is the most integrated option across all Pi models and is often the most practical approach when you do not want an extra external storage device attached.
 
+> [!IMPORTANT]
+> This approach solves the Bluetooth persistence problem, but it does not reduce SD-card wear in the same way an external persistent device does. The persistent writes still land on the same physical SD card.
+
 Typical target layout:
 
 - `/dev/mmcblk0p1` boot
@@ -439,6 +467,9 @@ sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /
 sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode persistent
 sudo reboot
 ```
+
+> [!NOTE]
+> Replace `/dev/YOUR-DEVICE` with the ext4 partition or external device you prepared for persistent Bluetooth state.
 
 After reboot:
 
