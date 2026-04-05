@@ -1,4 +1,4 @@
-# Contributing to Bluetooth to USB
+# Contributing to Bluetooth-2-USB
 
 Thanks for your interest in contributing.
 
@@ -165,4 +165,4 @@ Please be respectful, constructive, and patient in all project interactions.
 
 Assume good intent, focus feedback on the technical work, and help keep the project welcoming to people with different levels of experience.
 
-Thanks for helping improve Bluetooth to USB.
+Thanks for helping improve Bluetooth-2-USB.

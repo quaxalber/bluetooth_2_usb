@@ -7,7 +7,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         super().__init__(
             *args,
             add_help=False,
-            description="Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
+            description="Bluetooth-2-USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
             formatter_class=argparse.RawTextHelpFormatter,
             **kwargs,
         )

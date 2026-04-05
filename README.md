@@ -1,13 +1,13 @@
 <!-- omit in toc -->
-# Bluetooth to USB
+# Bluetooth-2-USB
 
-![Bluetooth to USB Overview](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
+![Bluetooth-2-USB Overview](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
 
 Turn a Raspberry Pi into a USB HID bridge for Bluetooth keyboards and mice.
 
-To the target host, the Pi appears as a standard wired USB keyboard and mouse. That makes Bluetooth to USB useful in BIOS and boot menus, installers, KVM switches, kiosks, tablets, retro systems, consoles, and other environments where Bluetooth is unavailable, unsupported, or unreliable.
+To the target host, the Pi appears as a standard wired USB keyboard and mouse. That makes Bluetooth-2-USB useful in BIOS and boot menus, installers, KVM switches, kiosks, tablets, retro systems, consoles, and other environments where Bluetooth is unavailable, unsupported, or unreliable.
 
-Bluetooth to USB is designed to be practical for both hobby setups and appliance-like deployments: install it, pair your devices, connect the Pi to the target host, and use your Bluetooth peripherals as if they were wired.
+Bluetooth-2-USB is designed to be practical for both hobby setups and appliance-like deployments: install it, pair your devices, connect the Pi to the target host, and use your Bluetooth peripherals as if they were wired.
 
 ## Why people use it
 
@@ -53,7 +53,7 @@ Bluetooth to USB is designed to be practical for both hobby setups and appliance
 
 Install Raspberry Pi OS Bookworm or newer, connect the Pi to the network, and optionally enable SSH if you plan to administer it remotely.
 
-### 2. Install Bluetooth to USB
+### 2. Install Bluetooth-2-USB
 
 Fastest path:
 
@@ -94,14 +94,6 @@ exit
 > Replace `A1:B2:C3:D4:E5:F6` with your device's Bluetooth MAC address.
 
 ### 5. Verify the installation
-
-Check the service:
-
-```bash
-sudo systemctl status bluetooth_2_usb.service
-```
-
-You want to see `active (running)`.
 
 Run the smoke test:
 
@@ -289,7 +281,10 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 
 ## Read-only modes
 
-Bluetooth to USB supports two OverlayFS-based operating modes for users who want a more appliance-like Raspberry Pi deployment.
+Bluetooth-2-USB supports one normal writable mode and two OverlayFS-based operating modes for users who want a more appliance-like Raspberry Pi deployment.
+
+> [!NOTE]
+> `Normal` is the default writable operating mode. It is included here for comparison, but it is not itself a read-only mode.
 
 | Mode       | Best for                                     | Setup effort | Bluetooth persistence                |
 | ---------- | -------------------------------------------- | ------------ | ------------------------------------ |
@@ -305,7 +300,7 @@ Use it when you want a simpler read-only setup and understand that Bluetooth per
 
 Recommended flow:
 
-1. Install Bluetooth to USB
+1. Install Bluetooth-2-USB
 2. Pair and trust your Bluetooth devices
 3. Confirm normal operation first
 4. Enable easy mode
@@ -348,23 +343,13 @@ Special note for Pi Zero and Pi Zero 2 W:
 > [!NOTE]
 > The Raspberry Pi Imager does not create this extra persistent ext4 partition for you. For persistent mode, you prepare the filesystem yourself and then point `setup_persistent_bluetooth_state.sh` at it.
 
-Recommended flow:
-
-1. Install Bluetooth to USB
-2. Pair and verify your devices in normal mode
-3. Prepare a writable ext4 filesystem
-4. Configure persistent Bluetooth state
-5. Enable persistent read-only mode
-6. Reboot
-7. Run the smoke test
-8. Verify reconnect behavior after reboot or power loss
-
 Prepare persistent Bluetooth state:
 
-Replace `/dev/your-device` with the path to your writable ext4 filesystem, for example `/dev/sda1` or `/dev/mmcblk0p3`:
+> [!NOTE]
+> Replace `/dev/YOUR-DEVICE` with the path to your writable ext4 filesystem, for example `/dev/sda1` or `/dev/mmcblk0p3`.
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-DEVICE
 ```
 
 Enable persistent mode:
@@ -400,13 +385,16 @@ lsblk -f
 3. If needed, create an ext4 filesystem on the correct partition:
 
 ```bash
-sudo mkfs.ext4 -L B2U_PERSIST /dev/sda1
+sudo mkfs.ext4 -L B2U_PERSIST /dev/YOUR-DEVICE
 ```
+
+> [!NOTE]
+> Replace `/dev/YOUR-DEVICE` with the partition you actually want to use.
 
 4. Configure persistent Bluetooth state:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-DEVICE
 ```
 
 ##### Option B: Use an extra partition on the SD card
@@ -447,7 +435,7 @@ If you are starting from scratch, it is often cleaner to plan this partition at 
 Once the ext4 filesystem exists, the simplest end-to-end test is:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-DEVICE
 sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode persistent
 sudo reboot
 ```
