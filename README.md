@@ -343,8 +343,10 @@ Recommended flow:
 
 Prepare persistent Bluetooth state:
 
+Replace `/dev/your-device` with the path to your writable ext4 filesystem, for example `/dev/sda1` or `/dev/mmcblk0p3`:
+
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/your-device
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
 ```
 
 Enable persistent mode:
@@ -425,7 +427,7 @@ connect A1:B2:C3:D4:E5:F6
 exit
 ```
 
-If the issue persists, collect a redacted debug report and open an issue.
+If the issue persists, run `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact` and open an issue with the output.
 
 ### Read-only mode is enabled, but reconnect behavior is unreliable
 
