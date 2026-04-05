@@ -361,9 +361,12 @@ ssh -4 pi4b 'hostname'
 Run this periodically on the Pi:
 
 ```bash
-nmcli -g 802-11-wireless.powersave connection show "netplan-wlan0-BenNet_2,4_optout_nomap"
+nmcli connection show
+nmcli -g 802-11-wireless.powersave connection show "YOUR-WIFI-CONNECTION"
 journalctl -b -u NetworkManager --no-pager | tail -n 50
 ```
+
+> Replace `YOUR-WIFI-CONNECTION` with the name shown by `nmcli connection show`.
 
 Pass criteria:
 

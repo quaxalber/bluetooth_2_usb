@@ -46,9 +46,23 @@ apt-get update -y
 apt-get install -y --no-install-recommends git python3 python3-pip python3-venv python3-dev
 require_commands git python3
 
+BOOT_SNAPSHOT_ACTIVE=0
+cleanup_on_failure() {
+  local exit_code=$?
+  trap - EXIT
+  if [[ $exit_code -ne 0 && $BOOT_SNAPSHOT_ACTIVE -eq 1 ]]; then
+    warn "Install failed; restoring original boot configuration"
+    restore_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT" || true
+    clear_boot_restore_snapshot || true
+  fi
+  exit "$exit_code"
+}
+trap cleanup_on_failure EXIT
+
 backup_file "$CONFIG_TXT"
 backup_file "$CMDLINE_TXT"
 capture_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT"
+BOOT_SNAPSHOT_ACTIVE=1
 normalize_dwc2_overlay "$CONFIG_TXT" "$OVERLAY_LINE"
 
 MODULES="libcomposite"
@@ -134,3 +148,5 @@ if [[ $NO_REBOOT -eq 0 ]]; then
     info "Skipping reboot prompt because stdin is not interactive"
   fi
 fi
+
+trap - EXIT
