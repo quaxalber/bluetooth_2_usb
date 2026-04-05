@@ -41,6 +41,7 @@ Bluetooth-2-USB is designed to be practical for both hobby setups and appliance-
 
 > [!NOTE]
 > Raspberry Pi 3 models include Bluetooth, but they do not expose a suitable USB device-mode port for this project.
+>
 > [!NOTE]
 > On Pi 4B and Pi 5, the OTG-capable port is the USB-C power port. On Pi Zero boards, the OTG-capable port is the USB data port, not the power-only port.
 
