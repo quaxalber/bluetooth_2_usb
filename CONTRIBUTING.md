@@ -1,10 +1,26 @@
-# Contributing to Bluetooth 2 USB
+# Contributing to Bluetooth to USB
 
-This guide assumes you already know the usual GitHub fork/branch/PR workflow and want the project-specific details only.
+Thanks for your interest in contributing.
 
-## Setup
+Bug reports, documentation improvements, testing on real hardware, and code changes are all valuable contributions. First-time contributors are welcome.
 
-Use Linux. Raspberry Pi hardware is required for meaningful runtime validation.
+This guide focuses on the project-specific details you need to make a contribution that is easy to review and verify.
+
+## Ways to contribute
+
+You do not need to submit code to help the project. Useful contributions include:
+
+- Reporting bugs with enough detail to reproduce them
+- Testing changes on Raspberry Pi hardware and target hosts
+- Improving installation, troubleshooting, and read-only-mode documentation
+- Fixing runtime, packaging, or service issues
+- Reviewing pull requests and sharing hardware compatibility results
+
+## Development environment
+
+Meaningful runtime validation requires Linux, and changes that affect USB gadget behavior should be tested on a real Raspberry Pi with an OTG-capable connection to a target host.
+
+### Basic setup
 
 ```bash
 sudo apt update
@@ -19,59 +35,134 @@ pip install -U pip setuptools wheel
 pip install -e .
 ```
 
-## Expectations
+## Project layout
 
-- Keep changes focused. Do not mix installer, runtime and vendored dependency changes without a reason.
-- Prefer changes inside `bluetooth_2_usb/`. Touch vendored forks only when you are intentionally syncing or patching upstream behavior.
-- Preserve the managed install model:
-  - install root: `/opt/bluetooth_2_usb`
-  - service: `bluetooth_2_usb.service`
-  - config: `/etc/default/bluetooth_2_usb`
-- If you change install, update or uninstall behavior, test those scripts on a real Pi.
+The files most contributors will touch are:
 
-## Required checks before a PR
+- `src/bluetooth_2_usb/`  
+  Python package for the CLI, runtime logic, argument parsing, logging, and relay behavior
 
-Run the same baseline checks locally that CI runs:
+- `scripts/`  
+  Install, update, uninstall, smoke-test, debug, and read-only helper scripts
+
+- `bluetooth_2_usb.service`  
+  systemd unit template used by the installer
+
+- `.github/workflows/ci.yml`  
+  Baseline CI checks run on pull requests
+
+## Before you start
+
+For larger changes, open or reference an issue first so the approach can be discussed before significant work is done.
+
+Please keep changes focused:
+
+- Avoid mixing unrelated refactors with functional changes
+- Avoid mixing runtime changes with installer or dependency changes unless there is a clear reason
+- Update documentation when behavior, paths, commands, or defaults change
+- Preserve the managed install model unless the change is intentionally redesigning it
+
+Current managed paths include:
+
+- Install root: `/opt/bluetooth_2_usb`
+- Runtime config: `/etc/default/bluetooth_2_usb`
+- Service name: `bluetooth_2_usb.service`
+
+## Quality expectations
+
+Aim for changes that are easy to understand, maintain, and validate.
+
+### For Python code
+
+- Prefer readable, focused functions over clever shortcuts
+- Keep public behavior and CLI semantics stable unless the change intentionally revises them
+- Match the surrounding code style
+- Add or update docstrings, comments, or help text when they materially improve clarity
+
+### For shell scripts
+
+- Write for `bash`
+- Quote variables consistently
+- Fail early on invalid input
+- Avoid changing install or boot behavior casually
+- Test installer, updater, uninstaller, and read-only flows on real hardware when you modify them
+
+### For documentation
+
+- Prefer accuracy over marketing language
+- Keep commands copy-pasteable
+- Explain when a step is optional, risky, or hardware-specific
+- Call out important limitations, especially around power and read-only behavior
+
+## Checks to run before opening a PR
+
+Run the same baseline checks that CI runs:
 
 ```bash
 python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
-python -m bluetooth_2_usb --validate-env || true
+python -m bluetooth_2_usb --validate-env || test $? -eq 3
+python -m bluetooth_2_usb --dry-run || test $? -eq 3
 bash -n scripts/*.sh scripts/lib/common.sh
 ```
 
-On Raspberry Pi hardware, also run:
+> [!NOTE]
+> Outside a properly configured Raspberry Pi gadget environment, `--validate-env` and `--dry-run` may exit with status `3`. That is expected and should not be treated as a failure in non-hardware CI or local development on a regular Linux workstation.
+
+## Hardware validation
+
+If your change affects runtime behavior, installation, service startup, USB gadget setup, or read-only operation, validate it on a real Pi.
+
+From a repository checkout:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
-```
-
-Those commands target the installed paths under `/opt/bluetooth_2_usb/` and therefore only work after running the installer. If you are validating directly from your repository checkout instead, run the repo-local equivalents:
-
-```bash
-sudo ./scripts/smoke_test.sh
+sudo ./scripts/smoke_test.sh --verbose
 sudo ./scripts/debug.sh --duration 10 --redact
 ```
 
-If your change touches HID/runtime behavior, validate against a real OTG host, not just CLI checks.
+From an installed deployment:
 
-## Pull requests
+```bash
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
+```
 
-- Use a short imperative commit title.
-- Explain what changed, how you tested it, and what hardware/host setup you used.
-- Link the relevant issue.
-- Include redacted logs or debug output when service or install behavior changed.
-- Maintainers should use squash merge for normal PRs so `main` stays compact and readable.
+Please also test against a real OTG target host when the change affects HID behavior or USB compatibility.
+
+Documentation-only changes do not require hardware validation, but commands and paths should still be checked for accuracy.
+
+## Pull request guidelines
+
+When you open a pull request:
+
+- Use a short, clear title
+- Explain what changed and why
+- Describe how you tested it
+- Include the Pi model, OS version, and target host type used for validation
+- Link the relevant issue if one exists
+- Include redacted logs or debug output when the change affects installation, service behavior, runtime diagnostics, or read-only mode
+
+Good pull requests are usually small enough to review in one pass and specific enough to test without guessing.
 
 ## Reporting issues
 
-Use the GitHub issue tracker and include:
+Please use the GitHub issue tracker and include as much of the following as you can:
 
 - Pi model
-- Raspberry Pi OS / kernel version
-- OTG host type
-- exact command or script used
-- `smoke_test.sh` result
-- `debug.sh --redact` output
+- Raspberry Pi OS version
+- Kernel version
+- Target host type
+- Whether you are using normal, easy, or persistent read-only mode
+- Exact commands or scripts used
+- Output from `smoke_test.sh --verbose`
+- Output from `debug.sh --duration 10 --redact`
+- Clear reproduction steps
+
+## Community expectations
+
+Please be respectful, constructive, and patient in all project interactions.
+
+Assume good intent, focus feedback on the technical work, and help keep the project welcoming to people with different levels of experience.
+
+Thanks for helping improve Bluetooth to USB.
