@@ -61,13 +61,8 @@ Fastest path:
 curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh | sudo bash
 ```
 
-Safer path if you prefer to inspect the installer first:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh -o /tmp/bluetooth_2_usb-bootstrap.sh
-less /tmp/bluetooth_2_usb-bootstrap.sh
-sudo bash /tmp/bluetooth_2_usb-bootstrap.sh
-```
+> [!NOTE]
+> As a general best practice, inspect `curl | sudo bash` installers before running them, especially on systems you care about. That advice applies here too.
 
 ### 3. Reboot
 
