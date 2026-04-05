@@ -124,31 +124,23 @@ clear_boot_restore_snapshot() {
   rmdir "$B2U_BOOT_RESTORE_DIR" 2>/dev/null || true
 }
 
-source_repo_root() {
-  printf '%s\n' "${B2U_SOURCE_REPO:-$B2U_REPO_ROOT}"
-}
-
 default_repo_url() {
-  local repo_root
-  repo_root="$(source_repo_root)"
-  if git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if git -C "$B2U_REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local remote_url
-    remote_url="$(git -C "$repo_root" remote get-url origin 2>/dev/null || true)"
+    remote_url="$(git -C "$B2U_REPO_ROOT" remote get-url origin 2>/dev/null || true)"
     if [[ -n "$remote_url" ]]; then
       printf '%s\n' "$remote_url"
       return
     fi
-    printf '%s\n' "$repo_root"
+    printf '%s\n' "$B2U_REPO_ROOT"
   else
     printf '%s\n' "https://github.com/quaxalber/bluetooth_2_usb.git"
   fi
 }
 
 default_repo_branch() {
-  local repo_root
-  repo_root="$(source_repo_root)"
-  if git -C "$repo_root" rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
-    git -C "$repo_root" rev-parse --abbrev-ref HEAD
+  if git -C "$B2U_REPO_ROOT" rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
+    git -C "$B2U_REPO_ROOT" rev-parse --abbrev-ref HEAD
   else
     printf '%s\n' "main"
   fi
@@ -272,13 +264,12 @@ activate_service_unit() {
   fi
 }
 write_default_env_file() {
-  local env_file="${1:-$B2U_ENV_FILE}"
-  if [[ ! -f "$env_file" ]]; then
-    cat >"$env_file" <<'EOF'
+  if [[ ! -f "$B2U_ENV_FILE" ]]; then
+    cat >"$B2U_ENV_FILE" <<'EOF'
 # Optional runtime arguments for bluetooth_2_usb.service.
 BLUETOOTH_2_USB_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12 --hid-profile compat"
 EOF
-    chmod 0644 "$env_file"
+    chmod 0644 "$B2U_ENV_FILE"
   fi
 }
 

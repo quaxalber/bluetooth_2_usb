@@ -35,30 +35,24 @@ require_commands git install python3 systemctl
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 
 if [[ -d "${B2U_INSTALL_DIR}/.git" ]]; then
-  if [[ -n "$REPO_URL" ]]; then
-    if git -C "$B2U_INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
-      git -C "$B2U_INSTALL_DIR" remote set-url origin "$REPO_URL"
-    else
-      git -C "$B2U_INSTALL_DIR" remote add origin "$REPO_URL"
-    fi
+  if git -C "$B2U_INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
+    git -C "$B2U_INSTALL_DIR" remote set-url origin "$REPO_URL"
+  else
+    git -C "$B2U_INSTALL_DIR" remote add origin "$REPO_URL"
   fi
   info "Updating repository in ${B2U_INSTALL_DIR}"
   git -C "$B2U_INSTALL_DIR" fetch --all --tags
-  if [[ -n "$REPO_BRANCH" ]]; then
-    git -C "$B2U_INSTALL_DIR" checkout "$REPO_BRANCH"
-  fi
+  git -C "$B2U_INSTALL_DIR" checkout "$REPO_BRANCH"
   if git -C "$B2U_INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
     git -C "$B2U_INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
   fi
-elif [[ -n "$REPO_URL" && -n "$REPO_BRANCH" ]]; then
+else
   info "Replacing non-git installation using ${REPO_URL}@${REPO_BRANCH}"
   tmpdir="$(mktemp -d)"
   git clone --branch "$REPO_BRANCH" "$REPO_URL" "${tmpdir}/repo"
   rm -rf "$B2U_INSTALL_DIR"
   mv "${tmpdir}/repo" "$B2U_INSTALL_DIR"
   rmdir "$tmpdir" 2>/dev/null || true
-else
-  fail "Install directory is not a git checkout. Provide --repo and --branch to replace it."
 fi
 
 info "Recreating virtual environment at ${VENV_DIR}"
