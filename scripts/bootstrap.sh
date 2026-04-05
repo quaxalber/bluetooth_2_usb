@@ -85,4 +85,4 @@ if [[ $NO_REBOOT -eq 1 ]]; then
   install_args+=(--no-reboot)
 fi
 
-exec bash "${repo_dir}/scripts/install.sh" "${install_args[@]}"
+bash "${repo_dir}/scripts/install.sh" "${install_args[@]}"

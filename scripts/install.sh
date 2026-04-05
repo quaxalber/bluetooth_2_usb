@@ -124,9 +124,13 @@ ${BOLD}Next steps${NC}
 EOF
 
 if [[ $NO_REBOOT -eq 0 ]]; then
-  read -r -p "Reboot now? [y/N] " answer
-  if [[ "${answer,,}" == "y" ]]; then
-    sync
-    reboot
+  if [[ -t 0 ]]; then
+    read -r -p "Reboot now? [y/N] " answer || answer=""
+    if [[ "${answer,,}" == "y" ]]; then
+      sync
+      reboot
+    fi
+  else
+    info "Skipping reboot prompt because stdin is not interactive"
   fi
 fi
