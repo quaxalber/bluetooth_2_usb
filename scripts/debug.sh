@@ -188,9 +188,9 @@ run_live_debug_block() {
   if [[ -n "$DURATION" ]]; then
     B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" timeout "$DURATION" bash -lc "$command" >"$tmp" 2>&1 || status=$?
   else
-    trap 'interrupted="INT"; INTERRUPTED_BY_SIGNAL="INT"; [[ -n "$child_pid" ]] && kill -INT "$child_pid" 2>/dev/null || true' INT
-    trap 'interrupted="TERM"; INTERRUPTED_BY_SIGNAL="TERM"; [[ -n "$child_pid" ]] && kill -TERM "$child_pid" 2>/dev/null || true' TERM
-    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" bash -lc "$command" >"$tmp" 2>&1 &
+    trap 'interrupted="INT"; INTERRUPTED_BY_SIGNAL="INT"; [[ -n "$child_pid" ]] && kill -INT -- "-$child_pid" 2>/dev/null || true' INT
+    trap 'interrupted="TERM"; INTERRUPTED_BY_SIGNAL="TERM"; [[ -n "$child_pid" ]] && kill -TERM -- "-$child_pid" 2>/dev/null || true' TERM
+    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" setsid bash -lc "$command" >"$tmp" 2>&1 &
     child_pid=$!
     wait "$child_pid" || status=$?
     trap 'INTERRUPTED_BY_SIGNAL="INT"' INT
