@@ -162,6 +162,8 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 
 ## Configuration
 
+This section is the short operational overview. The complete CLI and script reference is further down in [Reference](#reference).
+
 The service reads optional runtime flags from:
 
 ```bash
@@ -330,6 +332,27 @@ Persistent mode is the right choice if you need stable Bluetooth identity, pairi
 
 It uses a separate writable ext4 filesystem for Bluetooth state and bind-mounts it to `/var/lib/bluetooth`.
 
+#### Choose the persistent storage device
+
+There are two practical ways to provide the writable ext4 filesystem:
+
+- A separate USB storage device
+  Usually the simplest and lowest-risk option. It avoids repartitioning the system SD card and is easy to replace, reformat, or test.
+- A dedicated extra partition on the system SD card
+  Usually the cleanest fully self-contained option. It avoids extra external hardware, but you must plan or create the extra partition yourself.
+
+Recommended rule of thumb:
+
+- Use a separate USB ext4 device when your physical setup allows it and you want the least risky path
+- Use a dedicated extra ext4 partition on the SD card when you prefer an all-in-one setup or external storage is awkward
+
+Special note for Pi Zero and Pi Zero 2 W:
+
+- These boards often end up using the SD-card partition approach more often because external USB storage typically needs extra adapters, hubs, or split power/data cabling
+
+> [!NOTE]
+> The Raspberry Pi Imager does not create this extra persistent ext4 partition for you. For persistent mode, you prepare the filesystem yourself and then point `setup_persistent_bluetooth_state.sh` at it.
+
 Recommended flow:
 
 1. Install Bluetooth to USB
@@ -363,6 +386,93 @@ Default layout:
 
 > [!IMPORTANT]
 > Persistent mode expects an ext4 filesystem that you provide. The project does not repartition your disk automatically.
+
+#### Creating the persistent filesystem after Raspberry Pi OS is already installed
+
+There are two common cases:
+
+##### Option A: Use a separate USB storage device
+
+This is usually the simplest option on any Pi where attaching extra storage is convenient.
+
+1. Attach the device
+2. Identify it:
+
+```bash
+lsblk -f
+```
+
+3. If needed, create an ext4 filesystem on the correct partition:
+
+```bash
+sudo mkfs.ext4 -L B2U_PERSIST /dev/sda1
+```
+
+4. Configure persistent Bluetooth state:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
+```
+
+##### Option B: Use an extra partition on the SD card
+
+This is the most integrated option across all Pi models and is often the most practical approach when you do not want an extra external storage device attached.
+
+Typical target layout:
+
+- `/dev/mmcblk0p1` boot
+- `/dev/mmcblk0p2` root
+- `/dev/mmcblk0p3` b2u persistent Bluetooth state
+
+Important constraints:
+
+- On an already-installed Raspberry Pi OS system, the root partition often already fills the remaining SD card space
+- Creating a new third partition usually means shrinking the root filesystem first
+- Do not casually shrink the live root partition while booted from it
+
+Practical recommendation:
+
+- Make a full SD-card backup first
+- Power down the Pi
+- Resize the card offline on another Linux system with a partitioning tool such as `gparted`
+- Shrink the root filesystem and root partition
+- Create a new ext4 partition for b2u persistent state
+- Boot the Pi again and point b2u at the new partition
+
+Example once the new partition exists:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
+```
+
+If you are starting from scratch, it is often cleaner to plan this partition at the beginning of the build instead of retrofitting it later.
+
+#### Full persistent-mode test flow
+
+Once the ext4 filesystem exists, the simplest end-to-end test is:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
+sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode persistent
+sudo reboot
+```
+
+After reboot:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
+findmnt /var/lib/bluetooth
+findmnt /mnt/b2u-persist
+```
+
+What you want to confirm:
+
+- `/var/lib/bluetooth` is a bind mount
+- `/mnt/b2u-persist` is your writable ext4 filesystem
+- `smoke_test.sh --verbose` reports persistent Bluetooth state
+- previously paired devices reconnect after reboot
+- reconnect behavior also survives an unclean power cut if that is part of your real deployment model
 
 ### Disable read-only mode
 
@@ -455,6 +565,223 @@ Please open an issue and include:
 - Exact commands or scripts used
 - Output from `smoke_test.sh --verbose`
 - Output from `debug.sh --duration 10 --redact`
+
+## Reference
+
+The sections above focus on the common user flow. This section is the full command reference for contributors, power users, and anyone automating deployments.
+
+### CLI reference: `bluetooth_2_usb`
+
+- `--device_ids`, `-i`
+  Comma-separated device selectors. Each selector can be an event path, Bluetooth MAC address, or case-insensitive substring of the device name.
+- `--auto_discover`, `-a`
+  Relay all readable input devices automatically.
+- `--grab_devices`, `-g`
+  Grab the source input devices so the Pi does not also consume the local events.
+- `--interrupt_shortcut`, `-s`
+  Plus-separated key chord used to pause or resume relaying, for example `CTRL+SHIFT+F12`.
+- `--list_devices`, `-l`
+  List all visible input devices and exit.
+- `--log_to_file`, `-f`
+  Log to the default log file in addition to stdout.
+- `--log_path`, `-p`
+  Override the log path. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`
+- `--debug`, `-d`
+  Enable more verbose logging.
+- `--version`, `-v`
+  Print the current version and exit.
+- `--dry-run`
+  Validate the environment without binding USB gadgets.
+- `--no-bind`
+  Skip gadget binding and only perform diagnostic validation.
+- `--validate-env`
+  Validate gadget prerequisites and exit with status information.
+- `--hid-profile compat|extended`
+  Select the HID descriptor profile. `compat` is the default and should be the first choice for most hosts.
+- `--help`, `-h`
+  Show the CLI help text.
+
+### Script reference
+
+All managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after installation.
+
+#### `bootstrap.sh`
+
+Purpose:
+- download a repository archive from GitHub
+- run the managed installer without cloning first
+
+Arguments:
+- `--repo <url>`
+  Override the Git repository URL used for the archive download
+- `--branch <name>`
+  Install a specific branch or tag
+- `--dir <path>`
+  Override the managed install directory
+- `--no-reboot`
+  Install without prompting for an immediate reboot
+
+Typical usage:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh | sudo bash
+```
+
+#### `install.sh`
+
+Purpose:
+- install or refresh the managed checkout in `/opt/bluetooth_2_usb`
+- patch the required boot files
+- recreate the virtual environment
+- install the systemd unit and wrapper
+
+Arguments:
+- `--repo <url|path>`
+  Repository source to install from
+- `--branch <name>`
+  Branch or tag to check out
+- `--dir <path>`
+  Managed installation target
+- `--skip-clone`
+  Reuse the existing install directory contents instead of updating or cloning
+- `--no-reboot`
+  Do not prompt for a reboot after installation
+
+#### `update.sh`
+
+Purpose:
+- update an existing managed installation
+- refresh the checkout and recreate the virtual environment
+- optionally restart the service
+
+Arguments:
+- `--dir <path>`
+  Managed installation target
+- `--repo <url|path>`
+  Override the repository source used for the update
+- `--branch <name>`
+  Override the branch or tag used for the update
+- `--service <name>`
+  Override the service name
+- `--no-restart`
+  Update files and environment without restarting the service
+
+#### `uninstall.sh`
+
+Purpose:
+- stop and disable the managed service
+- remove systemd units, wrapper files, and optional installation data
+- optionally restore the boot configuration captured during install
+
+Arguments:
+- `--dir <path>`
+  Managed installation target
+- `--service <name>`
+  Override the service name
+- `--purge`
+  Remove the installation directory itself
+- `--revert-boot`
+  Restore the managed boot-file snapshot
+- `--no-reboot`
+  Do not prompt for a reboot at the end
+
+#### `debug.sh`
+
+Purpose:
+- collect a Markdown debug report suitable for issue reports
+- include service state, mount state, boot config, dmesg, and CLI diagnostics
+
+Arguments:
+- `--dir <path>`
+  Managed installation target
+- `--service <name>`
+  Service name to inspect
+- `--venv <path>`
+  Virtual environment path used for CLI checks
+- `--duration <sec>`
+  Timeout for longer-running diagnostic commands
+- `--redact`
+  Redact hostname, machine-id, UUIDs, PARTUUIDs, and Bluetooth MAC addresses
+
+#### `smoke_test.sh`
+
+Purpose:
+- perform a quick installation and runtime health check
+- verify boot config, UDC, service state, environment validation, and read-only status
+
+Arguments:
+- `--dir <path>`
+  Managed installation target
+- `--service <name>`
+  Service name to test
+- `--venv <path>`
+  Virtual environment path used for CLI checks
+- `--verbose`
+  Print mount details, validate-env output, dry-run output, service status, and journalctl output
+
+#### `enable_readonly_overlayfs.sh`
+
+Purpose:
+- enable Raspberry Pi OS OverlayFS mode
+- optionally prepare and activate persistent Bluetooth state
+
+Arguments:
+- `--mode <easy|persistent>`
+  Choose best-effort mode or persistent mode
+- `--persist-device <path>`
+  Device to use for persistent Bluetooth state in persistent mode
+- `--persist-mount <path>`
+  Mount point used for persistent Bluetooth state
+- `--bluetooth-subdir <name>`
+  Subdirectory below the persistent mount that will hold Bluetooth state
+- `--format`
+  Format the persistent device as ext4 before use
+
+#### `disable_readonly_overlayfs.sh`
+
+Purpose:
+- disable Raspberry Pi OS OverlayFS root mode
+- keep persistent Bluetooth-state configuration in place
+
+Arguments:
+- none
+
+#### `setup_persistent_bluetooth_state.sh`
+
+Purpose:
+- create or validate the persistent Bluetooth-state mount
+- write the mount units and bind mount
+- seed `/var/lib/bluetooth` into the persistent location
+
+Arguments:
+- `--device <path>`
+  Block device that backs the persistent filesystem
+- `--mount <path>`
+  Persistent mount point
+- `--bluetooth-subdir <name>`
+  Bluetooth-state directory below the persistent mount
+- `--service <name>`
+  Service name used in generated unit ordering
+- `--fs-type <type>`
+  Filesystem type. Currently only `ext4` is supported
+- `--format`
+  Format the given device before use
+- `--label <name>`
+  Filesystem label used when formatting
+- `--no-enable`
+  Prepare configuration and units without activating them immediately
+
+### Managed paths and files
+
+- Install root: `/opt/bluetooth_2_usb`
+- Virtual environment: `/opt/bluetooth_2_usb/venv`
+- Runtime config: `/etc/default/bluetooth_2_usb`
+- Read-only config: `/etc/default/bluetooth_2_usb_readonly`
+- Service unit: `/etc/systemd/system/bluetooth_2_usb.service`
+- CLI wrapper: `/usr/local/bin/bluetooth_2_usb`
+- Logs: `/var/log/bluetooth_2_usb`
+- Default persistent mount: `/mnt/b2u-persist`
+- Default persistent Bluetooth-state dir: `/mnt/b2u-persist/bluetooth`
 
 ## Contributing
 

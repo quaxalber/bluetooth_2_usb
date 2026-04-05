@@ -128,7 +128,7 @@ ${BOLD}Next steps${NC}
    sudo ${INSTALL_DIR}/scripts/smoke_test.sh --verbose
 3. For read-only mode afterwards, choose one of:
    sudo ${INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode easy
-   sudo ${INSTALL_DIR}/scripts/setup_persistent_bluetooth_state.sh --device /dev/your-device
+   sudo ${INSTALL_DIR}/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
    sudo ${INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode persistent
 EOF
 
