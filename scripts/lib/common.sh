@@ -294,13 +294,18 @@ service_installed() {
 }
 
 overlay_status() {
-  local root_fstype
-  root_fstype="$(findmnt -n -o FSTYPE / 2>/dev/null || true)"
-  if [[ "$root_fstype" == "overlay" ]]; then
-    printf '%s\n' "enabled"
-  else
-    printf '%s\n' "disabled"
+  local state
+  if ! command -v raspi-config >/dev/null 2>&1; then
+    printf '%s\n' "unknown"
+    return
   fi
+
+  state="$(raspi-config nonint get_overlay_now 2>/dev/null | tr -d '[:space:]')"
+  case "$state" in
+    0) printf '%s\n' "enabled" ;;
+    1) printf '%s\n' "disabled" ;;
+    *) printf '%s\n' "unknown" ;;
+  esac
 }
 
 snapshot_readonly_state() {
