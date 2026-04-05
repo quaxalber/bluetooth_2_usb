@@ -100,6 +100,10 @@ fi
 [[ -d "$B2U_INSTALL_DIR" ]] || fail "Install directory not found: $B2U_INSTALL_DIR"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
+if systemctl is-active --quiet "${B2U_SERVICE_UNIT}" 2>/dev/null; then
+  info "Stopping ${B2U_SERVICE_UNIT} before virtual environment recreation"
+  systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT}"
+fi
 info "Recreating virtual environment at ${VENV_DIR}"
 recreate_venv "$VENV_DIR"
 "${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel

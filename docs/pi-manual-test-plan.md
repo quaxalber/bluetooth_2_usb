@@ -298,14 +298,6 @@ sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices
 journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 
-Useful checks:
-
-```bash
-bluetoothctl paired-devices
-sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices
-journalctl -u bluetooth_2_usb.service -n 100 --no-pager
-```
-
 Pass criteria:
 
 - the paired device remains known after reboot
