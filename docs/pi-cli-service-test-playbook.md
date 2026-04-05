@@ -14,6 +14,9 @@ The managed install root and service unit are fixed by design throughout this pl
 - Install root: `/opt/bluetooth_2_usb`
 - Service unit: `bluetooth_2_usb.service`
 
+The mainline test flow should exercise the normal managed deployment against GitHub.
+Use the Pi-local bare repository only when you explicitly need an isolated snapshot or a force-pushed test branch.
+
 It does not try to cover:
 
 - full OTG end-to-end host input validation
@@ -228,7 +231,18 @@ Expected behavior:
 
 ## Update tests
 
-Standard update against the Pi-local bare repo:
+Preferred update test against GitHub:
+
+```bash
+ssh -4 pi4b '
+  cd /home/user/bluetooth_2_usb_test_2026_04_05
+  sudo -n bash scripts/update.sh \
+    --repo https://github.com/quaxalber/bluetooth_2_usb.git \
+    --branch feat/main-hardening-test-2026-04-05
+'
+```
+
+Use the Pi-local bare repo only when you need a fully isolated snapshot:
 
 ```bash
 ssh -4 pi4b '
@@ -256,7 +270,19 @@ ssh -4 pi4b '
 
 ## Install tests
 
-Explicit install path:
+Preferred install test against GitHub:
+
+```bash
+ssh -4 pi4b '
+  cd /home/user/bluetooth_2_usb_test_2026_04_05
+  sudo -n bash scripts/install.sh \
+    --repo https://github.com/quaxalber/bluetooth_2_usb.git \
+    --branch feat/main-hardening-test-2026-04-05 \
+    --no-reboot
+'
+```
+
+Use the Pi-local bare repo only when you want the install to come from an isolated snapshot:
 
 ```bash
 ssh -4 pi4b '

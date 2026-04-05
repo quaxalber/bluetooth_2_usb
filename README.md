@@ -18,8 +18,8 @@ Bluetooth-2-USB is designed to be practical for both hobby setups and appliance-
 
 ## Highlights
 
-- Managed installation into `/opt/bluetooth_2_usb`
-- systemd-first runtime with configuration in `/etc/default/bluetooth_2_usb`
+- Fixed managed installation into `/opt/bluetooth_2_usb`
+- Fixed `bluetooth_2_usb.service` plus runtime configuration in `/etc/default/bluetooth_2_usb`
 - Auto-discovery and auto-reconnect for supported input devices
 - Optional input grabbing so the Pi does not also consume local keyboard/mouse events
 - HID compatibility profiles for hosts with stricter USB expectations
@@ -63,6 +63,18 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 
 > [!NOTE]
 > As a general best practice, inspect `curl | sudo bash` installers before running them, especially on systems you care about. That advice applies here too.
+
+Bluetooth-2-USB always installs as a managed deployment in:
+
+```bash
+/opt/bluetooth_2_usb
+```
+
+and runs as:
+
+```bash
+bluetooth_2_usb.service
+```
 
 ### 3. Reboot
 
@@ -116,6 +128,11 @@ Connect the Pi's **USB data port** to the target host.
 If possible, power the Pi from a separate stable power supply using the power-only port. That usually improves stability.
 
 ## Installation options
+
+All installation paths below converge on the same managed result:
+
+- install root: `/opt/bluetooth_2_usb`
+- service unit: `bluetooth_2_usb.service`
 
 ### Bootstrap installer
 
@@ -237,7 +254,7 @@ journalctl -u bluetooth_2_usb.service -f
 
 ## Updating
 
-Update the installed checkout and recreate the virtual environment:
+Update the managed installation in `/opt/bluetooth_2_usb` and recreate the virtual environment:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/update.sh
@@ -245,7 +262,7 @@ sudo /opt/bluetooth_2_usb/scripts/update.sh
 
 ## Uninstalling
 
-Remove the service and helper files:
+Remove the managed service and helper files:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
@@ -589,12 +606,13 @@ Please open an issue and include:
 
 The sections above focus on the common user flow. This section is the full command reference for contributors, power users, and anyone automating deployments.
 
-The managed deployment model intentionally keeps the install root and service unit fixed:
+The deployment model is intentionally fixed:
 
 - Install root: `/opt/bluetooth_2_usb`
 - Service unit: `bluetooth_2_usb.service`
+- Runtime config: `/etc/default/bluetooth_2_usb`
 
-The scripts below do not support overriding those two managed paths.
+The scripts below do not support overriding those managed paths.
 
 ### CLI reference: `bluetooth_2_usb`
 
