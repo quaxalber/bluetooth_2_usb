@@ -7,14 +7,12 @@ source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 REPO_URL="$(default_repo_url)"
 REPO_BRANCH="$(default_repo_branch)"
 NO_REBOOT=0
-SKIP_CLONE=0
 
 usage() {
   cat <<EOF
 Usage: sudo ./install.sh [options]
   --repo <url|path>   Repository source. Default: current repo checkout
   --branch <name>     Branch/tag to install. Default: current branch
-  --skip-clone        Reuse existing install directory content
   --no-reboot         Do not prompt for reboot
 EOF
 }
@@ -23,7 +21,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) require_value "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
     --branch) require_value "$1" "${2:-}"; REPO_BRANCH="$2"; shift 2 ;;
-    --skip-clone) SKIP_CLONE=1; shift ;;
     --no-reboot) NO_REBOOT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "Unknown option: $1" ;;
@@ -61,31 +58,29 @@ fi
 normalize_modules_load "$CMDLINE_TXT" "$MODULES"
 ok "Boot configuration updated"
 
-if [[ $SKIP_CLONE -eq 0 ]]; then
-  mkdir -p "$(dirname "$B2U_INSTALL_DIR")"
-  if [[ "$REPO_URL" == "$B2U_INSTALL_DIR" ]]; then
-    info "Reusing source repository in place at ${B2U_INSTALL_DIR}"
-  elif [[ -d "${B2U_INSTALL_DIR}/.git" ]]; then
-    info "Updating repository at ${B2U_INSTALL_DIR}"
-    if git -C "$B2U_INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
-      git -C "$B2U_INSTALL_DIR" remote set-url origin "$REPO_URL"
-    else
-      git -C "$B2U_INSTALL_DIR" remote add origin "$REPO_URL"
-    fi
-    git -C "$B2U_INSTALL_DIR" fetch --all --tags
-    git -C "$B2U_INSTALL_DIR" checkout "$REPO_BRANCH"
-    if git -C "$B2U_INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
-      git -C "$B2U_INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
-    fi
+mkdir -p "$(dirname "$B2U_INSTALL_DIR")"
+if [[ "$REPO_URL" == "$B2U_INSTALL_DIR" ]]; then
+  info "Reusing source repository in place at ${B2U_INSTALL_DIR}"
+elif [[ -d "${B2U_INSTALL_DIR}/.git" ]]; then
+  info "Updating repository at ${B2U_INSTALL_DIR}"
+  if git -C "$B2U_INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
+    git -C "$B2U_INSTALL_DIR" remote set-url origin "$REPO_URL"
   else
-    info "Installing repository into ${B2U_INSTALL_DIR}"
-    if [[ -e "$B2U_INSTALL_DIR" ]]; then
-      backup_path="${B2U_INSTALL_DIR}.backup.$(timestamp)"
-      warn "Moving existing path at ${B2U_INSTALL_DIR} to ${backup_path} before cloning."
-      mv "$B2U_INSTALL_DIR" "$backup_path"
-    fi
-    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$B2U_INSTALL_DIR"
+    git -C "$B2U_INSTALL_DIR" remote add origin "$REPO_URL"
   fi
+  git -C "$B2U_INSTALL_DIR" fetch --all --tags
+  git -C "$B2U_INSTALL_DIR" checkout "$REPO_BRANCH"
+  if git -C "$B2U_INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
+    git -C "$B2U_INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
+  fi
+else
+  info "Installing repository into ${B2U_INSTALL_DIR}"
+  if [[ -e "$B2U_INSTALL_DIR" ]]; then
+    backup_path="${B2U_INSTALL_DIR}.backup.$(timestamp)"
+    warn "Moving existing path at ${B2U_INSTALL_DIR} to ${backup_path} before cloning."
+    mv "$B2U_INSTALL_DIR" "$backup_path"
+  fi
+  git clone --branch "$REPO_BRANCH" "$REPO_URL" "$B2U_INSTALL_DIR"
 fi
 
 [[ -d "$B2U_INSTALL_DIR" ]] || fail "Install directory not found: $B2U_INSTALL_DIR"
@@ -121,7 +116,7 @@ cat <<EOF
 ${BOLD}Next steps${NC}
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo ${B2U_INSTALL_DIR}/scripts/smoke_test.sh --verbose
+   sudo ${B2U_INSTALL_DIR}/scripts/smoke_test.sh
 3. For read-only mode afterwards, choose one of:
    sudo ${B2U_INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode easy
    sudo ${B2U_INSTALL_DIR}/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1

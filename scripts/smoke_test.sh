@@ -11,14 +11,12 @@ EXIT_CODE=0
 usage() {
   cat <<EOF
 Usage: sudo ./smoke_test.sh [options]
-  --venv <path>       Virtualenv path. Default: ${VENV_DIR}
   --verbose           Print detailed diagnostics, including journalctl
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --venv) require_value "$1" "${2:-}"; VENV_DIR="$2"; shift 2 ;;
     --verbose) VERBOSE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "Unknown option: $1" ;;

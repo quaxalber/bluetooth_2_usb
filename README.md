@@ -97,7 +97,7 @@ exit
 Run the smoke test:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
 ```
 
 ### 6. Connect the Pi to the target host
@@ -594,8 +594,11 @@ ls -t /var/log/bluetooth_2_usb/debug_*.md | head -n 1
 On your workstation:
 
 ```bash
-scp pi4b:/var/log/bluetooth_2_usb/debug_YYYYMMDD_HHMMSS.md .
+scp YOUR-PI-HOST:/var/log/bluetooth_2_usb/debug_YYYYMMDD_HHMMSS.md .
 ```
+
+> [!NOTE]
+> Replace `YOUR-PI-HOST` with your Pi hostname or IP address, for example `pi4b` or `192.168.2.215`.
 
 ## Reference
 
@@ -669,8 +672,6 @@ Arguments:
   Repository source to install from
 - `--branch <name>`
   Branch or tag to check out
-- `--skip-clone`
-  Reuse the existing managed checkout at `/opt/bluetooth_2_usb` instead of updating or cloning
 - `--no-reboot`
   Do not prompt for a reboot after installation
 
@@ -712,8 +713,6 @@ Purpose:
 - stop the service temporarily, if running, and capture a live Bluetooth-2-USB `--debug` session in the report
 
 Arguments:
-- `--venv <path>`
-  Virtual environment path used for CLI checks
 - `--duration <sec>`
   Bound the live Bluetooth-2-USB `--debug` session to `<sec>`; omit it to keep the session running until interrupted
 - `--redact`
@@ -726,8 +725,6 @@ Purpose:
 - verify boot config, UDC, service state, environment validation, and read-only status
 
 Arguments:
-- `--venv <path>`
-  Virtual environment path used for CLI checks
 - `--verbose`
   Print mount details, validate-env output, dry-run output, service status, and journalctl output
 

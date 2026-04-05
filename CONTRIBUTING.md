@@ -117,14 +117,14 @@ If your change affects runtime behavior, installation, service startup, USB gadg
 From a repository checkout:
 
 ```bash
-sudo ./scripts/smoke_test.sh --verbose
+sudo ./scripts/smoke_test.sh
 sudo ./scripts/debug.sh --duration 10 --redact
 ```
 
 From an installed deployment:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 ```
 

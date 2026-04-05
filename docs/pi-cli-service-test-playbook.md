@@ -181,8 +181,6 @@ ssh -4 pi4b '
     "bash scripts/install.sh --branch" \
     "bash scripts/update.sh --repo" \
     "bash scripts/update.sh --branch" \
-    "bash scripts/smoke_test.sh --venv" \
-    "bash scripts/debug.sh --venv" \
     "bash scripts/debug.sh --duration" \
     "bash scripts/enable_readonly_overlayfs.sh --mode" \
     "bash scripts/enable_readonly_overlayfs.sh --persist-device" \
@@ -286,15 +284,6 @@ ssh -4 pi4b '
     --repo /home/user/bluetooth_2_usb_test_2026_04_05_repo.git \
     --branch feat/main-hardening-test-2026-04-05 \
     --no-reboot
-'
-```
-
-Reuse path:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/install.sh --skip-clone --no-reboot
 '
 ```
 
