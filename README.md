@@ -271,6 +271,10 @@ Generate a Markdown debug report:
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 ```
 
+`debug.sh` temporarily stops the service if it is running, launches a foreground Bluetooth-2-USB `--debug` session, and restores the service afterwards.
+
+`--duration` bounds that live debug session. If you omit it, the debug run continues until you stop it with `Ctrl+C`.
+
 `--redact` masks host identifiers such as the hostname, `machine-id`, UUIDs, PARTUUIDs, and Bluetooth MAC addresses. It is the recommended mode for reports shared in public issues.
 
 Run a health check:
@@ -705,6 +709,7 @@ Arguments:
 Purpose:
 - collect a Markdown debug report suitable for issue reports
 - include service state, mount state, boot config, dmesg, and CLI diagnostics
+- stop the service temporarily, if running, and capture a live Bluetooth-2-USB `--debug` session in the report
 
 Arguments:
 - `--dir <path>`
@@ -714,7 +719,7 @@ Arguments:
 - `--venv <path>`
   Virtual environment path used for CLI checks
 - `--duration <sec>`
-  Timeout for longer-running diagnostic commands
+  Bound the live Bluetooth-2-USB `--debug` session to `<sec>`; omit it to keep the session running until interrupted
 - `--redact`
   Redact hostname, machine-id, UUIDs, PARTUUIDs, and Bluetooth MAC addresses
 
