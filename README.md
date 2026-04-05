@@ -18,8 +18,6 @@ Bluetooth-2-USB is designed to be practical for both hobby setups and appliance-
 
 ## Highlights
 
-- Fixed managed installation into `/opt/bluetooth_2_usb`
-- Fixed `bluetooth_2_usb.service` plus runtime configuration in `/etc/default/bluetooth_2_usb`
 - Auto-discovery and auto-reconnect for supported input devices
 - Optional input grabbing so the Pi does not also consume local keyboard/mouse events
 - HID compatibility profiles for hosts with stricter USB expectations
@@ -62,18 +60,6 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 
 > [!NOTE]
 > As a general best practice, inspect `curl | sudo bash` installers before running them, especially on systems you care about. That advice applies here too.
-
-Bluetooth-2-USB always installs as a managed deployment in:
-
-```bash
-/opt/bluetooth_2_usb
-```
-
-and runs as:
-
-```bash
-bluetooth_2_usb.service
-```
 
 ### 3. Reboot
 
@@ -128,14 +114,9 @@ If possible, power the Pi from a separate stable power supply using the power-on
 
 ## Installation options
 
-All installation paths below converge on the same managed result:
-
-- install root: `/opt/bluetooth_2_usb`
-- service unit: `bluetooth_2_usb.service`
-
 ### Bootstrap installer
 
-The bootstrap script downloads a repository archive and then runs the managed installer:
+The bootstrap script downloads a repository archive and then runs the installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh | sudo bash
@@ -604,14 +585,6 @@ Please open an issue and include:
 ## Reference
 
 The sections above focus on the common user flow. This section is the full command reference for contributors, power users, and anyone automating deployments.
-
-The deployment model is intentionally fixed:
-
-- Install root: `/opt/bluetooth_2_usb`
-- Service unit: `bluetooth_2_usb.service`
-- Runtime config: `/etc/default/bluetooth_2_usb`
-
-The scripts below do not support overriding those managed paths.
 
 ### CLI reference: `bluetooth_2_usb`
 
