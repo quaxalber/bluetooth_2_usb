@@ -260,7 +260,7 @@ ssh -4 pi4b '
   BEFORE=$(systemctl show -P ActiveEnterTimestampMonotonic bluetooth_2_usb.service)
   cd /home/user/bluetooth_2_usb_test_2026_04_05
   sudo -n bash scripts/update.sh \
-    --repo /home/user/bluetooth_2_usb_test_2026_04_05_repo.git \
+    --repo https://github.com/quaxalber/bluetooth_2_usb.git \
     --branch feat/main-hardening-test-2026-04-05 \
     --no-restart
   AFTER=$(systemctl show -P ActiveEnterTimestampMonotonic bluetooth_2_usb.service)
