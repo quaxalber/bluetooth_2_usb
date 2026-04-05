@@ -4,9 +4,7 @@ IFS=$'\n\t'
 
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
-INSTALL_DIR="$B2U_DEFAULT_INSTALL_DIR"
-SERVICE_NAME="$B2U_DEFAULT_SERVICE_NAME"
-VENV_DIR="${INSTALL_DIR}/venv"
+VENV_DIR="${B2U_INSTALL_DIR}/venv"
 DURATION=""
 REDACT=0
 OUT=""
@@ -17,8 +15,6 @@ PARSE_ERROR=0
 usage() {
   cat <<EOF
 Usage: sudo ./debug.sh [options]
-  --dir <path>        Install directory. Default: ${B2U_DEFAULT_INSTALL_DIR}
-  --service <name>    Service name. Default: ${B2U_DEFAULT_SERVICE_NAME}
   --venv <path>       Virtualenv path. Default: ${VENV_DIR}
   --duration <sec>    Limit the live Bluetooth-2-USB debug run to <sec>
                       If omitted, the live debug run continues until interrupted
@@ -28,8 +24,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; VENV_DIR="${INSTALL_DIR}/venv"; shift 2 ;;
-    --service) require_value "$1" "${2:-}"; SERVICE_NAME="$2"; shift 2 ;;
     --venv) require_value "$1" "${2:-}"; VENV_DIR="$2"; shift 2 ;;
     --duration) require_value "$1" "${2:-}"; DURATION="$2"; shift 2 ;;
     --redact) REDACT=1; shift ;;
@@ -39,13 +33,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 ensure_root
-mkdir -p "$B2U_DEFAULT_LOG_DIR"
-OUT="${B2U_DEFAULT_LOG_DIR}/debug_$(timestamp).md"
+mkdir -p "$B2U_LOG_DIR"
+OUT="${B2U_LOG_DIR}/debug_$(timestamp).md"
 BOOT_DIR="$(detect_boot_dir)"
 CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
 REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
-SERVICE_INITIAL_STATE="$(systemctl is-active "${SERVICE_NAME}.service" 2>/dev/null || true)"
+SERVICE_INITIAL_STATE="$(systemctl is-active "${B2U_SERVICE_UNIT}" 2>/dev/null || true)"
 if [[ -x "${VENV_DIR}/bin/bluetooth_2_usb" ]]; then
   B2U_DEBUG_CMD="'${VENV_DIR}/bin/bluetooth_2_usb' --debug"
 elif [[ -x "${VENV_DIR}/bin/python" ]]; then
@@ -144,8 +138,8 @@ cleanup() {
   trap - EXIT INT TERM
 
   if [[ $SERVICE_STOPPED_FOR_DEBUG -eq 1 ]]; then
-    if ! systemctl start "${SERVICE_NAME}.service"; then
-      warn "Failed to restart ${SERVICE_NAME}.service after debug run"
+    if ! systemctl start "${B2U_SERVICE_UNIT}"; then
+      warn "Failed to restart ${B2U_SERVICE_UNIT} after debug run"
       [[ $exit_code -eq 0 ]] && exit_code=1
     fi
   fi
@@ -169,8 +163,8 @@ trap 'INTERRUPTED_BY_SIGNAL="INT"' INT
 trap 'INTERRUPTED_BY_SIGNAL="TERM"' TERM
 
 stop_service_for_debug() {
-  if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
-    systemctl stop "${SERVICE_NAME}.service"
+  if systemctl is-active --quiet "${B2U_SERVICE_UNIT}"; then
+    systemctl stop "${B2U_SERVICE_UNIT}"
     SERVICE_STOPPED_FOR_DEBUG=1
   fi
 }
@@ -273,8 +267,8 @@ fi
 
 append_line "## systemd"
 printf '%s\n' "service_state_before_debug=${SERVICE_INITIAL_STATE:-unknown}" | code_block >>"$OUT"
-run_shell_block 8 "systemctl --no-pager --full status '${SERVICE_NAME}.service' 2>/dev/null || true" >>"$OUT"
-run_shell_block 8 "journalctl -b -u '${SERVICE_NAME}.service' -n 200 --no-pager 2>/dev/null || true" >>"$OUT"
+run_shell_block 8 "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' 2>/dev/null || true" >>"$OUT"
+run_shell_block 8 "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 200 --no-pager 2>/dev/null || true" >>"$OUT"
 
 append_line "## dmesg"
 run_shell_block 8 "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true" >>"$OUT"

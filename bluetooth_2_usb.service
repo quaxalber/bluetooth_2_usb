@@ -7,10 +7,10 @@ Wants=network-online.target
 Type=simple
 User=root
 Group=root
-WorkingDirectory=@INSTALL_DIR@
+WorkingDirectory=/opt/bluetooth_2_usb
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=-/etc/default/bluetooth_2_usb
-ExecStart=/bin/sh -lc 'exec "@INSTALL_DIR@/venv/bin/python" -m bluetooth_2_usb ${BLUETOOTH_2_USB_ARGS:---auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12}'
+ExecStart=/bin/sh -lc 'exec "/opt/bluetooth_2_usb/venv/bin/python" -m bluetooth_2_usb ${BLUETOOTH_2_USB_ARGS:---auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12}'
 Restart=on-failure
 RestartSec=2s
 NoNewPrivileges=true

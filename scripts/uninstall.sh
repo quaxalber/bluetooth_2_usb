@@ -4,8 +4,6 @@ IFS=$'\n\t'
 
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
-INSTALL_DIR="$B2U_DEFAULT_INSTALL_DIR"
-SERVICE_NAME="$B2U_DEFAULT_SERVICE_NAME"
 PURGE=0
 REVERT_BOOT=0
 NO_REBOOT=0
@@ -13,8 +11,6 @@ NO_REBOOT=0
 usage() {
   cat <<EOF
 Usage: sudo ./uninstall.sh [options]
-  --dir <path>        Install directory. Default: ${B2U_DEFAULT_INSTALL_DIR}
-  --service <name>    Service name. Default: ${B2U_DEFAULT_SERVICE_NAME}
   --purge             Remove the installation directory
   --revert-boot       Remove b2u boot configuration changes
   --no-reboot         Do not prompt for reboot
@@ -23,8 +19,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;
-    --service) require_value "$1" "${2:-}"; SERVICE_NAME="$2"; shift 2 ;;
     --purge) PURGE=1; shift ;;
     --revert-boot) REVERT_BOOT=1; shift ;;
     --no-reboot) NO_REBOOT=1; shift ;;
@@ -37,17 +31,17 @@ ensure_root
 prepare_log "uninstall"
 load_readonly_config
 
-if service_installed "$SERVICE_NAME" || [[ "$(systemctl show -P LoadState "${SERVICE_NAME}.service" 2>/dev/null || true)" != "not-found" ]]; then
-  systemctl stop "${SERVICE_NAME}.service" || true
-  if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
-    systemctl kill --kill-who=all "${SERVICE_NAME}.service" || true
+if service_installed || [[ "$(systemctl show -P LoadState "${B2U_SERVICE_UNIT}" 2>/dev/null || true)" != "not-found" ]]; then
+  systemctl stop "${B2U_SERVICE_UNIT}" || true
+  if systemctl is-active --quiet "${B2U_SERVICE_UNIT}"; then
+    systemctl kill --kill-who=all "${B2U_SERVICE_UNIT}" || true
     sleep 1
   fi
-  systemctl disable "${SERVICE_NAME}.service" || true
-  systemctl reset-failed "${SERVICE_NAME}.service" 2>/dev/null || true
+  systemctl disable "${B2U_SERVICE_UNIT}" || true
+  systemctl reset-failed "${B2U_SERVICE_UNIT}" 2>/dev/null || true
 fi
-rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
-rm -f "$B2U_DEFAULT_ENV_FILE"
+rm -f "/etc/systemd/system/${B2U_SERVICE_UNIT}"
+rm -f "$B2U_ENV_FILE"
 rm -f "$B2U_READONLY_ENV_FILE"
 rm -f /usr/local/bin/bluetooth_2_usb
 remove_bluetooth_persist_dropin
@@ -89,8 +83,8 @@ if [[ $REVERT_BOOT -eq 1 ]]; then
 fi
 
 if [[ $PURGE -eq 1 ]]; then
-  rm -rf "$INSTALL_DIR"
-  ok "Removed ${INSTALL_DIR}"
+  rm -rf "$B2U_INSTALL_DIR"
+  ok "Removed ${B2U_INSTALL_DIR}"
 fi
 
 if [[ $NO_REBOOT -eq 0 ]]; then

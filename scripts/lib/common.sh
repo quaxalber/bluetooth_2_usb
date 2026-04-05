@@ -12,10 +12,10 @@ BLUE=$'\033[0;34m'
 BOLD=$'\033[1m'
 NC=$'\033[0m'
 
-readonly B2U_DEFAULT_INSTALL_DIR="/opt/bluetooth_2_usb"
-readonly B2U_DEFAULT_SERVICE_NAME="bluetooth_2_usb"
-readonly B2U_DEFAULT_LOG_DIR="/var/log/bluetooth_2_usb"
-readonly B2U_DEFAULT_ENV_FILE="/etc/default/bluetooth_2_usb"
+readonly B2U_INSTALL_DIR="/opt/bluetooth_2_usb"
+readonly B2U_SERVICE_UNIT="bluetooth_2_usb.service"
+readonly B2U_LOG_DIR="/var/log/bluetooth_2_usb"
+readonly B2U_ENV_FILE="/etc/default/bluetooth_2_usb"
 readonly B2U_READONLY_ENV_FILE="/etc/default/bluetooth_2_usb_readonly"
 readonly B2U_BOOT_RESTORE_DIR="/var/lib/bluetooth_2_usb/boot_restore"
 readonly B2U_BOOT_RESTORE_CONFIG="${B2U_BOOT_RESTORE_DIR}/config.txt"
@@ -74,8 +74,8 @@ require_commands() {
 prepare_log() {
   local prefix="$1"
   local logfile
-  mkdir -p "$B2U_DEFAULT_LOG_DIR"
-  logfile="${B2U_DEFAULT_LOG_DIR}/${prefix}_$(timestamp).log"
+  mkdir -p "$B2U_LOG_DIR"
+  logfile="${B2U_LOG_DIR}/${prefix}_$(timestamp).log"
   exec > >(tee -a "$logfile") 2>&1
   info "Logging to $logfile"
 }
@@ -253,17 +253,26 @@ PY
 }
 
 install_service_unit() {
-  local install_dir="$1"
-  local service_name="${2:-$B2U_DEFAULT_SERVICE_NAME}"
-  local target="/etc/systemd/system/${service_name}.service"
-  local escaped_install_dir
-  escaped_install_dir="$(printf '%s' "$install_dir" | sed 's/[\\&|]/\\&/g')"
-  sed "s|@INSTALL_DIR@|${escaped_install_dir}|g" "${B2U_REPO_ROOT}/bluetooth_2_usb.service" >"$target"
-  chmod 0644 "$target"
+  install -m 0644 "${B2U_REPO_ROOT}/bluetooth_2_usb.service" \
+    "/etc/systemd/system/${B2U_SERVICE_UNIT}"
 }
 
+activate_service_unit() {
+  local was_active=0
+
+  if systemctl is-active --quiet "${B2U_SERVICE_UNIT}"; then
+    was_active=1
+  fi
+
+  systemctl enable "${B2U_SERVICE_UNIT}"
+  if [[ $was_active -eq 1 ]]; then
+    systemctl restart "${B2U_SERVICE_UNIT}"
+  else
+    systemctl start "${B2U_SERVICE_UNIT}"
+  fi
+}
 write_default_env_file() {
-  local env_file="${1:-$B2U_DEFAULT_ENV_FILE}"
+  local env_file="${1:-$B2U_ENV_FILE}"
   if [[ ! -f "$env_file" ]]; then
     cat >"$env_file" <<'EOF'
 # Optional runtime arguments for bluetooth_2_usb.service.
@@ -274,10 +283,9 @@ EOF
 }
 
 install_cli_wrapper() {
-  local install_dir="$1"
   cat >/usr/local/bin/bluetooth_2_usb <<EOF
 #!/usr/bin/env bash
-exec "${install_dir}/venv/bin/python" -m bluetooth_2_usb "\$@"
+exec "${B2U_INSTALL_DIR}/venv/bin/python" -m bluetooth_2_usb "\$@"
 EOF
   chmod 0755 /usr/local/bin/bluetooth_2_usb
 }
@@ -289,8 +297,7 @@ recreate_venv() {
 }
 
 service_installed() {
-  local service_name="${1:-$B2U_DEFAULT_SERVICE_NAME}"
-  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${service_name}.service"
+  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${B2U_SERVICE_UNIT}"
 }
 
 overlay_status() {
@@ -312,13 +319,14 @@ snapshot_readonly_state() {
   local boot_dir snapshot_dir
   boot_dir="$(detect_boot_dir)"
   snapshot_dir="${boot_dir}/bluetooth_2_usb/readonly_snapshot"
+  require_commands tar
   mkdir -p "$snapshot_dir"
   if [[ -f /etc/machine-id ]]; then
     cp -a /etc/machine-id "${snapshot_dir}/machine-id"
   fi
   if [[ -d /var/lib/bluetooth ]]; then
-    rm -rf "${snapshot_dir}/bluetooth"
-    cp -a /var/lib/bluetooth "${snapshot_dir}/bluetooth"
+    rm -f "${snapshot_dir}/bluetooth.tar.gz"
+    tar -czf "${snapshot_dir}/bluetooth.tar.gz" -C /var/lib bluetooth
   fi
 }
 
@@ -411,14 +419,13 @@ write_persist_mount_unit() {
   local persist_spec="$1"
   local mount_path="$2"
   local fs_type="$3"
-  local service_name="${4:-$B2U_DEFAULT_SERVICE_NAME}"
   local unit_name
 
   unit_name="$(persist_mount_unit_name "$mount_path")"
   cat >"/etc/systemd/system/${unit_name}" <<EOF
 [Unit]
 Description=bluetooth_2_usb persistent storage mount
-Before=local-fs.target bluetooth.service ${service_name}.service
+Before=local-fs.target bluetooth.service ${B2U_SERVICE_UNIT}
 
 [Mount]
 What=${persist_spec}
@@ -441,14 +448,13 @@ remove_persist_mount_unit() {
 
 write_bluetooth_bind_mount_unit() {
   local source_dir="$1"
-  local service_name="${2:-$B2U_DEFAULT_SERVICE_NAME}"
   mkdir -p /var/lib/bluetooth
   cat >"$B2U_BLUETOOTH_BIND_MOUNT_UNIT" <<EOF
 [Unit]
 Description=bluetooth_2_usb persistent Bluetooth state bind mount
 After=$(persist_mount_unit_name "$(dirname "$source_dir")")
 Requires=$(persist_mount_unit_name "$(dirname "$source_dir")")
-Before=bluetooth.service ${service_name}.service
+Before=bluetooth.service ${B2U_SERVICE_UNIT}
 
 [Mount]
 What=${source_dir}

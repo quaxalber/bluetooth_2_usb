@@ -4,17 +4,13 @@ IFS=$'\n\t'
 
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
-INSTALL_DIR="$B2U_DEFAULT_INSTALL_DIR"
-SERVICE_NAME="$B2U_DEFAULT_SERVICE_NAME"
-VENV_DIR="${INSTALL_DIR}/venv"
+VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
 EXIT_CODE=0
 
 usage() {
   cat <<EOF
 Usage: sudo ./smoke_test.sh [options]
-  --dir <path>        Install directory. Default: ${B2U_DEFAULT_INSTALL_DIR}
-  --service <name>    Service name. Default: ${B2U_DEFAULT_SERVICE_NAME}
   --venv <path>       Virtualenv path. Default: ${VENV_DIR}
   --verbose           Print detailed diagnostics, including journalctl
 EOF
@@ -22,8 +18,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; VENV_DIR="${INSTALL_DIR}/venv"; shift 2 ;;
-    --service) require_value "$1" "${2:-}"; SERVICE_NAME="$2"; shift 2 ;;
     --venv) require_value "$1" "${2:-}"; VENV_DIR="$2"; shift 2 ;;
     --verbose) VERBOSE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -70,17 +64,17 @@ else
   EXIT_CODE=1
 fi
 
-if systemctl is-enabled "${SERVICE_NAME}.service" >/dev/null 2>&1; then
-  ok "${SERVICE_NAME}.service is enabled"
+if systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1; then
+  ok "${B2U_SERVICE_UNIT} is enabled"
 else
-  warn "${SERVICE_NAME}.service is not enabled"
+  warn "${B2U_SERVICE_UNIT} is not enabled"
   EXIT_CODE=1
 fi
 
-if systemctl is-active "${SERVICE_NAME}.service" >/dev/null 2>&1; then
-  ok "${SERVICE_NAME}.service is active"
+if systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1; then
+  ok "${B2U_SERVICE_UNIT} is active"
 else
-  warn "${SERVICE_NAME}.service is not active"
+  warn "${B2U_SERVICE_UNIT} is not active"
   EXIT_CODE=1
 fi
 
@@ -143,9 +137,9 @@ if [[ $VERBOSE -eq 1 ]]; then
   findmnt -n -T /var/lib/bluetooth 2>/dev/null || true
   findmnt -n "$B2U_PERSIST_MOUNT" 2>/dev/null || true
   echo "## Service status"
-  systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
+  systemctl --no-pager --full status "${B2U_SERVICE_UNIT}" || true
   echo "## Journal"
-  journalctl -b -u "${SERVICE_NAME}.service" -n 100 --no-pager || true
+  journalctl -b -u "${B2U_SERVICE_UNIT}" -n 100 --no-pager || true
 fi
 
 if [[ $EXIT_CODE -eq 0 ]]; then

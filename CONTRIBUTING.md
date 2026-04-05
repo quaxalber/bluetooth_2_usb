@@ -66,7 +66,7 @@ Current managed paths include:
 
 - Install root: `/opt/bluetooth_2_usb`
 - Runtime config: `/etc/default/bluetooth_2_usb`
-- Service name: `bluetooth_2_usb.service`
+- Service unit: `bluetooth_2_usb.service`
 
 ## Quality expectations
 

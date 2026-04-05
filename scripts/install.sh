@@ -4,8 +4,6 @@ IFS=$'\n\t'
 
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
-INSTALL_DIR="$B2U_DEFAULT_INSTALL_DIR"
-SERVICE_NAME="$B2U_DEFAULT_SERVICE_NAME"
 REPO_URL="$(default_repo_url)"
 REPO_BRANCH="$(default_repo_branch)"
 NO_REBOOT=0
@@ -16,7 +14,6 @@ usage() {
 Usage: sudo ./install.sh [options]
   --repo <url|path>   Repository source. Default: current repo checkout
   --branch <name>     Branch/tag to install. Default: current branch
-  --dir <path>        Install directory. Default: ${B2U_DEFAULT_INSTALL_DIR}
   --skip-clone        Reuse existing install directory content
   --no-reboot         Do not prompt for reboot
 EOF
@@ -26,7 +23,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) require_value "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
     --branch) require_value "$1" "${2:-}"; REPO_BRANCH="$2"; shift 2 ;;
-    --dir) require_value "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;
     --skip-clone) SKIP_CLONE=1; shift ;;
     --no-reboot) NO_REBOOT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -66,47 +62,47 @@ normalize_modules_load "$CMDLINE_TXT" "$MODULES"
 ok "Boot configuration updated"
 
 if [[ $SKIP_CLONE -eq 0 ]]; then
-  mkdir -p "$(dirname "$INSTALL_DIR")"
-  if [[ "$REPO_URL" == "$INSTALL_DIR" ]]; then
-    info "Reusing source repository in place at ${INSTALL_DIR}"
-  elif [[ -d "${INSTALL_DIR}/.git" ]]; then
-    info "Updating repository at ${INSTALL_DIR}"
-    if git -C "$INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
-      git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+  mkdir -p "$(dirname "$B2U_INSTALL_DIR")"
+  if [[ "$REPO_URL" == "$B2U_INSTALL_DIR" ]]; then
+    info "Reusing source repository in place at ${B2U_INSTALL_DIR}"
+  elif [[ -d "${B2U_INSTALL_DIR}/.git" ]]; then
+    info "Updating repository at ${B2U_INSTALL_DIR}"
+    if git -C "$B2U_INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
+      git -C "$B2U_INSTALL_DIR" remote set-url origin "$REPO_URL"
     else
-      git -C "$INSTALL_DIR" remote add origin "$REPO_URL"
+      git -C "$B2U_INSTALL_DIR" remote add origin "$REPO_URL"
     fi
-    git -C "$INSTALL_DIR" fetch --all --tags
-    git -C "$INSTALL_DIR" checkout "$REPO_BRANCH"
-    if git -C "$INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
-      git -C "$INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
+    git -C "$B2U_INSTALL_DIR" fetch --all --tags
+    git -C "$B2U_INSTALL_DIR" checkout "$REPO_BRANCH"
+    if git -C "$B2U_INSTALL_DIR" symbolic-ref -q HEAD >/dev/null; then
+      git -C "$B2U_INSTALL_DIR" pull --ff-only origin "$REPO_BRANCH"
     fi
   else
-    info "Installing repository into ${INSTALL_DIR}"
-    if [[ -e "$INSTALL_DIR" ]]; then
-      backup_path="${INSTALL_DIR}.backup.$(timestamp)"
-      warn "Moving existing path at ${INSTALL_DIR} to ${backup_path} before cloning."
-      mv "$INSTALL_DIR" "$backup_path"
+    info "Installing repository into ${B2U_INSTALL_DIR}"
+    if [[ -e "$B2U_INSTALL_DIR" ]]; then
+      backup_path="${B2U_INSTALL_DIR}.backup.$(timestamp)"
+      warn "Moving existing path at ${B2U_INSTALL_DIR} to ${backup_path} before cloning."
+      mv "$B2U_INSTALL_DIR" "$backup_path"
     fi
-    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$B2U_INSTALL_DIR"
   fi
 fi
 
-[[ -d "$INSTALL_DIR" ]] || fail "Install directory not found: $INSTALL_DIR"
+[[ -d "$B2U_INSTALL_DIR" ]] || fail "Install directory not found: $B2U_INSTALL_DIR"
 
-VENV_DIR="${INSTALL_DIR}/venv"
+VENV_DIR="${B2U_INSTALL_DIR}/venv"
 info "Recreating virtual environment at ${VENV_DIR}"
 recreate_venv "$VENV_DIR"
 "${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel
-"${VENV_DIR}/bin/pip" install --upgrade "$INSTALL_DIR"
+"${VENV_DIR}/bin/pip" install --upgrade "$B2U_INSTALL_DIR"
 ok "Virtual environment updated at ${VENV_DIR}"
 
-install_service_unit "$INSTALL_DIR" "$SERVICE_NAME"
+install_service_unit
 write_default_env_file
-install_cli_wrapper "$INSTALL_DIR"
+install_cli_wrapper
 systemctl daemon-reload
-systemctl enable --now "${SERVICE_NAME}.service"
-ok "Service ${SERVICE_NAME}.service enabled and started"
+activate_service_unit
+ok "Service ${B2U_SERVICE_UNIT} enabled and started"
 
 if "${VENV_DIR}/bin/python" -m bluetooth_2_usb --version >/dev/null; then
   ok "CLI version check succeeded"
@@ -125,11 +121,11 @@ cat <<EOF
 ${BOLD}Next steps${NC}
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo ${INSTALL_DIR}/scripts/smoke_test.sh --verbose
+   sudo ${B2U_INSTALL_DIR}/scripts/smoke_test.sh --verbose
 3. For read-only mode afterwards, choose one of:
-   sudo ${INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode easy
-   sudo ${INSTALL_DIR}/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
-   sudo ${INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode persistent
+   sudo ${B2U_INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode easy
+   sudo ${B2U_INSTALL_DIR}/scripts/setup_persistent_bluetooth_state.sh --device /dev/sda1
+   sudo ${B2U_INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh --mode persistent
 EOF
 
 if [[ $NO_REBOOT -eq 0 ]]; then

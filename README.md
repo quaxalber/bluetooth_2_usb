@@ -589,6 +589,13 @@ Please open an issue and include:
 
 The sections above focus on the common user flow. This section is the full command reference for contributors, power users, and anyone automating deployments.
 
+The managed deployment model intentionally keeps the install root and service unit fixed:
+
+- Install root: `/opt/bluetooth_2_usb`
+- Service unit: `bluetooth_2_usb.service`
+
+The scripts below do not support overriding those two managed paths.
+
 ### CLI reference: `bluetooth_2_usb`
 
 - `--device_ids`, `-i`
@@ -635,8 +642,6 @@ Arguments:
   Override the Git repository URL used for the archive download
 - `--branch <name>`
   Install a specific branch or tag
-- `--dir <path>`
-  Override the managed install directory
 - `--no-reboot`
   Install without prompting for an immediate reboot
 
@@ -659,10 +664,8 @@ Arguments:
   Repository source to install from
 - `--branch <name>`
   Branch or tag to check out
-- `--dir <path>`
-  Managed installation target
 - `--skip-clone`
-  Reuse the existing install directory contents instead of updating or cloning
+  Reuse the existing managed checkout at `/opt/bluetooth_2_usb` instead of updating or cloning
 - `--no-reboot`
   Do not prompt for a reboot after installation
 
@@ -674,14 +677,10 @@ Purpose:
 - optionally restart the service
 
 Arguments:
-- `--dir <path>`
-  Managed installation target
 - `--repo <url|path>`
   Override the repository source used for the update
 - `--branch <name>`
   Override the branch or tag used for the update
-- `--service <name>`
-  Override the service name
 - `--no-restart`
   Update files and environment without restarting the service
 
@@ -693,10 +692,6 @@ Purpose:
 - optionally restore the boot configuration captured during install
 
 Arguments:
-- `--dir <path>`
-  Managed installation target
-- `--service <name>`
-  Override the service name
 - `--purge`
   Remove the installation directory itself
 - `--revert-boot`
@@ -712,10 +707,6 @@ Purpose:
 - stop the service temporarily, if running, and capture a live Bluetooth-2-USB `--debug` session in the report
 
 Arguments:
-- `--dir <path>`
-  Managed installation target
-- `--service <name>`
-  Service name to inspect
 - `--venv <path>`
   Virtual environment path used for CLI checks
 - `--duration <sec>`
@@ -730,10 +721,6 @@ Purpose:
 - verify boot config, UDC, service state, environment validation, and read-only status
 
 Arguments:
-- `--dir <path>`
-  Managed installation target
-- `--service <name>`
-  Service name to test
 - `--venv <path>`
   Virtual environment path used for CLI checks
 - `--verbose`
@@ -780,8 +767,6 @@ Arguments:
   Persistent mount point
 - `--bluetooth-subdir <name>`
   Bluetooth-state directory below the persistent mount
-- `--service <name>`
-  Service name used in generated unit ordering
 - `--fs-type <type>`
   Filesystem type. Currently only `ext4` is supported
 - `--format`
