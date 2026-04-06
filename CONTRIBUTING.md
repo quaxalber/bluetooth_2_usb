@@ -70,6 +70,21 @@ Current managed paths include:
 - Runtime config: `/etc/default/bluetooth_2_usb`
 - Service unit: `bluetooth_2_usb.service`
 
+## A note on AI
+
+Using AI tools during development is fine.
+
+What matters is that you manually validate the result before opening a pull request.
+Do not treat generated code, generated shell commands, or generated documentation as correct by default.
+
+In this repository, the playbooks under `docs/` are primarily written for agentic or AI-assisted workflows, with one explicit exception:
+
+- [`docs/pi-cli-service-test-playbook.md`](docs/pi-cli-service-test-playbook.md) is for repeatable agentic Pi-side validation
+- [`docs/doc-consistency-review-playbook.md`](docs/doc-consistency-review-playbook.md) is for repeatable agentic documentation review
+- [`docs/pi-manual-test-plan.md`](docs/pi-manual-test-plan.md) is the manual follow-up checklist for real hardware validation
+
+Please run the relevant validation before creating a PR, especially when AI was involved. That is the best way to catch shallow mistakes, drift, and AI slop before review.
+
 ## Quality expectations
 
 Aim for changes that are easy to understand, maintain, and validate.
@@ -153,7 +168,7 @@ Please also test against a real OTG target host when the change affects HID beha
 
 Documentation-only changes do not require hardware validation, but commands and paths should still be checked for accuracy.
 
-For repeatable Pi-side CLI, service, install, and script validation, use
+For repeatable Pi-side CLI, service, install, and script validation in an agentic workflow, use
 [`docs/pi-cli-service-test-playbook.md`](docs/pi-cli-service-test-playbook.md).
 For the remaining manual hardware checks, use
 [`docs/pi-manual-test-plan.md`](docs/pi-manual-test-plan.md).
