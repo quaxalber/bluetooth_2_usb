@@ -20,7 +20,7 @@ readonly B2U_READONLY_ENV_FILE="/etc/default/bluetooth_2_usb_readonly"
 readonly B2U_BOOT_RESTORE_DIR="/var/lib/bluetooth_2_usb/boot_restore"
 readonly B2U_BOOT_RESTORE_CONFIG="${B2U_BOOT_RESTORE_DIR}/config.txt"
 readonly B2U_BOOT_RESTORE_CMDLINE="${B2U_BOOT_RESTORE_DIR}/cmdline.txt"
-readonly B2U_PERSIST_MOUNT_DEFAULT="/mnt/b2u-persist"
+readonly B2U_PERSIST_MOUNT_PATH="/mnt/b2u-persist"
 readonly B2U_PERSIST_BLUETOOTH_SUBDIR="bluetooth"
 readonly B2U_BLUETOOTH_BIND_MOUNT_UNIT="/etc/systemd/system/var-lib-bluetooth.mount"
 readonly B2U_BLUETOOTH_SERVICE_DROPIN_DIR="/etc/systemd/system/bluetooth.service.d"
@@ -336,8 +336,8 @@ machine_id_valid() {
 
 load_readonly_config() {
   B2U_READONLY_MODE="disabled"
-  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_DEFAULT"
-  B2U_PERSIST_BLUETOOTH_DIR="${B2U_PERSIST_MOUNT_DEFAULT}/${B2U_PERSIST_BLUETOOTH_SUBDIR}"
+  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_PATH"
+  B2U_PERSIST_BLUETOOTH_DIR="${B2U_PERSIST_MOUNT_PATH}/${B2U_PERSIST_BLUETOOTH_SUBDIR}"
   B2U_PERSIST_SPEC=""
   B2U_PERSIST_DEVICE=""
   if [[ -f "$B2U_READONLY_ENV_FILE" ]]; then
@@ -366,7 +366,7 @@ load_readonly_config() {
 
 write_readonly_config() {
   local mode="${1:-disabled}"
-  local persist_mount="${2:-$B2U_PERSIST_MOUNT_DEFAULT}"
+  local persist_mount="${2:-$B2U_PERSIST_MOUNT_PATH}"
   local persist_bluetooth_dir="${3:-${persist_mount}/${B2U_PERSIST_BLUETOOTH_SUBDIR}}"
   local persist_spec="${4:-}"
   local persist_device="${5:-}"
