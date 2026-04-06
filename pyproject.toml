@@ -55,6 +55,10 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools_scm]
+write_to = "src/bluetooth_2_usb/_version.py"
+tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

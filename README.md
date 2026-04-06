@@ -664,6 +664,7 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 Contributions are welcome, including documentation improvements, bug reports, hardware validation, and code changes.
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Release tagging and versioning rules are documented in [docs/release-versioning-policy.md](docs/release-versioning-policy.md).
 
 ## License
 

@@ -1,19 +1,18 @@
 import asyncio
 from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError, version as package_version
 from logging import DEBUG
 from pathlib import Path
 import signal
 
 from .args import Arguments, parse_args
 from .logging import add_file_handler, get_logger
+from .version import get_versioned_name
 
 
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_ENVIRONMENT = 3
 EXIT_RUNTIME = 4
-DEFAULT_VERSION = "0.9.1"
 
 logger = get_logger()
 
@@ -27,13 +26,6 @@ class EnvironmentStatus:
     @property
     def ok(self) -> bool:
         return self.configfs and self.udc_present
-
-
-def get_versioned_name() -> str:
-    try:
-        return f"Bluetooth 2 USB v{package_version('bluetooth_2_usb')}"
-    except PackageNotFoundError:
-        return f"Bluetooth 2 USB v{DEFAULT_VERSION}"
 
 
 def get_udc_path() -> Path | None:

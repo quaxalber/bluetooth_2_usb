@@ -342,6 +342,8 @@ git tag -f -a "$TAG" -m "Test tag for Pi install validation" "$TEST_BRANCH"
 git push -f test-origin "refs/tags/$TAG"
 ```
 
+Use a non-release-like tag name here on purpose. Official package releases are reserved for `vMAJOR.MINOR.PATCH` tags only.
+
 Push the same tag into the Pi-local bare repo if you are using that path:
 
 ```bash

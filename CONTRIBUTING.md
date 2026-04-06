@@ -62,6 +62,8 @@ Please keep changes focused:
 - Update documentation when behavior, paths, commands, or defaults change
 - Preserve the managed install model unless the change is intentionally redesigning it
 
+Release and versioning rules are documented in [`docs/release-versioning-policy.md`](docs/release-versioning-policy.md).
+
 Current managed paths include:
 
 - Install root: `/opt/bluetooth_2_usb`
