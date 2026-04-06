@@ -64,5 +64,12 @@ local_scheme = "node-and-date"
 line-length = 88
 target-version = ["py311"]
 
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["F", "I"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

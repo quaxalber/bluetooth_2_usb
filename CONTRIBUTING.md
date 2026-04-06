@@ -32,7 +32,7 @@ cd bluetooth_2_usb
 python3 -m venv venv
 source venv/bin/activate
 pip install -U pip setuptools wheel
-pip install -e . black pylint yamllint shfmt-py shellcheck-py
+pip install -e . black ruff yamllint shfmt-py shellcheck-py
 ```
 
 ## Project layout
@@ -120,7 +120,7 @@ Run the same baseline checks that CI runs:
 
 ```bash
 black --check src
-pylint src/bluetooth_2_usb/*.py
+ruff check src
 python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version

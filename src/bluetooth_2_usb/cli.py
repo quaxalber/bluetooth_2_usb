@@ -1,8 +1,8 @@
 import asyncio
+import signal
 from dataclasses import dataclass
 from logging import DEBUG
 from pathlib import Path
-import signal
 
 from .args import Arguments, parse_args
 from .logging import add_file_handler, get_logger

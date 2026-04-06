@@ -1,15 +1,15 @@
 import asyncio
+import re
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
-import re
 from typing import Optional, Union
 
+import pyudev
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.mouse import Mouse
 from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
-import pyudev
 
 from .evdev import (
     evdev_to_usb_hid,
