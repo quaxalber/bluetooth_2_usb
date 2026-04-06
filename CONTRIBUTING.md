@@ -141,7 +141,7 @@ When you open a pull request:
 - Use a short, clear title
 - Explain what changed and why
 - Describe how you tested it
-- Include the Pi model, OS version, and target host type used for validation
+- Include the target host type used for validation when it matters
 - Link the relevant issue if one exists
 - Include redacted logs or debug output when the change affects installation, service behavior, runtime diagnostics, or read-only mode
 
@@ -151,9 +151,6 @@ Good pull requests are usually small enough to review in one pass and specific e
 
 Please use the GitHub issue tracker and include as much of the following as you can:
 
-- Pi model
-- Raspberry Pi OS version
-- Kernel version
 - Target host type
 - Whether you are using normal, easy, or persistent read-only mode
 - Exact commands or scripts used
