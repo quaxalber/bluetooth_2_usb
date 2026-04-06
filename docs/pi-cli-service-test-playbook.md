@@ -222,6 +222,7 @@ Expected behavior:
 
 - `debug.sh` stops the service if needed
 - runs a foreground `--debug` session
+- streams the live debug output to stdout
 - writes the live output into the Markdown report
 - restores the service when the script exits
 

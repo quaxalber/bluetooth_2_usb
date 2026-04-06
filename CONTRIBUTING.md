@@ -177,7 +177,9 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 ```
 
-`debug.sh` temporarily stops the service if it is running, captures a foreground Bluetooth-2-USB `--debug` session, and restores the service afterward. Omit `--duration` if you want that live debug session to continue until you interrupt it manually.
+Use `smoke_test.sh --markdown` when you want a shareable Markdown summary alongside the normal terminal output.
+
+`debug.sh` temporarily stops the service if it is running, captures a foreground Bluetooth-2-USB `--debug` session, streams that live debug output to stdout, writes the same output into a titled Markdown report, and restores the service afterward. Omit `--duration` if you want that live debug session to continue until you interrupt it manually.
 
 Please also test against a real OTG target host when the change affects HID behavior or USB compatibility.
 
