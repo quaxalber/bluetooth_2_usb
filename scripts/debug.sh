@@ -49,7 +49,7 @@ fi
 # Load readonly config with error handling to prevent malformed files from aborting report generation
 if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ]; then
   # Parse config manually to handle errors gracefully
-  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_FIXED"
+  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_DEFAULT"
 
   PARSE_ERROR=0
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -77,7 +77,7 @@ if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ]; then
   done <"$B2U_READONLY_ENV_FILE"
 else
   # Set defaults if file doesn't exist
-  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_FIXED"
+  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_DEFAULT"
 fi
 
 append_line() {

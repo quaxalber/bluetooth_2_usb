@@ -40,7 +40,7 @@ if [[ "$MODE" == "easy" ]]; then
     fail "Persistent Bluetooth state is already configured. Use --mode persistent or disable that setup first."
   fi
   readonly_warning_easy_mode
-  write_readonly_config "easy" "$B2U_PERSIST_MOUNT_FIXED" "${B2U_PERSIST_MOUNT_FIXED}/${B2U_PERSIST_BLUETOOTH_SUBDIR}" "" ""
+  write_readonly_config "easy" "$B2U_PERSIST_MOUNT_DEFAULT" "${B2U_PERSIST_MOUNT_DEFAULT}/${B2U_PERSIST_BLUETOOTH_SUBDIR}" "" ""
 else
   if ! machine_id_valid; then
     fail "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
