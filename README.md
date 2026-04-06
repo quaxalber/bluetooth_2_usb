@@ -606,173 +606,58 @@ The sections above focus on the common user flow. This section is the full comma
 
 ### CLI reference: `bluetooth_2_usb`
 
-- `--device_ids`, `-i`
-  Comma-separated device selectors. Each selector can be an event path, Bluetooth MAC address, or case-insensitive substring of the device name.
-- `--auto_discover`, `-a`
-  Relay all readable input devices automatically.
-- `--grab_devices`, `-g`
-  Grab the source input devices so the Pi does not also consume the local events.
-- `--interrupt_shortcut`, `-s`
-  Plus-separated key chord used to pause or resume relaying, for example `CTRL+SHIFT+F12`.
-- `--list_devices`, `-l`
-  List all visible input devices and exit.
-- `--log_to_file`, `-f`
-  Log to the default log file in addition to stdout.
-- `--log_path`, `-p`
-  Override the log path. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`
-- `--debug`, `-d`
-  Enable more verbose logging.
-- `--version`, `-v`
-  Print the current version and exit.
-- `--dry-run`
-  Validate the environment without binding USB gadgets.
-- `--no-bind`
-  Skip gadget binding and only perform diagnostic validation.
-- `--validate-env`
-  Validate gadget prerequisites and exit with status information.
-- `--hid-profile compat|extended`
-  Select the HID descriptor profile. `compat` is the default and should be the first choice for most hosts.
-- `--help`, `-h`
-  Show the CLI help text.
+| Option | Meaning |
+| --- | --- |
+| `--device_ids`, `-i` | Comma-separated device selectors. Each selector can be an event path, Bluetooth MAC address, or case-insensitive substring of the device name. |
+| `--auto_discover`, `-a` | Relay all readable input devices automatically. |
+| `--grab_devices`, `-g` | Grab the source input devices so the Pi does not also consume the local events. |
+| `--interrupt_shortcut`, `-s` | Plus-separated key chord used to pause or resume relaying, for example `CTRL+SHIFT+F12`. |
+| `--list_devices`, `-l` | List all visible input devices and exit. |
+| `--log_to_file`, `-f` | Log to the default log file in addition to stdout. |
+| `--log_path`, `-p` | Override the log path. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log` |
+| `--debug`, `-d` | Enable more verbose logging. |
+| `--version`, `-v` | Print the current version and exit. |
+| `--dry-run` | Validate the environment without binding USB gadgets. |
+| `--no-bind` | Skip gadget binding and only perform diagnostic validation. |
+| `--validate-env` | Validate gadget prerequisites and exit with status information. |
+| `--hid-profile compat\|extended` | Select the HID descriptor profile. `compat` is the default and should be the first choice for most hosts. |
+| `--help`, `-h` | Show the CLI help text. |
 
 ### Script reference
 
 All managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after installation.
 
-#### `bootstrap.sh`
+| Script | Purpose | Arguments |
+| --- | --- | --- |
+| `bootstrap.sh` | Download a repository archive from GitHub and run the managed installer without cloning first. | `--repo <url>` repository URL for the archive download<br>`--branch <name>` branch or tag to install<br>`--no-reboot` skip the immediate reboot prompt |
+| `install.sh` | Install or refresh the managed checkout in `/opt/bluetooth_2_usb`, patch boot files, recreate the virtual environment, and install the systemd unit and wrapper. | `--repo <url\|path>` repository source<br>`--branch <name>` branch or tag to check out<br>`--no-reboot` skip the reboot prompt |
+| `update.sh` | Update an existing managed installation, refresh the checkout and virtual environment, and optionally restart the service. | `--repo <url\|path>` override the update source<br>`--branch <name>` override the branch or tag<br>`--no-restart` update files without restarting the service |
+| `uninstall.sh` | Stop and disable the managed service, remove units and helper files, and optionally restore the boot configuration captured during install. | `--purge` remove the installation directory<br>`--revert-boot` restore the managed boot snapshot<br>`--no-reboot` skip the reboot prompt |
+| `debug.sh` | Collect a Markdown debug report with service state, mount state, boot config, dmesg, CLI diagnostics, and a live foreground debug run. | `--duration <sec>` bound the live debug session; omit to run until interrupted<br>`--redact` redact hostname, machine-id, UUIDs, PARTUUIDs, and Bluetooth MAC addresses |
+| `smoke_test.sh` | Perform a quick installation and runtime health check for boot config, UDC, service state, environment validation, and read-only status. | `--verbose` print mount details, validate-env output, dry-run output, service status, and `journalctl` output |
+| `enable_readonly_overlayfs.sh` | Enable Raspberry Pi OS OverlayFS mode and optionally prepare persistent Bluetooth state. | `--mode <easy\|persistent>` choose best-effort or persistent mode<br>`--persist-device <path>` device to use for persistent Bluetooth state in persistent mode |
+| `disable_readonly_overlayfs.sh` | Disable Raspberry Pi OS OverlayFS root mode while keeping persistent Bluetooth-state configuration in place. | none |
+| `setup_persistent_bluetooth_state.sh` | Create or validate the persistent Bluetooth-state mount, write the mount units and bind mount, and seed `/var/lib/bluetooth` into the persistent location. | `--device <path>` block device backing the persistent filesystem<br>`--no-enable` prepare configuration and units without activating them immediately |
 
-Purpose:
-- download a repository archive from GitHub
-- run the managed installer without cloning first
-
-Arguments:
-- `--repo <url>`
-  Override the Git repository URL used for the archive download
-- `--branch <name>`
-  Install a specific branch or tag
-- `--no-reboot`
-  Install without prompting for an immediate reboot
-
-Typical usage:
+Typical `bootstrap.sh` usage:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scripts/bootstrap.sh | sudo bash
 ```
 
-#### `install.sh`
-
-Purpose:
-- install or refresh the managed checkout in `/opt/bluetooth_2_usb`
-- patch the required boot files
-- recreate the virtual environment
-- install the systemd unit and wrapper
-
-Arguments:
-- `--repo <url|path>`
-  Repository source to install from
-- `--branch <name>`
-  Branch or tag to check out
-- `--no-reboot`
-  Do not prompt for a reboot after installation
-
-#### `update.sh`
-
-Purpose:
-- update an existing managed installation
-- refresh the checkout and recreate the virtual environment
-- optionally restart the service
-
-Arguments:
-- `--repo <url|path>`
-  Override the repository source used for the update
-- `--branch <name>`
-  Override the branch or tag used for the update
-- `--no-restart`
-  Update files and environment without restarting the service
-
-#### `uninstall.sh`
-
-Purpose:
-- stop and disable the managed service
-- remove systemd units, wrapper files, and optional installation data
-- optionally restore the boot configuration captured during install
-
-Arguments:
-- `--purge`
-  Remove the installation directory itself
-- `--revert-boot`
-  Restore the managed boot-file snapshot
-- `--no-reboot`
-  Do not prompt for a reboot at the end
-
-#### `debug.sh`
-
-Purpose:
-- collect a Markdown debug report suitable for issue reports
-- include service state, mount state, boot config, dmesg, and CLI diagnostics
-- stop the service temporarily, if running, and capture a live Bluetooth-2-USB `--debug` session in the report
-
-Arguments:
-- `--duration <sec>`
-  Bound the live Bluetooth-2-USB `--debug` session to `<sec>`; omit it to keep the session running until interrupted
-- `--redact`
-  Redact hostname, machine-id, UUIDs, PARTUUIDs, and Bluetooth MAC addresses
-
-#### `smoke_test.sh`
-
-Purpose:
-- perform a quick installation and runtime health check
-- verify boot config, UDC, service state, environment validation, and read-only status
-
-Arguments:
-- `--verbose`
-  Print mount details, validate-env output, dry-run output, service status, and journalctl output
-
-#### `enable_readonly_overlayfs.sh`
-
-Purpose:
-- enable Raspberry Pi OS OverlayFS mode
-- optionally prepare and activate persistent Bluetooth state
-
-Arguments:
-- `--mode <easy|persistent>`
-  Choose best-effort mode or persistent mode
-- `--persist-device <path>`
-  Device to use for persistent Bluetooth state in persistent mode
-
-#### `disable_readonly_overlayfs.sh`
-
-Purpose:
-- disable Raspberry Pi OS OverlayFS root mode
-- keep persistent Bluetooth-state configuration in place
-
-Arguments:
-- none
-
-#### `setup_persistent_bluetooth_state.sh`
-
-Purpose:
-- create or validate the persistent Bluetooth-state mount
-- write the mount units and bind mount
-- seed `/var/lib/bluetooth` into the persistent location
-
-Arguments:
-- `--device <path>`
-  Block device that backs the persistent filesystem
-- `--no-enable`
-  Prepare configuration and units without activating them immediately
-
 ### Managed paths and files
 
-- Install root: `/opt/bluetooth_2_usb`
-- Virtual environment: `/opt/bluetooth_2_usb/venv`
-- Runtime config: `/etc/default/bluetooth_2_usb`
-- Read-only config: `/etc/default/bluetooth_2_usb_readonly`
-- Service unit: `/etc/systemd/system/bluetooth_2_usb.service`
-- CLI wrapper: `/usr/local/bin/bluetooth_2_usb`
-- Logs: `/var/log/bluetooth_2_usb`
-- Default persistent mount: `/mnt/b2u-persist`
-- Default persistent Bluetooth-state dir: `/mnt/b2u-persist/bluetooth`
+| Path | Purpose |
+| --- | --- |
+| `/opt/bluetooth_2_usb` | Managed installation root |
+| `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
+| `/etc/default/bluetooth_2_usb` | Runtime config |
+| `/etc/default/bluetooth_2_usb_readonly` | Read-only mode config |
+| `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |
+| `/usr/local/bin/bluetooth_2_usb` | CLI wrapper |
+| `/var/log/bluetooth_2_usb` | Logs |
+| `/mnt/b2u-persist` | Persistent storage mount |
+| `/mnt/b2u-persist/bluetooth` | Persistent Bluetooth-state directory |
 
 ## Contributing
 
