@@ -680,4 +680,13 @@ The overview image is by Laura T. and is licensed under [CC BY-NC 4.0](http://cr
 - [Adafruit](https://www.adafruit.com/) for CircuitPython HID and Blinka, which helped make USB gadget access much smoother
 - Everyone who tests the project on real hardware and reports what works, what fails, and how to improve it
 
-Written by Eyes 👀, Assisted by Technology and AI 🤖, Powered by Coffee ☕, Developed with Love 🫶
+---
+
+<div align="center">
+
+👀 Written by Eyes  
+🤖 Assisted by Technology and AI  
+☕ Powered by Coffee  
+🫶 Developed with Love
+
+</div>
