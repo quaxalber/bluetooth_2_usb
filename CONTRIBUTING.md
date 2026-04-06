@@ -96,6 +96,9 @@ Aim for changes that are easy to understand, maintain, and validate.
 - Explain when a step is optional, risky, or hardware-specific
 - Call out important limitations, especially around power and read-only behavior
 
+When you touch documentation, also review the documentation consistency process in
+[`docs/doc-consistency-review-playbook.md`](docs/doc-consistency-review-playbook.md).
+
 ## Checks to run before opening a PR
 
 Run the same baseline checks that CI runs:
@@ -149,6 +152,11 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 Please also test against a real OTG target host when the change affects HID behavior or USB compatibility.
 
 Documentation-only changes do not require hardware validation, but commands and paths should still be checked for accuracy.
+
+For repeatable Pi-side CLI, service, install, and script validation, use
+[`docs/pi-cli-service-test-playbook.md`](docs/pi-cli-service-test-playbook.md).
+For the remaining manual hardware checks, use
+[`docs/pi-manual-test-plan.md`](docs/pi-manual-test-plan.md).
 
 ## Pull request guidelines
 
