@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
@@ -17,8 +18,14 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --verbose) VERBOSE=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --verbose)
+      VERBOSE=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) fail "Unknown option: $1" ;;
   esac
 done

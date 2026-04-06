@@ -176,7 +176,7 @@ dwc2_mode() {
 board_overlay_line() {
   local model="$1"
   case "$model" in
-    *"Raspberry Pi 4"*|*"Raspberry Pi 5"*)
+    *"Raspberry Pi 4"* | *"Raspberry Pi 5"*)
       printf '%s\n' "dtoverlay=dwc2,dr_mode=peripheral"
       ;;
     *)
@@ -352,7 +352,7 @@ load_readonly_config() {
       value="${BASH_REMATCH[2]}"
 
       case "$key" in
-        B2U_READONLY_MODE|B2U_PERSIST_MOUNT|B2U_PERSIST_BLUETOOTH_DIR|B2U_PERSIST_SPEC|B2U_PERSIST_DEVICE)
+        B2U_READONLY_MODE | B2U_PERSIST_MOUNT | B2U_PERSIST_BLUETOOTH_DIR | B2U_PERSIST_SPEC | B2U_PERSIST_DEVICE)
           printf -v "$key" '%s' "$value"
           ;;
         *)

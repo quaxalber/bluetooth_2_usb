@@ -6,7 +6,6 @@ from evdev import InputEvent, KeyEvent, RelEvent
 
 from .logging import get_logger
 
-
 _logger = get_logger()
 
 
@@ -1522,7 +1521,7 @@ def _get_hid_code_type(
 ) -> type[ConsumerControlCode] | type[Keycode] | type[MouseButton]:
     if is_consumer_key(event):
         return ConsumerControlCode
-    elif is_mouse_button(event):
+    if is_mouse_button(event):
         return MouseButton
     return Keycode
 

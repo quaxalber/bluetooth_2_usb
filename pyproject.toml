@@ -60,5 +60,9 @@ tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
 version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
 
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 REPO_URL="$(default_repo_url)"
@@ -19,10 +20,24 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo) require_value "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
-    --branch) require_value "$1" "${2:-}"; REPO_BRANCH="$2"; shift 2 ;;
-    --no-reboot) NO_REBOOT=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --repo)
+      require_value "$1" "${2:-}"
+      REPO_URL="$2"
+      shift 2
+      ;;
+    --branch)
+      require_value "$1" "${2:-}"
+      REPO_BRANCH="$2"
+      shift 2
+      ;;
+    --no-reboot)
+      NO_REBOOT=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) fail "Unknown option: $1" ;;
   esac
 done

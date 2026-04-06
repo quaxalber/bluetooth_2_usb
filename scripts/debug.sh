@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
@@ -24,9 +25,19 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --duration) require_value "$1" "${2:-}"; DURATION="$2"; shift 2 ;;
-    --redact) REDACT=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --duration)
+      require_value "$1" "${2:-}"
+      DURATION="$2"
+      shift 2
+      ;;
+    --redact)
+      REDACT=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) fail "Unknown option: $1" ;;
   esac
 done
@@ -72,7 +83,7 @@ if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ]; then
       B2U_PERSIST_MOUNT)
         printf -v "$key" '%s' "$value"
         ;;
-      B2U_READONLY_MODE|B2U_PERSIST_BLUETOOTH_DIR|B2U_PERSIST_SPEC|B2U_PERSIST_DEVICE)
+      B2U_READONLY_MODE | B2U_PERSIST_BLUETOOTH_DIR | B2U_PERSIST_SPEC | B2U_PERSIST_DEVICE)
         :
         ;;
       *)

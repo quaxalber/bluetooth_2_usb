@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 PURGE=0
@@ -19,10 +20,22 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --purge) PURGE=1; shift ;;
-    --revert-boot) REVERT_BOOT=1; shift ;;
-    --no-reboot) NO_REBOOT=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --purge)
+      PURGE=1
+      shift
+      ;;
+    --revert-boot)
+      REVERT_BOOT=1
+      shift
+      ;;
+    --no-reboot)
+      NO_REBOOT=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) fail "Unknown option: $1" ;;
   esac
 done

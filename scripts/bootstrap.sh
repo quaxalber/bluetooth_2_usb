@@ -25,11 +25,28 @@ require_value() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo) require_value "$1" "${2:-}"; REPO_URL="$2"; shift 2 ;;
-    --branch) require_value "$1" "${2:-}"; REPO_BRANCH="$2"; shift 2 ;;
-    --no-reboot) NO_REBOOT=1; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
+    --repo)
+      require_value "$1" "${2:-}"
+      REPO_URL="$2"
+      shift 2
+      ;;
+    --branch)
+      require_value "$1" "${2:-}"
+      REPO_BRANCH="$2"
+      shift 2
+      ;;
+    --no-reboot)
+      NO_REBOOT=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s\n' "$1" >&2
+      exit 1
+      ;;
   esac
 done
 

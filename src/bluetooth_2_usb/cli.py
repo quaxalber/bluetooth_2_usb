@@ -8,7 +8,6 @@ from .args import Arguments, parse_args
 from .logging import add_file_handler, get_logger
 from .version import get_versioned_name
 
-
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_ENVIRONMENT = 3
@@ -83,8 +82,7 @@ def validate_shortcut(shortcut: list[str]) -> set[str]:
     valid_keys = set()
     for raw_key in shortcut:
         key_upper = raw_key.strip().upper()
-        if key_upper in alias_map:
-            key_upper = alias_map[key_upper]
+        key_upper = alias_map.get(key_upper, key_upper)
         key_name = key_upper if key_upper.startswith("KEY_") else f"KEY_{key_upper}"
         valid_keys.add(key_name)
 
@@ -111,7 +109,9 @@ async def async_run_diagnostics(
         devices = await async_list_input_devices()
         logger.info(f"Detected {len(devices)} input device(s).")
     elif list_devices:
-        logger.info("Skipping input device enumeration because gadget prerequisites are missing.")
+        logger.info(
+            "Skipping input device enumeration because gadget prerequisites are missing."
+        )
     return EXIT_OK if env_status.ok else EXIT_ENVIRONMENT
 
 
@@ -148,7 +148,9 @@ async def async_run(args: Arguments) -> int:
 
     if not env_status.ok:
         if not env_status.configfs:
-            logger.error("configfs gadget path is missing: /sys/kernel/config/usb_gadget")
+            logger.error(
+                "configfs gadget path is missing: /sys/kernel/config/usb_gadget"
+            )
         if not env_status.udc_present:
             logger.error("No UDC detected! USB gadget mode may not be enabled.")
         return EXIT_ENVIRONMENT
@@ -197,14 +199,21 @@ async def async_run(args: Arguments) -> int:
         logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
         shutdown_event.set()
 
-    for handled_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
+    for handled_signal in (
+        signal.SIGINT,
+        signal.SIGTERM,
+        signal.SIGHUP,
+        signal.SIGQUIT,
+    ):
         previous_handlers[handled_signal] = signal.getsignal(handled_signal)
         signal.signal(handled_signal, _signal_handler)
 
     try:
         async with (
             UdevEventMonitor(relay_controller),
-            UdcStateMonitor(relaying_active=relaying_active, udc_path=env_status.udc_path),
+            UdcStateMonitor(
+                relaying_active=relaying_active, udc_path=env_status.udc_path
+            ),
         ):
             relay_task = asyncio.create_task(relay_controller.async_relay_devices())
             shutdown_task = asyncio.create_task(shutdown_event.wait())
@@ -215,11 +224,15 @@ async def async_run(args: Arguments) -> int:
 
             if relay_task in done:
                 if relay_task.cancelled():
-                    logger.error("Relay task was cancelled before shutdown was requested.")
+                    logger.error(
+                        "Relay task was cancelled before shutdown was requested."
+                    )
                 else:
                     relay_exc = relay_task.exception()
                     if relay_exc is None:
-                        logger.error("Relay task exited unexpectedly before shutdown was requested.")
+                        logger.error(
+                            "Relay task exited unexpectedly before shutdown was requested."
+                        )
                     else:
                         logger.error(
                             "Relay task exited unexpectedly before shutdown was requested: %s",

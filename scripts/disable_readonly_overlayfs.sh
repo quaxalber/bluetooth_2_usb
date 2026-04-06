@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 usage() {
@@ -14,8 +15,11 @@ EOF
 }
 
 case "${1:-}" in
-  "" ) ;;
-  -h|--help) usage; exit 0 ;;
+  "") ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
   *) fail "Unknown option: $1" ;;
 esac
 

@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 load_readonly_config
@@ -22,9 +23,19 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --device) require_value "$1" "${2:-}"; DEVICE="$2"; shift 2 ;;
-    --no-enable) NO_ENABLE=1; shift ;;
-    -h|--help) usage; exit 0 ;;
+    --device)
+      require_value "$1" "${2:-}"
+      DEVICE="$2"
+      shift 2
+      ;;
+    --no-enable)
+      NO_ENABLE=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) fail "Unknown option: $1" ;;
   esac
 done

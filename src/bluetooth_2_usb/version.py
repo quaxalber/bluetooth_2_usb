@@ -1,6 +1,5 @@
 from importlib.metadata import PackageNotFoundError, version as package_version
 
-
 PACKAGE_NAME = "bluetooth_2_usb"
 UNKNOWN_VERSION = "unknown"
 

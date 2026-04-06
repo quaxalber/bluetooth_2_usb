@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+# shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 MODE="easy"
@@ -20,9 +21,20 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode) require_value "$1" "${2:-}"; MODE="$2"; shift 2 ;;
-    --persist-device) require_value "$1" "${2:-}"; PERSIST_DEVICE="$2"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
+    --mode)
+      require_value "$1" "${2:-}"
+      MODE="$2"
+      shift 2
+      ;;
+    --persist-device)
+      require_value "$1" "${2:-}"
+      PERSIST_DEVICE="$2"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     *) fail "Unknown option: $1" ;;
   esac
 done

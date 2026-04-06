@@ -3,7 +3,7 @@ from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
 import re
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.keyboard import Keyboard
@@ -290,7 +290,9 @@ class RelayController:
     def schedule_remove_device(self, device_path: str) -> None:
         loop = self._loop
         if loop is None or self._cancelled:
-            _logger.debug(f"Ignoring remove for {device_path}; event loop is unavailable.")
+            _logger.debug(
+                f"Ignoring remove for {device_path}; event loop is unavailable."
+            )
             return
         try:
             loop.call_soon_threadsafe(self.remove_device, device_path)
@@ -685,7 +687,7 @@ def get_output_device(
     """
     if is_consumer_key(event):
         return gadget_manager.get_consumer()
-    elif is_mouse_button(event):
+    if is_mouse_button(event):
         return gadget_manager.get_mouse()
     return gadget_manager.get_keyboard()
 
@@ -754,7 +756,7 @@ class UdcStateMonitor:
         :rtype: str
         """
         try:
-            with open(self.udc_path, "r") as f:
+            with open(self.udc_path, "r", encoding="utf-8") as f:
                 return f.read().strip()
         except FileNotFoundError:
             return "not_attached"

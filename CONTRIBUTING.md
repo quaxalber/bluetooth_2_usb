@@ -32,7 +32,7 @@ cd bluetooth_2_usb
 python3 -m venv venv
 source venv/bin/activate
 pip install -U pip setuptools wheel
-pip install -e .
+pip install -e . black pylint yamllint shfmt-py shellcheck-py
 ```
 
 ## Project layout
@@ -119,6 +119,8 @@ When you touch documentation, also review the documentation consistency process 
 Run the same baseline checks that CI runs:
 
 ```bash
+black --check src
+pylint src/bluetooth_2_usb/*.py
 python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
@@ -138,7 +140,10 @@ python -m bluetooth_2_usb --dry-run || {
     exit "$status"
   fi
 }
+shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh
+shellcheck -x scripts/*.sh scripts/lib/common.sh
 bash -n scripts/*.sh scripts/lib/common.sh
+yamllint .github/workflows/ci.yml
 ```
 
 > [!NOTE]
