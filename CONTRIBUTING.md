@@ -102,8 +102,22 @@ Run the same baseline checks that CI runs:
 python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
-python -m bluetooth_2_usb --validate-env || test $? -eq 3
-python -m bluetooth_2_usb --dry-run || test $? -eq 3
+python -m bluetooth_2_usb --validate-env || {
+  status=$?
+  if [[ $status -eq 3 ]]; then
+    echo "validate-env exited with status 3 outside a Pi gadget environment; treating that as expected here."
+  else
+    exit "$status"
+  fi
+}
+python -m bluetooth_2_usb --dry-run || {
+  status=$?
+  if [[ $status -eq 3 ]]; then
+    echo "dry-run exited with status 3 outside a Pi gadget environment; treating that as expected here."
+  else
+    exit "$status"
+  fi
+}
 bash -n scripts/*.sh scripts/lib/common.sh
 ```
 
