@@ -58,11 +58,7 @@ class GadgetManager:
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
         usb_hid = import_module("usb_hid")
-
-        try:
-            usb_hid.disable()
-        except Exception as ex:
-            _logger.debug(f"usb_hid.disable() failed or was already disabled: {ex}")
+        usb_hid.disable()
 
         usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
         enabled_devices = list(usb_hid.devices)  # type: ignore[attr-defined]

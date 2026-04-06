@@ -284,7 +284,7 @@ Generate a Markdown debug report:
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 ```
 
-`debug.sh` temporarily stops the service if it is running, launches a foreground Bluetooth-2-USB `--debug` session, and restores the service afterwards.
+`debug.sh` temporarily stops the service if it is running, launches a foreground Bluetooth-2-USB `--debug` session, and restores the service afterward.
 
 `--duration` bounds that live debug session. If you omit it, the debug run continues until you stop it with `Ctrl+C`.
 
@@ -355,6 +355,16 @@ sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --mode easy
 Persistent mode is the right choice if you need stable Bluetooth identity, pairings, and reconnect behavior while the root filesystem is read-only.
 
 It uses a separate writable ext4 filesystem for Bluetooth state and bind-mounts it to `/var/lib/bluetooth`.
+
+Recommended flow:
+
+1. Install Bluetooth-2-USB
+2. Pair and trust your Bluetooth devices
+3. Confirm normal operation first
+4. Prepare the writable ext4 filesystem
+5. Run `setup_persistent_bluetooth_state.sh` to seed the current `/var/lib/bluetooth` state
+6. Run `enable_readonly_overlayfs.sh --mode persistent`
+7. Reboot and verify
 
 ### Mode summary
 

@@ -102,6 +102,8 @@ Pay attention to:
 - persistent Bluetooth-state paths
 - service unit name
 
+Treat explicit default flags in the docs as consistent when runtime or service args omit them but the CLI default yields the same effective behavior, such as `--hid-profile compat`.
+
 ### 5. Development workflow
 
 Verify that the documented local development flow still works.

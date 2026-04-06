@@ -35,7 +35,26 @@ def get_udc_path() -> Path | None:
     controllers = [entry for entry in udc_root.iterdir() if entry.is_dir()]
     if not controllers:
         return None
-    return controllers[0] / "state"
+
+    def state_path(controller: Path) -> Path:
+        return controller / "state"
+
+    otg_candidates = [
+        controller
+        for controller in controllers
+        if any(token in controller.name.lower() for token in ("otg", "gadget", "dwc2"))
+        and state_path(controller).is_file()
+    ]
+    if otg_candidates:
+        return state_path(otg_candidates[0])
+
+    valid_controllers = [
+        controller for controller in controllers if state_path(controller).is_file()
+    ]
+    if valid_controllers:
+        return state_path(valid_controllers[0])
+
+    return None
 
 
 def validate_environment() -> EnvironmentStatus:
@@ -258,7 +277,7 @@ def run(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
     except SystemExit as exc:
-        return int(exc.code)
+        return int(exc.code) if exc.code is not None else EXIT_OK
 
     try:
         return asyncio.run(async_run(args))
