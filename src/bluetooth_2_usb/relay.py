@@ -3,7 +3,7 @@ import re
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 import pyudev
 from adafruit_hid.consumer_control import ConsumerControl
@@ -78,7 +78,7 @@ class GadgetManager:
             enabled_devices,
         )
 
-    def get_keyboard(self) -> Optional[Keyboard]:
+    def get_keyboard(self) -> Keyboard | None:
         """
         Get the Keyboard gadget.
 
@@ -87,7 +87,7 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> Optional[Mouse]:
+    def get_mouse(self) -> Mouse | None:
         """
         Get the Mouse gadget.
 
@@ -96,7 +96,7 @@ class GadgetManager:
         """
         return self._gadgets["mouse"]
 
-    def get_consumer(self) -> Optional[ConsumerControl]:
+    def get_consumer(self) -> ConsumerControl | None:
         """
         Get the ConsumerControl gadget.
 
@@ -188,11 +188,11 @@ class RelayController:
     def __init__(
         self,
         gadget_manager: GadgetManager,
-        device_identifiers: Optional[list[str]] = None,
+        device_identifiers: list[str] | None = None,
         auto_discover: bool = False,
-        skip_name_prefixes: Optional[list[str]] = None,
+        skip_name_prefixes: list[str] | None = None,
         grab_devices: bool = False,
-        relaying_active: Optional[asyncio.Event] = None,
+        relaying_active: asyncio.Event | None = None,
         shortcut_toggler: Optional["ShortcutToggler"] = None,
     ) -> None:
         """
@@ -223,9 +223,9 @@ class RelayController:
         self._shortcut_toggler = shortcut_toggler
 
         self._active_tasks: dict[str, Task] = {}
-        self._task_group: Optional[TaskGroup] = None
+        self._task_group: TaskGroup | None = None
         self._cancelled = False
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     async def async_relay_devices(self) -> None:
         """
@@ -424,7 +424,7 @@ class DeviceRelay:
         input_device: InputDevice,
         gadget_manager: GadgetManager,
         grab_device: bool = False,
-        relaying_active: Optional[asyncio.Event] = None,
+        relaying_active: asyncio.Event | None = None,
         shortcut_toggler: Optional["ShortcutToggler"] = None,
     ) -> None:
         """
@@ -677,7 +677,7 @@ def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
 
 def get_output_device(
     event: KeyEvent, gadget_manager: GadgetManager
-) -> Union[ConsumerControl, Keyboard, Mouse, None]:
+) -> ConsumerControl | Keyboard | Mouse | None:
     """
     Determine which HID gadget to target for the given key event.
 
@@ -714,8 +714,8 @@ class UdcStateMonitor:
         self.poll_interval = poll_interval
 
         self._stop = False
-        self._task: Optional[asyncio.Task] = None
-        self._last_state: Optional[str] = None
+        self._task: asyncio.Task | None = None
+        self._last_state: str | None = None
 
         if not self.udc_path.is_file():
             _logger.warning(
@@ -756,7 +756,7 @@ class UdcStateMonitor:
         :rtype: str
         """
         try:
-            with open(self.udc_path, "r", encoding="utf-8") as f:
+            with open(self.udc_path, encoding="utf-8") as f:
                 return f.read().strip()
         except FileNotFoundError:
             return "not_attached"

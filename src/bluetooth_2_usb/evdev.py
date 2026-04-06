@@ -1509,7 +1509,7 @@ def _cached_getattr(class_type, attribute):
     return getattr(class_type, attribute, None)
 
 
-@lru_cache()
+@lru_cache
 def _cached_dir(
     class_type: type,
 ) -> list[str]:

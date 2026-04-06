@@ -1,5 +1,4 @@
 import argparse
-from typing import Optional
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
@@ -142,10 +141,10 @@ class Arguments:
 
     def __init__(
         self,
-        device_ids: Optional[list[str]],
+        device_ids: list[str] | None,
         auto_discover: bool,
         grab_devices: bool,
-        interrupt_shortcut: Optional[list[str]],
+        interrupt_shortcut: list[str] | None,
         list_devices: bool,
         log_to_file: bool,
         log_path: str,
@@ -171,7 +170,7 @@ class Arguments:
         self._hid_profile = hid_profile
 
     @property
-    def device_ids(self) -> Optional[list[str]]:
+    def device_ids(self) -> list[str] | None:
         return self._device_ids
 
     @property
@@ -183,7 +182,7 @@ class Arguments:
         return self._grab_devices
 
     @property
-    def interrupt_shortcut(self) -> Optional[list[str]]:
+    def interrupt_shortcut(self) -> list[str] | None:
         return self._interrupt_shortcut
 
     @property
@@ -227,7 +226,7 @@ class Arguments:
         return ", ".join(slot_values)
 
 
-def parse_args(argv: Optional[list[str]] = None) -> Arguments:
+def parse_args(argv: list[str] | None = None) -> Arguments:
     parser = CustomArgumentParser()
     args = parser.parse_args(argv)
 
