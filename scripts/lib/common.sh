@@ -8,7 +8,7 @@ readonly B2U_COMMON_SH_SOURCED=1
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
 YELLOW=$'\033[0;33m'
-BLUE=$'\033[0;34m'
+BLUE=$'\033[1;36m'
 BOLD=$'\033[1m'
 NC=$'\033[0m'
 
@@ -20,8 +20,8 @@ readonly B2U_READONLY_ENV_FILE="/etc/default/bluetooth_2_usb_readonly"
 readonly B2U_BOOT_RESTORE_DIR="/var/lib/bluetooth_2_usb/boot_restore"
 readonly B2U_BOOT_RESTORE_CONFIG="${B2U_BOOT_RESTORE_DIR}/config.txt"
 readonly B2U_BOOT_RESTORE_CMDLINE="${B2U_BOOT_RESTORE_DIR}/cmdline.txt"
-readonly B2U_DEFAULT_PERSIST_MOUNT="/mnt/b2u-persist"
-readonly B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR="bluetooth"
+readonly B2U_PERSIST_MOUNT_FIXED="/mnt/b2u-persist"
+readonly B2U_PERSIST_BLUETOOTH_SUBDIR="bluetooth"
 readonly B2U_BLUETOOTH_BIND_MOUNT_UNIT="/etc/systemd/system/var-lib-bluetooth.mount"
 readonly B2U_BLUETOOTH_SERVICE_DROPIN_DIR="/etc/systemd/system/bluetooth.service.d"
 readonly B2U_BLUETOOTH_SERVICE_DROPIN="${B2U_BLUETOOTH_SERVICE_DROPIN_DIR}/bluetooth_2_usb_persist.conf"
@@ -336,8 +336,8 @@ machine_id_valid() {
 
 load_readonly_config() {
   B2U_READONLY_MODE="disabled"
-  B2U_PERSIST_MOUNT="$B2U_DEFAULT_PERSIST_MOUNT"
-  B2U_PERSIST_BLUETOOTH_DIR="${B2U_DEFAULT_PERSIST_MOUNT}/${B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR}"
+  B2U_PERSIST_MOUNT="$B2U_PERSIST_MOUNT_FIXED"
+  B2U_PERSIST_BLUETOOTH_DIR="${B2U_PERSIST_MOUNT_FIXED}/${B2U_PERSIST_BLUETOOTH_SUBDIR}"
   B2U_PERSIST_SPEC=""
   B2U_PERSIST_DEVICE=""
   if [[ -f "$B2U_READONLY_ENV_FILE" ]]; then
@@ -366,8 +366,8 @@ load_readonly_config() {
 
 write_readonly_config() {
   local mode="${1:-disabled}"
-  local persist_mount="${2:-$B2U_DEFAULT_PERSIST_MOUNT}"
-  local persist_bluetooth_dir="${3:-${persist_mount}/${B2U_DEFAULT_PERSIST_BLUETOOTH_SUBDIR}}"
+  local persist_mount="${2:-$B2U_PERSIST_MOUNT_FIXED}"
+  local persist_bluetooth_dir="${3:-${persist_mount}/${B2U_PERSIST_BLUETOOTH_SUBDIR}}"
   local persist_spec="${4:-}"
   local persist_device="${5:-}"
 
