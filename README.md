@@ -80,7 +80,7 @@ bluetoothctl
 scan on
 ```
 
-Wait for your device to appear, then trust, pair, and connect it:
+Wait for your device to appear, note its Bluetooth MAC address, then trust, pair, and connect it:
 
 ```bash
 trust A1:B2:C3:D4:E5:F6
@@ -91,6 +91,7 @@ exit
 
 > [!NOTE]
 > Replace `A1:B2:C3:D4:E5:F6` with your device's Bluetooth MAC address.
+> `bluetoothctl select` chooses a Bluetooth controller, not a target device, so there is no separate "select this device once" command for later `trust`, `pair`, or `connect` calls.
 
 ### 5. Verify the installation
 
@@ -554,6 +555,9 @@ pair A1:B2:C3:D4:E5:F6
 connect A1:B2:C3:D4:E5:F6
 exit
 ```
+
+> [!NOTE]
+> `bluetoothctl` keeps the MAC address as the device reference for `trust`, `pair`, `connect`, `block`, and `remove`; `select` is only for choosing the local controller.
 
 If the issue persists, run `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact` and open an issue with the output.
 
