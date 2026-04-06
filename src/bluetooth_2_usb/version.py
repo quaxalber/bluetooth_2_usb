@@ -23,5 +23,5 @@ def get_version() -> str:
 def get_versioned_name() -> str:
     version = get_version()
     if version == UNKNOWN_VERSION:
-        return "Bluetooth 2 USB"
-    return f"Bluetooth 2 USB v{version}"
+        return "Bluetooth-2-USB"
+    return f"Bluetooth-2-USB v{version}"
