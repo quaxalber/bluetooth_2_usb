@@ -116,6 +116,16 @@ When you touch documentation, also review the documentation consistency process 
 
 ## Checks to run before opening a PR
 
+Before you rely on CI, format and auto-fix the obvious issues locally first. CI should validate a clean branch, not be the first place that tells you `black`, `shfmt`, or `ruff` would rewrite files.
+
+A practical pre-check is:
+
+```bash
+black src
+ruff check --fix src
+shfmt -w -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh
+```
+
 Run the same baseline checks that CI runs:
 
 ```bash
