@@ -133,15 +133,18 @@ Run this before mutating the system.
 
 ```bash
 ssh -4 pi4b '
+  wifi_conn=$(nmcli -t -f NAME connection show --active | head -n 1)
   echo BRANCH=$(cd /home/user/bluetooth_2_usb_test_2026_04_05 && git branch --show-current)
   echo SHA=$(cd /home/user/bluetooth_2_usb_test_2026_04_05 && git rev-parse --short HEAD)
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service)
   echo ROOT=$(findmnt -no FSTYPE,OPTIONS /)
   echo OVERLAY_NOW=$(sudo -n raspi-config nonint get_overlay_now)
-  echo WIFI_CONN=$(nmcli -t -f NAME connection show --active | head -n 1)
-  nmcli -g 802-11-wireless.powersave connection show "netplan-wlan0-BenNet_2,4_optout_nomap"
+  echo WIFI_CONN=$wifi_conn
+  nmcli -g 802-11-wireless.powersave connection show "$wifi_conn"
 '
 ```
+
+> Replace nothing in that block manually; it resolves the currently active Wi-Fi connection name on the Pi before querying the powersave setting.
 
 ## CLI matrix
 

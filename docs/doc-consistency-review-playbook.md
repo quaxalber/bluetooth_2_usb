@@ -1,6 +1,6 @@
 # Documentation Consistency Review Playbook
 
-Use this checklist when you want to verify that `README.md` and `CONTRIBUTING.md` still match the current repository state.
+Use this checklist when you want to verify that `README.md`, `CONTRIBUTING.md`, and the Markdown playbooks under `docs/` still match the current repository state.
 
 This is not a generic docs review. The goal is to catch drift between:
 
@@ -15,16 +15,35 @@ Review at least:
 
 - `README.md`
 - `CONTRIBUTING.md`
+- every `docs/*.md` file
 - `scripts/*.sh`
 - `scripts/lib/common.sh`
 - `src/bluetooth_2_usb/args.py`
 - `pyproject.toml`
 
-Check `docs/` too if the change touched testing, read-only mode, install/update flows, or review workflow.
+Do not treat `docs/` as optional. The repo-specific playbooks there can drift just as easily as the top-level docs.
 
 ## What to verify
 
-### 1. Script interfaces
+### 1. Full Markdown doc set
+
+Read all Markdown files that define user, contributor, or test workflows:
+
+```bash
+find docs -maxdepth 1 -name '*.md' -print | sort
+sed -n '1,240p' README.md
+sed -n '1,240p' CONTRIBUTING.md
+```
+
+For each file under `docs/`, verify that:
+
+- commands still exist
+- argument names still exist
+- path examples still match the current managed deployment
+- any placeholders are still clearly marked as placeholders
+- any Pi- or host-specific examples still match the current supported workflow
+
+### 2. Script interfaces
 
 Compare the documentation against the current `--help` output of all managed scripts:
 
@@ -48,7 +67,7 @@ done
 
 Confirm that the docs do not mention removed options such as old testing or path overrides.
 
-### 2. Python CLI interface
+### 3. Python CLI interface
 
 Compare the documented CLI reference against the current package interface:
 
@@ -65,7 +84,7 @@ sed -n '1,220p' src/bluetooth_2_usb/args.py
 
 Make sure option names, defaults, and descriptions in the docs still match.
 
-### 3. Managed paths and service assumptions
+### 4. Managed paths and service assumptions
 
 Verify documented paths and service names against the current shared shell constants and service unit:
 
@@ -83,7 +102,7 @@ Pay attention to:
 - persistent Bluetooth-state paths
 - service unit name
 
-### 4. Development workflow
+### 5. Development workflow
 
 Verify that the documented local development flow still works.
 
@@ -102,7 +121,7 @@ rm -rf "$tmpdir"
 
 This catches stale references to removed entrypoints or outdated install instructions.
 
-### 5. Drift search for removed options or old paths
+### 6. Drift search for removed options or old paths
 
 Search the docs for options and paths that were removed or renamed:
 
@@ -123,7 +142,7 @@ rg -n -e '--dir' \
 
 Interpret the results, do not blindly delete every match. Some hits may be legitimate prose or examples in historical test docs.
 
-### 6. Syntax and basic code health
+### 7. Syntax and basic code health
 
 When doc changes include command examples or script interface descriptions, run the baseline checks too:
 
@@ -134,12 +153,13 @@ bash -n scripts/*.sh scripts/lib/common.sh
 
 ## Review heuristics
 
-When checking `README.md` and `CONTRIBUTING.md`, pay special attention to:
+When checking `README.md`, `CONTRIBUTING.md`, and the files under `docs/`, pay special attention to:
 
 - commands that no longer exist
 - commands that still work but now have different defaults
 - references to removed files or entrypoints
 - branch/tag/install examples that no longer match script behavior
+- Pi test playbooks that still contain environment-specific hard-coded values
 - issue-report guidance that duplicates information already present in `debug.sh`
 - read-only mode claims that overstate persistence guarantees
 
@@ -147,10 +167,10 @@ When checking `README.md` and `CONTRIBUTING.md`, pay special attention to:
 
 At the end of the review, answer these questions explicitly:
 
-1. Do `README.md` and `CONTRIBUTING.md` match the current script interfaces?
+1. Do `README.md`, `CONTRIBUTING.md`, and all relevant `docs/*.md` files match the current script interfaces?
 2. Do they match the current Python CLI surface?
 3. Do the documented managed paths and runtime defaults still match `common.sh` and the systemd unit?
-4. Are there any stale commands, removed flags, or outdated entrypoints left?
+4. Are there any stale commands, removed flags, outdated entrypoints, or hard-coded environment values left?
 5. Did you make doc fixes, or is the current documentation already consistent?
 
 If you do make changes, keep them narrow and traceable to specific mismatches.
