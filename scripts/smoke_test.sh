@@ -60,7 +60,7 @@ append_report_code_block() {
   [[ $MARKDOWN -eq 1 ]] || return 0
   {
     echo '```'
-    cat
+    perl -0pe 's/(?<!\n)\z/\n/'
     echo '```'
   } >>"$OUT"
 }

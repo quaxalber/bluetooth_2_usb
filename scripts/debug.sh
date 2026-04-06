@@ -104,7 +104,7 @@ append_line() {
 
 code_block() {
   echo '```'
-  cat
+  perl -0pe 's/(?<!\n)\z/\n/'
   echo '```'
 }
 
@@ -155,7 +155,7 @@ run_shell_block() {
   echo '```'
   tmp="$(mktemp)"
   B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" timeout "$timeout_secs" bash -lc "$command" >"$tmp" 2>&1 || status=$?
-  B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp"
+  B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" | perl -0pe 's/(?<!\n)\z/\n/'
   rm -f "$tmp"
   if [[ $status -eq 124 ]]; then
     printf '[timed out after %ss]\n' "$timeout_secs"
@@ -227,7 +227,7 @@ run_live_debug_block() {
     trap 'INTERRUPTED_BY_SIGNAL="TERM"' TERM
   fi
 
-  cat "$tmp" >>"$OUT"
+  perl -0pe 's/(?<!\n)\z/\n/' "$tmp" >>"$OUT"
   rm -f "$tmp"
 
   if [[ $status -eq 124 ]]; then
