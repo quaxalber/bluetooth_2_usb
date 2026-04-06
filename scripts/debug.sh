@@ -11,6 +11,7 @@ OUT=""
 SERVICE_STOPPED_FOR_DEBUG=0
 INTERRUPTED_BY_SIGNAL=""
 PARSE_ERROR=0
+B2U_EFFECTIVE_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12"
 
 usage() {
   cat <<EOF
@@ -38,10 +39,16 @@ CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
 REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
 SERVICE_INITIAL_STATE="$(systemctl is-active "${B2U_SERVICE_UNIT}" 2>/dev/null || true)"
+if [[ -f "$B2U_ENV_FILE" ]] && [[ -s "$B2U_ENV_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^BLUETOOTH_2_USB_ARGS=\"([^\"]*)\"$ ]] || continue
+    B2U_EFFECTIVE_ARGS="${BASH_REMATCH[1]}"
+  done <"$B2U_ENV_FILE"
+fi
 if [[ -x "${VENV_DIR}/bin/bluetooth_2_usb" ]]; then
-  B2U_DEBUG_CMD="'${VENV_DIR}/bin/bluetooth_2_usb' --debug"
+  B2U_DEBUG_CMD="'${VENV_DIR}/bin/bluetooth_2_usb' ${B2U_EFFECTIVE_ARGS} --debug"
 elif [[ -x "${VENV_DIR}/bin/python" ]]; then
-  B2U_DEBUG_CMD="'${VENV_DIR}/bin/python' -m bluetooth_2_usb --debug"
+  B2U_DEBUG_CMD="'${VENV_DIR}/bin/python' -m bluetooth_2_usb ${B2U_EFFECTIVE_ARGS} --debug"
 else
   B2U_DEBUG_CMD=""
 fi
@@ -251,11 +258,15 @@ else
   printf '%s\n' "readonly_mode=$(readonly_mode 2>/dev/null || echo '<error>')" | code_block >>"$OUT"
   printf '%s\n' "bluetooth_state_persistent=$(bluetooth_state_persistent 2>/dev/null && echo yes || echo no)" | code_block >>"$OUT"
 fi
-[[ -f "$B2U_READONLY_ENV_FILE" ]] && run_shell_block 5 "cat '$B2U_READONLY_ENV_FILE'" >>"$OUT" || true
+if [[ -f "$B2U_READONLY_ENV_FILE" ]]; then
+  run_shell_block 5 "cat '$B2U_READONLY_ENV_FILE'" >>"$OUT"
+fi
 run_shell_block 5 "findmnt -t overlay,tmpfs 2>/dev/null || true" >>"$OUT"
 run_shell_block 5 "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true" >>"$OUT"
 run_shell_block 5 "findmnt -n '$B2U_PERSIST_MOUNT' 2>/dev/null || true" >>"$OUT"
-[[ -f /etc/machine-id ]] && run_shell_block 5 "cat /etc/machine-id" >>"$OUT" || true
+if [[ -f /etc/machine-id ]]; then
+  run_shell_block 5 "cat /etc/machine-id" >>"$OUT"
+fi
 printf '%s\n' "machine_id_valid=$(machine_id_valid && echo yes || echo no)" | code_block >>"$OUT"
 if [[ -d /var/lib/bluetooth ]]; then
   run_shell_block 5 "find /var/lib/bluetooth -type f | sort" >>"$OUT"
@@ -265,8 +276,8 @@ fi
 
 append_line "## systemd"
 printf '%s\n' "service_state_before_debug=${SERVICE_INITIAL_STATE:-unknown}" | code_block >>"$OUT"
-run_shell_block 8 "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' 2>/dev/null || true" >>"$OUT"
-run_shell_block 8 "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 200 --no-pager 2>/dev/null || true" >>"$OUT"
+run_shell_block 8 "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}'" >>"$OUT"
+run_shell_block 8 "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 200 --no-pager" >>"$OUT"
 
 append_line "## dmesg"
 run_shell_block 8 "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true" >>"$OUT"

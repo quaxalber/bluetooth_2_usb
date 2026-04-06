@@ -40,7 +40,9 @@ fi
 if [[ -z "$DEVICE" && -z "${B2U_PERSIST_SPEC:-}" ]]; then
   if mountpoint -q "$PERSIST_MOUNT"; then
     source_spec="$(findmnt -n -o SOURCE --target "$PERSIST_MOUNT" 2>/dev/null || true)"
+    source_fstype="$(findmnt -n -o FSTYPE --target "$PERSIST_MOUNT" 2>/dev/null || true)"
     [[ -n "$source_spec" ]] || fail "Could not determine the backing source for ${PERSIST_MOUNT}. Provide --device."
+    [[ "$source_fstype" == "ext4" ]] || fail "Expected ext4 on ${PERSIST_MOUNT}, got ${source_fstype:-unknown}. Reformat the backing storage as ext4 first."
     if [[ -b "$source_spec" ]]; then
       DEVICE="$source_spec"
     else
@@ -87,9 +89,9 @@ EOF
 fi
 
 if service_installed; then
-  systemctl stop "${B2U_SERVICE_UNIT}" || true
+  systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT} before migrating Bluetooth state"
 fi
-systemctl stop bluetooth.service 2>/dev/null || true
+systemctl stop bluetooth.service || fail "Failed to stop bluetooth.service before migrating Bluetooth state"
 
 systemctl daemon-reload
 systemctl enable --now "$(persist_mount_unit_name "$PERSIST_MOUNT")"
@@ -115,15 +117,17 @@ touch "${PERSIST_BLUETOOTH_DIR}/.b2u-persistent-state"
 if mountpoint -q /var/lib/bluetooth; then
   current_source="$(findmnt -n -o SOURCE --target /var/lib/bluetooth 2>/dev/null || true)"
   if [[ "$current_source" != "$PERSIST_BLUETOOTH_DIR" ]]; then
-    umount /var/lib/bluetooth || true
+    umount /var/lib/bluetooth || fail "Failed to unmount /var/lib/bluetooth before enabling the persistent bind mount"
   fi
 fi
 mkdir -p /var/lib/bluetooth
 
 systemctl enable --now var-lib-bluetooth.mount
-systemctl start bluetooth.service 2>/dev/null || true
+systemctl start bluetooth.service || fail "Failed to start bluetooth.service after enabling the persistent bind mount"
+systemctl is-active --quiet bluetooth.service || fail "bluetooth.service did not come back up after enabling the persistent bind mount"
 if service_installed; then
-  systemctl restart "${B2U_SERVICE_UNIT}" || true
+  systemctl restart "${B2U_SERVICE_UNIT}" || fail "Failed to restart ${B2U_SERVICE_UNIT} after enabling the persistent bind mount"
+  systemctl is-active --quiet "${B2U_SERVICE_UNIT}" || fail "${B2U_SERVICE_UNIT} did not come back up after enabling the persistent bind mount"
 fi
 
 ok "Persistent Bluetooth state is active at ${PERSIST_BLUETOOTH_DIR}"

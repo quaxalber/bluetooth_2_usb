@@ -382,10 +382,13 @@ EOF
 }
 
 bluetooth_state_persistent() {
+  local mount_source
   load_readonly_config
   mountpoint -q /var/lib/bluetooth || return 1
   [[ -d "$B2U_PERSIST_BLUETOOTH_DIR" ]] || return 1
-  findmnt -n -o OPTIONS --target /var/lib/bluetooth 2>/dev/null | grep -qw bind
+  findmnt -n -o OPTIONS --target /var/lib/bluetooth 2>/dev/null | grep -qw bind || return 1
+  mount_source="$(findmnt -n -o SOURCE --target /var/lib/bluetooth 2>/dev/null || true)"
+  [[ "$mount_source" == "$B2U_PERSIST_BLUETOOTH_DIR" ]]
 }
 
 readonly_mode() {
@@ -469,9 +472,9 @@ install_bluetooth_persist_dropin() {
 [Unit]
 After=var-lib-bluetooth.mount
 Requires=var-lib-bluetooth.mount
+RequiresMountsFor=/var/lib/bluetooth
 
 [Service]
-RequiresMountsFor=/var/lib/bluetooth
 EOF
   chmod 0644 "$B2U_BLUETOOTH_SERVICE_DROPIN"
 }

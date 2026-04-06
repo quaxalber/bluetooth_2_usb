@@ -52,8 +52,12 @@ cleanup_on_failure() {
   trap - EXIT
   if [[ $exit_code -ne 0 && $BOOT_SNAPSHOT_ACTIVE -eq 1 ]]; then
     warn "Install failed; restoring original boot configuration"
-    restore_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT" || true
-    clear_boot_restore_snapshot || true
+    if ! restore_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT"; then
+      warn "Failed to restore the managed boot configuration snapshot"
+    fi
+    if ! clear_boot_restore_snapshot; then
+      warn "Failed to clear the managed boot configuration snapshot"
+    fi
   fi
   exit "$exit_code"
 }
