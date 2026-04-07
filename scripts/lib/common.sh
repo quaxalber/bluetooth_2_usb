@@ -133,6 +133,15 @@ block() {
   write_line "$outfile"
 }
 
+text_block() {
+  local outfile="$1"
+  local level="$2"
+  local status="$3"
+  local title="$4"
+  shift 4
+  printf '%s\n' "$@" | block "$outfile" "$level" "$status" "$title"
+}
+
 command_block() {
   local outfile="$1"
   local level="$2"

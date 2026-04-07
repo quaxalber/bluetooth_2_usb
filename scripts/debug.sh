@@ -236,15 +236,15 @@ write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
 write_line "$OUT"
 
 heading "$OUT" "##" "info" "System"
-printf '%s\n' "$(
+text_block "$OUT" "###" "info" "Hostname" "$(
   printf '%s\n' "$REDACT_HOSTNAME" | B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream
-) " | block "$OUT" "###" "info" "Hostname"
+)"
 timed_command_block "info" "Kernel" 5 "uname -a"
 [[ -f /etc/os-release ]] && timed_command_block "info" "OS release" 5 "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"
 timed_command_block "info" "Hardware model" 5 "tr -d '\\0' </proc/device-tree/model 2>/dev/null || true"
 
 heading "$OUT" "##" "info" "Boot"
-printf '%s\n' "boot_dir=${BOOT_DIR}" | block "$OUT" "###" "info" "Boot directory"
+text_block "$OUT" "###" "info" "Boot directory" "boot_dir=${BOOT_DIR}"
 config_status="info"
 config_command="grep -nE '^\[all\]|dtoverlay=dwc2.*' '$CONFIG_TXT'"
 config_fallback="missing: $CONFIG_TXT"
@@ -252,7 +252,7 @@ config_fallback="missing: $CONFIG_TXT"
 if [[ -f "$CONFIG_TXT" ]]; then
   timed_command_block "$config_status" "config.txt dwc2 lines" 5 "$config_command"
 else
-  printf '%s\n' "$config_fallback" | block "$OUT" "###" "$config_status" "config.txt dwc2 lines"
+  text_block "$OUT" "###" "$config_status" "config.txt dwc2 lines" "$config_fallback"
 fi
 cmdline_status="info"
 cmdline_command="cat '$CMDLINE_TXT'"
@@ -261,17 +261,17 @@ cmdline_fallback="missing: $CMDLINE_TXT"
 if [[ -f "$CMDLINE_TXT" ]]; then
   timed_command_block "$cmdline_status" "cmdline.txt" 5 "$cmdline_command"
 else
-  printf '%s\n' "$cmdline_fallback" | block "$OUT" "###" "$cmdline_status" "cmdline.txt"
+  text_block "$OUT" "###" "$cmdline_status" "cmdline.txt" "$cmdline_fallback"
 fi
 
 heading "$OUT" "##" "info" "Runtime prerequisites"
 timed_command_block "info" "Detected UDC controllers" 5 "ls /sys/class/udc 2>/dev/null || true"
 if [[ -d /sys/kernel/config/usb_gadget ]]; then
-  printf '%s\n' "/sys/kernel/config/usb_gadget exists" | block "$OUT" "###" "ok" "configfs gadget path"
+  text_block "$OUT" "###" "ok" "configfs gadget path" "/sys/kernel/config/usb_gadget exists"
 else
-  printf '%s\n' "configfs missing" | block "$OUT" "###" "fail" "configfs gadget path"
+  text_block "$OUT" "###" "fail" "configfs gadget path" "configfs missing"
 fi
-printf '%s\n' "overlayfs=$(overlay_status)" | block "$OUT" "###" "info" "OverlayFS status"
+text_block "$OUT" "###" "info" "OverlayFS status" "overlayfs=$(overlay_status)"
 readonly_mode_status="info"
 readonly_mode_value="readonly_mode=$(readonly_mode 2>/dev/null || echo '<error>')"
 persist_status="info"
@@ -287,8 +287,8 @@ else
     persist_value="bluetooth_state_persistent=yes"
   fi
 fi
-printf '%s\n' "$readonly_mode_value" | block "$OUT" "###" "$readonly_mode_status" "Read-only mode"
-printf '%s\n' "$persist_value" | block "$OUT" "###" "$persist_status" "Persistent Bluetooth-state detection"
+text_block "$OUT" "###" "$readonly_mode_status" "Read-only mode" "$readonly_mode_value"
+text_block "$OUT" "###" "$persist_status" "Persistent Bluetooth-state detection" "$persist_value"
 if [[ -f "$B2U_READONLY_ENV_FILE" ]]; then
   timed_command_block "info" "Read-only environment file" 5 "cat '$B2U_READONLY_ENV_FILE'"
 fi
@@ -304,11 +304,11 @@ if machine_id_valid; then
   machine_id_status="ok"
   machine_id_value="machine_id_valid=yes"
 fi
-printf '%s\n' "$machine_id_value" | block "$OUT" "###" "$machine_id_status" "machine-id validation"
+text_block "$OUT" "###" "$machine_id_status" "machine-id validation" "$machine_id_value"
 if [[ -d /var/lib/bluetooth ]]; then
   timed_command_block "ok" "Bluetooth state files" 5 "find /var/lib/bluetooth -type f | sort"
 else
-  printf '%s\n' "/var/lib/bluetooth missing" | block "$OUT" "###" "fail" "Bluetooth state files"
+  text_block "$OUT" "###" "fail" "Bluetooth state files" "/var/lib/bluetooth missing"
 fi
 
 heading "$OUT" "##" "info" "systemd"
@@ -320,7 +320,7 @@ if [[ "${INITIAL_SERVICE_STATE:-unknown}" == "active" ]]; then
   service_state_value="service_state_before_debug=active"
   service_status_heading="ok"
 fi
-printf '%s\n' "$service_state_value" | block "$OUT" "###" "$service_state_status" "Initial service state"
+text_block "$OUT" "###" "$service_state_status" "Initial service state" "$service_state_value"
 timed_command_block "$service_status_heading" "Service status" 8 "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}'"
 timed_command_block "info" "Recent service journal" 8 "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 200 --no-pager"
 
@@ -334,10 +334,10 @@ if [[ -x "${VENV_DIR}/bin/python" ]]; then
 
   stop_service_for_debug
 
-  printf '%s\n' \
+  text_block "$OUT" "###" "info" "Live debug setup" \
     "service_stopped_for_live_debug=$([[ $SERVICE_WAS_STOPPED -eq 1 ]] && echo yes || echo no)" \
     "$([[ -n "$DURATION" ]] && printf 'live_debug_duration=%ss' "$DURATION" || printf 'live_debug_duration=until interrupted')" \
-    "live_debug_command=${DEBUG_CMD}" | block "$OUT" "###" "info" "Live debug setup"
+    "live_debug_command=${DEBUG_CMD}"
   heading "$OUT" "###" "ok" "Live Bluetooth-2-USB debug output"
   if [[ -n "$DURATION" ]]; then
     info "Live debug duration: ${DURATION}s"
@@ -346,5 +346,5 @@ if [[ -x "${VENV_DIR}/bin/python" ]]; then
   fi
   run_live_debug_block "${DEBUG_CMD}"
 else
-  printf '%s\n' "missing virtualenv at ${VENV_DIR}" | block "$OUT" "###" "fail" "CLI runtime"
+  text_block "$OUT" "###" "fail" "CLI runtime" "missing virtualenv at ${VENV_DIR}"
 fi

@@ -91,37 +91,37 @@ write_markdown_report() {
   write_line "$OUT"
 
   heading "$OUT" "##" "$result_status" "Summary"
-  printf '%s\n' \
+  text_block "$OUT" "###" "$result_status" "Overall result" \
     "Overall result" \
     "smoke_test=${result}" \
     "overlayfs=$(overlay_status)" \
     "readonly_mode=${READONLY_MODE}" \
-    "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)" | block "$OUT" "###" "$result_status" "Overall result"
-  printf '%s\n' \
+    "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)"
+  text_block "$OUT" "###" "info" "Boot and runtime summary" \
     "boot_config=${CONFIG_TXT}" \
     "cmdline=${CMDLINE_TXT}" \
     "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
     "udc_controllers=${UDC_LIST:-<none>}" \
     "service_unit=${B2U_SERVICE_UNIT}" \
-    "venv_python=${VENV_DIR}/bin/python" | block "$OUT" "###" "info" "Boot and runtime summary"
+    "venv_python=${VENV_DIR}/bin/python"
 
   heading "$OUT" "##" "$result_status" "Checks"
-  printf '%s\n' \
+  text_block "$OUT" "###" "$boot_checks_status" "Boot configuration checks" \
     "dwc2_overlay=$(grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" && echo yes || echo no)" \
     "modules_load_present=$(grep -q 'modules-load=' "$CMDLINE_TXT" && echo yes || echo no)" \
     "configfs_gadget_path=$([[ -d /sys/kernel/config/usb_gadget ]] && echo present || echo missing)" \
-    "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)" | block "$OUT" "###" "$boot_checks_status" "Boot configuration checks"
-  printf '%s\n' \
+    "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)"
+  text_block "$OUT" "###" "$service_checks_status" "Service and runtime checks" \
     "service_enabled=$(systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
     "service_active=$(systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
     "venv_python_present=$([[ -x "${VENV_DIR}/bin/python" ]] && echo yes || echo no)" \
-    "bluetooth_state_dir=$([[ -d /var/lib/bluetooth ]] && echo present || echo missing)" | block "$OUT" "###" "$service_checks_status" "Service and runtime checks"
+    "bluetooth_state_dir=$([[ -d /var/lib/bluetooth ]] && echo present || echo missing)"
 
   heading "$OUT" "##" "$result_status" "CLI diagnostics"
-  printf '%s\n' "validate_env=${validate_status}" | block "$OUT" "###" "$validate_heading_status" "CLI environment validation status"
+  text_block "$OUT" "###" "$validate_heading_status" "CLI environment validation status" "validate_env=${validate_status}"
   code <"$VALIDATE_LOG" >>"$OUT"
   write_line "$OUT"
-  printf '%s\n' "dry_run=${dry_run_status}" | block "$OUT" "###" "$dry_run_heading_status" "CLI dry-run status"
+  text_block "$OUT" "###" "$dry_run_heading_status" "CLI dry-run status" "dry_run=${dry_run_status}"
   code <"$DRY_RUN_LOG" >>"$OUT"
   write_line "$OUT"
 
