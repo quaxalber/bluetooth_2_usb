@@ -130,7 +130,6 @@ block() {
   local title="$4"
   heading "$outfile" "$level" "$status" "$title"
   code >>"$outfile"
-  write_line "$outfile"
 }
 
 text_block() {
@@ -140,6 +139,7 @@ text_block() {
   local title="$4"
   shift 4
   printf '%s\n' "$@" | block "$outfile" "$level" "$status" "$title"
+  write_line "$outfile"
 }
 
 command_block() {
@@ -151,10 +151,9 @@ command_block() {
   local command_status=0
   local tmp
 
-  heading "$outfile" "$level" "$status" "$title"
   tmp="$(mktemp)"
   bash -lc "$command" >"$tmp" 2>&1 || command_status=$?
-  code <"$tmp" >>"$outfile"
+  block "$outfile" "$level" "$status" "$title" <"$tmp"
   rm -f "$tmp"
   if [[ $command_status -ne 0 ]]; then
     write_line "$outfile" "_Command exited with status ${command_status}_"

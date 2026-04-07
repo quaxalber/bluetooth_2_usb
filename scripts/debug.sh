@@ -104,6 +104,7 @@ timed_command_block() {
   local timeout_secs="$3"
   local command="$4"
   shell_output "$timeout_secs" "$command" | block "$OUT" "###" "$status" "$title"
+  write_line "$OUT"
 }
 
 redact_stream() {
