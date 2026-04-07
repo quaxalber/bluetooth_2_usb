@@ -48,6 +48,7 @@ require_commands git install python3 systemctl
 
 [[ -d "$B2U_INSTALL_DIR" ]] || fail "Install directory not found: $B2U_INSTALL_DIR"
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
+SERVICE_WAS_ACTIVE=0
 
 if [[ -d "${B2U_INSTALL_DIR}/.git" ]]; then
   if git -C "$B2U_INSTALL_DIR" remote get-url origin >/dev/null 2>&1; then
@@ -70,6 +71,12 @@ else
   rmdir "$tmpdir" 2>/dev/null || true
 fi
 
+if systemctl is-active --quiet "${B2U_SERVICE_UNIT}" 2>/dev/null; then
+  SERVICE_WAS_ACTIVE=1
+  info "Stopping ${B2U_SERVICE_UNIT} before virtual environment recreation"
+  systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT}"
+fi
+
 info "Recreating virtual environment at ${VENV_DIR}"
 recreate_venv "$VENV_DIR"
 
@@ -81,8 +88,15 @@ install_cli_wrapper
 systemctl daemon-reload
 
 if [[ $RESTART -eq 1 ]]; then
+  if [[ $SERVICE_WAS_ACTIVE -eq 1 ]]; then
+    info "Restarting ${B2U_SERVICE_UNIT}"
+  else
+    info "Starting ${B2U_SERVICE_UNIT}"
+  fi
   systemctl restart "${B2U_SERVICE_UNIT}"
   systemctl --no-pager --full status "${B2U_SERVICE_UNIT}" || true
+else
+  info "Leaving ${B2U_SERVICE_UNIT} stopped after update (--no-restart)"
 fi
 
 ok "Update complete"

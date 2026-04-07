@@ -220,11 +220,22 @@ default_repo_url() {
 }
 
 default_repo_branch() {
-  if git -C "$B2U_REPO_ROOT" rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
-    git -C "$B2U_REPO_ROOT" rev-parse --abbrev-ref HEAD
-  else
-    printf '%s\n' "main"
+  local branch_name
+  local tag_name
+
+  branch_name="$(git -C "$B2U_REPO_ROOT" symbolic-ref -q --short HEAD 2>/dev/null || true)"
+  if [[ -n "$branch_name" ]]; then
+    printf '%s\n' "$branch_name"
+    return
   fi
+
+  tag_name="$(git -C "$B2U_REPO_ROOT" describe --tags --exact-match 2>/dev/null || true)"
+  if [[ -n "$tag_name" ]]; then
+    printf '%s\n' "$tag_name"
+    return
+  fi
+
+  printf '%s\n' "main"
 }
 
 kernel_config_snippet() {

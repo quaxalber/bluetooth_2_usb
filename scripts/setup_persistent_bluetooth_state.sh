@@ -77,7 +77,6 @@ fi
 
 PERSIST_BLUETOOTH_DIR="${PERSIST_MOUNT}/${BLUETOOTH_SUBDIR}"
 mkdir -p "$PERSIST_MOUNT"
-mkdir -p "$PERSIST_BLUETOOTH_DIR"
 
 write_persist_mount_unit "$PERSIST_SPEC" "$PERSIST_MOUNT" "ext4"
 write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR"
@@ -106,6 +105,7 @@ systemctl stop bluetooth.service || fail "Failed to stop bluetooth.service befor
 
 systemctl daemon-reload
 systemctl enable --now "$(persist_mount_unit_name "$PERSIST_MOUNT")"
+mkdir -p "$PERSIST_BLUETOOTH_DIR"
 
 if [[ -d /var/lib/bluetooth ]]; then
   seed_lock_dir="${PERSIST_BLUETOOTH_DIR}/.b2u-seed.lock"

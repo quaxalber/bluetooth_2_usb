@@ -52,6 +52,50 @@ trap 'rm -f "$VALIDATE_LOG" "$DRY_RUN_LOG"' EXIT
 
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
+DWC2_MODE="$(dwc2_mode)"
+REQUIRED_MODULES=(libcomposite)
+if [[ "$DWC2_MODE" == "module" ]]; then
+  REQUIRED_MODULES=(dwc2 libcomposite)
+fi
+
+modules_load_has_required_modules() {
+  local module
+  local normalized_modules
+
+  normalized_modules=",${MODULES_LOAD_VALUE#modules-load=},"
+  for module in "${REQUIRED_MODULES[@]}"; do
+    if [[ "$normalized_modules" != *",$module,"* ]]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+required_modules_status() {
+  local module
+  local joined
+  local missing_modules=()
+
+  for module in "${REQUIRED_MODULES[@]}"; do
+    if [[ ",${MODULES_LOAD_VALUE#modules-load=}," != *",$module,"* ]]; then
+      missing_modules+=("$module")
+    fi
+  done
+
+  if [[ ${#missing_modules[@]} -eq 0 ]]; then
+    printf '%s\n' "all present"
+  else
+    joined="$(printf '%s,' "${missing_modules[@]}")"
+    joined="${joined%,}"
+    printf '%s\n' "missing: ${joined}"
+  fi
+}
+
+required_modules_list() {
+  local joined
+  joined="$(printf '%s,' "${REQUIRED_MODULES[@]}")"
+  printf '%s\n' "${joined%,}"
+}
 
 write_markdown_report() {
   local result="PASSED"
@@ -70,7 +114,7 @@ write_markdown_report() {
   fi
   [[ -s "$VALIDATE_LOG" ]] || validate_status="produced no output"
   [[ -s "$DRY_RUN_LOG" ]] || dry_run_status="produced no output"
-  if ! grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" || ! grep -q 'modules-load=' "$CMDLINE_TXT" || [[ ! -d /sys/kernel/config/usb_gadget ]] || [[ -z "$UDC_LIST" ]]; then
+  if ! grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" || ! modules_load_has_required_modules || [[ ! -d /sys/kernel/config/usb_gadget ]] || [[ -z "$UDC_LIST" ]]; then
     boot_checks_status="fail"
   fi
   if ! systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 || ! systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 || [[ ! -x "${VENV_DIR}/bin/python" ]] || [[ ! -d /var/lib/bluetooth ]]; then
@@ -101,6 +145,8 @@ write_markdown_report() {
     "boot_config=${CONFIG_TXT}" \
     "cmdline=${CMDLINE_TXT}" \
     "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
+    "required_modules=$(required_modules_list)" \
+    "required_modules_status=$(required_modules_status)" \
     "udc_controllers=${UDC_LIST:-<none>}" \
     "service_unit=${B2U_SERVICE_UNIT}" \
     "venv_python=${VENV_DIR}/bin/python"
@@ -108,7 +154,9 @@ write_markdown_report() {
   heading "$OUT" "##" "$result_status" "Checks"
   text_block "$OUT" "###" "$boot_checks_status" "Boot configuration checks" \
     "dwc2_overlay=$(grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" && echo yes || echo no)" \
-    "modules_load_present=$(grep -q 'modules-load=' "$CMDLINE_TXT" && echo yes || echo no)" \
+    "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
+    "required_modules=$(required_modules_list)" \
+    "required_modules_present=$(modules_load_has_required_modules && echo yes || echo no)" \
     "configfs_gadget_path=$([[ -d /sys/kernel/config/usb_gadget ]] && echo present || echo missing)" \
     "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)"
   text_block "$OUT" "###" "$service_checks_status" "Service and runtime checks" \
@@ -143,10 +191,10 @@ else
   EXIT_CODE=1
 fi
 
-if grep -q 'modules-load=' "$CMDLINE_TXT"; then
-  ok "cmdline.txt contains modules-load (${MODULES_LOAD_VALUE})"
+if modules_load_has_required_modules; then
+  ok "cmdline.txt contains required modules-load (${MODULES_LOAD_VALUE:-<missing>})"
 else
-  warn "cmdline.txt is missing modules-load"
+  warn "cmdline.txt is missing required modules ($(required_modules_list)); current value: ${MODULES_LOAD_VALUE:-<missing>}"
   EXIT_CODE=1
 fi
 
@@ -240,6 +288,8 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "Boot config: ${CONFIG_TXT}"
   echo "Cmdline: ${CMDLINE_TXT}"
   echo "modules-load token: ${MODULES_LOAD_VALUE:-<missing>}"
+  echo "required modules: $(required_modules_list)"
+  echo "required modules status: $(required_modules_status)"
   echo "UDC controllers: ${UDC_LIST:-<none>}"
   echo "Readonly mode: ${READONLY_MODE}"
   echo "OverlayFS: $(overlay_status)"

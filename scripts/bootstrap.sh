@@ -43,7 +43,7 @@ github_repo_slug() {
   printf '%s\n' "$repo_url"
 }
 
-resolve_latest_release_branch() {
+resolve_latest_release_tag() {
   local repo_url="$1"
   local repo_slug
   local api_url
@@ -98,7 +98,7 @@ for cmd in bash curl sed tar mktemp; do
 done
 
 if [[ -z "$REPO_BRANCH" ]]; then
-  if REPO_BRANCH="$(resolve_latest_release_branch "$REPO_URL")"; then
+  if REPO_BRANCH="$(resolve_latest_release_tag "$REPO_URL")"; then
     printf 'No --branch supplied; using latest published release: %s\n' "$REPO_BRANCH"
   else
     REPO_BRANCH="main"
