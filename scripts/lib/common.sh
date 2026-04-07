@@ -97,7 +97,7 @@ markdown_status_emoji() {
   esac
 }
 
-markdown_append_heading() {
+append_heading() {
   local outfile="$1"
   local level="$2"
   local status="$3"
@@ -111,7 +111,7 @@ markdown_append_heading() {
   fi
 }
 
-markdown_code_block() {
+code_block() {
   echo '```console'
   normalize_stream_trailing_newline
   echo '```'

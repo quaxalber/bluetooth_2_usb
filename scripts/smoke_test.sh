@@ -63,12 +63,12 @@ append_report_heading() {
   local status="$2"
   local title="$3"
   [[ $MARKDOWN -eq 1 ]] || return 0
-  markdown_append_heading "$OUT" "$level" "$status" "$title"
+  append_heading "$OUT" "$level" "$status" "$title"
 }
 
 append_report_code_block() {
   [[ $MARKDOWN -eq 1 ]] || return 0
-  markdown_code_block >>"$OUT"
+  code_block >>"$OUT"
 }
 
 append_report_literal_block() {
