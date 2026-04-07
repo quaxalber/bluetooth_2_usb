@@ -136,6 +136,7 @@ redact_stream() {
     s/PARTUUID=[^\s]+/PARTUUID=<<REDACTED_PARTUUID>>/g;
     s/UUID=[^\s]+/UUID=<<REDACTED_UUID>>/g;
     s/\/dev\/disk\/by-uuid\/[^\s]+/\/dev\/disk\/by-uuid\/<<REDACTED_UUID>>/g;
+    s/\/dev\/disk\/by-partuuid\/[^\s]+/\/dev\/disk\/by-partuuid\/<<REDACTED_PARTUUID>>/g;
     s/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/<<REDACTED_UUID>>/gi;
     s/^(?:[0-9a-f]{32})$/<<REDACTED_MACHINE_ID>>/;
     s/\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b/<<REDACTED_BT_MAC>>/g;

@@ -20,6 +20,7 @@ Before running this manual plan, these should already be true:
 
 - `smoke_test.sh --verbose` passes
 - `debug.sh --duration 10 --redact` produces a sane report
+- the `smoke_test.sh` and `debug.sh` output has been reviewed for correctness and internal consistency, not just exit status
 - install, update, uninstall, bootstrap, and tag-based install have already been validated
 - the Pi is on the code revision you actually want to evaluate
 

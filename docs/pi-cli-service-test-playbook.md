@@ -225,6 +225,15 @@ Expected behavior:
 - streams the live debug output to stdout
 - writes the live output into the Markdown report
 - restores the service when the script exits
+- the live stdout stream and the `### Live Bluetooth-2-USB debug output` section in the Markdown report should match
+- the report headings and status markers should match the actual system state instead of showing contradictory results
+
+Inspect the `debug.sh` and `smoke_test.sh` output carefully, not just the exit code:
+
+- confirm that the stdout summary matches the detailed sections that follow
+- confirm that green, yellow, and red status markers in the Markdown reports match the underlying command output
+- confirm that the Markdown reports do not expose identifiers that should have been redacted
+- confirm that service state, mount state, read-only mode, and persistent Bluetooth-state detection are mutually consistent
 
 ## Update tests
 
@@ -299,6 +308,12 @@ ssh -4 pi4b '
   sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
   sudo -n bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 '
+
+When you run `smoke_test.sh --markdown`, inspect the generated report as well:
+
+- the Markdown summary should agree with the normal terminal output
+- warning or failure markers should correspond to real problems in the detailed sections
+- `validate-env`, `dry-run`, mount details, and service status should not contradict each other
 ```
 
 ## Bootstrap tests
