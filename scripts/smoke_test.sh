@@ -132,7 +132,7 @@ write_markdown_report() {
     dry_run_heading_status="fail"
   fi
 
-  append_report_heading "#" "$result_status" "bluetooth_2_usb smoke test report"
+  append_report_heading "#" "none" "bluetooth_2_usb smoke test report"
   append_report_line
   append_report_line "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
   append_report_line
@@ -146,7 +146,7 @@ write_markdown_report() {
     "readonly_mode=${READONLY_MODE}" \
     "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)"
   append_report_literal_block \
-    "warn" \
+    "info" \
     "Boot and runtime summary" \
     "boot_config=${CONFIG_TXT}" \
     "cmdline=${CMDLINE_TXT}" \
@@ -179,11 +179,11 @@ write_markdown_report() {
   cat "$DRY_RUN_LOG" | append_report_code_block
   append_report_line
 
-  append_report_heading "##" "warn" "Mounts and service details"
-  append_report_shell_block "warn" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
-  append_report_shell_block "warn" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
+  append_report_heading "##" "info" "Mounts and service details"
+  append_report_shell_block "info" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
+  append_report_shell_block "info" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
   append_report_shell_block "$service_checks_status" "Service status" "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' || true"
-  append_report_shell_block "warn" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
+  append_report_shell_block "info" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
 }
 
 if [[ $MARKDOWN -eq 1 ]]; then

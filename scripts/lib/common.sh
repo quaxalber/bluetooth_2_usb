@@ -88,10 +88,12 @@ normalize_stream_trailing_newline() {
 
 markdown_status_emoji() {
   case "${1:-}" in
+    "" | none) printf '%s\n' "" ;;
     ok | pass | green) printf '%s\n' "🟢" ;;
-    warn | warning | yellow | info) printf '%s\n' "🟡" ;;
+    info | blue) printf '%s\n' "🔵" ;;
+    warn | warning | yellow) printf '%s\n' "🟡" ;;
     fail | error | red) printf '%s\n' "🔴" ;;
-    *) printf '%s\n' "⚪" ;;
+    *) printf '%s\n' "" ;;
   esac
 }
 
@@ -100,11 +102,17 @@ markdown_append_heading() {
   local level="$2"
   local status="$3"
   local title="$4"
-  printf '%s %s %s\n' "$level" "$(markdown_status_emoji "$status")" "$title" >>"$outfile"
+  local marker
+  marker="$(markdown_status_emoji "$status")"
+  if [[ -n "$marker" ]]; then
+    printf '%s %s %s\n' "$level" "$marker" "$title" >>"$outfile"
+  else
+    printf '%s %s\n' "$level" "$title" >>"$outfile"
+  fi
 }
 
 markdown_code_block() {
-  echo '```'
+  echo '```console'
   normalize_stream_trailing_newline
   echo '```'
 }
