@@ -88,12 +88,12 @@ ensure_final_newline() {
 
 status_emoji() {
   case "${1:-}" in
-    "" | none) printf '%s\n' "" ;;
-    ok | pass | green) printf '%s\n' "🟢" ;;
-    info | blue) printf '%s\n' "🔵" ;;
-    warn | warning | yellow) printf '%s\n' "🟡" ;;
-    fail | error | red) printf '%s\n' "🔴" ;;
-    *) printf '%s\n' "" ;;
+    "" | none) printf '%s' "" ;;
+    ok | pass | green) printf '%s' "🟢" ;;
+    info | blue) printf '%s' "🔵" ;;
+    warn | warning | yellow) printf '%s' "🟡" ;;
+    fail | error | red) printf '%s' "🔴" ;;
+    *) printf '%s' "" ;;
   esac
 }
 
