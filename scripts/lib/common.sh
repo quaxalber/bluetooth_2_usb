@@ -111,10 +111,46 @@ heading() {
   fi
 }
 
-fence_block() {
+write_line() {
+  local outfile="$1"
+  shift
+  printf '%s\n' "$@" >>"$outfile"
+}
+
+code() {
   echo '```console'
   ensure_final_newline
   echo '```'
+}
+
+block() {
+  local outfile="$1"
+  local level="$2"
+  local status="$3"
+  local title="$4"
+  heading "$outfile" "$level" "$status" "$title"
+  code >>"$outfile"
+  write_line "$outfile"
+}
+
+command_block() {
+  local outfile="$1"
+  local level="$2"
+  local status="$3"
+  local title="$4"
+  local command="$5"
+  local command_status=0
+  local tmp
+
+  heading "$outfile" "$level" "$status" "$title"
+  tmp="$(mktemp)"
+  bash -lc "$command" >"$tmp" 2>&1 || command_status=$?
+  code <"$tmp" >>"$outfile"
+  rm -f "$tmp"
+  if [[ $command_status -ne 0 ]]; then
+    write_line "$outfile" "_Command exited with status ${command_status}_"
+  fi
+  write_line "$outfile"
 }
 
 detect_boot_dir() {

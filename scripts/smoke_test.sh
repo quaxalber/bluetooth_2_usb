@@ -53,53 +53,6 @@ trap 'rm -f "$VALIDATE_LOG" "$DRY_RUN_LOG"' EXIT
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
 
-report_line() {
-  [[ $MARKDOWN -eq 1 ]] || return 0
-  printf '%s\n' "$*" >>"$OUT"
-}
-
-report_heading() {
-  local level="$1"
-  local status="$2"
-  local title="$3"
-  [[ $MARKDOWN -eq 1 ]] || return 0
-  heading "$OUT" "$level" "$status" "$title"
-}
-
-report_block() {
-  [[ $MARKDOWN -eq 1 ]] || return 0
-  fence_block >>"$OUT"
-}
-
-literal_report() {
-  local status="$1"
-  local title="$2"
-  shift 2
-  report_heading "###" "$status" "$title"
-  printf '%s\n' "$@" | report_block
-  report_line
-}
-
-shell_report() {
-  local status="$1"
-  local title="$2"
-  local command="$3"
-  local command_status=0
-  local tmp
-
-  [[ $MARKDOWN -eq 1 ]] || return 0
-
-  report_heading "###" "$status" "$title"
-  tmp="$(mktemp)"
-  bash -lc "$command" >"$tmp" 2>&1 || command_status=$?
-  report_block <"$tmp"
-  rm -f "$tmp"
-  if [[ $command_status -ne 0 ]]; then
-    report_line "_Command exited with status ${command_status}_"
-    report_line
-  fi
-}
-
 write_markdown_report() {
   local result="PASSED"
   local result_status="ok"
@@ -132,58 +85,51 @@ write_markdown_report() {
     dry_run_heading_status="fail"
   fi
 
-  report_heading "#" "none" "bluetooth_2_usb smoke test report"
-  report_line
-  report_line "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
-  report_line
+  heading "$OUT" "#" "none" "bluetooth_2_usb smoke test report"
+  write_line "$OUT"
+  write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
+  write_line "$OUT"
 
-  report_heading "##" "$result_status" "Summary"
-  literal_report \
-    "$result_status" \
+  heading "$OUT" "##" "$result_status" "Summary"
+  printf '%s\n' \
     "Overall result" \
     "smoke_test=${result}" \
     "overlayfs=$(overlay_status)" \
     "readonly_mode=${READONLY_MODE}" \
-    "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)"
-  literal_report \
-    "info" \
-    "Boot and runtime summary" \
+    "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)" | block "$OUT" "###" "$result_status" "Overall result"
+  printf '%s\n' \
     "boot_config=${CONFIG_TXT}" \
     "cmdline=${CMDLINE_TXT}" \
     "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
     "udc_controllers=${UDC_LIST:-<none>}" \
     "service_unit=${B2U_SERVICE_UNIT}" \
-    "venv_python=${VENV_DIR}/bin/python"
+    "venv_python=${VENV_DIR}/bin/python" | block "$OUT" "###" "info" "Boot and runtime summary"
 
-  report_heading "##" "$result_status" "Checks"
-  literal_report \
-    "$boot_checks_status" \
-    "Boot configuration checks" \
+  heading "$OUT" "##" "$result_status" "Checks"
+  printf '%s\n' \
     "dwc2_overlay=$(grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" && echo yes || echo no)" \
     "modules_load_present=$(grep -q 'modules-load=' "$CMDLINE_TXT" && echo yes || echo no)" \
     "configfs_gadget_path=$([[ -d /sys/kernel/config/usb_gadget ]] && echo present || echo missing)" \
-    "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)"
-  literal_report \
-    "$service_checks_status" \
-    "Service and runtime checks" \
+    "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)" | block "$OUT" "###" "$boot_checks_status" "Boot configuration checks"
+  printf '%s\n' \
     "service_enabled=$(systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
     "service_active=$(systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
     "venv_python_present=$([[ -x "${VENV_DIR}/bin/python" ]] && echo yes || echo no)" \
-    "bluetooth_state_dir=$([[ -d /var/lib/bluetooth ]] && echo present || echo missing)"
+    "bluetooth_state_dir=$([[ -d /var/lib/bluetooth ]] && echo present || echo missing)" | block "$OUT" "###" "$service_checks_status" "Service and runtime checks"
 
-  report_heading "##" "$result_status" "CLI diagnostics"
-  literal_report "$validate_heading_status" "CLI environment validation status" "validate_env=${validate_status}"
-  report_block <"$VALIDATE_LOG"
-  report_line
-  literal_report "$dry_run_heading_status" "CLI dry-run status" "dry_run=${dry_run_status}"
-  report_block <"$DRY_RUN_LOG"
-  report_line
+  heading "$OUT" "##" "$result_status" "CLI diagnostics"
+  printf '%s\n' "validate_env=${validate_status}" | block "$OUT" "###" "$validate_heading_status" "CLI environment validation status"
+  code <"$VALIDATE_LOG" >>"$OUT"
+  write_line "$OUT"
+  printf '%s\n' "dry_run=${dry_run_status}" | block "$OUT" "###" "$dry_run_heading_status" "CLI dry-run status"
+  code <"$DRY_RUN_LOG" >>"$OUT"
+  write_line "$OUT"
 
-  report_heading "##" "info" "Mounts and service details"
-  shell_report "info" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
-  shell_report "info" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
-  shell_report "$service_checks_status" "Service status" "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' || true"
-  shell_report "info" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
+  heading "$OUT" "##" "info" "Mounts and service details"
+  command_block "$OUT" "###" "info" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
+  command_block "$OUT" "###" "info" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
+  command_block "$OUT" "###" "$service_checks_status" "Service status" "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' || true"
+  command_block "$OUT" "###" "info" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
 }
 
 if [[ $MARKDOWN -eq 1 ]]; then
