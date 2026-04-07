@@ -80,13 +80,13 @@ prepare_log() {
   info "Logging to $logfile"
 }
 
-normalize_stream_trailing_newline() {
+ensure_final_newline() {
   # Some command outputs do not end with a newline. Normalize them once so
   # fenced Markdown blocks do not collapse into the closing fence.
   perl -0pe 's/(?<!\n)\z/\n/'
 }
 
-markdown_status_emoji() {
+status_emoji() {
   case "${1:-}" in
     "" | none) printf '%s\n' "" ;;
     ok | pass | green) printf '%s\n' "🟢" ;;
@@ -97,13 +97,13 @@ markdown_status_emoji() {
   esac
 }
 
-append_heading() {
+heading() {
   local outfile="$1"
   local level="$2"
   local status="$3"
   local title="$4"
   local marker
-  marker="$(markdown_status_emoji "$status")"
+  marker="$(status_emoji "$status")"
   if [[ -n "$marker" ]]; then
     printf '%s %s %s\n' "$level" "$marker" "$title" >>"$outfile"
   else
@@ -111,9 +111,9 @@ append_heading() {
   fi
 }
 
-code_block() {
+fence_block() {
   echo '```console'
-  normalize_stream_trailing_newline
+  ensure_final_newline
   echo '```'
 }
 
