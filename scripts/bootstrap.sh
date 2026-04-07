@@ -3,14 +3,20 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 REPO_URL="${B2U_BOOTSTRAP_REPO:-https://github.com/quaxalber/bluetooth_2_usb.git}"
-REPO_BRANCH="${B2U_BOOTSTRAP_BRANCH:-main}"
+REPO_BRANCH="${B2U_BOOTSTRAP_BRANCH:-}"
 NO_REBOOT=0
 
 usage() {
+  local default_branch_label
+  if [[ -n "$REPO_BRANCH" ]]; then
+    default_branch_label="$REPO_BRANCH"
+  else
+    default_branch_label="latest published release"
+  fi
   cat <<EOF
 Usage: curl .../bootstrap.sh | sudo bash -s -- [options]
   --repo <url>       Repository URL. Default: ${REPO_URL}
-  --branch <name>    Branch or tag to install. Default: ${REPO_BRANCH}
+  --branch <name>    Branch or tag to install. Default: ${default_branch_label}
   --no-reboot        Do not prompt for reboot
 EOF
 }
@@ -21,6 +27,35 @@ require_value() {
     printf 'Missing value for %s\n' "$opt" >&2
     exit 1
   }
+}
+
+github_repo_slug() {
+  local repo_url="$1"
+  case "$repo_url" in
+    https://github.com/*) repo_url="${repo_url#https://github.com/}" ;;
+    http://github.com/*) repo_url="${repo_url#http://github.com/}" ;;
+    git@github.com:*) repo_url="${repo_url#git@github.com:}" ;;
+    ssh://git@github.com/*) repo_url="${repo_url#ssh://git@github.com/}" ;;
+    *) return 1 ;;
+  esac
+  repo_url="${repo_url%.git}"
+  [[ "$repo_url" == */* ]] || return 1
+  printf '%s\n' "$repo_url"
+}
+
+resolve_latest_release_branch() {
+  local repo_url="$1"
+  local repo_slug
+  local api_url
+  local response
+  local tag_name
+
+  repo_slug="$(github_repo_slug "$repo_url")" || return 1
+  api_url="https://api.github.com/repos/${repo_slug}/releases/latest"
+  response="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api_url")" || return 1
+  tag_name="$(printf '%s' "$response" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
+  [[ -n "$tag_name" ]] || return 1
+  printf '%s\n' "$tag_name"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -55,12 +90,21 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 
-for cmd in bash curl tar mktemp; do
+for cmd in bash curl sed tar mktemp; do
   command -v "$cmd" >/dev/null 2>&1 || {
     printf 'Missing required command: %s\n' "$cmd" >&2
     exit 1
   }
 done
+
+if [[ -z "$REPO_BRANCH" ]]; then
+  if REPO_BRANCH="$(resolve_latest_release_branch "$REPO_URL")"; then
+    printf 'No --branch supplied; using latest published release: %s\n' "$REPO_BRANCH"
+  else
+    REPO_BRANCH="main"
+    printf 'Could not resolve the latest published release for %s. Falling back to: %s\n' "$REPO_URL" "$REPO_BRANCH" >&2
+  fi
+fi
 
 tmpdir="$(mktemp -d)"
 cleanup() {

@@ -76,6 +76,8 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 
 > [!NOTE]
 > As a general best practice, inspect `curl | sudo bash` installers before running them, especially on systems you care about. That advice applies here too.
+>
+> Without `--branch`, the bootstrap installer now installs the latest published release. Use `--branch main` or another explicit branch or tag when you intentionally want a non-release build.
 
 ### 3. Reboot
 
@@ -286,6 +288,7 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10 --redact
 
 `debug.sh` temporarily stops the service if it is running, launches a foreground Bluetooth-2-USB `--debug` session, and restores the service afterward.
 The live Bluetooth-2-USB debug output is echoed to stdout while the same output is captured in the Markdown report.
+Both `debug.sh` and `smoke_test.sh --markdown` use green, yellow, and red status markers in their generated Markdown headings so the important health signals stand out quickly when you review or share a report.
 
 `--duration` bounds that live debug session. If you omit it, the debug run continues until you stop it with `Ctrl+C`.
 
@@ -656,12 +659,12 @@ All managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after ins
 
 | Script | Purpose | Arguments |
 | --- | --- | --- |
-| `bootstrap.sh` | Download a repository archive from GitHub and run the managed installer without cloning first. | `--repo <url>` repository URL for the archive download<br>`--branch <name>` branch or tag to install<br>`--no-reboot` skip the immediate reboot prompt |
+| `bootstrap.sh` | Download a repository archive from GitHub and run the managed installer without cloning first. Without `--branch`, it installs the latest published release when the repository is hosted on GitHub. | `--repo <url>` repository URL for the archive download<br>`--branch <name>` branch or tag to install<br>`--no-reboot` skip the immediate reboot prompt |
 | `install.sh` | Install or refresh the managed checkout in `/opt/bluetooth_2_usb`, patch boot files, recreate the virtual environment, and install the systemd unit and wrapper. | `--repo <url\|path>` repository source<br>`--branch <name>` branch or tag to check out<br>`--no-reboot` skip the reboot prompt |
 | `update.sh` | Update an existing managed installation, refresh the checkout and virtual environment, and optionally restart the service. | `--repo <url\|path>` override the update source<br>`--branch <name>` override the branch or tag<br>`--no-restart` update files without restarting the service |
 | `uninstall.sh` | Stop and disable the managed service, remove units and helper files, and optionally restore the boot configuration captured during install. | `--purge` remove the installation directory<br>`--revert-boot` restore the managed boot snapshot<br>`--no-reboot` skip the reboot prompt |
 | `debug.sh` | Collect a Markdown debug report with clearly titled sections for service state, mount state, boot config, dmesg, CLI diagnostics, and a live foreground debug run. The live Bluetooth-2-USB debug output is also echoed to stdout while the report is being generated. | `--duration <sec>` bound the live debug session; omit to run until interrupted<br>`--redact` redact hostname, machine-id, UUIDs, PARTUUIDs, and Bluetooth MAC addresses |
-| `smoke_test.sh` | Perform a quick installation and runtime health check for boot config, UDC, service state, environment validation, and read-only status, with a more detailed summary in both normal and verbose output. It can also write a Markdown report for later sharing or archival. | `--verbose` print mount details, validate-env output, dry-run output, service status, and `journalctl` output<br>`--markdown` also write a Markdown report under `/var/log/bluetooth_2_usb/` |
+| `smoke_test.sh` | Perform a quick installation and runtime health check for boot config, UDC, service state, environment validation, and read-only status, with a more detailed summary in both normal and verbose output. It can also write a Markdown report with the same status markers for later sharing or archival. | `--verbose` print mount details, validate-env output, dry-run output, service status, and `journalctl` output<br>`--markdown` also write a Markdown report under `/var/log/bluetooth_2_usb/` |
 | `enable_readonly_overlayfs.sh` | Enable Raspberry Pi OS OverlayFS mode and optionally prepare persistent Bluetooth state. | `--mode <easy\|persistent>` choose best-effort or persistent mode<br>`--persist-device <path>` device to use for persistent Bluetooth state in persistent mode |
 | `disable_readonly_overlayfs.sh` | Disable Raspberry Pi OS OverlayFS root mode while keeping persistent Bluetooth-state configuration in place. | none |
 | `setup_persistent_bluetooth_state.sh` | Create or validate the persistent Bluetooth-state mount, write the mount units and bind mount, and seed `/var/lib/bluetooth` into the persistent location. | `--device <path>` block device backing the persistent filesystem<br>`--no-enable` prepare configuration and units without activating them immediately |

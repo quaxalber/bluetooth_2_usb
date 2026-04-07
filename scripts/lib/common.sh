@@ -80,6 +80,35 @@ prepare_log() {
   info "Logging to $logfile"
 }
 
+normalize_stream_trailing_newline() {
+  # Some command outputs do not end with a newline. Normalize them once so
+  # fenced Markdown blocks do not collapse into the closing fence.
+  perl -0pe 's/(?<!\n)\z/\n/'
+}
+
+markdown_status_emoji() {
+  case "${1:-}" in
+    ok | pass | green) printf '%s\n' "🟢" ;;
+    warn | warning | yellow | info) printf '%s\n' "🟡" ;;
+    fail | error | red) printf '%s\n' "🔴" ;;
+    *) printf '%s\n' "⚪" ;;
+  esac
+}
+
+markdown_append_heading() {
+  local outfile="$1"
+  local level="$2"
+  local status="$3"
+  local title="$4"
+  printf '%s %s %s\n' "$level" "$(markdown_status_emoji "$status")" "$title" >>"$outfile"
+}
+
+markdown_code_block() {
+  echo '```'
+  normalize_stream_trailing_newline
+  echo '```'
+}
+
 detect_boot_dir() {
   if [[ -d /boot/firmware ]]; then
     printf '%s\n' "/boot/firmware"
