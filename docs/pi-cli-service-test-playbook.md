@@ -263,16 +263,17 @@ No-restart path:
 
 ```bash
 ssh -4 pi4b '
-  BEFORE=$(systemctl show -P ActiveEnterTimestampMonotonic bluetooth_2_usb.service)
   cd /home/user/bluetooth_2_usb_test_2026_04_05
+  sudo -n systemctl stop bluetooth_2_usb.service
   sudo -n bash scripts/update.sh \
     --repo https://github.com/quaxalber/bluetooth_2_usb.git \
     --branch feat/main-hardening-test-2026-04-05 \
     --no-restart
-  AFTER=$(systemctl show -P ActiveEnterTimestampMonotonic bluetooth_2_usb.service)
-  printf "BEFORE=%s\nAFTER=%s\n" "$BEFORE" "$AFTER"
+  systemctl is-active bluetooth_2_usb.service || true
 '
 ```
+
+`update.sh --no-restart` is intentionally only valid when the service is already stopped. Verify that it remains stopped afterward.
 
 ## Install tests
 
@@ -452,7 +453,6 @@ ssh -4 pi4b '
   sudo -n bash scripts/enable_readonly_overlayfs.sh --mode easy
   sudo -n raspi-config nonint get_overlay_now
   sudo -n cat /etc/default/bluetooth_2_usb_readonly
-  ls -l /boot/firmware/bluetooth_2_usb/readonly_snapshot
   sudo -n bash scripts/smoke_test.sh --verbose
   sudo -n bash scripts/debug.sh --duration 3 --redact
   sudo -n bash scripts/disable_readonly_overlayfs.sh

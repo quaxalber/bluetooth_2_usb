@@ -18,6 +18,7 @@ Review at least:
 - every `docs/*.md` file
 - `scripts/*.sh`
 - `scripts/lib/common.sh`
+- `scripts/lib/report.sh`
 - `src/bluetooth_2_usb/args.py`
 - `pyproject.toml`
 
@@ -90,6 +91,7 @@ Verify documented paths and service names against the current shared shell const
 
 ```bash
 sed -n '1,220p' scripts/lib/common.sh
+sed -n '1,220p' scripts/lib/report.sh
 sed -n '1,120p' bluetooth_2_usb.service
 ```
 
@@ -150,7 +152,7 @@ When doc changes include command examples or script interface descriptions, run 
 
 ```bash
 python -m compileall src
-bash -n scripts/*.sh scripts/lib/common.sh
+bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 ```
 
 ## Review heuristics

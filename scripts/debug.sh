@@ -4,6 +4,8 @@ IFS=$'\n\t'
 
 # shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
+# shellcheck source=./lib/report.sh
+source "$(cd -- "$(dirname "$0")" && pwd)/lib/report.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 DURATION=""
@@ -52,8 +54,11 @@ REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
 INITIAL_SERVICE_STATE="$(systemctl is-active "${B2U_SERVICE_UNIT}" 2>/dev/null || true)"
 if [[ -f "$B2U_ENV_FILE" ]] && [[ -s "$B2U_ENV_FILE" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ "$line" =~ ^BLUETOOTH_2_USB_ARGS=\"([^\"]*)\"$ ]] || continue
-    RUN_ARGS="${BASH_REMATCH[1]}"
+    if [[ "$line" =~ ^BLUETOOTH_2_USB_ARGS=\"([^\"]*)\"$ ]]; then
+      RUN_ARGS="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ^BLUETOOTH_2_USB_ARGS=(.+)$ ]]; then
+      RUN_ARGS="${BASH_REMATCH[1]}"
+    fi
   done <"$B2U_ENV_FILE"
 fi
 if [[ -x "${VENV_DIR}/bin/bluetooth_2_usb" ]]; then
@@ -103,8 +108,9 @@ timed_command_block() {
   local title="$2"
   local timeout_secs="$3"
   local command="$4"
-  shell_output "$timeout_secs" "$command" | block "$OUT" "###" "$status" "$title"
-  write_line "$OUT"
+  report_heading "$OUT" "###" "$status" "$title"
+  shell_output "$timeout_secs" "$command" | report_code_block >>"$OUT"
+  report_write_line "$OUT"
 }
 
 redact_stream() {
@@ -136,8 +142,8 @@ shell_output() {
   local tmp
 
   tmp="$(mktemp)"
-  B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" timeout "$timeout_secs" bash -lc "$command" >"$tmp" 2>&1 || status=$?
-  B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" | ensure_final_newline
+  B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" timeout "$timeout_secs" bash --noprofile --norc -c "$command" >"$tmp" 2>&1 || status=$?
+  B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" | report_ensure_final_newline
   rm -f "$tmp"
   if [[ $status -eq 124 ]]; then
     printf '[timed out after %ss]\n' "$timeout_secs"
@@ -195,12 +201,12 @@ run_live_debug_block() {
   info "Streaming live Bluetooth-2-USB debug output to stdout and $OUT"
 
   if [[ -n "$DURATION" ]]; then
-    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" timeout "$DURATION" bash -lc "$command" \
+    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" timeout "$DURATION" bash --noprofile --norc -c "$command" \
       > >(B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream | tee "$tmp") 2>&1 || status=$?
   else
     trap 'interrupted="INT"; STOP_SIGNAL="INT"; [[ -n "$child_pid" ]] && kill -INT -- "-$child_pid" 2>/dev/null || true' INT
     trap 'interrupted="TERM"; STOP_SIGNAL="TERM"; [[ -n "$child_pid" ]] && kill -TERM -- "-$child_pid" 2>/dev/null || true' TERM
-    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" setsid bash -lc "$command" \
+    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" setsid bash --noprofile --norc -c "$command" \
       > >(B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream | tee "$tmp") 2>&1 &
     child_pid=$!
     wait "$child_pid" || status=$?
@@ -208,7 +214,7 @@ run_live_debug_block() {
     trap 'STOP_SIGNAL="TERM"' TERM
   fi
 
-  ensure_final_newline <"$tmp" >>"$OUT"
+  report_ensure_final_newline <"$tmp" >>"$OUT"
   rm -f "$tmp"
 
   if [[ $status -eq 124 ]]; then
@@ -231,21 +237,21 @@ run_live_debug_block() {
   return 0
 }
 
-heading "$OUT" "#" "none" "bluetooth_2_usb debug report"
-write_line "$OUT"
-write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
-write_line "$OUT"
+report_heading "$OUT" "#" "none" "bluetooth_2_usb debug report"
+report_write_line "$OUT"
+report_write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
+report_write_line "$OUT"
 
-heading "$OUT" "##" "info" "System"
-text_block "$OUT" "###" "info" "Hostname" "$(
+report_heading "$OUT" "##" "info" "System"
+report_text_block "$OUT" "###" "info" "Hostname" "$(
   printf '%s\n' "$REDACT_HOSTNAME" | B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream
 )"
 timed_command_block "info" "Kernel" 5 "uname -a"
 [[ -f /etc/os-release ]] && timed_command_block "info" "OS release" 5 "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"
 timed_command_block "info" "Hardware model" 5 "tr -d '\\0' </proc/device-tree/model 2>/dev/null || true"
 
-heading "$OUT" "##" "info" "Boot"
-text_block "$OUT" "###" "info" "Boot directory" "boot_dir=${BOOT_DIR}"
+report_heading "$OUT" "##" "info" "Boot"
+report_text_block "$OUT" "###" "info" "Boot directory" "boot_dir=${BOOT_DIR}"
 config_status="info"
 config_command="grep -nE '^\[all\]|dtoverlay=dwc2.*' '$CONFIG_TXT'"
 config_fallback="missing: $CONFIG_TXT"
@@ -253,7 +259,7 @@ config_fallback="missing: $CONFIG_TXT"
 if [[ -f "$CONFIG_TXT" ]]; then
   timed_command_block "$config_status" "config.txt dwc2 lines" 5 "$config_command"
 else
-  text_block "$OUT" "###" "$config_status" "config.txt dwc2 lines" "$config_fallback"
+  report_text_block "$OUT" "###" "$config_status" "config.txt dwc2 lines" "$config_fallback"
 fi
 cmdline_status="info"
 cmdline_command="cat '$CMDLINE_TXT'"
@@ -262,17 +268,17 @@ cmdline_fallback="missing: $CMDLINE_TXT"
 if [[ -f "$CMDLINE_TXT" ]]; then
   timed_command_block "$cmdline_status" "cmdline.txt" 5 "$cmdline_command"
 else
-  text_block "$OUT" "###" "$cmdline_status" "cmdline.txt" "$cmdline_fallback"
+  report_text_block "$OUT" "###" "$cmdline_status" "cmdline.txt" "$cmdline_fallback"
 fi
 
-heading "$OUT" "##" "info" "Runtime prerequisites"
+report_heading "$OUT" "##" "info" "Runtime prerequisites"
 timed_command_block "info" "Detected UDC controllers" 5 "ls /sys/class/udc 2>/dev/null || true"
 if [[ -d /sys/kernel/config/usb_gadget ]]; then
-  text_block "$OUT" "###" "ok" "configfs gadget path" "/sys/kernel/config/usb_gadget exists"
+  report_text_block "$OUT" "###" "ok" "configfs gadget path" "/sys/kernel/config/usb_gadget exists"
 else
-  text_block "$OUT" "###" "fail" "configfs gadget path" "configfs missing"
+  report_text_block "$OUT" "###" "fail" "configfs gadget path" "configfs missing"
 fi
-text_block "$OUT" "###" "info" "OverlayFS status" "overlayfs=$(overlay_status)"
+report_text_block "$OUT" "###" "info" "OverlayFS status" "overlayfs=$(overlay_status)"
 readonly_mode_status="info"
 readonly_mode_value="readonly_mode=$(readonly_mode 2>/dev/null || echo '<error>')"
 persist_status="info"
@@ -288,8 +294,8 @@ else
     persist_value="bluetooth_state_persistent=yes"
   fi
 fi
-text_block "$OUT" "###" "$readonly_mode_status" "Read-only mode" "$readonly_mode_value"
-text_block "$OUT" "###" "$persist_status" "Persistent Bluetooth-state detection" "$persist_value"
+report_text_block "$OUT" "###" "$readonly_mode_status" "Read-only mode" "$readonly_mode_value"
+report_text_block "$OUT" "###" "$persist_status" "Persistent Bluetooth-state detection" "$persist_value"
 if [[ -f "$B2U_READONLY_ENV_FILE" ]]; then
   timed_command_block "info" "Read-only environment file" 5 "cat '$B2U_READONLY_ENV_FILE'"
 fi
@@ -305,14 +311,14 @@ if machine_id_valid; then
   machine_id_status="ok"
   machine_id_value="machine_id_valid=yes"
 fi
-text_block "$OUT" "###" "$machine_id_status" "machine-id validation" "$machine_id_value"
+report_text_block "$OUT" "###" "$machine_id_status" "machine-id validation" "$machine_id_value"
 if [[ -d /var/lib/bluetooth ]]; then
   timed_command_block "ok" "Bluetooth state files" 5 "find /var/lib/bluetooth -type f | sort"
 else
-  text_block "$OUT" "###" "fail" "Bluetooth state files" "/var/lib/bluetooth missing"
+  report_text_block "$OUT" "###" "fail" "Bluetooth state files" "/var/lib/bluetooth missing"
 fi
 
-heading "$OUT" "##" "info" "systemd"
+report_heading "$OUT" "##" "info" "systemd"
 service_state_status="warn"
 service_state_value="service_state_before_debug=${INITIAL_SERVICE_STATE:-unknown}"
 service_status_heading="warn"
@@ -321,25 +327,25 @@ if [[ "${INITIAL_SERVICE_STATE:-unknown}" == "active" ]]; then
   service_state_value="service_state_before_debug=active"
   service_status_heading="ok"
 fi
-text_block "$OUT" "###" "$service_state_status" "Initial service state" "$service_state_value"
+report_text_block "$OUT" "###" "$service_state_status" "Initial service state" "$service_state_value"
 timed_command_block "$service_status_heading" "Service status" 8 "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}'"
 timed_command_block "info" "Recent service journal" 8 "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 200 --no-pager"
 
-heading "$OUT" "##" "info" "dmesg"
+report_heading "$OUT" "##" "info" "dmesg"
 timed_command_block "info" "Relevant kernel log lines" 8 "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"
 
-heading "$OUT" "##" "info" "CLI"
+report_heading "$OUT" "##" "info" "CLI"
 if [[ -x "${VENV_DIR}/bin/python" ]]; then
   timed_command_block "ok" "CLI version" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --version"
   timed_command_block "ok" "CLI environment validation" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --validate-env"
 
   stop_service_for_debug
 
-  text_block "$OUT" "###" "info" "Live debug setup" \
+  report_text_block "$OUT" "###" "info" "Live debug setup" \
     "service_stopped_for_live_debug=$([[ $SERVICE_WAS_STOPPED -eq 1 ]] && echo yes || echo no)" \
     "$([[ -n "$DURATION" ]] && printf 'live_debug_duration=%ss' "$DURATION" || printf 'live_debug_duration=until interrupted')" \
     "live_debug_command=${DEBUG_CMD}"
-  heading "$OUT" "###" "ok" "Live Bluetooth-2-USB debug output"
+  report_heading "$OUT" "###" "ok" "Live Bluetooth-2-USB debug output"
   if [[ -n "$DURATION" ]]; then
     info "Live debug duration: ${DURATION}s"
   else
@@ -347,5 +353,5 @@ if [[ -x "${VENV_DIR}/bin/python" ]]; then
   fi
   run_live_debug_block "${DEBUG_CMD}"
 else
-  text_block "$OUT" "###" "fail" "CLI runtime" "missing virtualenv at ${VENV_DIR}"
+  report_text_block "$OUT" "###" "fail" "CLI runtime" "missing virtualenv at ${VENV_DIR}"
 fi

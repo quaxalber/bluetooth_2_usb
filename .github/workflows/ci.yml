@@ -46,15 +46,15 @@ jobs:
 
       - name: Shell formatting checks
         run: |
-          shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh
+          shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 
       - name: Shell lint checks
         run: |
-          shellcheck -x scripts/*.sh scripts/lib/common.sh
+          shellcheck -x scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 
       - name: Shell syntax checks
         run: |
-          bash -n scripts/*.sh scripts/lib/common.sh
+          bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 
       - name: YAML lint checks
         run: |

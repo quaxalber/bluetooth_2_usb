@@ -1,4 +1,5 @@
 import asyncio
+import os
 import signal
 from dataclasses import dataclass
 from logging import DEBUG
@@ -28,31 +29,39 @@ class EnvironmentStatus:
 
 
 def get_udc_path() -> Path | None:
+    override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
+    if override_path:
+        candidate = Path(override_path)
+        return candidate if candidate.is_file() else None
+
     udc_root = Path("/sys/class/udc")
     if not udc_root.is_dir():
         return None
 
-    controllers = [entry for entry in udc_root.iterdir() if entry.is_dir()]
+    controllers = sorted(entry for entry in udc_root.iterdir() if entry.is_dir())
     if not controllers:
         return None
 
     def state_path(controller: Path) -> Path:
         return controller / "state"
 
-    otg_candidates = [
-        controller
-        for controller in controllers
-        if any(token in controller.name.lower() for token in ("otg", "gadget", "dwc2"))
-        and state_path(controller).is_file()
-    ]
-    if otg_candidates:
-        return state_path(otg_candidates[0])
+    scored_controllers: list[tuple[int, str, Path]] = []
+    for controller in controllers:
+        candidate = state_path(controller)
+        if not candidate.is_file():
+            continue
 
-    valid_controllers = [
-        controller for controller in controllers if state_path(controller).is_file()
-    ]
-    if valid_controllers:
-        return state_path(valid_controllers[0])
+        name = controller.name.lower()
+        score = 0
+        if any(token in name for token in ("otg", "gadget", "dwc2")):
+            score += 100
+        if name.startswith("2098") or name.startswith("fe98"):
+            score += 25
+        scored_controllers.append((score, controller.name, candidate))
+
+    if scored_controllers:
+        scored_controllers.sort(key=lambda item: (-item[0], item[1]))
+        return scored_controllers[0][2]
 
     return None
 

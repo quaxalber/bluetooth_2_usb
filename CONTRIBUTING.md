@@ -123,7 +123,7 @@ A practical pre-check is:
 ```bash
 black src
 ruff check --fix src
-shfmt -w -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh
+shfmt -w -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 ```
 
 Run the same baseline checks that CI runs:
@@ -150,9 +150,9 @@ python -m bluetooth_2_usb --dry-run || {
     exit "$status"
   fi
 }
-shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh
-shellcheck -x scripts/*.sh scripts/lib/common.sh
-bash -n scripts/*.sh scripts/lib/common.sh
+shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+shellcheck -x scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 yamllint .github/workflows/ci.yml
 ```
 

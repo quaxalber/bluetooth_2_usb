@@ -14,7 +14,7 @@ Usage: sudo ./enable_readonly_overlayfs.sh [options]
   --mode <easy|persistent>   Read-only mode. Default: easy
   --persist-device <path>    Block device for persistent Bluetooth state
 
-Easy mode only enables OverlayFS and stores recovery snapshots on /boot.
+Easy mode only enables OverlayFS.
 Persistent mode additionally bind-mounts /var/lib/bluetooth from a writable ext4 mount.
 EOF
 }
@@ -44,8 +44,6 @@ done
 ensure_root
 prepare_log "readonly_enable"
 require_commands raspi-config
-
-snapshot_readonly_state
 
 if [[ "$MODE" == "easy" ]]; then
   if bluetooth_state_persistent; then

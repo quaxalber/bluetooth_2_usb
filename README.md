@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 > [!NOTE]
 > As a general best practice, inspect `curl | sudo bash` installers before running them, especially on systems you care about. That advice applies here too.
 >
-> Without `--branch`, the bootstrap installer now installs the latest published release. Use `--branch main` or another explicit branch or tag when you intentionally want a non-release build.
+> Without `--branch`, the bootstrap installer installs the latest published release. If release resolution fails, it stops and asks you to pass `--branch` explicitly instead of silently falling forward to branch tip.
 
 ### 3. Reboot
 
@@ -154,6 +154,12 @@ cd bluetooth_2_usb
 sudo ./scripts/install.sh
 ```
 
+Install the latest published release from a normal clone:
+
+```bash
+sudo ./scripts/install.sh --latest-release
+```
+
 ### Install a specific branch or tag
 
 Useful when testing a feature branch or release candidate:
@@ -183,6 +189,10 @@ After editing that file, restart the service:
 ```bash
 sudo systemctl restart bluetooth_2_usb.service
 ```
+
+Advanced runtime override:
+
+- Set `BLUETOOTH_2_USB_UDC_PATH=/sys/class/udc/.../state` in the service environment file only if you need to pin UDC detection on a system with multiple controllers.
 
 ### Common runtime options
 
@@ -258,6 +268,16 @@ Update the managed installation in `/opt/bluetooth_2_usb` and recreate the virtu
 sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
+`update.sh` follows the source metadata recorded at install time:
+
+- installs done from a branch stay on that branch by default
+- installs pinned to a tag stay pinned to that tag by default
+- installs done with the bootstrap default or `--latest-release` keep following the newest published release
+
+Use `--branch` or `--latest-release` when you intentionally want to change that tracking mode.
+
+`--no-restart` is only for a service that is already stopped. It updates files and leaves the service down.
+
 ## Uninstalling
 
 Remove the managed service and helper files:
@@ -277,6 +297,8 @@ Also revert managed boot configuration changes:
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/uninstall.sh --purge --revert-boot
 ```
+
+`--revert-boot` restores the boot files captured immediately before the most recent managed install touched them. If no managed snapshot exists, the uninstaller warns and skips the boot revert instead of failing halfway through teardown.
 
 ## Diagnostics
 
@@ -334,7 +356,7 @@ What it does **not** do by itself:
 
 ### Easy mode
 
-Easy mode enables Raspberry Pi OS OverlayFS and stores recovery snapshots on the boot partition.
+Easy mode enables Raspberry Pi OS OverlayFS without adding a writable Bluetooth-state mount.
 
 Use it when you want a simpler read-only setup and understand that Bluetooth persistence is best effort only.
 
@@ -659,10 +681,10 @@ All managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after ins
 
 | Script | Purpose | Arguments |
 | --- | --- | --- |
-| `bootstrap.sh` | Download a repository archive from GitHub and run the managed installer without cloning first. Without `--branch`, it installs the latest published release when the repository is hosted on GitHub. | `--repo <url>` repository URL for the archive download<br>`--branch <name>` branch or tag to install<br>`--no-reboot` skip the immediate reboot prompt |
-| `install.sh` | Install or refresh the managed checkout in `/opt/bluetooth_2_usb`, patch boot files, recreate the virtual environment, and install the systemd unit and wrapper. | `--repo <url\|path>` repository source<br>`--branch <name>` branch or tag to check out<br>`--no-reboot` skip the reboot prompt |
-| `update.sh` | Update an existing managed installation, refresh the checkout and virtual environment, and optionally restart the service. | `--repo <url\|path>` override the update source<br>`--branch <name>` override the branch or tag<br>`--no-restart` update files without restarting the service |
-| `uninstall.sh` | Stop and disable the managed service, remove units and helper files, and optionally restore the boot configuration captured during install. | `--purge` remove the installation directory<br>`--revert-boot` restore the managed boot snapshot<br>`--no-reboot` skip the reboot prompt |
+| `bootstrap.sh` | Download a repository archive from GitHub and run the managed installer without cloning first. By default it resolves the latest published release and refuses to fall forward to branch tip if release resolution fails. | `--repo <url>` repository URL for the archive download<br>`--branch <name>` branch or tag to install<br>`--latest-release` explicitly track the latest published release<br>`--no-reboot` skip the immediate reboot prompt |
+| `install.sh` | Install or refresh the managed checkout in `/opt/bluetooth_2_usb`, patch boot files, recreate the virtual environment, install the systemd unit and wrapper, and record the managed source for future updates. | `--repo <url\|path>` repository source<br>`--branch <name>` branch or tag to check out<br>`--latest-release` install the latest published release and record that tracking mode<br>`--no-reboot` skip the reboot prompt |
+| `update.sh` | Update an existing managed installation, refresh the checkout and virtual environment, and follow the recorded managed source by default. | `--repo <url\|path>` override the update source<br>`--branch <name>` override the branch or tag<br>`--latest-release` switch to latest-release tracking<br>`--no-restart` update without starting the service; requires it to already be stopped |
+| `uninstall.sh` | Stop and disable the managed service, remove units and helper files, and optionally restore the boot configuration captured before the latest managed install mutated it. | `--purge` remove the installation directory<br>`--revert-boot` restore the latest managed boot snapshot when available<br>`--no-reboot` skip the reboot prompt |
 | `debug.sh` | Collect a Markdown debug report with clearly titled sections for service state, mount state, boot config, dmesg, CLI diagnostics, and a live foreground debug run. The live Bluetooth-2-USB debug output is also echoed to stdout while the report is being generated. | `--duration <sec>` bound the live debug session; omit to run until interrupted<br>`--redact` redact hostname, machine-id, UUIDs, PARTUUIDs, and Bluetooth MAC addresses |
 | `smoke_test.sh` | Perform a quick installation and runtime health check for boot config, UDC, service state, environment validation, and read-only status, with a more detailed summary in both normal and verbose output. It can also write a Markdown report with the same status markers for later sharing or archival. | `--verbose` print mount details, validate-env output, dry-run output, service status, and `journalctl` output<br>`--markdown` also write a Markdown report under `/var/log/bluetooth_2_usb/` |
 | `enable_readonly_overlayfs.sh` | Enable Raspberry Pi OS OverlayFS mode and optionally prepare persistent Bluetooth state. | `--mode <easy\|persistent>` choose best-effort or persistent mode<br>`--persist-device <path>` device to use for persistent Bluetooth state in persistent mode |
@@ -685,6 +707,7 @@ curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/scri
 | `/etc/default/bluetooth_2_usb_readonly` | Read-only mode config |
 | `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |
 | `/usr/local/bin/bluetooth_2_usb` | CLI wrapper |
+| `/var/lib/bluetooth_2_usb/managed_source.env` | Recorded install/update source tracking |
 | `/var/log/bluetooth_2_usb` | Logs |
 | `/mnt/b2u-persist` | Persistent storage mount |
 | `/mnt/b2u-persist/bluetooth` | Persistent Bluetooth-state directory |

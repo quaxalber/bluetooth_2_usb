@@ -44,6 +44,13 @@ ensure_root
 prepare_log "uninstall"
 load_readonly_config
 
+BOOT_RESTORE_AVAILABLE=0
+if [[ -f "$B2U_BOOT_RESTORE_CONFIG" && -f "$B2U_BOOT_RESTORE_CMDLINE" ]]; then
+  BOOT_RESTORE_AVAILABLE=1
+elif [[ $REVERT_BOOT -eq 1 ]]; then
+  warn "No managed boot snapshot is available; boot configuration changes will not be reverted."
+fi
+
 if service_installed || [[ "$(systemctl show -P LoadState "${B2U_SERVICE_UNIT}" 2>/dev/null || true)" != "not-found" ]]; then
   systemctl stop "${B2U_SERVICE_UNIT}" || true
   if systemctl is-active --quiet "${B2U_SERVICE_UNIT}"; then
@@ -56,6 +63,7 @@ fi
 rm -f "/etc/systemd/system/${B2U_SERVICE_UNIT}"
 rm -f "$B2U_ENV_FILE"
 rm -f "$B2U_READONLY_ENV_FILE"
+remove_managed_source_config
 rm -f /usr/local/bin/bluetooth_2_usb
 remove_bluetooth_persist_dropin
 remove_bluetooth_bind_mount_unit
@@ -85,7 +93,7 @@ if [[ -d /sys/kernel/config/usb_gadget ]]; then
   shopt -u nullglob
 fi
 
-if [[ $REVERT_BOOT -eq 1 ]]; then
+if [[ $REVERT_BOOT -eq 1 && $BOOT_RESTORE_AVAILABLE -eq 1 ]]; then
   CONFIG_TXT="$(boot_config_path)"
   CMDLINE_TXT="$(boot_cmdline_path)"
   backup_file "$CONFIG_TXT"

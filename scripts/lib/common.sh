@@ -17,7 +17,9 @@ readonly B2U_SERVICE_UNIT="bluetooth_2_usb.service"
 readonly B2U_LOG_DIR="/var/log/bluetooth_2_usb"
 readonly B2U_ENV_FILE="/etc/default/bluetooth_2_usb"
 readonly B2U_READONLY_ENV_FILE="/etc/default/bluetooth_2_usb_readonly"
-readonly B2U_BOOT_RESTORE_DIR="/var/lib/bluetooth_2_usb/boot_restore"
+readonly B2U_STATE_DIR="/var/lib/bluetooth_2_usb"
+readonly B2U_MANAGED_SOURCE_FILE="${B2U_STATE_DIR}/managed_source.env"
+readonly B2U_BOOT_RESTORE_DIR="${B2U_STATE_DIR}/boot_restore"
 readonly B2U_BOOT_RESTORE_CONFIG="${B2U_BOOT_RESTORE_DIR}/config.txt"
 readonly B2U_BOOT_RESTORE_CMDLINE="${B2U_BOOT_RESTORE_DIR}/cmdline.txt"
 readonly B2U_PERSIST_MOUNT_PATH="/mnt/b2u-persist"
@@ -80,87 +82,6 @@ prepare_log() {
   info "Logging to $logfile"
 }
 
-ensure_final_newline() {
-  # Some command outputs do not end with a newline. Normalize them once so
-  # fenced Markdown blocks do not collapse into the closing fence.
-  perl -0pe 's/(?<!\n)\z/\n/'
-}
-
-status_emoji() {
-  case "${1:-}" in
-    "" | none) printf '%s' "" ;;
-    ok | pass | green) printf '%s' "🟢" ;;
-    info | blue) printf '%s' "🔵" ;;
-    warn | warning | yellow) printf '%s' "🟡" ;;
-    fail | error | red) printf '%s' "🔴" ;;
-    *) printf '%s' "" ;;
-  esac
-}
-
-heading() {
-  local outfile="$1"
-  local level="$2"
-  local status="$3"
-  local title="$4"
-  local marker
-  marker="$(status_emoji "$status")"
-  if [[ -n "$marker" ]]; then
-    printf '%s %s %s\n' "$level" "$marker" "$title" >>"$outfile"
-  else
-    printf '%s %s\n' "$level" "$title" >>"$outfile"
-  fi
-}
-
-write_line() {
-  local outfile="$1"
-  shift
-  printf '%s\n' "$@" >>"$outfile"
-}
-
-code() {
-  echo '```console'
-  ensure_final_newline
-  echo '```'
-}
-
-block() {
-  local outfile="$1"
-  local level="$2"
-  local status="$3"
-  local title="$4"
-  heading "$outfile" "$level" "$status" "$title"
-  code >>"$outfile"
-}
-
-text_block() {
-  local outfile="$1"
-  local level="$2"
-  local status="$3"
-  local title="$4"
-  shift 4
-  printf '%s\n' "$@" | block "$outfile" "$level" "$status" "$title"
-  write_line "$outfile"
-}
-
-command_block() {
-  local outfile="$1"
-  local level="$2"
-  local status="$3"
-  local title="$4"
-  local command="$5"
-  local command_status=0
-  local tmp
-
-  tmp="$(mktemp)"
-  bash -lc "$command" >"$tmp" 2>&1 || command_status=$?
-  block "$outfile" "$level" "$status" "$title" <"$tmp"
-  rm -f "$tmp"
-  if [[ $command_status -ne 0 ]]; then
-    write_line "$outfile" "_Command exited with status ${command_status}_"
-  fi
-  write_line "$outfile"
-}
-
 detect_boot_dir() {
   if [[ -d /boot/firmware ]]; then
     printf '%s\n' "/boot/firmware"
@@ -187,8 +108,8 @@ capture_boot_restore_snapshot() {
   local config_file="$1"
   local cmdline_file="$2"
   mkdir -p "$B2U_BOOT_RESTORE_DIR"
-  [[ -f "$B2U_BOOT_RESTORE_CONFIG" ]] || cp -a "$config_file" "$B2U_BOOT_RESTORE_CONFIG"
-  [[ -f "$B2U_BOOT_RESTORE_CMDLINE" ]] || cp -a "$cmdline_file" "$B2U_BOOT_RESTORE_CMDLINE"
+  cp -a "$config_file" "$B2U_BOOT_RESTORE_CONFIG"
+  cp -a "$cmdline_file" "$B2U_BOOT_RESTORE_CMDLINE"
 }
 
 restore_boot_restore_snapshot() {
@@ -219,7 +140,7 @@ default_repo_url() {
   fi
 }
 
-default_repo_branch() {
+default_repo_ref() {
   local branch_name
   local tag_name
 
@@ -262,7 +183,23 @@ dwc2_mode() {
     printf '%s\n' "module"
     return
   fi
+  if command -v modinfo >/dev/null 2>&1 && modinfo dwc2 >/dev/null 2>&1; then
+    printf '%s\n' "module"
+    return
+  fi
+  if [[ -d /sys/module/dwc2 ]]; then
+    printf '%s\n' "builtin"
+    return
+  fi
   printf '%s\n' "unknown"
+}
+
+required_boot_modules_csv() {
+  if [[ "$(dwc2_mode)" == "module" ]]; then
+    printf '%s\n' "dwc2,libcomposite"
+  else
+    printf '%s\n' "libcomposite"
+  fi
 }
 
 board_overlay_line() {
@@ -398,24 +335,9 @@ overlay_status() {
   esac
 }
 
-snapshot_readonly_state() {
-  local boot_dir snapshot_dir
-  boot_dir="$(detect_boot_dir)"
-  snapshot_dir="${boot_dir}/bluetooth_2_usb/readonly_snapshot"
-  require_commands tar
-  mkdir -p "$snapshot_dir"
-  if [[ -f /etc/machine-id ]]; then
-    cp -a /etc/machine-id "${snapshot_dir}/machine-id"
-  fi
-  if [[ -d /var/lib/bluetooth ]]; then
-    rm -f "${snapshot_dir}/bluetooth.tar.gz"
-    tar -czf "${snapshot_dir}/bluetooth.tar.gz" -C /var/lib bluetooth
-  fi
-}
-
 readonly_warning_easy_mode() {
   cat <<'EOF'
-Easy Mode only enables Raspberry Pi OS OverlayFS and stores recovery snapshots on /boot.
+Easy Mode only enables Raspberry Pi OS OverlayFS.
 Bluetooth pairing persistence is best effort only in this mode.
 Use the persistent mode if you need stable Bluetooth identity and pairings across reboots.
 EOF
@@ -582,4 +504,125 @@ persist_spec_from_device() {
   uuid="$(blkid -s UUID -o value "$device" 2>/dev/null || true)"
   [[ -n "$uuid" ]] || fail "Could not determine UUID for ${device}"
   printf '%s\n' "/dev/disk/by-uuid/${uuid}"
+}
+
+resolve_latest_release_tag() {
+  local repo_url="$1"
+  local repo_slug
+  local api_url
+  local response
+  local tag_name
+
+  case "$repo_url" in
+    https://github.com/*) repo_slug="${repo_url#https://github.com/}" ;;
+    http://github.com/*) repo_slug="${repo_url#http://github.com/}" ;;
+    git@github.com:*) repo_slug="${repo_url#git@github.com:}" ;;
+    ssh://git@github.com/*) repo_slug="${repo_url#ssh://git@github.com/}" ;;
+    *) return 1 ;;
+  esac
+  repo_slug="${repo_slug%.git}"
+  [[ "$repo_slug" == */* ]] || return 1
+
+  require_commands curl sed
+  api_url="https://api.github.com/repos/${repo_slug}/releases/latest"
+  response="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api_url")" || return 1
+  tag_name="$(printf '%s' "$response" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
+  [[ -n "$tag_name" ]] || return 1
+  printf '%s\n' "$tag_name"
+}
+
+load_managed_source_config() {
+  B2U_MANAGED_REPO_URL=""
+  B2U_MANAGED_REF_MODE=""
+  B2U_MANAGED_REF=""
+
+  [[ -f "$B2U_MANAGED_SOURCE_FILE" ]] || return 0
+
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || continue
+    if [[ ! "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"$ ]]; then
+      fail "Refusing to load invalid managed source line from ${B2U_MANAGED_SOURCE_FILE}: ${line}"
+    fi
+
+    key="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+    case "$key" in
+      B2U_MANAGED_REPO_URL | B2U_MANAGED_REF_MODE | B2U_MANAGED_REF)
+        printf -v "$key" '%s' "$value"
+        ;;
+      *)
+        fail "Refusing to load unexpected key from ${B2U_MANAGED_SOURCE_FILE}: ${key}"
+        ;;
+    esac
+  done <"$B2U_MANAGED_SOURCE_FILE"
+}
+
+write_managed_source_config() {
+  local repo_url="$1"
+  local ref_mode="$2"
+  local ref="${3:-}"
+
+  mkdir -p "$B2U_STATE_DIR"
+  cat >"$B2U_MANAGED_SOURCE_FILE" <<EOF
+B2U_MANAGED_REPO_URL="${repo_url}"
+B2U_MANAGED_REF_MODE="${ref_mode}"
+B2U_MANAGED_REF="${ref}"
+EOF
+  chmod 0644 "$B2U_MANAGED_SOURCE_FILE"
+}
+
+remove_managed_source_config() {
+  rm -f "$B2U_MANAGED_SOURCE_FILE"
+}
+
+checkout_ref_mode() {
+  local repo_dir="$1"
+  local branch_name
+  local tag_name
+
+  branch_name="$(git -C "$repo_dir" symbolic-ref -q --short HEAD 2>/dev/null || true)"
+  if [[ -n "$branch_name" ]]; then
+    printf '%s\n' "branch"
+    return
+  fi
+
+  tag_name="$(git -C "$repo_dir" describe --tags --exact-match 2>/dev/null || true)"
+  if [[ -n "$tag_name" ]]; then
+    printf '%s\n' "tag"
+    return
+  fi
+
+  printf '%s\n' "detached"
+}
+
+checkout_ref_name() {
+  local repo_dir="$1"
+  local branch_name
+  local tag_name
+
+  branch_name="$(git -C "$repo_dir" symbolic-ref -q --short HEAD 2>/dev/null || true)"
+  if [[ -n "$branch_name" ]]; then
+    printf '%s\n' "$branch_name"
+    return
+  fi
+
+  tag_name="$(git -C "$repo_dir" describe --tags --exact-match 2>/dev/null || true)"
+  if [[ -n "$tag_name" ]]; then
+    printf '%s\n' "$tag_name"
+    return
+  fi
+
+  git -C "$repo_dir" rev-parse --short HEAD
+}
+
+ensure_repo_remote() {
+  local repo_dir="$1"
+  local repo_url="$2"
+
+  if git -C "$repo_dir" remote get-url origin >/dev/null 2>&1; then
+    git -C "$repo_dir" remote set-url origin "$repo_url"
+  else
+    git -C "$repo_dir" remote add origin "$repo_url"
+  fi
 }

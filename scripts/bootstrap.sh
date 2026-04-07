@@ -3,20 +3,22 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 REPO_URL="${B2U_BOOTSTRAP_REPO:-https://github.com/quaxalber/bluetooth_2_usb.git}"
-REPO_BRANCH="${B2U_BOOTSTRAP_BRANCH:-}"
+REPO_REF="${B2U_BOOTSTRAP_BRANCH:-}"
+LATEST_RELEASE=0
 NO_REBOOT=0
 
 usage() {
-  local default_branch_label
-  if [[ -n "$REPO_BRANCH" ]]; then
-    default_branch_label="$REPO_BRANCH"
+  local default_ref_label
+  if [[ -n "$REPO_REF" ]]; then
+    default_ref_label="$REPO_REF"
   else
-    default_branch_label="latest published release"
+    default_ref_label="latest published release"
   fi
   cat <<EOF
 Usage: curl .../bootstrap.sh | sudo bash -s -- [options]
   --repo <url>       Repository URL. Default: ${REPO_URL}
-  --branch <name>    Branch or tag to install. Default: ${default_branch_label}
+  --branch <name>    Branch or tag to install. Default: ${default_ref_label}
+  --latest-release   Install the latest published release tag
   --no-reboot        Do not prompt for reboot
 EOF
 }
@@ -66,9 +68,21 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --branch)
+      [[ $LATEST_RELEASE -eq 0 ]] || {
+        printf 'Use either --branch or --latest-release, not both.\n' >&2
+        exit 1
+      }
       require_value "$1" "${2:-}"
-      REPO_BRANCH="$2"
+      REPO_REF="$2"
       shift 2
+      ;;
+    --latest-release)
+      [[ -z "$REPO_REF" ]] || {
+        printf 'Use either --branch or --latest-release, not both.\n' >&2
+        exit 1
+      }
+      LATEST_RELEASE=1
+      shift
       ;;
     --no-reboot)
       NO_REBOOT=1
@@ -97,13 +111,13 @@ for cmd in bash curl sed tar mktemp; do
   }
 done
 
-if [[ -z "$REPO_BRANCH" ]]; then
-  if REPO_BRANCH="$(resolve_latest_release_tag "$REPO_URL")"; then
-    printf 'No --branch supplied; using latest published release: %s\n' "$REPO_BRANCH"
-  else
-    REPO_BRANCH="main"
-    printf 'Could not resolve the latest published release for %s. Falling back to: %s\n' "$REPO_URL" "$REPO_BRANCH" >&2
-  fi
+if [[ $LATEST_RELEASE -eq 1 || -z "$REPO_REF" ]]; then
+  REPO_REF="$(resolve_latest_release_tag "$REPO_URL")" || {
+    printf 'Could not resolve the latest published release for %s. Pass --branch explicitly if you want a non-release ref.\n' "$REPO_URL" >&2
+    exit 1
+  }
+  LATEST_RELEASE=1
+  printf 'Using latest published release: %s\n' "$REPO_REF"
 fi
 
 tmpdir="$(mktemp -d)"
@@ -115,8 +129,8 @@ trap cleanup EXIT
 archive_path="${tmpdir}/bluetooth_2_usb.tar.gz"
 
 archive_urls=(
-  "${REPO_URL%.git}/archive/refs/heads/${REPO_BRANCH}.tar.gz"
-  "${REPO_URL%.git}/archive/refs/tags/${REPO_BRANCH}.tar.gz"
+  "${REPO_URL%.git}/archive/refs/heads/${REPO_REF}.tar.gz"
+  "${REPO_URL%.git}/archive/refs/tags/${REPO_REF}.tar.gz"
 )
 
 downloaded=0
@@ -129,7 +143,7 @@ for archive_url in "${archive_urls[@]}"; do
 done
 
 [[ $downloaded -eq 1 ]] || {
-  printf 'Failed to download repository archive for %s from %s\n' "$REPO_BRANCH" "$REPO_URL" >&2
+  printf 'Failed to download repository archive for %s from %s\n' "$REPO_REF" "$REPO_URL" >&2
   exit 1
 }
 
@@ -141,7 +155,11 @@ repo_dir="$(find "$tmpdir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
   exit 1
 }
 
-install_args=(--repo "$REPO_URL" --branch "$REPO_BRANCH")
+if [[ $LATEST_RELEASE -eq 1 ]]; then
+  install_args=(--repo "$REPO_URL" --latest-release)
+else
+  install_args=(--repo "$REPO_URL" --branch "$REPO_REF")
+fi
 if [[ $NO_REBOOT -eq 1 ]]; then
   install_args+=(--no-reboot)
 fi

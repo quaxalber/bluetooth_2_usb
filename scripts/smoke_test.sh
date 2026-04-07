@@ -4,6 +4,8 @@ IFS=$'\n\t'
 
 # shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
+# shellcheck source=./lib/report.sh
+source "$(cd -- "$(dirname "$0")" && pwd)/lib/report.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
@@ -53,10 +55,7 @@ trap 'rm -f "$VALIDATE_LOG" "$DRY_RUN_LOG"' EXIT
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
 DWC2_MODE="$(dwc2_mode)"
-REQUIRED_MODULES=(libcomposite)
-if [[ "$DWC2_MODE" == "module" ]]; then
-  REQUIRED_MODULES=(dwc2 libcomposite)
-fi
+IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
 
 modules_load_has_required_modules() {
   local module
@@ -129,55 +128,57 @@ write_markdown_report() {
     dry_run_heading_status="fail"
   fi
 
-  heading "$OUT" "#" "none" "bluetooth_2_usb smoke test report"
-  write_line "$OUT"
-  write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
-  write_line "$OUT"
+  report_heading "$OUT" "#" "none" "bluetooth_2_usb smoke test report"
+  report_write_line "$OUT"
+  report_write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
+  report_write_line "$OUT"
 
-  heading "$OUT" "##" "$result_status" "Summary"
-  text_block "$OUT" "###" "$result_status" "Overall result" \
+  report_heading "$OUT" "##" "$result_status" "Summary"
+  report_text_block "$OUT" "###" "$result_status" "Overall result" \
     "Overall result" \
     "smoke_test=${result}" \
     "overlayfs=$(overlay_status)" \
     "readonly_mode=${READONLY_MODE}" \
     "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)"
-  text_block "$OUT" "###" "info" "Boot and runtime summary" \
+  report_text_block "$OUT" "###" "info" "Boot and runtime summary" \
     "boot_config=${CONFIG_TXT}" \
     "cmdline=${CMDLINE_TXT}" \
     "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
+    "dwc2_mode=${DWC2_MODE}" \
     "required_modules=$(required_modules_list)" \
     "required_modules_status=$(required_modules_status)" \
     "udc_controllers=${UDC_LIST:-<none>}" \
     "service_unit=${B2U_SERVICE_UNIT}" \
     "venv_python=${VENV_DIR}/bin/python"
 
-  heading "$OUT" "##" "$result_status" "Checks"
-  text_block "$OUT" "###" "$boot_checks_status" "Boot configuration checks" \
+  report_heading "$OUT" "##" "$result_status" "Checks"
+  report_text_block "$OUT" "###" "$boot_checks_status" "Boot configuration checks" \
     "dwc2_overlay=$(grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" && echo yes || echo no)" \
     "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
+    "dwc2_mode=${DWC2_MODE}" \
     "required_modules=$(required_modules_list)" \
     "required_modules_present=$(modules_load_has_required_modules && echo yes || echo no)" \
     "configfs_gadget_path=$([[ -d /sys/kernel/config/usb_gadget ]] && echo present || echo missing)" \
     "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)"
-  text_block "$OUT" "###" "$service_checks_status" "Service and runtime checks" \
+  report_text_block "$OUT" "###" "$service_checks_status" "Service and runtime checks" \
     "service_enabled=$(systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
     "service_active=$(systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
     "venv_python_present=$([[ -x "${VENV_DIR}/bin/python" ]] && echo yes || echo no)" \
     "bluetooth_state_dir=$([[ -d /var/lib/bluetooth ]] && echo present || echo missing)"
 
-  heading "$OUT" "##" "$result_status" "CLI diagnostics"
-  text_block "$OUT" "###" "$validate_heading_status" "CLI environment validation status" "validate_env=${validate_status}"
-  code <"$VALIDATE_LOG" >>"$OUT"
-  write_line "$OUT"
-  text_block "$OUT" "###" "$dry_run_heading_status" "CLI dry-run status" "dry_run=${dry_run_status}"
-  code <"$DRY_RUN_LOG" >>"$OUT"
-  write_line "$OUT"
+  report_heading "$OUT" "##" "$result_status" "CLI diagnostics"
+  report_text_block "$OUT" "###" "$validate_heading_status" "CLI environment validation status" "validate_env=${validate_status}"
+  report_code_block <"$VALIDATE_LOG" >>"$OUT"
+  report_write_line "$OUT"
+  report_text_block "$OUT" "###" "$dry_run_heading_status" "CLI dry-run status" "dry_run=${dry_run_status}"
+  report_code_block <"$DRY_RUN_LOG" >>"$OUT"
+  report_write_line "$OUT"
 
-  heading "$OUT" "##" "info" "Mounts and service details"
-  command_block "$OUT" "###" "info" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
-  command_block "$OUT" "###" "info" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
-  command_block "$OUT" "###" "$service_checks_status" "Service status" "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' || true"
-  command_block "$OUT" "###" "info" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
+  report_heading "$OUT" "##" "info" "Mounts and service details"
+  report_command_block "$OUT" "###" "info" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
+  report_command_block "$OUT" "###" "info" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
+  report_command_block "$OUT" "###" "$service_checks_status" "Service status" "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' || true"
+  report_command_block "$OUT" "###" "info" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
 }
 
 if [[ $MARKDOWN -eq 1 ]]; then
@@ -196,6 +197,10 @@ if modules_load_has_required_modules; then
 else
   warn "cmdline.txt is missing required modules ($(required_modules_list)); current value: ${MODULES_LOAD_VALUE:-<missing>}"
   EXIT_CODE=1
+fi
+
+if [[ "$DWC2_MODE" == "unknown" ]]; then
+  warn "Could not determine whether dwc2 is built-in or modular; boot module validation is heuristic"
 fi
 
 if [[ -d /sys/kernel/config/usb_gadget ]]; then
