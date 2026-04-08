@@ -201,8 +201,7 @@ journalctl -u bluetooth_2_usb.service -f
 Update the managed checkout and re-apply the system integration:
 
 ```bash
-cd /opt/bluetooth_2_usb
-sudo git pull --ff-only
+sudo git -C /opt/bluetooth_2_usb pull --ff-only
 sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
@@ -344,8 +343,7 @@ Interpret those checks conservatively:
 Then reboot after fixing the install:
 
 ```bash
-cd /opt/bluetooth_2_usb
-sudo ./scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/install.sh
 sudo reboot
 ```
 
@@ -375,7 +373,8 @@ check the physical path:
 - confirm the service is actually active with
   `systemctl is-active bluetooth_2_usb.service`
 - inspect logs with `journalctl -u bluetooth_2_usb.service -n 100 --no-pager`
-- after boot-config changes, rerun `sudo ./scripts/install.sh` and reboot
+- after boot-config changes, rerun
+  `sudo /opt/bluetooth_2_usb/scripts/install.sh` and reboot
   before concluding the relay path is broken
 
 ### Persistent read-only mode does not keep Bluetooth pairings
