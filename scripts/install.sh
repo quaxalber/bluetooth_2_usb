@@ -124,6 +124,9 @@ fi
 
 if [[ "$REPO_URL" == "$B2U_INSTALL_DIR" ]]; then
   info "Reusing source repository in place at ${B2U_INSTALL_DIR}"
+  [[ -d "${B2U_INSTALL_DIR}/.git" ]] || fail "Cannot reuse ${B2U_INSTALL_DIR} in place because it is not a git checkout."
+  git -C "$B2U_INSTALL_DIR" fetch --all --tags --prune || fail "Failed to refresh the in-place repository at ${B2U_INSTALL_DIR}"
+  git -C "$B2U_INSTALL_DIR" checkout "$REPO_REF" || fail "Failed to check out ${REPO_REF} in ${B2U_INSTALL_DIR}"
 elif [[ -d "${B2U_INSTALL_DIR}/.git" ]]; then
   info "Updating repository at ${B2U_INSTALL_DIR}"
   ensure_repo_remote "$B2U_INSTALL_DIR" "$REPO_URL"
@@ -164,9 +167,7 @@ write_managed_source_config "$REPO_URL" "$stored_mode" "$stored_ref"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 info "Recreating virtual environment at ${VENV_DIR}"
-recreate_venv "$VENV_DIR"
-"${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel
-"${VENV_DIR}/bin/pip" install --upgrade "$B2U_INSTALL_DIR"
+rebuild_venv_atomically "$VENV_DIR" "$B2U_INSTALL_DIR" || fail "Failed to rebuild virtual environment at ${VENV_DIR}"
 ok "Virtual environment updated at ${VENV_DIR}"
 
 install_service_unit

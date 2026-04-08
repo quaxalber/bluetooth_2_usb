@@ -316,6 +316,46 @@ recreate_venv() {
   python3 -m venv "$venv_dir"
 }
 
+rebuild_venv_atomically() {
+  local venv_dir="$1"
+  local package_dir="$2"
+  local staging_dir="${venv_dir}.new"
+  local backup_dir="${venv_dir}.backup.$(timestamp)"
+
+  rm -rf "$staging_dir"
+  recreate_venv "$staging_dir" || {
+    rm -rf "$staging_dir"
+    return 1
+  }
+
+  if ! "${staging_dir}/bin/pip" install --upgrade pip setuptools wheel; then
+    rm -rf "$staging_dir"
+    return 1
+  fi
+  if ! "${staging_dir}/bin/pip" install --upgrade "$package_dir"; then
+    rm -rf "$staging_dir"
+    return 1
+  fi
+
+  if [[ -e "$venv_dir" ]]; then
+    mv "$venv_dir" "$backup_dir" || {
+      rm -rf "$staging_dir"
+      return 1
+    }
+  fi
+
+  if mv "$staging_dir" "$venv_dir"; then
+    rm -rf "$backup_dir"
+    return 0
+  fi
+
+  rm -rf "$venv_dir" "$staging_dir"
+  if [[ -e "$backup_dir" ]]; then
+    mv "$backup_dir" "$venv_dir" || warn "Failed to restore ${venv_dir} from ${backup_dir}"
+  fi
+  return 1
+}
+
 service_installed() {
   systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${B2U_SERVICE_UNIT}"
 }

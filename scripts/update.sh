@@ -137,10 +137,7 @@ esac
 write_managed_source_config "$REPO_URL" "$stored_mode" "$stored_ref"
 
 info "Recreating virtual environment at ${VENV_DIR}"
-recreate_venv "$VENV_DIR"
-
-"${VENV_DIR}/bin/pip" install --upgrade pip setuptools wheel
-"${VENV_DIR}/bin/pip" install --upgrade "$B2U_INSTALL_DIR"
+rebuild_venv_atomically "$VENV_DIR" "$B2U_INSTALL_DIR" || fail "Failed to rebuild virtual environment at ${VENV_DIR}"
 install_service_unit
 write_default_env_file
 install_cli_wrapper

@@ -230,16 +230,17 @@ Identify the device:
 lsblk -f
 ```
 
-If needed, create ext4 on the real spare device:
+If needed, create ext4 on the real spare partition. Double-check the target with
+`lsblk -f` first so you do not wipe the wrong disk:
 
 ```bash
-sudo mkfs.ext4 -L B2U_PERSIST /dev/YOUR-DEVICE
+sudo mkfs.ext4 -L B2U_PERSIST /dev/YOUR-PARTITION   # example: /dev/sda1
 ```
 
 Prepare persistent Bluetooth state:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-DEVICE
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
 ```
 
 Enable persistent read-only mode:
@@ -344,11 +345,12 @@ Purpose:
 
 - confirm the earlier reachability issue is actually gone
 
-Run these periodically from your workstation:
+Run these periodically from your workstation. Replace `<pi-host-or-ip>` with the
+actual hostname or IP of the Pi under test:
 
 ```bash
-ping -c 5 pi4b
-ssh -4 pi4b 'hostname'
+ping -c 5 <pi-host-or-ip>
+ssh -4 <pi-host-or-ip> 'hostname'
 ```
 
 Run this periodically on the Pi:
