@@ -151,35 +151,28 @@ Advanced runtime override:
   environment file only if you need to pin UDC detection on a system with
   multiple controllers.
 
-## Common CLI options
+## CLI reference
 
-- `--auto_discover`
-  Relay readable input devices automatically.
-- `--grab_devices`
-  Prevent the Pi from also consuming local input events.
-- `--interrupt_shortcut CTRL+SHIFT+F12`
-  Toggle relaying on or off so you can temporarily use the Pi locally.
-- `--device_ids ...`
-  Restrict relaying to specific input devices by event path, MAC address, or
-  partial name.
-- `--hid-profile compat|extended`
-  Select the USB HID descriptor profile.
-- `--validate-env`
-  Validate gadget runtime prerequisites and exit.
+Use these runtime flags in `BLUETOOTH_2_USB_ARGS` or when running the CLI
+manually.
 
-Concrete `--device_ids` examples:
+| Argument | Explanation / Example |
+| --- | --- |
+| `--auto_discover` | Relay readable input devices automatically. Good default for appliance-style setups. |
+| `--grab_devices` | Prevent the Pi from also consuming local keyboard and mouse events. |
+| `--interrupt_shortcut CTRL+SHIFT+F12` | Toggle relaying on or off so you can temporarily use the Pi locally. Example: `--interrupt_shortcut CTRL+ALT+F12` |
+| `--device_ids ...` | Restrict relaying to specific input devices by event path, Bluetooth MAC address, or case-insensitive name fragment. Examples: `--device_ids /dev/input/event4`, `--device_ids A1:B2:C3:D4:E5:F6`, `--device_ids logi`, `--device_ids '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'` |
+| `--hid-profile compat` | Use the stricter compatibility-oriented USB HID descriptor profile. |
+| `--hid-profile extended` | Expose the extended HID descriptor profile when the target host tolerates it. |
+| `--list_devices` | List readable input devices and exit. Useful before setting `--device_ids`. |
+| `--debug` | Increase log verbosity for manual troubleshooting. |
+| `--log_to_file` | Add file logging in addition to stdout logging. |
+| `--log_path /var/log/bluetooth_2_usb/bluetooth_2_usb.log` | Override the log file path used with `--log_to_file`. |
+| `--validate-env` | Validate gadget runtime prerequisites and exit. |
+| `--version` | Print the installed Bluetooth-2-USB version and exit. |
 
-- One exact event node:
-  `bluetooth_2_usb --device_ids /dev/input/event4`
-- One Bluetooth MAC address:
-  `bluetooth_2_usb --device_ids A1:B2:C3:D4:E5:F6`
-- One device-name fragment:
-  `bluetooth_2_usb --device_ids logi`
-- A mixed filter list:
-  `bluetooth_2_usb --device_ids '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`
-
-The matcher accepts event paths, Bluetooth MAC addresses, and case-insensitive
-name fragments in the same comma-separated list.
+The `--device_ids` matcher accepts event paths, Bluetooth MAC addresses, and
+case-insensitive name fragments in the same comma-separated list.
 
 ## Day-to-day usage
 
@@ -335,6 +328,19 @@ grep -nE '^\[all\]|dtoverlay=dwc2.*' /boot/config.txt
 cat /boot/firmware/cmdline.txt 2>/dev/null || cat /boot/cmdline.txt
 ```
 
+Interpret those checks conservatively:
+
+- `dtoverlay=dwc2` in `config.txt` should be present.
+- `modules-load=` in `cmdline.txt` should still load `libcomposite`, and may
+  also include `dwc2` on kernels where `dwc2` is built as a module.
+- On newer 64-bit Bookworm and aarch64 kernels, `CONFIG_USB_DWC2=y` often means
+  `dwc2` is built into the kernel. In that case, the absence of a separate
+  loadable `dwc2` module is normal and not itself a failure.
+- Treat missing USB gadget support as the problem, not merely the absence of a
+  loadable module: if `CONFIG_USB_DWC2=y` is present, built-in `dwc2` is fine;
+  otherwise make sure `dtoverlay=dwc2` is set and that `dwc2` is loaded on
+  kernels that require it as a module.
+
 Then reboot after fixing the install:
 
 ```bash
@@ -360,24 +366,18 @@ Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
 This is the main deployment entrypoint for first install and for later
 re-application after `git pull`.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | `/opt/bluetooth_2_usb` |
-| Purpose | Patch boot config, rebuild the managed virtualenv, install the service, and refresh the wrapper |
-| Public options | none |
-| Typical invocation | `sudo ./scripts/install.sh` |
+| `none` | No public options. Run from `/opt/bluetooth_2_usb`. Example: `sudo ./scripts/install.sh` |
 
 ### `uninstall.sh`
 
 Remove the managed system integration while deliberately leaving the checkout in
 place for inspection or later reuse.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | anywhere |
-| Purpose | Remove the service, wrapper, env files, and persistent Bluetooth-state mount integration |
-| Public options | none |
-| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/uninstall.sh` |
+| `none` | No public options. Example: `sudo /opt/bluetooth_2_usb/scripts/uninstall.sh` |
 
 ### `debug.sh`
 
@@ -385,60 +385,45 @@ Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough.
 It records service, boot, mount, and runtime state, then runs a bounded live
 foreground debug session.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | anywhere |
-| Purpose | Produce a redacted Markdown report for issue triage |
-| Public options | `--duration <sec>` |
-| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10` |
+| `--duration <sec>` | Limit the live foreground debug run. Example: `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10` |
 
 ### `smoke_test.sh`
 
 Run the fast health check for the supported managed deployment. This is the
 first script to use after install, reboot, update, or read-only changes.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | anywhere |
-| Purpose | Verify boot config, UDC visibility, service state, CLI validation, and persistent Bluetooth state wiring |
-| Public options | `--verbose` |
-| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose` |
+| `--verbose` | Print the fuller health-check output instead of the compact pass/fail view. Example: `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose` |
 
 ### `setup_persistent_bluetooth_state.sh`
 
 Prepare the writable ext4-backed storage for `/var/lib/bluetooth` before
 enabling OverlayFS.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | anywhere |
-| Purpose | Configure, mount, seed, and bind-mount persistent Bluetooth state |
-| Public options | `--device <path>` |
-| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION` |
+| `--device <path>` | Required writable ext4 device or partition to mount at the persistent state path. Example: `sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3` |
 
 ### `enable_readonly_overlayfs.sh`
 
 Switch Raspberry Pi OS into persistent read-only operation after the writable
 Bluetooth-state mount has already been prepared.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | anywhere |
-| Purpose | Enable OverlayFS while preserving writable Bluetooth state on the persistent mount |
-| Public options | none |
-| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh` |
+| `none` | No public options. Run after `setup_persistent_bluetooth_state.sh`. Example: `sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh` |
 
 ### `disable_readonly_overlayfs.sh`
 
 Return the system to normal writable mode while keeping the persistent
 Bluetooth-state configuration available.
 
-| Aspect | Value |
+| Argument | Explanation / Example |
 | --- | --- |
-| Run from | anywhere |
-| Purpose | Disable OverlayFS and keep the persistent Bluetooth-state layout intact |
-| Public options | none |
-| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh` |
+| `none` | No public options. Example: `sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh` |
 
 ## Managed paths
 

@@ -32,7 +32,7 @@ The supported deployment model is a normal Git checkout at
 For a test branch:
 
 ```bash
-BRANCH="feat/streamline-install-diagnostics"
+BRANCH="${BRANCH:-main}"
 
 ssh -4 pi4b "
   sudo rm -rf /opt/bluetooth_2_usb &&
