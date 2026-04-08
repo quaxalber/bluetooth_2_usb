@@ -111,6 +111,9 @@ exit
 
 > [!NOTE]
 > Replace `A1:B2:C3:D4:E5:F6` with your device's Bluetooth MAC address.
+> Some devices trigger an interactive `bluetoothctl` authorization prompt during
+> pairing. If you see `[agent] Accept pairing (yes/no):`, answer `yes`
+> immediately or BlueZ may cancel the request.
 
 ### 5. Verify the installation
 
@@ -384,6 +387,56 @@ check the physical path:
 - after boot-config changes, rerun
   `sudo /opt/bluetooth_2_usb/scripts/install.sh` and reboot
   before concluding the relay path is broken
+
+### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active
+
+Do not treat `systemctl status bluetooth` on its own as a health check. A
+running `bluetooth.service` can still leave the controller powered off or
+rfkill-blocked.
+
+Check the actual adapter state:
+
+```bash
+sudo bluetoothctl show
+sudo btmgmt info
+for f in /sys/class/rfkill/rfkill*; do
+  [ -e "$f" ] || continue
+  printf '%s: ' "$(cat "$f/name" 2>/dev/null)"
+  printf 'type=%s soft=%s hard=%s state=%s\n' \
+    "$(cat "$f/type" 2>/dev/null)" \
+    "$(cat "$f/soft" 2>/dev/null)" \
+    "$(cat "$f/hard" 2>/dev/null)" \
+    "$(cat "$f/state" 2>/dev/null)"
+done
+```
+
+Interpretation:
+
+- `Powered: no` or `PowerState: off-blocked` means the adapter is not actually
+  usable yet.
+- `soft=1` with `hard=0` means a software rfkill block is preventing Bluetooth
+  from powering on.
+- `hciconfig` or `btmgmt` showing the controller as `DOWN` is consistent with
+  that state.
+
+If the adapter is soft-blocked, clear that first:
+
+```bash
+sudo sh -c 'echo 0 > /sys/class/rfkill/rfkill0/soft'
+```
+
+Then recheck:
+
+```bash
+sudo bluetoothctl show
+sudo btmgmt info
+```
+
+If pairing still fails, watch for `bluetoothctl` agent prompts. Some BLE
+devices connect briefly, then drop again unless the interactive authorization
+prompt is answered in time. Repeated short `Connected: yes` / `Connected: no`
+transitions without a durable `Paired: yes` usually mean the bonding handshake
+is not completing, not that the device is already usable.
 
 ### Persistent read-only mode does not keep Bluetooth pairings
 

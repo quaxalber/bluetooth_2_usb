@@ -193,6 +193,25 @@ For runtime-affecting changes, validate on real hardware when feasible:
 - `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh`
 - `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
 
+For Bluetooth-adapter or pairing issues, do not stop at
+`systemctl status bluetooth`. Also check the real controller and rfkill state:
+
+- `sudo bluetoothctl show`
+- `sudo btmgmt info`
+- `/sys/class/rfkill/rfkill*/soft`, `hard`, and `state`
+
+Treat `bluetooth.service active` as necessary but not sufficient. A live BlueZ
+service can still leave the controller `Powered: no`, `PowerState:
+off-blocked`, or `DOWN` because of a persisted software rfkill block.
+
+When validating flaky BLE pairings on the Pi:
+
+- prefer a live `bluetoothctl` session over one-shot commands
+- watch for `[agent] Accept pairing (yes/no):` and answer it explicitly
+- distinguish short transient connects from a real bonded state; repeated
+  `Connected: yes` / `Connected: no` cycles with `Paired: no` mean the bonding
+  handshake is still failing
+
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.
 
