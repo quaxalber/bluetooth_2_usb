@@ -3,13 +3,10 @@ import re
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import pyudev
-from adafruit_hid.consumer_control import ConsumerControl
-from adafruit_hid.keyboard import Keyboard
-from adafruit_hid.mouse import Mouse
-from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
+from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
 
 from .evdev import (
     evdev_to_usb_hid,
@@ -18,10 +15,14 @@ from .evdev import (
     is_consumer_key,
     is_mouse_button,
 )
-from .input_devices import async_list_input_devices
 from .logging import get_logger
 
 _logger = get_logger()
+
+if TYPE_CHECKING:
+    from adafruit_hid.consumer_control import ConsumerControl
+    from adafruit_hid.keyboard import Keyboard
+    from adafruit_hid.mouse import Mouse
 
 
 class GadgetManager:
@@ -64,6 +65,10 @@ class GadgetManager:
         usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
         enabled_devices = list(usb_hid.devices)  # type: ignore[attr-defined]
 
+        from adafruit_hid.consumer_control import ConsumerControl
+        from adafruit_hid.keyboard import Keyboard
+        from adafruit_hid.mouse import Mouse
+
         self._gadgets["keyboard"] = Keyboard(enabled_devices)
         self._gadgets["mouse"] = Mouse(enabled_devices)
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
@@ -75,7 +80,7 @@ class GadgetManager:
             enabled_devices,
         )
 
-    def get_keyboard(self) -> Keyboard | None:
+    def get_keyboard(self) -> "Keyboard | None":
         """
         Get the Keyboard gadget.
 
@@ -84,7 +89,7 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> Mouse | None:
+    def get_mouse(self) -> "Mouse | None":
         """
         Get the Mouse gadget.
 
@@ -93,7 +98,7 @@ class GadgetManager:
         """
         return self._gadgets["mouse"]
 
-    def get_consumer(self) -> ConsumerControl | None:
+    def get_consumer(self) -> "ConsumerControl | None":
         """
         Get the ConsumerControl gadget.
 
@@ -607,6 +612,23 @@ class DeviceIdentifier:
         if self._type == "mac":
             return self._normalized_value == (device.uniq or "").lower()
         return self._normalized_value in device.name.lower()
+
+
+async def async_list_input_devices() -> list[InputDevice]:
+    """
+    Return a list of available /dev/input/event* devices.
+
+    :return: List of InputDevice objects
+    :rtype: list[InputDevice]
+    """
+    try:
+        return [InputDevice(path) for path in list_devices()]
+    except (OSError, FileNotFoundError) as ex:
+        _logger.critical(f"Failed listing devices: {ex}")
+        return []
+    except Exception:
+        _logger.exception("Unexpected error listing devices")
+        return []
 
 
 def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:
