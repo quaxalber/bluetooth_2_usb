@@ -9,7 +9,7 @@ import pyudev
 from adafruit_hid.consumer_control import ConsumerControl
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.mouse import Mouse
-from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
+from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
 
 from .evdev import (
     evdev_to_usb_hid,
@@ -18,6 +18,7 @@ from .evdev import (
     is_consumer_key,
     is_mouse_button,
 )
+from .input_devices import async_list_input_devices
 from .logging import get_logger
 
 _logger = get_logger()
@@ -606,23 +607,6 @@ class DeviceIdentifier:
         if self._type == "mac":
             return self._normalized_value == (device.uniq or "").lower()
         return self._normalized_value in device.name.lower()
-
-
-async def async_list_input_devices() -> list[InputDevice]:
-    """
-    Return a list of available /dev/input/event* devices.
-
-    :return: List of InputDevice objects
-    :rtype: list[InputDevice]
-    """
-    try:
-        return [InputDevice(path) for path in list_devices()]
-    except (OSError, FileNotFoundError) as ex:
-        _logger.critical(f"Failed listing devices: {ex}")
-        return []
-    except Exception:
-        _logger.exception("Unexpected error listing devices")
-        return []
 
 
 def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:

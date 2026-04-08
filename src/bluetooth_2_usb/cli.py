@@ -6,6 +6,7 @@ from logging import DEBUG
 from pathlib import Path
 
 from .args import Arguments, parse_args
+from .input_devices import async_list_input_devices
 from .logging import add_file_handler, get_logger
 from .version import get_versioned_name
 
@@ -118,8 +119,6 @@ def validate_shortcut(shortcut: list[str]) -> set[str]:
 
 
 async def async_list_devices() -> int:
-    from .relay import async_list_input_devices
-
     for dev in await async_list_input_devices():
         print(f"{dev.name}\t{dev.uniq if dev.uniq else dev.phys}\t{dev.path}")
     return EXIT_OK
@@ -136,8 +135,6 @@ def configure_logging(args: Arguments) -> None:
 
 
 async def async_run(args: Arguments) -> int:
-    configure_logging(args)
-
     if args.version:
         return print_version()
 
@@ -149,6 +146,8 @@ async def async_run(args: Arguments) -> int:
     if args.validate_env:
         print_environment_status(env_status)
         return EXIT_OK if env_status.ok else EXIT_ENVIRONMENT
+
+    configure_logging(args)
 
     logger.info(f"Launching {get_versioned_name()}")
     logger.info(f"HID profile: {args.hid_profile}")
