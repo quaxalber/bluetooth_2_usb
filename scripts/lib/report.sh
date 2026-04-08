@@ -43,8 +43,15 @@ report_write_line() {
 }
 
 report_code_block() {
+  local content=""
+
+  content="$(cat)"
   echo '```console'
-  report_ensure_final_newline
+  if [[ -n "$content" ]]; then
+    printf '%s' "$content" | report_ensure_final_newline
+  else
+    printf '<no output>\n'
+  fi
   echo '```'
 }
 
