@@ -320,7 +320,9 @@ rebuild_venv_atomically() {
   local venv_dir="$1"
   local package_dir="$2"
   local staging_dir="${venv_dir}.new"
-  local backup_dir="${venv_dir}.backup.$(timestamp)"
+  local backup_dir
+
+  backup_dir="${venv_dir}.backup.$(timestamp)"
 
   rm -rf "$staging_dir"
   recreate_venv "$staging_dir" || {
