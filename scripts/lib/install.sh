@@ -54,6 +54,30 @@ recreate_venv() {
   python3 -m venv "$venv_dir"
 }
 
+repair_venv_shebangs() {
+  local venv_dir="$1"
+  local staging_dir="$2"
+  local file=""
+  local first_line=""
+  local rewritten_line=""
+  local tmp=""
+
+  for file in "${venv_dir}"/bin/*; do
+    [[ -f "$file" ]] || continue
+    IFS= read -r first_line <"$file" || true
+    [[ "$first_line" == "#!${staging_dir}"* ]] || continue
+
+    rewritten_line="#!${venv_dir}${first_line#\#!"${staging_dir}"}"
+    tmp="${file}.tmp.$$"
+    {
+      printf '%s\n' "$rewritten_line"
+      tail -n +2 "$file" || true
+    } >"$tmp"
+    chmod --reference="$file" "$tmp"
+    mv "$tmp" "$file"
+  done
+}
+
 rebuild_venv_atomically() {
   local venv_dir="$1"
   local package_dir="$2"
@@ -85,6 +109,7 @@ rebuild_venv_atomically() {
   fi
 
   if mv "$staging_dir" "$venv_dir"; then
+    repair_venv_shebangs "$venv_dir" "$staging_dir"
     if [[ -n "$backup_dir" ]]; then
       info "Previous virtual environment backed up to ${backup_dir}"
       for backup_path in "${venv_dir}".bak.*; do
