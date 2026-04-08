@@ -19,8 +19,7 @@ Review at least:
 - `CONTRIBUTING.md`
 - every `docs/*.md` file
 - `scripts/*.sh`
-- `scripts/lib/common.sh`
-- `scripts/lib/report.sh`
+- `scripts/lib/*.sh`
 - `src/bluetooth_2_usb/args.py`
 - `pyproject.toml`
 
@@ -75,8 +74,10 @@ Confirm that the docs match the current option names, defaults, and behavior.
 ### 4. Managed paths and service assumptions
 
 ```bash
-sed -n '1,220p' scripts/lib/common.sh
-sed -n '1,220p' scripts/lib/report.sh
+for f in scripts/lib/*.sh; do
+  echo "==== $f"
+  sed -n '1,220p' "$f"
+done
 sed -n '1,120p' bluetooth_2_usb.service
 ```
 
@@ -88,6 +89,8 @@ Pay attention to:
 - log directory
 - persistent Bluetooth-state paths
 - service unit name
+- whether generic helpers, path constants, and workflow-specific shell logic are
+  still separated cleanly across the shell libs
 
 ### 5. Development workflow
 
@@ -121,7 +124,7 @@ explained where an operator would reasonably expect it.
 
 ```bash
 python -m compileall src
-bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+bash -n scripts/*.sh scripts/lib/*.sh
 ```
 
 ## Expected outcome

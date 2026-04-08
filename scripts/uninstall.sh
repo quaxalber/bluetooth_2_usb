@@ -2,8 +2,13 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 # shellcheck source=./lib/common.sh
-source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=./lib/install.sh
+source "${SCRIPT_DIR}/lib/install.sh"
+# shellcheck source=./lib/readonly.sh
+source "${SCRIPT_DIR}/lib/readonly.sh"
 
 usage() {
   cat <<EOF
@@ -57,6 +62,7 @@ if mountpoint -q /var/lib/bluetooth; then
   umount /var/lib/bluetooth || true
 fi
 if [[ -n "${B2U_PERSIST_MOUNT:-}" ]] && mountpoint -q "$B2U_PERSIST_MOUNT"; then
+  persist_mount_unit=""
   persist_mount_unit="$(persist_mount_unit_name "$B2U_PERSIST_MOUNT")"
   systemctl disable --now "$persist_mount_unit" 2>/dev/null || true
   umount "$B2U_PERSIST_MOUNT" || true

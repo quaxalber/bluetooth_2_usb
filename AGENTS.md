@@ -64,8 +64,16 @@ Files and directories that matter most:
   version handling
 - `scripts/`
   Managed install, uninstall, smoke/debug, and persistent read-only helpers
+- `scripts/lib/paths.sh`
+  Shared managed-path and service constants
 - `scripts/lib/common.sh`
-  Shared shell helpers and managed deployment conventions
+  Generic shell helpers only
+- `scripts/lib/boot.sh`
+  Raspberry Pi boot and `dwc2` helpers
+- `scripts/lib/install.sh`
+  Managed install, service, and virtualenv helpers
+- `scripts/lib/readonly.sh`
+  Persistent read-only and Bluetooth-state mount helpers
 - `scripts/lib/report.sh`
   Markdown/report-only shell helpers
 - `bluetooth_2_usb.service`
@@ -123,6 +131,10 @@ Preserve these unless the task explicitly redesigns them:
 - Quote variables consistently
 - Use shared helpers from `scripts/lib/common.sh` only when they are genuinely
   generic and reused
+- Keep managed paths and service constants out of `common.sh`; they belong in a
+  dedicated path/config layer
+- Move boot/install/read-only workflow logic into dedicated shell libs rather
+  than growing `common.sh`
 - Put report-only helpers in `scripts/lib/report.sh`, not in `common.sh`
 - Avoid masking failures with `|| true` unless they are truly non-fatal
 - Treat install/uninstall/read-only flows as production code
@@ -145,9 +157,9 @@ python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
-shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
-shellcheck -x scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
-bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
+shellcheck -x scripts/*.sh scripts/lib/*.sh
+bash -n scripts/*.sh scripts/lib/*.sh
 yamllint .github/workflows/ci.yml
 python -m build
 ```
@@ -187,6 +199,10 @@ summary.
 
 - When addressing PR feedback, verify each comment against current code; do not
   assume a resolved thread is still satisfied after later commits.
+- Also verify grouped nitpicks, summary comments, and other non-threaded review
+  notes against the current code before deciding they are irrelevant.
+- If you intentionally disagree with review feedback, document the technical
+  reason directly on the PR at the relevant thread or comment location.
 - Findings should focus on behavioral regressions, release risk, shell/runtime
   contract drift, and maintainability with operational impact.
 - If CI fails, inspect the actual failing GitHub Actions step and log before

@@ -32,7 +32,7 @@ The supported deployment model is a normal Git checkout at
 For a test branch:
 
 ```bash
-BRANCH="feat/main-hardening-clean"
+BRANCH="feat/streamline-install-diagnostics"
 
 ssh -4 pi4b "
   sudo rm -rf /opt/bluetooth_2_usb &&
@@ -77,6 +77,13 @@ ssh -4 pi4b '
   cd /opt/bluetooth_2_usb
   sudo -n ./scripts/install.sh
 '
+```
+
+Reboot and wait for SSH:
+
+```bash
+ssh -4 pi4b 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
 ```
 
 After reboot, verify:
@@ -136,6 +143,13 @@ ssh -4 pi4b '
 '
 ```
 
+Reboot and wait for SSH after `enable_readonly_overlayfs.sh`:
+
+```bash
+ssh -4 pi4b 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
+```
+
 After reboot:
 
 ```bash
@@ -152,6 +166,13 @@ Disable read-only mode again:
 ssh -4 pi4b '
   sudo -n /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
 '
+```
+
+Reboot and wait for SSH after `disable_readonly_overlayfs.sh`:
+
+```bash
+ssh -4 pi4b 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
 ```
 
 ## Uninstall validation

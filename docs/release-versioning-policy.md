@@ -50,7 +50,7 @@ Between release tags, the package version is derived from Git history.
 Typical examples:
 
 - `1.0.1.dev3+gabc1234.d20260406`
-- `1.1.0.dev7+gdef5678.d20260406`
+- `1.1.1.dev7+gdef5678.d20260406`
 
 These development versions are intentionally PEP 440 compliant rather than pure SemVer strings.
 The SemVer contract applies to official release tags such as `v1.0.0`, `v1.0.1`, and `v1.1.0`.

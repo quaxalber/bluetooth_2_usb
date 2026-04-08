@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+
+if [[ -n "${B2U_INSTALL_LIB_SH_SOURCED:-}" ]]; then
+  return
+fi
+readonly B2U_INSTALL_LIB_SH_SOURCED=1
+
+_b2u_install_lib_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./common.sh
+source "${_b2u_install_lib_dir}/common.sh"
+unset _b2u_install_lib_dir
+
+install_service_unit() {
+  install -m 0644 "${B2U_REPO_ROOT}/bluetooth_2_usb.service" "/etc/systemd/system/${B2U_SERVICE_UNIT}"
+}
+
+activate_service_unit() {
+  local was_active=0
+
+  if systemctl is-active --quiet "${B2U_SERVICE_UNIT}"; then
+    was_active=1
+  fi
+
+  systemctl enable "${B2U_SERVICE_UNIT}"
+  if [[ $was_active -eq 1 ]]; then
+    systemctl restart "${B2U_SERVICE_UNIT}"
+  else
+    systemctl start "${B2U_SERVICE_UNIT}"
+  fi
+}
+
+write_default_env_file() {
+  if [[ ! -f "$B2U_ENV_FILE" ]]; then
+    cat >"$B2U_ENV_FILE" <<'EOF'
+# Optional runtime arguments for bluetooth_2_usb.service.
+BLUETOOTH_2_USB_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12 --hid-profile compat"
+EOF
+    chmod 0644 "$B2U_ENV_FILE"
+  fi
+}
+
+install_cli_wrapper() {
+  cat >/usr/local/bin/bluetooth_2_usb <<EOF
+#!/usr/bin/env bash
+exec "${B2U_INSTALL_DIR}/venv/bin/python" -m bluetooth_2_usb "\$@"
+EOF
+  chmod 0755 /usr/local/bin/bluetooth_2_usb
+}
+
+recreate_venv() {
+  local venv_dir="$1"
+
+  rm -rf "$venv_dir"
+  python3 -m venv "$venv_dir"
+}
+
+rebuild_venv_atomically() {
+  local venv_dir="$1"
+  local package_dir="$2"
+  local staging_dir="${venv_dir}.new"
+  local backup_dir=""
+
+  rm -rf "$staging_dir"
+  recreate_venv "$staging_dir" || {
+    rm -rf "$staging_dir"
+    return 1
+  }
+
+  if ! "${staging_dir}/bin/pip" install --upgrade pip setuptools wheel; then
+    rm -rf "$staging_dir"
+    return 1
+  fi
+  if ! "${staging_dir}/bin/pip" install --upgrade "$package_dir"; then
+    rm -rf "$staging_dir"
+    return 1
+  fi
+
+  if [[ -e "$venv_dir" ]]; then
+    backup_dir="${venv_dir}.bak.$(timestamp)"
+    mv "$venv_dir" "$backup_dir" || {
+      rm -rf "$staging_dir"
+      return 1
+    }
+  fi
+
+  if mv "$staging_dir" "$venv_dir"; then
+    if [[ -n "$backup_dir" ]]; then
+      info "Previous virtual environment backed up to ${backup_dir}"
+    fi
+    return 0
+  fi
+
+  warn "Failed to activate the new virtual environment."
+  if [[ -n "$backup_dir" ]]; then
+    warn "Previous virtual environment remains available at ${backup_dir}."
+  fi
+  return 1
+}
+
+service_installed() {
+  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${B2U_SERVICE_UNIT}"
+}

@@ -2,8 +2,11 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 # shellcheck source=./lib/common.sh
-source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=./lib/readonly.sh
+source "${SCRIPT_DIR}/lib/readonly.sh"
 
 usage() {
   cat <<EOF

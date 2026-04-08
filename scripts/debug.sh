@@ -2,10 +2,15 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 # shellcheck source=./lib/common.sh
-source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=./lib/boot.sh
+source "${SCRIPT_DIR}/lib/boot.sh"
+# shellcheck source=./lib/readonly.sh
+source "${SCRIPT_DIR}/lib/readonly.sh"
 # shellcheck source=./lib/report.sh
-source "$(cd -- "$(dirname "$0")" && pwd)/lib/report.sh"
+source "${SCRIPT_DIR}/lib/report.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 DURATION=""
@@ -269,7 +274,7 @@ else
 fi
 report_text_block "$OUT" "###" "info" "OverlayFS status" "overlayfs=$(overlay_status)"
 readonly_mode_status="info"
-readonly_mode_value="readonly_mode=$(readonly_mode 2>/dev/null || echo '<error>')"
+readonly_mode_value="readonly_mode=disabled"
 persist_status="info"
 persist_value="bluetooth_state_persistent=no"
 if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ] && [ "$PARSE_ERROR" -eq 1 ]; then
@@ -278,6 +283,7 @@ if [ -f "$B2U_READONLY_ENV_FILE" ] && [ -s "$B2U_READONLY_ENV_FILE" ] && [ "$PAR
   persist_status="fail"
   persist_value="bluetooth_state_persistent=<config parse error>"
 else
+  readonly_mode_value="readonly_mode=$(readonly_mode)"
   if bluetooth_state_persistent 2>/dev/null; then
     persist_status="ok"
     persist_value="bluetooth_state_persistent=yes"
@@ -329,11 +335,15 @@ if [[ -x "${VENV_DIR}/bin/python" ]]; then
   timed_command_block "ok" "CLI environment validation" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --validate-env"
 
   stop_service_for_debug
+  redacted_debug_cmd="$(
+    printf '%s\n' "live_debug_command=${DEBUG_CMD}" \
+      | B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream
+  )"
 
   report_text_block "$OUT" "###" "info" "Live debug setup" \
     "service_stopped_for_live_debug=$([[ $SERVICE_WAS_STOPPED -eq 1 ]] && echo yes || echo no)" \
     "$([[ -n "$DURATION" ]] && printf 'live_debug_duration=%ss' "$DURATION" || printf 'live_debug_duration=until interrupted')" \
-    "live_debug_command=${DEBUG_CMD}"
+    "$redacted_debug_cmd"
   report_heading "$OUT" "###" "ok" "Live Bluetooth-2-USB debug output"
   if [[ -n "$DURATION" ]]; then
     info "Live debug duration: ${DURATION}s"

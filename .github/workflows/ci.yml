@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -45,15 +47,15 @@ jobs:
 
       - name: Shell formatting checks
         run: |
-          shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+          shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
 
       - name: Shell lint checks
         run: |
-          shellcheck -x scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+          shellcheck -x scripts/*.sh scripts/lib/*.sh
 
       - name: Shell syntax checks
         run: |
-          bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+          bash -n scripts/*.sh scripts/lib/*.sh
 
       - name: YAML lint checks
         run: |

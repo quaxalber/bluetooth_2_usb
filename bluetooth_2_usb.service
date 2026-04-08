@@ -1,7 +1,6 @@
 [Unit]
 Description=Bluetooth-2-USB HID relay
-After=bluetooth.service network-online.target local-fs.target
-Wants=network-online.target
+After=bluetooth.service local-fs.target
 
 [Service]
 Type=simple

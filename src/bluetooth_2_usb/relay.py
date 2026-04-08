@@ -395,7 +395,15 @@ class RelayController:
                         prefix,
                     )
                     return False
-            capabilities = device.capabilities(verbose=False)
+            try:
+                capabilities = device.capabilities(verbose=False)
+            except OSError as exc:
+                _logger.debug(
+                    "Skipping %s during auto-discovery: failed to read capabilities (%s)",
+                    device,
+                    exc,
+                )
+                return False
             if not any(code in capabilities for code in (1, 2)):
                 _logger.debug(
                     "Skipping %s during auto-discovery: missing EV_KEY/EV_REL capabilities",

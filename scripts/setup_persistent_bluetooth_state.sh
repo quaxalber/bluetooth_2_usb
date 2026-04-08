@@ -2,8 +2,13 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 # shellcheck source=./lib/common.sh
-source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=./lib/install.sh
+source "${SCRIPT_DIR}/lib/install.sh"
+# shellcheck source=./lib/readonly.sh
+source "${SCRIPT_DIR}/lib/readonly.sh"
 
 load_readonly_config
 
@@ -51,6 +56,7 @@ detected_type="$(blkid -s TYPE -o value "$DEVICE" 2>/dev/null || true)"
 
 PERSIST_SPEC="$(persist_spec_from_device "$DEVICE")"
 PERSIST_BLUETOOTH_DIR="${PERSIST_MOUNT}/${BLUETOOTH_SUBDIR}"
+PERSIST_MOUNT_UNIT="$(persist_mount_unit_name "$PERSIST_MOUNT")"
 mkdir -p "$PERSIST_MOUNT"
 
 write_persist_mount_unit "$PERSIST_SPEC" "$PERSIST_MOUNT" "ext4"
@@ -64,7 +70,13 @@ fi
 systemctl stop bluetooth.service || fail "Failed to stop bluetooth.service before migrating Bluetooth state"
 
 systemctl daemon-reload
-systemctl enable --now "$(persist_mount_unit_name "$PERSIST_MOUNT")"
+if mountpoint -q "$PERSIST_MOUNT"; then
+  systemctl stop "$PERSIST_MOUNT_UNIT" 2>/dev/null || true
+  if mountpoint -q "$PERSIST_MOUNT"; then
+    umount "$PERSIST_MOUNT" || fail "Failed to unmount ${PERSIST_MOUNT} before switching the persistent mount source"
+  fi
+fi
+systemctl enable --now "$PERSIST_MOUNT_UNIT"
 mkdir -p "$PERSIST_BLUETOOTH_DIR"
 
 if [[ -d /var/lib/bluetooth ]]; then

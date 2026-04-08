@@ -85,6 +85,9 @@ Keep code and docs aligned with that model.
 - Quote variables consistently
 - Fail early on invalid input
 - Keep shared helpers in `scripts/lib/common.sh` genuinely generic
+- Keep managed paths and service constants out of `common.sh`
+- Move boot/install/read-only workflow helpers into dedicated shell libs instead
+  of expanding `common.sh`
 - Keep report-only helpers in `scripts/lib/report.sh`
 - Treat install and readonly flows as production code, not convenience glue
 
@@ -106,9 +109,9 @@ python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
-shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
-shellcheck -x scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
-bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
+shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
+shellcheck -x scripts/*.sh scripts/lib/*.sh
+bash -n scripts/*.sh scripts/lib/*.sh
 yamllint .github/workflows/ci.yml
 python -m build
 ```
@@ -158,6 +161,9 @@ When you open a pull request:
 
 If you address review feedback, verify each point against the current code.
 Do not assume an old resolved thread is still satisfied after later commits.
+Also check grouped nitpicks and summary comments, not just unresolved inline
+threads. If you intentionally decline a review suggestion, explain that
+decision directly on the PR at the relevant thread or comment.
 
 ## Reporting issues
 
