@@ -67,13 +67,12 @@ The supported deployment model is a normal Git checkout at
 
 ```bash
 sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb
-cd /opt/bluetooth_2_usb
 ```
 
 ### 2. Install
 
 ```bash
-sudo ./scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
 ### 3. Reboot
@@ -176,7 +175,7 @@ manually.
 List available devices:
 
 ```bash
-bluetooth_2_usb --list_devices
+bluetooth_2_usb -l
 ```
 
 Validate the runtime environment:
@@ -204,7 +203,7 @@ Update the managed checkout and re-apply the system integration:
 ```bash
 cd /opt/bluetooth_2_usb
 sudo git pull --ff-only
-sudo ./scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
 This keeps the operational model simple:
@@ -355,7 +354,7 @@ sudo reboot
 Check what the runtime can actually see:
 
 ```bash
-bluetooth_2_usb --list_devices
+bluetooth_2_usb -l
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
