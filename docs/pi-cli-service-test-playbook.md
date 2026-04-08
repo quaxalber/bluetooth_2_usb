@@ -29,6 +29,13 @@ need a manual reboot before retrying.
 The supported deployment model is a normal Git checkout at
 `/opt/bluetooth_2_usb`.
 
+If the Pi image does not include `git`, which is common on Raspberry Pi OS
+Lite, install it first:
+
+```bash
+ssh -4 pi4b 'sudo -n apt update && sudo -n apt install -y git'
+```
+
 For a test branch:
 
 ```bash
@@ -37,8 +44,7 @@ BRANCH="${BRANCH:-main}"
 ssh -4 pi4b "
   sudo -n rm -rf /opt/bluetooth_2_usb &&
   sudo -n git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
-  cd /opt/bluetooth_2_usb &&
-  sudo -n git checkout \"${BRANCH}\"
+  sudo -n git -C /opt/bluetooth_2_usb checkout \"${BRANCH}\"
 "
 ```
 
@@ -59,14 +65,13 @@ ssh -4 pi4b '
 
 ```bash
 ssh -4 pi4b '
-  cd /opt/bluetooth_2_usb
-  bash scripts/install.sh --help >/dev/null
-  bash scripts/uninstall.sh --help >/dev/null
-  bash scripts/smoke_test.sh --help >/dev/null
-  bash scripts/debug.sh --help >/dev/null
-  bash scripts/enable_readonly_overlayfs.sh --help >/dev/null
-  bash scripts/disable_readonly_overlayfs.sh --help >/dev/null
-  bash scripts/setup_persistent_bluetooth_state.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --help >/dev/null
 '
 ```
 
@@ -74,8 +79,7 @@ ssh -4 pi4b '
 
 ```bash
 ssh -4 pi4b '
-  cd /opt/bluetooth_2_usb
-  sudo -n ./scripts/install.sh
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh
 '
 ```
 
@@ -101,9 +105,8 @@ The supported update model is Git plus reinstall:
 
 ```bash
 ssh -4 pi4b '
-  cd /opt/bluetooth_2_usb
-  sudo -n git pull --ff-only
-  sudo -n ./scripts/install.sh
+  sudo -n git -C /opt/bluetooth_2_usb pull --ff-only
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh
 '
 ```
 

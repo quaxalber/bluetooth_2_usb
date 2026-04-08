@@ -102,12 +102,13 @@ Preserve these unless the task explicitly redesigns them:
 - Managed installs are rooted in `/opt/bluetooth_2_usb`.
 - The service launches the module with the managed venv Python.
 - Supported install flow:
+  - on minimal Raspberry Pi OS Lite images, install `git` first if needed:
+    `sudo apt update && sudo apt install -y git`
   - clone to `/opt/bluetooth_2_usb`
-  - run `sudo ./scripts/install.sh`
+  - run `sudo /opt/bluetooth_2_usb/scripts/install.sh`
 - Supported update flow:
-  - `cd /opt/bluetooth_2_usb`
-  - `sudo git pull --ff-only`
-  - `sudo ./scripts/install.sh`
+  - `sudo git -C /opt/bluetooth_2_usb pull --ff-only`
+  - `sudo /opt/bluetooth_2_usb/scripts/install.sh`
 - Shell scripts should fail loudly on ambiguous or unsafe input.
 - Boot changes should be conservative and leave timestamped backups, but scripts
   should not attempt automatic rollback restores.

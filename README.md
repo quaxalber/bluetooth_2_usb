@@ -65,6 +65,14 @@ where Bluetooth is unavailable or inconvenient.
 The supported deployment model is a normal Git checkout at
 `/opt/bluetooth_2_usb`.
 
+If `git` is missing, which is common on a minimal Raspberry Pi OS Lite image,
+install it first:
+
+```bash
+sudo apt update
+sudo apt install -y git
+```
+
 ```bash
 sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb
 ```

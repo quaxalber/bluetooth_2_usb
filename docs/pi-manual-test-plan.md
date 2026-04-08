@@ -12,9 +12,10 @@ Purpose:
 Steps:
 
 ```bash
+sudo apt update
+sudo apt install -y git
 sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb
-cd /opt/bluetooth_2_usb
-sudo ./scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/install.sh
 sudo reboot
 ```
 
@@ -59,9 +60,8 @@ Purpose:
 Steps:
 
 ```bash
-cd /opt/bluetooth_2_usb
-sudo git pull --ff-only
-sudo ./scripts/install.sh
+sudo git -C /opt/bluetooth_2_usb pull --ff-only
+sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
 After reboot if boot settings changed:
