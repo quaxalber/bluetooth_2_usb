@@ -158,24 +158,21 @@ manually.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--device_ids DEVICE_IDS` | Comma-separated identifiers for the devices to relay. Each identifier may be an event path, a Bluetooth MAC address, or a case-insensitive name fragment. Default: none. Examples: `--device_ids /dev/input/event4`, `--device_ids A1:B2:C3:D4:E5:F6`, `--device_ids logi`, `--device_ids '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`. |
-| `--auto_discover` | Relay all readable input devices automatically. Default: disabled. Good default for appliance-style setups where you do not want to curate a static device list. |
-| `--grab_devices` | Grab the selected input devices so the Pi no longer consumes their local events. Default: disabled. |
-| `--interrupt_shortcut INTERRUPT_SHORTCUT` | Plus-separated key chord that toggles relaying on and off at runtime. Default: none, feature disabled. Example: `--interrupt_shortcut CTRL+SHIFT+F12`. |
-| `--list_devices` | List readable input devices and exit without starting the relay. Default: disabled. Useful before setting `DEVICE_IDS`. |
-| `--log_to_file` | Add file logging in addition to stdout logging. Default: disabled. |
-| `--log_path LOG_PATH` | Override the path used with `--log_to_file`. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`. Example: `--log_path /tmp/bluetooth_2_usb.log`. |
-| `--debug` | Increase log verbosity for manual troubleshooting. Default: disabled. |
-| `--version` | Print the installed Bluetooth-2-USB version and exit. Default: disabled. |
-| `--validate-env` | Validate gadget runtime prerequisites and exit. Default: disabled. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
+| `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Comma-separated identifiers for the devices to relay. Each identifier may be an event path, a Bluetooth MAC address, or a case-insensitive name fragment. Default: none. Examples: `--device_ids /dev/input/event4`, `--device_ids A1:B2:C3:D4:E5:F6`, `--device_ids logi`, `--device_ids '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`. |
+| `--auto_discover, -a` | Relay all readable input devices automatically. Good default for appliance-style setups where you do not want to curate a static device list. |
+| `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events. |
+| `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Plus-separated key chord that toggles relaying on and off at runtime. Default: none, feature disabled. Example: `--interrupt_shortcut CTRL+SHIFT+F12`. |
+| `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. |
+| `--log_to_file, -f` | Add file logging in addition to stdout logging. |
+| `--log_path LOG_PATH, -p LOG_PATH` | Override the path used with `--log_to_file`. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`. Example: `--log_path /tmp/bluetooth_2_usb.log`. |
+| `--debug, -d` | Increase log verbosity for manual troubleshooting. |
+| `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
+| `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
 | `--hid-profile PROFILE` | USB HID profile to expose. Default: `compat`. Supported values: `compat`, `extended`. Example: `--hid-profile extended`. |
-| `--help` | Show the built-in CLI help and exit. Default: disabled. |
+| `--help, -h` | Show the built-in CLI help and exit. |
 
 The `--device_ids` matcher accepts event paths, Bluetooth MAC addresses, and
 case-insensitive name fragments in the same comma-separated list.
-
-Short aliases from `-h`: `-i`, `-a`, `-g`, `-s`, `-l`, `-f`, `-p`, `-d`,
-`-v`, and `-h`.
 
 ## Day-to-day usage
 
@@ -398,7 +395,6 @@ Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
 This is the main deployment entrypoint for first install and for later
 re-application after `git pull`.
 
-This script has no public options. Run it from `/opt/bluetooth_2_usb`.
 Typical invocation: `sudo ./scripts/install.sh`.
 
 ### `uninstall.sh`
@@ -406,8 +402,7 @@ Typical invocation: `sudo ./scripts/install.sh`.
 Remove the managed system integration while deliberately leaving the checkout in
 place for inspection or later reuse.
 
-This script has no public options. Typical invocation:
-`sudo /opt/bluetooth_2_usb/scripts/uninstall.sh`.
+Typical invocation: `sudo /opt/bluetooth_2_usb/scripts/uninstall.sh`.
 
 ### `debug.sh`
 
@@ -442,8 +437,7 @@ enabling OverlayFS.
 Switch Raspberry Pi OS into persistent read-only operation after the writable
 Bluetooth-state mount has already been prepared.
 
-This script has no public options. Run it after
-`setup_persistent_bluetooth_state.sh`. Typical invocation:
+Run it after `setup_persistent_bluetooth_state.sh`. Typical invocation:
 `sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh`.
 
 ### `disable_readonly_overlayfs.sh`
@@ -451,8 +445,7 @@ This script has no public options. Run it after
 Return the system to normal writable mode while keeping the persistent
 Bluetooth-state configuration available.
 
-This script has no public options. Typical invocation:
-`sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh`.
+Typical invocation: `sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh`.
 
 ## Managed paths
 

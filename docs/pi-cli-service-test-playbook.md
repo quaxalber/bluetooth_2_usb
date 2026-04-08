@@ -35,10 +35,10 @@ For a test branch:
 BRANCH="${BRANCH:-main}"
 
 ssh -4 pi4b "
-  sudo rm -rf /opt/bluetooth_2_usb &&
-  sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
+  sudo -n rm -rf /opt/bluetooth_2_usb &&
+  sudo -n git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
   cd /opt/bluetooth_2_usb &&
-  sudo git checkout ${BRANCH}
+  sudo -n git checkout \"${BRANCH}\"
 "
 ```
 
@@ -49,7 +49,7 @@ Run this before mutating the system:
 ```bash
 ssh -4 pi4b '
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
-  echo OVERLAY=$(sudo raspi-config nonint get_overlay_now 2>/dev/null || echo unknown)
+  echo OVERLAY=$(sudo -n raspi-config nonint get_overlay_now 2>/dev/null || echo unknown)
   echo ROOT=$(findmnt -no FSTYPE,OPTIONS /)
   uname -a
 '
