@@ -218,6 +218,6 @@ ssh -4 pi4b '
   cat /etc/os-release
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
   echo READONLY=$(grep "^B2U_READONLY_MODE=" /etc/default/bluetooth_2_usb_readonly 2>/dev/null || echo disabled)
-  journalctl -u bluetooth_2_usb.service -n 100 --no-pager || true
+  sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager || true
 '
 ```
