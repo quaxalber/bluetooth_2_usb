@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import re
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import pyudev
 from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
@@ -80,7 +82,7 @@ class GadgetManager:
             enabled_devices,
         )
 
-    def get_keyboard(self) -> "Keyboard | None":
+    def get_keyboard(self) -> Keyboard | None:
         """
         Get the Keyboard gadget.
 
@@ -89,7 +91,7 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> "Mouse | None":
+    def get_mouse(self) -> Mouse | None:
         """
         Get the Mouse gadget.
 
@@ -98,7 +100,7 @@ class GadgetManager:
         """
         return self._gadgets["mouse"]
 
-    def get_consumer(self) -> "ConsumerControl | None":
+    def get_consumer(self) -> ConsumerControl | None:
         """
         Get the ConsumerControl gadget.
 
@@ -195,7 +197,7 @@ class RelayController:
         skip_name_prefixes: list[str] | None = None,
         grab_devices: bool = False,
         relaying_active: asyncio.Event | None = None,
-        shortcut_toggler: Optional["ShortcutToggler"] = None,
+        shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
         :param gadget_manager: Provides the USB HID gadget devices
@@ -435,7 +437,7 @@ class DeviceRelay:
         gadget_manager: GadgetManager,
         grab_device: bool = False,
         relaying_active: asyncio.Event | None = None,
-        shortcut_toggler: Optional["ShortcutToggler"] = None,
+        shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
         :param input_device: The evdev input device
@@ -465,7 +467,7 @@ class DeviceRelay:
         """
         return self._input_device
 
-    async def __aenter__(self) -> "DeviceRelay":
+    async def __aenter__(self) -> DeviceRelay:
         """
         Async context manager entry. Grabs the device if requested.
 
