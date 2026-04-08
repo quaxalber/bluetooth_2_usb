@@ -59,6 +59,7 @@ rebuild_venv_atomically() {
   local package_dir="$2"
   local staging_dir="${venv_dir}.new"
   local backup_dir=""
+  local backup_path=""
 
   rm -rf "$staging_dir"
   recreate_venv "$staging_dir" || {
@@ -86,6 +87,11 @@ rebuild_venv_atomically() {
   if mv "$staging_dir" "$venv_dir"; then
     if [[ -n "$backup_dir" ]]; then
       info "Previous virtual environment backed up to ${backup_dir}"
+      for backup_path in "${venv_dir}".bak.*; do
+        [[ -e "$backup_path" ]] || break
+        [[ "$backup_path" == "$backup_dir" ]] && continue
+        rm -rf "$backup_path"
+      done
     fi
     return 0
   fi

@@ -134,8 +134,9 @@ At the end of the review, answer these questions explicitly:
 1. Do `README.md`, `CONTRIBUTING.md`, and all relevant `docs/*.md` files match
    the current script interfaces?
 2. Do they match the current Python CLI surface?
-3. Do the documented managed paths and defaults still match `common.sh` and the
-   service unit?
+3. Do the documented managed paths and defaults still match
+   `scripts/lib/paths.sh` and the service unit? `scripts/lib/paths.sh` is the
+   authoritative source for managed path constants.
 4. Are there any stale commands, removed flags, outdated entrypoints, or
    hard-coded environment values left?
 5. Did you make doc fixes, or is the current documentation already consistent?

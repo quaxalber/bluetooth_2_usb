@@ -107,6 +107,22 @@ ssh -4 pi4b '
 '
 ```
 
+Reboot and wait for SSH so the update path is validated against the next boot:
+
+```bash
+ssh -4 pi4b 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
+```
+
+After reboot, verify:
+
+```bash
+ssh -4 pi4b '
+  systemctl is-active bluetooth_2_usb.service
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+'
+```
+
 ## Debug validation
 
 Bounded run:

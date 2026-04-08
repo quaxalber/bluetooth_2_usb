@@ -42,7 +42,8 @@ load_readonly_config() {
 
   local line key value
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -n "$line" ]] || continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
     if [[ ! "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"$ ]]; then
       fail "Refusing to load invalid read-only config line from ${B2U_READONLY_ENV_FILE}: ${line}"
     fi

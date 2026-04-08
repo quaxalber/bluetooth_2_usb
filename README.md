@@ -167,6 +167,20 @@ Advanced runtime override:
 - `--validate-env`
   Validate gadget runtime prerequisites and exit.
 
+Concrete `--device_ids` examples:
+
+- One exact event node:
+  `bluetooth_2_usb --device_ids /dev/input/event4`
+- One Bluetooth MAC address:
+  `bluetooth_2_usb --device_ids A1:B2:C3:D4:E5:F6`
+- One device-name fragment:
+  `bluetooth_2_usb --device_ids logi`
+- A mixed filter list:
+  `bluetooth_2_usb --device_ids '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`
+
+The matcher accepts event paths, Bluetooth MAC addresses, and case-insensitive
+name fragments in the same comma-separated list.
+
 ## Day-to-day usage
 
 List available devices:
@@ -340,15 +354,91 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 All managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
 installation.
 
-| Script | Purpose | Public options |
-| --- | --- | --- |
-| `install.sh` | Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install, including boot config, virtualenv, service, and wrapper. | none |
-| `uninstall.sh` | Remove the managed service integration while leaving the checkout in place. | none |
-| `debug.sh` | Collect a redacted Markdown debug report with service state, boot config, mount state, dmesg, CLI validation, and a live foreground debug run. | `--duration <sec>` |
-| `smoke_test.sh` | Perform a quick installation and runtime health check for boot config, UDC, service state, environment validation, and persistent Bluetooth state. | `--verbose` |
-| `setup_persistent_bluetooth_state.sh` | Configure and activate the writable ext4 mount and bind mount for `/var/lib/bluetooth`. | `--device <path>` |
-| `enable_readonly_overlayfs.sh` | Enable Raspberry Pi OS OverlayFS after persistent Bluetooth state has already been prepared. | none |
-| `disable_readonly_overlayfs.sh` | Disable Raspberry Pi OS OverlayFS while leaving the persistent Bluetooth-state mount configuration in place. | none |
+### `install.sh`
+
+Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
+This is the main deployment entrypoint for first install and for later
+re-application after `git pull`.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | `/opt/bluetooth_2_usb` |
+| Purpose | Patch boot config, rebuild the managed virtualenv, install the service, and refresh the wrapper |
+| Public options | none |
+| Typical invocation | `sudo ./scripts/install.sh` |
+
+### `uninstall.sh`
+
+Remove the managed system integration while deliberately leaving the checkout in
+place for inspection or later reuse.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | anywhere |
+| Purpose | Remove the service, wrapper, env files, and persistent Bluetooth-state mount integration |
+| Public options | none |
+| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/uninstall.sh` |
+
+### `debug.sh`
+
+Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough.
+It records service, boot, mount, and runtime state, then runs a bounded live
+foreground debug session.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | anywhere |
+| Purpose | Produce a redacted Markdown report for issue triage |
+| Public options | `--duration <sec>` |
+| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10` |
+
+### `smoke_test.sh`
+
+Run the fast health check for the supported managed deployment. This is the
+first script to use after install, reboot, update, or read-only changes.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | anywhere |
+| Purpose | Verify boot config, UDC visibility, service state, CLI validation, and persistent Bluetooth state wiring |
+| Public options | `--verbose` |
+| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose` |
+
+### `setup_persistent_bluetooth_state.sh`
+
+Prepare the writable ext4-backed storage for `/var/lib/bluetooth` before
+enabling OverlayFS.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | anywhere |
+| Purpose | Configure, mount, seed, and bind-mount persistent Bluetooth state |
+| Public options | `--device <path>` |
+| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION` |
+
+### `enable_readonly_overlayfs.sh`
+
+Switch Raspberry Pi OS into persistent read-only operation after the writable
+Bluetooth-state mount has already been prepared.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | anywhere |
+| Purpose | Enable OverlayFS while preserving writable Bluetooth state on the persistent mount |
+| Public options | none |
+| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh` |
+
+### `disable_readonly_overlayfs.sh`
+
+Return the system to normal writable mode while keeping the persistent
+Bluetooth-state configuration available.
+
+| Aspect | Value |
+| --- | --- |
+| Run from | anywhere |
+| Purpose | Disable OverlayFS and keep the persistent Bluetooth-state layout intact |
+| Public options | none |
+| Typical invocation | `sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh` |
 
 ## Managed paths
 
@@ -372,3 +462,30 @@ Release tagging and versioning rules are documented in
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+The overview image is by Laura T. and is licensed under
+[CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/).
+
+## Acknowledgments
+
+- [Mike Redrobe](https://github.com/mikerr/pihidproxy) for the original Pi HID
+  proxy idea
+- [HeuristicPerson](https://github.com/HeuristicPerson/bluetooth_2_hid) for
+  related prior art
+- [Georgi Valkov](https://github.com/gvalkov) for
+  [`python-evdev`](https://github.com/gvalkov/python-evdev)
+- [Adafruit](https://www.adafruit.com/) for CircuitPython HID and Blinka, which
+  helped make USB gadget access much smoother
+- Everyone who tests the project on real hardware and reports what works, what
+  fails, and how to improve it
+
+---
+
+<div align="center">
+
+👀 Written by Eyes<br>
+🤖 Assisted by Technology and AI<br>
+☕ Powered by Coffee<br>
+🫶 Developed with Love
+
+</div>
