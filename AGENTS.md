@@ -3,6 +3,11 @@
 This file is the fast-start contract for work in this repository. A fresh thread
 should be able to start from here without guessing project standards.
 
+Treat this file as living project documentation, not as a one-off bootstrap
+note. When workflows, validation commands, managed paths, service behavior,
+release rules, hardware expectations, or project conventions change, update this
+file in the same change to prevent drift.
+
 ## Scope
 
 - Repository: `bluetooth_2_usb`
