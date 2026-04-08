@@ -7,7 +7,7 @@ source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 usage() {
   cat <<EOF
-Usage: sudo ./disable_readonly_overlayfs.sh
+Usage: sudo ./scripts/disable_readonly_overlayfs.sh
 
 Disables the Raspberry Pi OS OverlayFS root filesystem mode.
 Any configured persistent Bluetooth mount remains in place.

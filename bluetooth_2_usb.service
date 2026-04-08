@@ -17,9 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
-StateDirectory=bluetooth_2_usb
 LogsDirectory=bluetooth_2_usb
-RuntimeDirectory=bluetooth_2_usb
 ReadWritePaths=/var/lib/bluetooth
 
 [Install]

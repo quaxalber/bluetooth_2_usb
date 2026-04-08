@@ -4,22 +4,15 @@ IFS=$'\n\t'
 
 # shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
-# shellcheck source=./lib/report.sh
-source "$(cd -- "$(dirname "$0")" && pwd)/lib/report.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
-MARKDOWN=0
 EXIT_CODE=0
-OUT=""
-VALIDATE_EXIT=0
-DRY_RUN_EXIT=0
 
 usage() {
   cat <<EOF
-Usage: sudo ./smoke_test.sh [options]
+Usage: sudo ./scripts/smoke_test.sh [options]
   --verbose           Print detailed diagnostics, including journalctl
-  --markdown          Also write a Markdown report under ${B2U_LOG_DIR}
 EOF
 }
 
@@ -29,15 +22,13 @@ while [[ $# -gt 0 ]]; do
       VERBOSE=1
       shift
       ;;
-    --markdown)
-      MARKDOWN=1
-      shift
-      ;;
     -h | --help)
       usage
       exit 0
       ;;
-    *) fail "Unknown option: $1" ;;
+    *)
+      fail "Unknown option: $1"
+      ;;
   esac
 done
 
@@ -49,8 +40,7 @@ CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
 READONLY_MODE="$(readonly_mode)"
 VALIDATE_LOG="$(mktemp)"
-DRY_RUN_LOG="$(mktemp)"
-trap 'rm -f "$VALIDATE_LOG" "$DRY_RUN_LOG"' EXIT
+trap 'rm -f "$VALIDATE_LOG"' EXIT
 
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
@@ -85,105 +75,16 @@ required_modules_status() {
     printf '%s\n' "all present"
   else
     joined="$(printf '%s,' "${missing_modules[@]}")"
-    joined="${joined%,}"
-    printf '%s\n' "missing: ${joined}"
+    printf '%s\n' "missing: ${joined%,}"
   fi
 }
 
 required_modules_list() {
   local joined
+
   joined="$(printf '%s,' "${REQUIRED_MODULES[@]}")"
   printf '%s\n' "${joined%,}"
 }
-
-write_markdown_report() {
-  local result="PASSED"
-  local result_status="ok"
-  local validate_status="passed"
-  local validate_heading_status="ok"
-  local dry_run_status="passed"
-  local dry_run_heading_status="ok"
-  local boot_checks_status="ok"
-  local service_checks_status="ok"
-
-  [[ $MARKDOWN -eq 1 ]] || return 0
-  if [[ $EXIT_CODE -ne 0 ]]; then
-    result="FAILED"
-    result_status="fail"
-  fi
-  [[ -s "$VALIDATE_LOG" ]] || validate_status="produced no output"
-  [[ -s "$DRY_RUN_LOG" ]] || dry_run_status="produced no output"
-  if ! grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" || ! modules_load_has_required_modules || [[ ! -d /sys/kernel/config/usb_gadget ]] || [[ -z "$UDC_LIST" ]]; then
-    boot_checks_status="fail"
-  fi
-  if ! systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 || ! systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 || [[ ! -x "${VENV_DIR}/bin/python" ]] || [[ ! -d /var/lib/bluetooth ]]; then
-    service_checks_status="fail"
-  fi
-  if [[ $VALIDATE_EXIT -ne 0 ]]; then
-    validate_status="failed"
-    validate_heading_status="fail"
-  fi
-  if [[ $DRY_RUN_EXIT -ne 0 ]]; then
-    dry_run_status="failed"
-    dry_run_heading_status="fail"
-  fi
-
-  report_heading "$OUT" "#" "none" "bluetooth_2_usb smoke test report"
-  report_write_line "$OUT"
-  report_write_line "$OUT" "_Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")_"
-  report_write_line "$OUT"
-
-  report_heading "$OUT" "##" "$result_status" "Summary"
-  report_text_block "$OUT" "###" "$result_status" "Overall result" \
-    "Overall result" \
-    "smoke_test=${result}" \
-    "overlayfs=$(overlay_status)" \
-    "readonly_mode=${READONLY_MODE}" \
-    "bluetooth_state_persistent=$(bluetooth_state_persistent && echo yes || echo no)"
-  report_text_block "$OUT" "###" "info" "Boot and runtime summary" \
-    "boot_config=${CONFIG_TXT}" \
-    "cmdline=${CMDLINE_TXT}" \
-    "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
-    "dwc2_mode=${DWC2_MODE}" \
-    "required_modules=$(required_modules_list)" \
-    "required_modules_status=$(required_modules_status)" \
-    "udc_controllers=${UDC_LIST:-<none>}" \
-    "service_unit=${B2U_SERVICE_UNIT}" \
-    "venv_python=${VENV_DIR}/bin/python"
-
-  report_heading "$OUT" "##" "$result_status" "Checks"
-  report_text_block "$OUT" "###" "$boot_checks_status" "Boot configuration checks" \
-    "dwc2_overlay=$(grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT" && echo yes || echo no)" \
-    "modules_load=${MODULES_LOAD_VALUE:-<missing>}" \
-    "dwc2_mode=${DWC2_MODE}" \
-    "required_modules=$(required_modules_list)" \
-    "required_modules_present=$(modules_load_has_required_modules && echo yes || echo no)" \
-    "configfs_gadget_path=$([[ -d /sys/kernel/config/usb_gadget ]] && echo present || echo missing)" \
-    "udc_present=$([[ -n "$UDC_LIST" ]] && echo yes || echo no)"
-  report_text_block "$OUT" "###" "$service_checks_status" "Service and runtime checks" \
-    "service_enabled=$(systemctl is-enabled "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
-    "service_active=$(systemctl is-active "${B2U_SERVICE_UNIT}" >/dev/null 2>&1 && echo yes || echo no)" \
-    "venv_python_present=$([[ -x "${VENV_DIR}/bin/python" ]] && echo yes || echo no)" \
-    "bluetooth_state_dir=$([[ -d /var/lib/bluetooth ]] && echo present || echo missing)"
-
-  report_heading "$OUT" "##" "$result_status" "CLI diagnostics"
-  report_text_block "$OUT" "###" "$validate_heading_status" "CLI environment validation status" "validate_env=${validate_status}"
-  report_code_block <"$VALIDATE_LOG" >>"$OUT"
-  report_write_line "$OUT"
-  report_text_block "$OUT" "###" "$dry_run_heading_status" "CLI dry-run status" "dry_run=${dry_run_status}"
-  report_code_block <"$DRY_RUN_LOG" >>"$OUT"
-  report_write_line "$OUT"
-
-  report_heading "$OUT" "##" "info" "Mounts and service details"
-  report_command_block "$OUT" "###" "info" "Bluetooth state mount" "findmnt -n -T /var/lib/bluetooth 2>/dev/null || true"
-  report_command_block "$OUT" "###" "info" "Persistent mount target" "findmnt -n '${B2U_PERSIST_MOUNT}' 2>/dev/null || true"
-  report_command_block "$OUT" "###" "$service_checks_status" "Service status" "systemctl --no-pager --full status '${B2U_SERVICE_UNIT}' || true"
-  report_command_block "$OUT" "###" "info" "Recent service journal" "journalctl -b -u '${B2U_SERVICE_UNIT}' -n 100 --no-pager || true"
-}
-
-if [[ $MARKDOWN -eq 1 ]]; then
-  OUT="${B2U_LOG_DIR}/smoke_test_$(timestamp).md"
-fi
 
 if grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT"; then
   ok "config.txt contains a dwc2 overlay"
@@ -239,22 +140,10 @@ else
 fi
 
 if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb --validate-env >"$VALIDATE_LOG" 2>&1; then
-  VALIDATE_EXIT=0
   ok "CLI environment validation passed"
 else
-  VALIDATE_EXIT=1
   warn "CLI environment validation failed"
   sed -n '1,20p' "$VALIDATE_LOG" || true
-  EXIT_CODE=1
-fi
-
-if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb --dry-run >"$DRY_RUN_LOG" 2>&1; then
-  DRY_RUN_EXIT=0
-  ok "CLI dry-run passed"
-else
-  DRY_RUN_EXIT=1
-  warn "CLI dry-run failed"
-  sed -n '1,20p' "$DRY_RUN_LOG" || true
   EXIT_CODE=1
 fi
 
@@ -281,14 +170,16 @@ if [[ "$READONLY_MODE" == "persistent" ]]; then
   fi
 fi
 
+if [[ "$(overlay_status)" == "enabled" && "$READONLY_MODE" != "persistent" ]]; then
+  warn "OverlayFS is enabled without persistent Bluetooth state; this setup is unsupported."
+  EXIT_CODE=1
+fi
+
 info "OverlayFS status: $(overlay_status)"
 info "Read-only mode: ${READONLY_MODE}"
 info "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
 
 if [[ $VERBOSE -eq 1 ]]; then
-  if [[ "$READONLY_MODE" == "easy" ]]; then
-    info "Easy read-only mode is best effort only."
-  fi
   echo "## Summary"
   echo "Boot config: ${CONFIG_TXT}"
   echo "Cmdline: ${CMDLINE_TXT}"
@@ -301,8 +192,6 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
   echo "## CLI validate-env output"
   cat "$VALIDATE_LOG"
-  echo "## CLI dry-run output"
-  cat "$DRY_RUN_LOG"
   echo "## Mount details"
   findmnt -n -T /var/lib/bluetooth 2>/dev/null || true
   findmnt -n "$B2U_PERSIST_MOUNT" 2>/dev/null || true
@@ -310,11 +199,6 @@ if [[ $VERBOSE -eq 1 ]]; then
   systemctl --no-pager --full status "${B2U_SERVICE_UNIT}" || true
   echo "## Journal"
   journalctl -b -u "${B2U_SERVICE_UNIT}" -n 100 --no-pager || true
-fi
-
-write_markdown_report
-if [[ $MARKDOWN -eq 1 ]]; then
-  ok "Wrote: ${OUT}"
 fi
 
 if [[ $EXIT_CODE -eq 0 ]]; then

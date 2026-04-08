@@ -1,168 +1,66 @@
 # Pi CLI and Service Test Playbook
 
-This playbook is the fast path for repeating the Raspberry Pi script, CLI, and service validation against the current codebase without rebuilding the process from scratch.
+This playbook is the fast path for repeating Raspberry Pi validation against the
+current codebase without rebuilding the process from scratch.
 
 It is intentionally focused on:
 
-- `scripts/` validation
+- managed install validation
 - service lifecycle validation
-- managed install/update/uninstall validation
-- isolated test branches and test repos
-
-The managed install root and service unit are fixed by design throughout this playbook:
-
-- Install root: `/opt/bluetooth_2_usb`
-- Service unit: `bluetooth_2_usb.service`
-
-The mainline test flow should exercise the normal managed deployment against GitHub.
-Use the Pi-local bare repository only when you explicitly need an isolated snapshot or a force-pushed test branch.
-
-It does not try to cover:
-
-- full OTG end-to-end host input validation
-- persistent read-only mode with real external storage
-- reboot or power-cycle behavior across physical hardware events
-
-Those remain manual follow-up checks.
-
-## Scope
-
-Use this playbook when you need to validate any of these on a real Pi:
-
-- `bootstrap.sh`
-- `install.sh`
-- `update.sh`
-- `uninstall.sh`
-- `smoke_test.sh`
-- `debug.sh`
-- `enable_readonly_overlayfs.sh`
-- `disable_readonly_overlayfs.sh`
-- `setup_persistent_bluetooth_state.sh`
+- smoke and debug validation
+- persistent read-only validation
+- uninstall validation
 
 ## Assumptions
 
-- Local workstation has:
-  - `git`
-  - `gh`
-  - SSH access to the Pi via `ssh -4 pi4b`
-- GitHub CLI is already authenticated:
-
-```bash
-gh auth status
-```
-
-- Pi user has passwordless sudo:
+- local workstation has `git`, `gh`, and SSH access to the Pi
+- the Pi is normally reachable as `pi4b`
+- the Pi user has passwordless sudo:
 
 ```bash
 ssh -4 pi4b 'sudo -n true'
 ```
 
-- Pi is reachable as `user@pi4b`
-- The active Wi-Fi profile on the Pi has powersave disabled
+If `pi4b` is unreachable, treat that first as an environment problem. It may
+need a manual reboot before retrying.
 
-## One-time local setup
+## Prepare the checkout on the Pi
 
-These commands create an isolated test branch and a separate private test repository.
+The supported deployment model is a normal Git checkout at
+`/opt/bluetooth_2_usb`.
 
-Replace the date suffix if needed.
-
-```bash
-cd /home/benfred/VS/quaxalber/bluetooth_2_usb
-
-TEST_BRANCH="feat/main-hardening-test-2026-04-05"
-TEST_REPO="bluetooth_2_usb_test_2026_04_05"
-
-git switch feat/main-hardening-clean
-git switch -c "$TEST_BRANCH"
-
-gh repo create "quaxalber/${TEST_REPO}" --private --source=. --remote=test-origin --push
-git push -u origin "$TEST_BRANCH"
-git push -u test-origin "$TEST_BRANCH"
-```
-
-## Pi-side isolated test checkout
-
-If the Pi cannot clone the private test repository directly over SSH, use the local archive path below. This keeps the productive checkout and the test checkout separate.
+For a test branch:
 
 ```bash
-cd /home/benfred/VS/quaxalber/bluetooth_2_usb
+BRANCH="feat/main-hardening-clean"
 
-git archive --format=tar "$TEST_BRANCH" | ssh -4 pi4b '
-  mkdir -p /home/user/bluetooth_2_usb_test_2026_04_05 &&
-  tar -xf - -C /home/user/bluetooth_2_usb_test_2026_04_05
-'
-
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05 &&
-  git init -q &&
-  git config user.name "b2u test" &&
-  git config user.email "b2u-test@example.invalid" &&
-  git add . &&
-  git commit -q -m "initial test snapshot" || true &&
-  git branch -M feat/main-hardening-test-2026-04-05 &&
-  git init -q --bare /home/user/bluetooth_2_usb_test_2026_04_05_repo.git &&
-  git push -f /home/user/bluetooth_2_usb_test_2026_04_05_repo.git HEAD:feat/main-hardening-test-2026-04-05
-'
+ssh -4 pi4b "
+  sudo rm -rf /opt/bluetooth_2_usb &&
+  sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
+  cd /opt/bluetooth_2_usb &&
+  sudo git checkout ${BRANCH}
+"
 ```
 
-## Refreshing the Pi test checkout after local changes
+## Baseline status snapshot
 
-Use this whenever the test branch changed locally and you want the Pi-side isolated checkout and its local bare repo to match.
-
-```bash
-cd /home/benfred/VS/quaxalber/bluetooth_2_usb
-
-git archive --format=tar "$TEST_BRANCH" | ssh -4 pi4b '
-  mkdir -p /home/user/bluetooth_2_usb_test_2026_04_05 &&
-  tar -xf - -C /home/user/bluetooth_2_usb_test_2026_04_05
-'
-
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05 &&
-  git add -A &&
-  if ! git diff --cached --quiet; then
-    git commit -m "sync test snapshot"
-  fi &&
-  git push -f /home/user/bluetooth_2_usb_test_2026_04_05_repo.git HEAD:feat/main-hardening-test-2026-04-05
-'
-```
-
-## Baseline Pi status snapshot
-
-Run this before mutating the system.
+Run this before mutating the system:
 
 ```bash
 ssh -4 pi4b '
-  wifi_conn=$(nmcli -t -f NAME connection show --active | head -n 1)
-  echo BRANCH=$(cd /home/user/bluetooth_2_usb_test_2026_04_05 && git branch --show-current)
-  echo SHA=$(cd /home/user/bluetooth_2_usb_test_2026_04_05 && git rev-parse --short HEAD)
-  echo SERVICE=$(systemctl is-active bluetooth_2_usb.service)
+  echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
+  echo OVERLAY=$(sudo raspi-config nonint get_overlay_now 2>/dev/null || echo unknown)
   echo ROOT=$(findmnt -no FSTYPE,OPTIONS /)
-  echo OVERLAY_NOW=$(sudo -n raspi-config nonint get_overlay_now)
-  echo WIFI_CONN=$wifi_conn
-  nmcli -g 802-11-wireless.powersave connection show "$wifi_conn"
+  uname -a
 '
 ```
 
-> Replace nothing in that block manually; it resolves the currently active Wi-Fi connection name on the Pi before querying the powersave setting.
-
-## CLI matrix
-
-This covers the safe argument-surface checks:
-
-- `--help`
-- unknown option handling
-- missing-value handling for every option that requires a value
-
-Run from the Pi test checkout:
+## Script help surface
 
 ```bash
 ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-
-  bash scripts/bootstrap.sh --help >/dev/null
+  cd /opt/bluetooth_2_usb
   bash scripts/install.sh --help >/dev/null
-  bash scripts/update.sh --help >/dev/null
   bash scripts/uninstall.sh --help >/dev/null
   bash scripts/smoke_test.sh --help >/dev/null
   bash scripts/debug.sh --help >/dev/null
@@ -172,337 +70,117 @@ ssh -4 pi4b '
 '
 ```
 
-Then explicitly sample the missing-value paths:
+## Install validation
 
 ```bash
 ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  for cmd in \
-    "bash scripts/bootstrap.sh --repo" \
-    "bash scripts/bootstrap.sh --branch" \
-    "bash scripts/install.sh --repo" \
-    "bash scripts/install.sh --branch" \
-    "bash scripts/update.sh --repo" \
-    "bash scripts/update.sh --branch" \
-    "bash scripts/debug.sh --duration" \
-    "bash scripts/enable_readonly_overlayfs.sh --mode" \
-    "bash scripts/enable_readonly_overlayfs.sh --persist-device" \
-    "bash scripts/setup_persistent_bluetooth_state.sh --device" \
-    "bash scripts/setup_persistent_bluetooth_state.sh --no-enable --device"
-  do
-    eval "$cmd" >/dev/null 2>&1 || true
-  done
+  cd /opt/bluetooth_2_usb
+  sudo -n ./scripts/install.sh
 '
 ```
 
-## Safe runtime tests
-
-Run these from the Pi test checkout first:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/smoke_test.sh --verbose
-  sudo -n bash scripts/debug.sh --duration 5 --redact
-'
-```
-
-For the unbounded debug flow:
-
-```bash
-ssh -4 -t pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/debug.sh --redact
-'
-```
-
-Interrupt it with `Ctrl+C`.
-
-Expected behavior:
-
-- `debug.sh` stops the service if needed
-- runs a foreground `--debug` session
-- streams the live debug output to stdout
-- writes the live output into the Markdown report
-- restores the service when the script exits
-- the live stdout stream and the `### Live Bluetooth-2-USB debug output` section in the Markdown report should match
-- the report headings and status markers should match the actual system state instead of showing contradictory results
-
-Inspect the `debug.sh` and `smoke_test.sh` output carefully, not just the exit code:
-
-- confirm that the stdout summary matches the detailed sections that follow
-- confirm that green, yellow, and red status markers in the Markdown reports match the underlying command output
-- confirm that the Markdown reports do not expose identifiers that should have been redacted
-- confirm that service state, mount state, read-only mode, and persistent Bluetooth-state detection are mutually consistent
-
-## Update tests
-
-Preferred update test against GitHub:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/update.sh \
-    --repo https://github.com/quaxalber/bluetooth_2_usb.git \
-    --branch feat/main-hardening-test-2026-04-05
-'
-```
-
-Use the Pi-local bare repo only when you need a fully isolated snapshot:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/update.sh \
-    --repo /home/user/bluetooth_2_usb_test_2026_04_05_repo.git \
-    --branch feat/main-hardening-test-2026-04-05
-'
-```
-
-No-restart path:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n systemctl stop bluetooth_2_usb.service
-  sudo -n bash scripts/update.sh \
-    --repo https://github.com/quaxalber/bluetooth_2_usb.git \
-    --branch feat/main-hardening-test-2026-04-05 \
-    --no-restart
-  systemctl is-active bluetooth_2_usb.service || true
-'
-```
-
-`update.sh --no-restart` is intentionally only valid when the service is already stopped. Verify that it remains stopped afterward.
-
-## Install tests
-
-Preferred install test against GitHub:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/install.sh \
-    --repo https://github.com/quaxalber/bluetooth_2_usb.git \
-    --branch feat/main-hardening-test-2026-04-05 \
-    --no-reboot
-'
-```
-
-Use the Pi-local bare repo only when you want the install to come from an isolated snapshot:
-
-```bash
-ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05
-  sudo -n bash scripts/install.sh \
-    --repo /home/user/bluetooth_2_usb_test_2026_04_05_repo.git \
-    --branch feat/main-hardening-test-2026-04-05 \
-    --no-reboot
-'
-```
-
-After either install:
+After reboot, verify:
 
 ```bash
 ssh -4 pi4b '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
-  sudo -n bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-'
-
-When you run `smoke_test.sh --markdown`, inspect the generated report as well:
-
-- the Markdown summary should agree with the normal terminal output
-- warning or failure markers should correspond to real problems in the detailed sections
-- `validate-env`, `dry-run`, mount details, and service status should not contradict each other
-```
-
-## Bootstrap tests
-
-For the private test repository, use HTTPS with a GitHub token so both archive download and git clone can succeed on the Pi:
-
-This replaces the active managed install in `/opt/bluetooth_2_usb`.
-
-```bash
-TOKEN=$(gh auth token)
-
-ssh -4 pi4b "
-  curl -fsSL https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/${TEST_BRANCH}/scripts/bootstrap.sh |
-    sudo -n bash -s -- \
-      --repo https://x-access-token:${TOKEN}@github.com/quaxalber/${TEST_REPO}.git \
-      --branch ${TEST_BRANCH} \
-      --no-reboot
-"
-```
-
-Immediately verify that the running process still matches the standard managed path:
-
-```bash
-ssh -4 pi4b '
-  systemctl show -P ExecStart bluetooth_2_usb.service
-  ps -o args= -p $(systemctl show -P MainPID bluetooth_2_usb.service)
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 '
 ```
 
-The running process and `ExecStart` should both point to `/opt/bluetooth_2_usb/...`.
+## Update validation
 
-## Tag tests
-
-Create or update a test tag on the current branch:
-
-```bash
-cd /home/benfred/VS/quaxalber/bluetooth_2_usb
-
-TAG=hardening-test-install-2026-04-05
-git tag -f -a "$TAG" -m "Test tag for Pi install validation" "$TEST_BRANCH"
-git push -f test-origin "refs/tags/$TAG"
-```
-
-Use a non-release-like tag name here on purpose. Official package releases are reserved for `vMAJOR.MINOR.PATCH` tags only.
-
-Push the same tag into the Pi-local bare repo if you are using that path:
+The supported update model is Git plus reinstall:
 
 ```bash
 ssh -4 pi4b '
-  cd /home/user/bluetooth_2_usb_test_2026_04_05 &&
-  git tag -f hardening-test-install-2026-04-05 HEAD >/dev/null 2>&1 &&
-  git push -f /home/user/bluetooth_2_usb_test_2026_04_05_repo.git refs/tags/hardening-test-install-2026-04-05
+  cd /opt/bluetooth_2_usb
+  sudo -n git pull --ff-only
+  sudo -n ./scripts/install.sh
 '
 ```
 
-Install from the tag:
+## Debug validation
 
-This also replaces the active managed install in `/opt/bluetooth_2_usb`.
-
-```bash
-TOKEN=$(gh auth token)
-
-ssh -4 pi4b "
-  cd /home/user/bluetooth_2_usb_test_2026_04_05 &&
-  sudo -n bash scripts/install.sh \
-    --repo https://x-access-token:${TOKEN}@github.com/quaxalber/${TEST_REPO}.git \
-    --branch ${TAG} \
-    --no-reboot
-"
-```
-
-Validate:
+Bounded run:
 
 ```bash
 ssh -4 pi4b '
-  systemctl show -P ExecStart bluetooth_2_usb.service
-  ps -o args= -p $(systemctl show -P MainPID bluetooth_2_usb.service)
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
+  sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 '
 ```
 
-The version string should remain a normal package version derived from the real release lineage. It should not collapse to a meaningless `v5`-style value.
-
-## Uninstall tests
-
-Non-purge:
+Manual interrupt path:
 
 ```bash
-ssh -4 pi4b '
-  sudo -n bash /opt/bluetooth_2_usb/scripts/uninstall.sh \
-    --no-reboot
+ssh -4 -t pi4b '
+  sudo -n /opt/bluetooth_2_usb/scripts/debug.sh
 '
 ```
 
-Purge:
+Inspect the resulting report and verify:
+
+- the service was restored afterwards
+- the live debug section contains real runtime output
+- the report is redacted
+- the report does not contradict the actual service and mount state
+
+## Persistent read-only validation
+
+Prepare the writable ext4 partition:
 
 ```bash
 ssh -4 pi4b '
-  sudo -n bash /opt/bluetooth_2_usb/scripts/uninstall.sh \
-    --purge \
-    --no-reboot
+  sudo -n /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
+  sudo -n /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
 '
 ```
 
-Purge and boot revert:
+After reboot:
 
 ```bash
 ssh -4 pi4b '
-  sudo -n bash /opt/bluetooth_2_usb/scripts/uninstall.sh \
-    --purge \
-    --revert-boot \
-    --no-reboot
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  findmnt /var/lib/bluetooth
+  findmnt /mnt/b2u-persist
 '
 ```
 
-After uninstall, verify:
+Disable read-only mode again:
 
 ```bash
 ssh -4 pi4b '
+  sudo -n /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
+'
+```
+
+## Uninstall validation
+
+```bash
+ssh -4 pi4b '
+  sudo -n /opt/bluetooth_2_usb/scripts/uninstall.sh
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
-  test -d /opt/bluetooth_2_usb && echo exists || echo missing
+  test -d /opt/bluetooth_2_usb && echo checkout-present || echo checkout-missing
 '
 ```
 
-## Read-only tests
+Expected outcome:
 
-### Easy mode
+- service integration is removed
+- checkout remains present
+- persistent mount units are disabled
 
-This tests configuration and reporting, not post-reboot behavior.
+## What to record
+
+For each run, record:
 
 ```bash
 ssh -4 pi4b '
-  cd /opt/bluetooth_2_usb
-  sudo -n bash scripts/enable_readonly_overlayfs.sh --mode easy
-  sudo -n raspi-config nonint get_overlay_now
-  sudo -n cat /etc/default/bluetooth_2_usb_readonly
-  sudo -n bash scripts/smoke_test.sh --verbose
-  sudo -n bash scripts/debug.sh --duration 3 --redact
-  sudo -n bash scripts/disable_readonly_overlayfs.sh
+  uname -a
+  cat /etc/os-release
+  echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
+  echo READONLY=$(grep "^B2U_READONLY_MODE=" /etc/default/bluetooth_2_usb_readonly 2>/dev/null || echo disabled)
+  journalctl -u bluetooth_2_usb.service -n 100 --no-pager || true
 '
 ```
-
-### Persistent mode
-
-Without a real spare ext4 device, restrict this to error-path validation:
-
-```bash
-ssh -4 pi4b '
-  cd /opt/bluetooth_2_usb
-  sudo -n bash scripts/setup_persistent_bluetooth_state.sh --device /dev/doesnotexist || true
-  sudo -n bash scripts/setup_persistent_bluetooth_state.sh --no-enable || true
-  sudo -n bash scripts/enable_readonly_overlayfs.sh --mode persistent || true
-'
-```
-
-## Result categories
-
-When you repeat the playbook, classify results as:
-
-- `passed`
-- `failed`
-- `blocked`
-- `open for user`
-
-Suggested summary format:
-
-```text
-bootstrap.sh: passed
-install.sh: passed
-update.sh: passed
-uninstall.sh: passed
-smoke_test.sh: passed
-debug.sh: passed
-enable_readonly_overlayfs.sh easy mode: passed
-enable_readonly_overlayfs.sh persistent happy path: open for user
-setup_persistent_bluetooth_state.sh happy path: open for user
-OTG host end-to-end input: open for user
-```
-
-## Still manual
-
-Even after this playbook, these remain manual hardware validations:
-
-- persistent mode with real ext4 storage
-- post-reboot persistent mode behavior
-- power-cycle behavior
-- OTG host end-to-end input
-- Windows, BIOS, and pre-OS host validation
-- long-running Wi-Fi stability

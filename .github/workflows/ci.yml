@@ -42,7 +42,6 @@ jobs:
           python -m bluetooth_2_usb --help
           python -m bluetooth_2_usb --version
           python -m bluetooth_2_usb --validate-env || test $? -eq 3
-          python -m bluetooth_2_usb --dry-run || test $? -eq 3
 
       - name: Shell formatting checks
         run: |

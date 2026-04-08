@@ -5,51 +5,33 @@ IFS=$'\n\t'
 # shellcheck source=./lib/common.sh
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
-PURGE=0
-REVERT_BOOT=0
-NO_REBOOT=0
-
 usage() {
   cat <<EOF
-Usage: sudo ./uninstall.sh [options]
-  --purge             Remove the installation directory
-  --revert-boot       Remove b2u boot configuration changes
-  --no-reboot         Do not prompt for reboot
+Usage: sudo ./scripts/uninstall.sh
+
+Remove the managed system integration for Bluetooth-2-USB:
+- stop and disable ${B2U_SERVICE_UNIT}
+- remove systemd units, wrapper, and env files
+- remove persistent Bluetooth-state mount integration
+
+The checkout at ${B2U_INSTALL_DIR} is left in place.
 EOF
 }
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --purge)
-      PURGE=1
-      shift
-      ;;
-    --revert-boot)
-      REVERT_BOOT=1
-      shift
-      ;;
-    --no-reboot)
-      NO_REBOOT=1
-      shift
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *) fail "Unknown option: $1" ;;
-  esac
-done
+case "${1:-}" in
+  "") ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    fail "Unknown option: $1"
+    ;;
+esac
 
 ensure_root
 prepare_log "uninstall"
 load_readonly_config
-
-BOOT_RESTORE_AVAILABLE=0
-if [[ -f "$B2U_BOOT_RESTORE_CONFIG" && -f "$B2U_BOOT_RESTORE_CMDLINE" ]]; then
-  BOOT_RESTORE_AVAILABLE=1
-elif [[ $REVERT_BOOT -eq 1 ]]; then
-  warn "No managed boot snapshot is available; boot configuration changes will not be reverted."
-fi
 
 if service_installed || [[ "$(systemctl show -P LoadState "${B2U_SERVICE_UNIT}" 2>/dev/null || true)" != "not-found" ]]; then
   systemctl stop "${B2U_SERVICE_UNIT}" || true
@@ -60,10 +42,10 @@ if service_installed || [[ "$(systemctl show -P LoadState "${B2U_SERVICE_UNIT}" 
   systemctl disable "${B2U_SERVICE_UNIT}" || true
   systemctl reset-failed "${B2U_SERVICE_UNIT}" 2>/dev/null || true
 fi
+
 rm -f "/etc/systemd/system/${B2U_SERVICE_UNIT}"
 rm -f "$B2U_ENV_FILE"
 rm -f "$B2U_READONLY_ENV_FILE"
-remove_managed_source_config
 rm -f /usr/local/bin/bluetooth_2_usb
 remove_bluetooth_persist_dropin
 remove_bluetooth_bind_mount_unit
@@ -93,31 +75,5 @@ if [[ -d /sys/kernel/config/usb_gadget ]]; then
   shopt -u nullglob
 fi
 
-if [[ $REVERT_BOOT -eq 1 && $BOOT_RESTORE_AVAILABLE -eq 1 ]]; then
-  CONFIG_TXT="$(boot_config_path)"
-  CMDLINE_TXT="$(boot_cmdline_path)"
-  backup_file "$CONFIG_TXT"
-  backup_file "$CMDLINE_TXT"
-  restore_boot_restore_snapshot "$CONFIG_TXT" "$CMDLINE_TXT"
-  clear_boot_restore_snapshot
-  ok "Reverted boot configuration"
-fi
-
-if [[ $PURGE -eq 1 ]]; then
-  rm -rf "$B2U_INSTALL_DIR"
-  ok "Removed ${B2U_INSTALL_DIR}"
-fi
-
-if [[ $NO_REBOOT -eq 0 ]]; then
-  if [[ -t 0 ]]; then
-    read -r -p "Reboot now? [y/N] " answer || answer=""
-    if [[ "${answer,,}" == "y" ]]; then
-      sync
-      reboot
-    fi
-  else
-    info "Skipping reboot prompt because stdin is not interactive"
-  fi
-fi
-
 ok "Uninstall complete"
+info "The checkout at ${B2U_INSTALL_DIR} was left in place."

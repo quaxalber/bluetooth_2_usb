@@ -84,18 +84,6 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Display the version number of this software and exit.",
         )
         self.add_argument(
-            "--dry-run",
-            action="store_true",
-            default=False,
-            help="Validate the runtime environment and exit without binding USB gadgets.",
-        )
-        self.add_argument(
-            "--no-bind",
-            action="store_true",
-            default=False,
-            help="Skip USB gadget initialization and only perform diagnostic validation.",
-        )
-        self.add_argument(
             "--validate-env",
             action="store_true",
             default=False,
@@ -133,8 +121,6 @@ class Arguments:
         "_log_path",
         "_debug",
         "_version",
-        "_dry_run",
-        "_no_bind",
         "_validate_env",
         "_hid_profile",
     ]
@@ -150,8 +136,6 @@ class Arguments:
         log_path: str,
         debug: bool,
         version: bool,
-        dry_run: bool,
-        no_bind: bool,
         validate_env: bool,
         hid_profile: str,
     ) -> None:
@@ -164,8 +148,6 @@ class Arguments:
         self._log_path = log_path
         self._debug = debug
         self._version = version
-        self._dry_run = dry_run
-        self._no_bind = no_bind
         self._validate_env = validate_env
         self._hid_profile = hid_profile
 
@@ -206,14 +188,6 @@ class Arguments:
         return self._version
 
     @property
-    def dry_run(self) -> bool:
-        return self._dry_run
-
-    @property
-    def no_bind(self) -> bool:
-        return self._no_bind
-
-    @property
     def validate_env(self) -> bool:
         return self._validate_env
 
@@ -252,8 +226,6 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         log_path=args.log_path,
         debug=args.debug,
         version=args.version,
-        dry_run=args.dry_run,
-        no_bind=args.no_bind,
         validate_env=args.validate_env,
         hid_profile=args.hid_profile,
     )

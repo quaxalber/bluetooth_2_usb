@@ -125,24 +125,6 @@ async def async_list_devices() -> int:
     return EXIT_OK
 
 
-async def async_run_diagnostics(
-    env_status: EnvironmentStatus,
-    *,
-    list_devices: bool = True,
-) -> int:
-    print_environment_status(env_status)
-    if list_devices and env_status.ok:
-        from .relay import async_list_input_devices
-
-        devices = await async_list_input_devices()
-        logger.info(f"Detected {len(devices)} input device(s).")
-    elif list_devices:
-        logger.info(
-            "Skipping input device enumeration because gadget prerequisites are missing."
-        )
-    return EXIT_OK if env_status.ok else EXIT_ENVIRONMENT
-
-
 def configure_logging(args: Arguments) -> None:
     if args.debug:
         logger.setLevel(DEBUG)
@@ -170,9 +152,6 @@ async def async_run(args: Arguments) -> int:
 
     logger.info(f"Launching {get_versioned_name()}")
     logger.info(f"HID profile: {args.hid_profile}")
-
-    if args.dry_run or args.no_bind:
-        return await async_run_diagnostics(env_status)
 
     if not env_status.ok:
         if not env_status.configfs:

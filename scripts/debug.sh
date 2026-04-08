@@ -9,7 +9,6 @@ source "$(cd -- "$(dirname "$0")" && pwd)/lib/report.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 DURATION=""
-REDACT=0
 OUT=""
 SERVICE_WAS_STOPPED=0
 STOP_SIGNAL=""
@@ -18,10 +17,9 @@ RUN_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12"
 
 usage() {
   cat <<EOF
-Usage: sudo ./debug.sh [options]
+Usage: sudo ./scripts/debug.sh [--duration <sec>]
   --duration <sec>    Limit the live Bluetooth-2-USB debug run to <sec>
                       If omitted, the live debug run continues until interrupted
-  --redact            Redact host identifiers before writing the report
 EOF
 }
 
@@ -31,10 +29,6 @@ while [[ $# -gt 0 ]]; do
       require_value "$1" "${2:-}"
       DURATION="$2"
       shift 2
-      ;;
-    --redact)
-      REDACT=1
-      shift
       ;;
     -h | --help)
       usage
@@ -114,11 +108,6 @@ timed_command_block() {
 }
 
 redact_stream() {
-  if [[ $REDACT -ne 1 ]]; then
-    cat
-    return
-  fi
-
   perl -pe '
     my $hostname = $ENV{B2U_REDACT_HOSTNAME} // q{};
     if (length $hostname) {

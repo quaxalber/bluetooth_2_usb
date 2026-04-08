@@ -6,18 +6,16 @@ IFS=$'\n\t'
 source "$(cd -- "$(dirname "$0")" && pwd)/lib/common.sh"
 
 load_readonly_config
-SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 
-DEVICE="${B2U_PERSIST_DEVICE:-}"
+DEVICE=""
 PERSIST_MOUNT="${B2U_PERSIST_MOUNT:-$B2U_PERSIST_MOUNT_PATH}"
 BLUETOOTH_SUBDIR="$B2U_PERSIST_BLUETOOTH_SUBDIR"
-NO_ENABLE=0
 
 usage() {
   cat <<EOF
-Usage: sudo ./setup_persistent_bluetooth_state.sh [options]
-  --device <path>         Block device to mount persistently
-  --no-enable             Only prepare config and units; do not activate them now
+Usage: sudo ./scripts/setup_persistent_bluetooth_state.sh --device <path>
+
+Prepare and activate persistent Bluetooth state on a writable ext4 filesystem.
 EOF
 }
 
@@ -28,53 +26,30 @@ while [[ $# -gt 0 ]]; do
       DEVICE="$2"
       shift 2
       ;;
-    --no-enable)
-      NO_ENABLE=1
-      shift
-      ;;
     -h | --help)
       usage
       exit 0
       ;;
-    *) fail "Unknown option: $1" ;;
+    *)
+      fail "Unknown option: $1"
+      ;;
   esac
 done
 
 ensure_root
 prepare_log "persistent_bluetooth_setup"
-require_commands blkid cp mkdir mount mountpoint python3 systemctl systemd-escape
+require_commands blkid cp mkdir mount mountpoint systemctl systemd-escape
+[[ -n "$DEVICE" ]] || fail "Pass --device /dev/YOUR-PARTITION for the writable ext4 filesystem."
 
 if ! machine_id_valid; then
   fail "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
 fi
 
-if [[ -z "$DEVICE" && -z "${B2U_PERSIST_SPEC:-}" ]]; then
-  if mountpoint -q "$PERSIST_MOUNT"; then
-    source_spec="$(findmnt -n -o SOURCE --target "$PERSIST_MOUNT" 2>/dev/null || true)"
-    source_fstype="$(findmnt -n -o FSTYPE --target "$PERSIST_MOUNT" 2>/dev/null || true)"
-    [[ -n "$source_spec" ]] || fail "Could not determine the backing source for ${PERSIST_MOUNT}. Provide --device."
-    [[ "$source_fstype" == "ext4" ]] || fail "Expected ext4 on ${PERSIST_MOUNT}, got ${source_fstype:-unknown}. Reformat the backing storage as ext4 first."
-    if [[ -b "$source_spec" ]]; then
-      DEVICE="$source_spec"
-    else
-      PERSIST_SPEC="$source_spec"
-    fi
-  else
-    fail "Provide --device or prepare an existing persistent mount first."
-  fi
-fi
+detected_type="$(blkid -s TYPE -o value "$DEVICE" 2>/dev/null || true)"
+[[ -n "$detected_type" ]] || fail "No filesystem detected on ${DEVICE}. Create an ext4 filesystem first, then rerun this script."
+[[ "$detected_type" == "ext4" ]] || fail "Expected ext4 on ${DEVICE}, got ${detected_type}"
 
-if [[ -n "$DEVICE" ]]; then
-  detected_type="$(blkid -s TYPE -o value "$DEVICE" 2>/dev/null || true)"
-  [[ -n "$detected_type" ]] || fail "No filesystem detected on ${DEVICE}. Create an ext4 filesystem first, then rerun this script."
-  [[ "$detected_type" == "ext4" ]] || fail "Expected ext4 on ${DEVICE}, got ${detected_type}"
-  PERSIST_SPEC="$(persist_spec_from_device "$DEVICE")"
-else
-  PERSIST_SPEC="${PERSIST_SPEC:-${B2U_PERSIST_SPEC:-}}"
-fi
-
-[[ -n "$PERSIST_SPEC" ]] || fail "Could not determine persistent mount source."
-
+PERSIST_SPEC="$(persist_spec_from_device "$DEVICE")"
 PERSIST_BLUETOOTH_DIR="${PERSIST_MOUNT}/${BLUETOOTH_SUBDIR}"
 mkdir -p "$PERSIST_MOUNT"
 
@@ -82,21 +57,6 @@ write_persist_mount_unit "$PERSIST_SPEC" "$PERSIST_MOUNT" "ext4"
 write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR"
 install_bluetooth_persist_dropin
 write_readonly_config "disabled" "$PERSIST_MOUNT" "$PERSIST_BLUETOOTH_DIR" "$PERSIST_SPEC" "$DEVICE"
-
-if [[ $NO_ENABLE -eq 1 ]]; then
-  systemctl daemon-reload
-  ok "Persistent Bluetooth state configuration prepared"
-  cat <<EOF
-
-Next steps:
-1. Review the generated mount configuration.
-2. Run:
-   sudo systemctl enable --now $(persist_mount_unit_name "$PERSIST_MOUNT") var-lib-bluetooth.mount
-3. Then enable read-only mode with:
-   sudo ${SCRIPT_DIR}/enable_readonly_overlayfs.sh --mode persistent
-EOF
-  exit 0
-fi
 
 if service_installed; then
   systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT} before migrating Bluetooth state"

@@ -1,41 +1,37 @@
 # Bluetooth-2-USB Agent Guide
 
-This file is the fast-start contract for work in this repository. A fresh thread
-should be able to start from here without guessing project standards.
+This file is the fast-start contract for work in this repository. A fresh
+thread should be able to start from here without guessing project standards.
 
-Treat this file as living project documentation, not as a one-off bootstrap
-note. When workflows, validation commands, managed paths, service behavior,
+Treat this file as living project documentation, not as a one-off setup note.
+When workflows, validation commands, managed paths, service behavior,
 release rules, hardware expectations, or project conventions change, update this
 file in the same change to prevent drift.
 
 ## Scope
 
 - Repository: `bluetooth_2_usb`
-- Primary goal: turn a Raspberry Pi into a USB HID bridge for Bluetooth keyboards
-  and mice
-- Main risk areas: USB gadget setup, boot config mutation, managed install/update
-  flows, systemd service behavior, read-only OverlayFS modes, and Pi-specific
-  runtime validation
+- Primary goal: turn a Raspberry Pi into a USB HID bridge for Bluetooth
+  keyboards and mice
+- Main risk areas: USB gadget setup, boot config mutation, managed install
+  re-apply behavior, systemd service behavior, persistent read-only mode, and
+  Pi-specific runtime validation
 
-## First Steps
+## First steps
 
-Before making changes, read the local context that defines current behavior:
+Before making changes, read:
 
 1. `README.md`
 2. `CONTRIBUTING.md`
-3. Relevant files under `docs/` for the task
-4. The code or scripts you plan to modify
+3. relevant files under `docs/`
+4. the code or scripts you plan to modify
 
-When the task matches one of these playbooks, use it:
+Use these repo-specific playbooks when they match the task:
 
 - `docs/pi-cli-service-test-playbook.md`
-  Agentic Pi-side validation of install/update/service/script flows
 - `docs/pi-manual-test-plan.md`
-  Manual hardware follow-up checks
 - `docs/doc-consistency-review-playbook.md`
-  Documentation consistency review
 - `docs/release-versioning-policy.md`
-  Versioning and release rules
 
 ## Environment
 
@@ -59,7 +55,7 @@ Important:
 - For one-off commands in automation, prefer `source venv/bin/activate && ...`
   or `venv/bin/<tool>`.
 
-## Repository Layout
+## Repository layout
 
 Files and directories that matter most:
 
@@ -67,8 +63,7 @@ Files and directories that matter most:
   Python package for CLI, runtime, HID profiles, relay logic, logging, and
   version handling
 - `scripts/`
-  Managed install/update/uninstall flows, smoke/debug helpers, readonly helpers,
-  persistent Bluetooth-state setup
+  Managed install, uninstall, smoke/debug, and persistent read-only helpers
 - `scripts/lib/common.sh`
   Shared shell helpers and managed deployment conventions
 - `scripts/lib/report.sh`
@@ -84,32 +79,35 @@ Files and directories that matter most:
 
 Managed deployment paths:
 
-- Install root: `/opt/bluetooth_2_usb`
-- Managed venv: `/opt/bluetooth_2_usb/venv`
-- Service unit: `bluetooth_2_usb.service`
-- Runtime env file: `/etc/default/bluetooth_2_usb`
-- Read-only env file: `/etc/default/bluetooth_2_usb_readonly`
-- State dir: `/var/lib/bluetooth_2_usb`
-- Managed source tracking: `/var/lib/bluetooth_2_usb/managed_source.env`
+- install root: `/opt/bluetooth_2_usb`
+- managed venv: `/opt/bluetooth_2_usb/venv`
+- service unit: `bluetooth_2_usb.service`
+- runtime env file: `/etc/default/bluetooth_2_usb`
+- read-only env file: `/etc/default/bluetooth_2_usb_readonly`
+- log dir: `/var/log/bluetooth_2_usb`
+- persistent mount: `/mnt/b2u-persist`
 
-## Current Contracts
+## Current contracts
 
 Preserve these unless the task explicitly redesigns them:
 
 - Managed installs are rooted in `/opt/bluetooth_2_usb`.
 - The service launches the module with the managed venv Python.
-- Install/update flows must be safe for non-interactive use.
-- Shell scripts should be idempotent where practical and should fail loudly on
-  ambiguous or unsafe input.
-- Release tracking is explicit:
-  - branch installs stay on that branch
-  - exact tag installs stay pinned
-  - `--latest-release` / bootstrap default track the latest published release
-- Boot mutation and rollback must be conservative and reversible.
-- Read-only mode behavior must stay consistent across scripts, service behavior,
-  documentation, and smoke/debug output.
+- Supported install flow:
+  - clone to `/opt/bluetooth_2_usb`
+  - run `sudo ./scripts/install.sh`
+- Supported update flow:
+  - `cd /opt/bluetooth_2_usb`
+  - `sudo git pull --ff-only`
+  - `sudo ./scripts/install.sh`
+- Shell scripts should fail loudly on ambiguous or unsafe input.
+- Boot changes should be conservative and leave timestamped backups, but scripts
+  should not attempt automatic rollback restores.
+- Read-only operation is either:
+  - normal writable mode
+  - persistent read-only mode with writable Bluetooth state on ext4 storage
 
-## Editing Standards
+## Editing standards
 
 ### Python
 
@@ -118,30 +116,23 @@ Preserve these unless the task explicitly redesigns them:
 - Lint with Ruff
 - Prefer clear, direct control flow over cleverness
 - Keep CLI/help text and exit-code behavior stable unless intentionally changed
-- Update docstrings/comments/help when behavior meaningfully changes
 
 ### Shell
 
 - Target `bash`
 - Quote variables consistently
-- Use shared helpers from `scripts/lib/common.sh` only when they are truly
+- Use shared helpers from `scripts/lib/common.sh` only when they are genuinely
   generic and reused
-- Put report/Markdown-specific helpers in `scripts/lib/report.sh`, not in
-  `common.sh`
-- Avoid masking failures with `|| true` unless the failure is truly non-fatal
-  and documented
-- Treat install/update/uninstall/readonly scripts as production code, not local
-  glue
+- Put report-only helpers in `scripts/lib/report.sh`, not in `common.sh`
+- Avoid masking failures with `|| true` unless they are truly non-fatal
+- Treat install/uninstall/read-only flows as production code
 
 ### Documentation
 
 - Prefer operational accuracy over marketing language
 - Keep commands copy-pasteable
-- Parameterize examples when they are not intentionally repo- or environment-
-  specific
-- Call out dangerous steps explicitly, especially formatting, boot changes,
-  uninstall/purge flows, and power-loss/read-only caveats
-- Keep docs aligned with real script interfaces, defaults, and service behavior
+- Parameterize examples unless a fixed value is intentionally required
+- Keep docs aligned with real script interfaces, defaults, and managed paths
 
 ## Validation
 
@@ -154,7 +145,6 @@ python -m compileall src
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
-python -m bluetooth_2_usb --dry-run || test $? -eq 3
 shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 shellcheck -x scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
 bash -n scripts/*.sh scripts/lib/common.sh scripts/lib/report.sh
@@ -164,17 +154,14 @@ python -m build
 
 Interpretation note:
 
-- Outside a real Pi gadget environment, `--validate-env` and `--dry-run` may
-  exit with status `3`. That is expected on a normal workstation and should not
-  be treated as a failure by itself.
+- Outside a real Pi gadget environment, `--validate-env` may exit with status
+  `3`. That is expected on a normal workstation and should not be treated as a
+  failure by itself.
 
-If you change installer/update/uninstall/read-only logic, shell validation is
+If you change installer/uninstaller/read-only logic, shell validation is
 mandatory.
 
-If you change packaging, entrypoints, versioning, or service wiring, run
-`python -m build` and the CLI checks.
-
-## Hardware Validation
+## Hardware validation
 
 For Pi-side validation, a local Pi with hostname `pi4b` should normally be
 reachable over SSH and should be used when the task affects runtime or managed
@@ -190,9 +177,8 @@ Use `docs/pi-cli-service-test-playbook.md` for repeatable Pi-side validation.
 
 For runtime-affecting changes, validate on real hardware when feasible:
 
-- `sudo ./scripts/smoke_test.sh`
-- `sudo ./scripts/debug.sh --duration 10 --redact`
-- installed-path equivalents under `/opt/bluetooth_2_usb/scripts/`
+- `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh`
+- `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
 
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.
@@ -207,21 +193,19 @@ summary.
   guessing.
 - CodeRabbit comments are useful hints, not ground truth.
 
-## Git and Change Scope
+## Git and change scope
 
 - Keep changes focused.
 - Update docs when behavior, commands, paths, defaults, or validation guidance
   change.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
-- Avoid touching unrelated repos or vendored code from this workspace.
 
-## Final Response Expectations
+## Final response expectations
 
 When reporting work:
 
-- Say which checks were actually run.
-- Say which checks could not be run and why.
-- Distinguish workstation validation from real Pi validation.
-- Call out any residual risk, especially for install/update/readonly/release
-  behavior.
+- say which checks were actually run
+- say which checks could not be run and why
+- distinguish workstation validation from real Pi validation
+- call out any residual risk, especially for install/read-only/release behavior
