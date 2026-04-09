@@ -137,17 +137,35 @@ power-only port. That usually improves stability.
 
 ## Configuration
 
-The service reads optional runtime flags from:
+The service reads structured runtime settings from:
 
 ```bash
 /etc/default/bluetooth_2_usb
 ```
 
-Default value:
+Default content:
 
 ```bash
-BLUETOOTH_2_USB_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12 --hid-profile compat"
+B2U_AUTO_DISCOVER=1
+B2U_GRAB_DEVICES=1
+B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
+B2U_HID_PROFILE=compat
+B2U_LOG_TO_FILE=0
+B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
+B2U_DEBUG=0
+B2U_DEVICE_IDS=
+B2U_UDC_PATH=
 ```
+
+Meaning:
+
+- `B2U_AUTO_DISCOVER=1` relays all suitable readable input devices except known
+  excluded platform devices.
+- `B2U_DEVICE_IDS` is the precise alternative when you want to pin the runtime
+  to specific event paths, Bluetooth MACs, or case-insensitive device-name
+  fragments.
+- `B2U_UDC_PATH` is optional and only needed if you must pin UDC detection on a
+  system with multiple gadget-capable controllers.
 
 After editing that file, restart the service:
 
@@ -155,29 +173,29 @@ After editing that file, restart the service:
 sudo systemctl restart bluetooth_2_usb.service
 ```
 
-Advanced runtime override:
+Note:
 
-- Set `BLUETOOTH_2_USB_UDC_PATH=/sys/class/udc/.../state` in the service
-  environment file only if you need to pin UDC detection on a system with
-  multiple controllers.
+- despite the project name, broad auto-discovery can also relay other suitable
+  Linux input devices that are visible on the Pi; the intended primary use case
+  remains Bluetooth keyboard and mouse bridging
 
 ## CLI reference
 
-Use these runtime flags in `BLUETOOTH_2_USB_ARGS` or when running the CLI
-manually.
+Use these runtime flags when running the CLI manually.
 
 | Argument | Explanation / Example |
 | --- | --- |
 | `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Comma-separated identifiers for the devices to relay. Each identifier may be an event path, a Bluetooth MAC address, or a case-insensitive name fragment. The matcher accepts all three kinds in the same comma-separated list. Default: none. Examples: `-i /dev/input/event4`, `-i A1:B2:C3:D4:E5:F6`, `-i logi`, `-i '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`. |
-| `--auto_discover, -a` | Relay all readable input devices automatically. Good default for appliance-style setups where you do not want to curate a static device list. |
+| `--auto_discover, -a` | Relay all readable suitable input devices automatically, except known excluded platform devices. Good default for appliance-style setups where you do not want to curate a static device list. |
 | `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events. |
 | `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Plus-separated key chord that toggles relaying on and off at runtime. Default: none, feature disabled. Example: `-s CTRL+SHIFT+F12`. |
-| `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. |
+| `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. Combine with `--output json` for scripts or diagnostics. |
 | `--log_to_file, -f` | Add file logging in addition to stdout logging. |
 | `--log_path LOG_PATH, -p LOG_PATH` | Override the path used with `--log_to_file`. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`. Example: `-p /tmp/bluetooth_2_usb.log`. |
 | `--debug, -d` | Increase log verbosity for manual troubleshooting. |
 | `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
-| `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
+| `--validate-env` | Validate gadget runtime prerequisites and exit. Combine with `--output json` for machine-readable checks. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
+| `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
 | `--hid-profile PROFILE` | USB HID profile to expose. Default: `compat`. Supported values: `compat`, `extended`. Example: `--hid-profile extended`. |
 | `--help, -h` | Show the built-in CLI help and exit. |
 
@@ -189,10 +207,22 @@ List available devices:
 bluetooth_2_usb -l
 ```
 
+List available devices as JSON:
+
+```bash
+bluetooth_2_usb -l --output json
+```
+
 Validate the runtime environment:
 
 ```bash
 bluetooth_2_usb --validate-env
+```
+
+Validate the runtime environment as JSON:
+
+```bash
+bluetooth_2_usb --validate-env --output json
 ```
 
 Inspect recent service logs:
@@ -316,11 +346,21 @@ sudo reboot
 
 ## Troubleshooting
 
+Start every troubleshooting pass with the two built-in diagnostics first:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+```
+
+Use `smoke_test.sh` as the quick health gate and `debug.sh` as the fuller
+redacted state snapshot. The subsections below are only for follow-up checks
+that go beyond what those two tools already collect.
+
 ### The service does not start
 
 ```bash
 bluetooth_2_usb --validate-env
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 
@@ -364,7 +404,7 @@ Check what the runtime can actually see:
 
 ```bash
 bluetooth_2_usb -l
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+bluetooth_2_usb -l --output json
 ```
 
 Then verify that `DEVICE_IDS` really matches what the runtime reports. Matching
@@ -394,49 +434,28 @@ Do not treat `systemctl status bluetooth` on its own as a health check. A
 running `bluetooth.service` can still leave the controller powered off or
 rfkill-blocked.
 
-Check the actual adapter state:
+If `smoke_test.sh` or `debug.sh` already show the adapter as healthy, switch to
+an interactive `bluetoothctl` session and complete the actual bonding flow
+there. The common failure mode is not missing BlueZ, but an unanswered pairing
+prompt or a bonding handshake that never completes.
 
-```bash
-sudo bluetoothctl show
-sudo btmgmt info
-for f in /sys/class/rfkill/rfkill*; do
-  [ -e "$f" ] || continue
-  printf '%s: ' "$(cat "$f/name" 2>/dev/null)"
-  printf 'type=%s soft=%s hard=%s state=%s\n' \
-    "$(cat "$f/type" 2>/dev/null)" \
-    "$(cat "$f/soft" 2>/dev/null)" \
-    "$(cat "$f/hard" 2>/dev/null)" \
-    "$(cat "$f/state" 2>/dev/null)"
-done
-```
-
-Interpretation:
-
-- `Powered: no` or `PowerState: off-blocked` means the adapter is not actually
-  usable yet.
-- `soft=1` with `hard=0` means a software rfkill block is preventing Bluetooth
-  from powering on.
-- `hciconfig` or `btmgmt` showing the controller as `DOWN` is consistent with
-  that state.
-
-If the adapter is soft-blocked, clear that first:
+If you already know the adapter is soft-blocked, clear that first:
 
 ```bash
 sudo sh -c 'echo 0 > /sys/class/rfkill/rfkill0/soft'
 ```
 
-Then recheck:
+Then work interactively:
 
 ```bash
-sudo bluetoothctl show
-sudo btmgmt info
+sudo bluetoothctl
 ```
 
-If pairing still fails, watch for `bluetoothctl` agent prompts. Some BLE
-devices connect briefly, then drop again unless the interactive authorization
-prompt is answered in time. Repeated short `Connected: yes` / `Connected: no`
-transitions without a durable `Paired: yes` usually mean the bonding handshake
-is not completing, not that the device is already usable.
+Inside `bluetoothctl`, watch for agent prompts and answer them explicitly. Some
+BLE devices connect briefly, then drop again unless the authorization prompt is
+accepted in time. Repeated short `Connected: yes` / `Connected: no` transitions
+without a durable bonded state usually mean the pairing handshake is not
+completing, not that the device is already usable.
 
 ### Persistent read-only mode does not keep Bluetooth pairings
 
@@ -446,13 +465,6 @@ Verify that the writable state is actually mounted where expected:
 findmnt /var/lib/bluetooth
 findmnt /mnt/b2u-persist
 grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-```
-
-### You need a report for an issue
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
 ## Script reference
@@ -474,8 +486,8 @@ place for inspection or later reuse.
 ### `debug.sh`
 
 Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough.
-It records service, boot, mount, and runtime state, then runs a bounded live
-foreground debug session.
+It records service, boot, Bluetooth, mount, and runtime state, then runs a
+bounded live foreground debug session.
 
 | Argument | Explanation / Example |
 | --- | --- |
@@ -484,7 +496,10 @@ foreground debug session.
 ### `smoke_test.sh`
 
 Run the fast health check for the supported managed deployment. This is the
-first script to use after install, reboot, update, or read-only changes.
+first script to use after install, reboot, update, or read-only changes. It
+fails on broken platform, runtime, or Bluetooth-controller prerequisites, and
+warns when no paired or relayable devices are currently visible. In that case
+the final line stays successful but is rendered as `PASSED (with warnings)`.
 
 | Argument | Explanation / Example |
 | --- | --- |
@@ -515,7 +530,7 @@ Bluetooth-state configuration available.
 | --- | --- |
 | `/opt/bluetooth_2_usb` | Managed installation root |
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
-| `/etc/default/bluetooth_2_usb` | Optional runtime arguments for the service |
+| `/etc/default/bluetooth_2_usb` | Structured runtime configuration for the service |
 | `/etc/default/bluetooth_2_usb_readonly` | Persistent read-only mode configuration |
 | `/var/log/bluetooth_2_usb` | Script and report output |
 | `/mnt/b2u-persist` | Default persistent mount target |

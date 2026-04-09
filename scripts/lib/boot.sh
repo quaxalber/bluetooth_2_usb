@@ -6,6 +6,8 @@ fi
 readonly B2U_BOOT_SH_SOURCED=1
 
 _b2u_boot_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./paths.sh
+source "${_b2u_boot_dir}/paths.sh"
 # shellcheck source=./common.sh
 source "${_b2u_boot_dir}/common.sh"
 unset _b2u_boot_dir
@@ -82,6 +84,14 @@ board_overlay_line() {
       printf '%s\n' "dtoverlay=dwc2"
       ;;
   esac
+}
+
+current_pi_model() {
+  tr -d '\0' </proc/device-tree/model 2>/dev/null || true
+}
+
+expected_dwc2_overlay_line() {
+  board_overlay_line "$(current_pi_model)"
 }
 
 normalize_dwc2_overlay() {

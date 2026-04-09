@@ -5,11 +5,6 @@ if [[ -n "${B2U_COMMON_SH_SOURCED:-}" ]]; then
 fi
 readonly B2U_COMMON_SH_SOURCED=1
 
-_b2u_common_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./paths.sh
-source "${_b2u_common_dir}/paths.sh"
-unset _b2u_common_dir
-
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
 YELLOW=$'\033[0;33m'

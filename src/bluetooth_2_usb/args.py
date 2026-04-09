@@ -1,5 +1,47 @@
 import argparse
 
+from .evdev import ecodes
+
+
+def _parse_device_ids(raw_value: str) -> list[str]:
+    device_ids = [
+        device_id.strip() for device_id in raw_value.split(",") if device_id.strip()
+    ]
+    if not device_ids:
+        raise argparse.ArgumentTypeError("DEVICE_IDS must not be empty.")
+    return device_ids
+
+
+def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
+    alias_map = {
+        "SHIFT": "LEFTSHIFT",
+        "LSHIFT": "LEFTSHIFT",
+        "RSHIFT": "RIGHTSHIFT",
+        "CTRL": "LEFTCTRL",
+        "LCTRL": "LEFTCTRL",
+        "RCTRL": "RIGHTCTRL",
+        "ALT": "LEFTALT",
+        "LALT": "LEFTALT",
+        "RALT": "RIGHTALT",
+        "GUI": "LEFTMETA",
+        "LMETA": "LEFTMETA",
+        "RMETA": "RIGHTMETA",
+    }
+    parsed_keys = []
+    for raw_key in raw_value.split("+"):
+        key = raw_key.strip().upper()
+        if not key:
+            continue
+        normalized = alias_map.get(key, key)
+        key_name = normalized if normalized.startswith("KEY_") else f"KEY_{normalized}"
+        if not hasattr(ecodes, key_name):
+            raise argparse.ArgumentTypeError(f"Unknown shortcut key: {raw_key}")
+        parsed_keys.append(key_name)
+
+    if not parsed_keys:
+        raise argparse.ArgumentTypeError("Shortcut must contain at least one key.")
+    return parsed_keys
+
 
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs) -> None:
@@ -17,7 +59,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "--device_ids",
             "-i",
-            type=lambda input: [id.strip() for id in input.split(",")],
+            type=_parse_device_ids,
             default=None,
             help="Comma-separated list of identifiers for input devices to be relayed.\nAn identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\nExample: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\nDefault: None",
         )
@@ -38,9 +80,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "--interrupt_shortcut",
             "-s",
-            type=lambda input: [
-                key.strip().upper() for key in input.split("+") if key.strip()
-            ],
+            type=_parse_interrupt_shortcut,
             default=None,
             help=(
                 "A plus-separated list of key names to press simultaneously in order to "
@@ -90,6 +130,12 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Validate the gadget runtime prerequisites and exit.",
         )
         self.add_argument(
+            "--output",
+            choices=["text", "json"],
+            default="text",
+            help="Output format for --list_devices and --validate-env. Default: text",
+        )
+        self.add_argument(
             "--hid-profile",
             choices=["compat", "extended"],
             default="compat",
@@ -122,6 +168,7 @@ class Arguments:
         "_debug",
         "_version",
         "_validate_env",
+        "_output",
         "_hid_profile",
     ]
 
@@ -137,6 +184,7 @@ class Arguments:
         debug: bool,
         version: bool,
         validate_env: bool,
+        output: str,
         hid_profile: str,
     ) -> None:
         self._device_ids = device_ids
@@ -149,6 +197,7 @@ class Arguments:
         self._debug = debug
         self._version = version
         self._validate_env = validate_env
+        self._output = output
         self._hid_profile = hid_profile
 
     @property
@@ -192,6 +241,10 @@ class Arguments:
         return self._validate_env
 
     @property
+    def output(self) -> str:
+        return self._output
+
+    @property
     def hid_profile(self) -> str:
         return self._hid_profile
 
@@ -214,7 +267,7 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
 
     if len(provided_argv) == 0:
         parser.print_help()
-        raise SystemExit(1)
+        raise SystemExit(2)
 
     return Arguments(
         device_ids=args.device_ids,
@@ -227,5 +280,6 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         debug=args.debug,
         version=args.version,
         validate_env=args.validate_env,
+        output=args.output,
         hid_profile=args.hid_profile,
     )

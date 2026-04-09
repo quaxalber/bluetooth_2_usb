@@ -128,8 +128,8 @@ Purpose:
 Before reboot:
 
 ```bash
-bluetoothctl paired-devices
-sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices
+bluetoothctl devices Paired
+sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
 ```
 
 Then:
@@ -141,8 +141,8 @@ Then:
 After reboot:
 
 ```bash
-bluetoothctl paired-devices
-sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices
+bluetoothctl devices Paired
+sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
 journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 
@@ -161,7 +161,7 @@ Purpose:
 Before cutting power:
 
 ```bash
-bluetoothctl paired-devices
+bluetoothctl devices Paired
 systemctl is-active bluetooth_2_usb.service
 ```
 
@@ -175,7 +175,7 @@ After boot:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-bluetoothctl paired-devices
+bluetoothctl devices Paired
 journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 

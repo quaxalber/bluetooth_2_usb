@@ -3,6 +3,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+# shellcheck source=./lib/paths.sh
+source "${SCRIPT_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=./lib/readonly.sh

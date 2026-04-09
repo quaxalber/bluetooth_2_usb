@@ -9,7 +9,7 @@ description = "Convert a Raspberry Pi into a HID relay translating Bluetooth key
 authors = [
     { name = "quaxalber", email = "pypi@quaxalber.de" },
 ]
-license = {text = "MIT"}
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = [
@@ -33,7 +33,6 @@ keywords = [
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware :: Universal Serial Bus (USB) :: Human Interface Device (HID)",
     "Intended Audience :: Developers",

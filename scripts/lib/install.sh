@@ -6,6 +6,8 @@ fi
 readonly B2U_INSTALL_LIB_SH_SOURCED=1
 
 _b2u_install_lib_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./paths.sh
+source "${_b2u_install_lib_dir}/paths.sh"
 # shellcheck source=./common.sh
 source "${_b2u_install_lib_dir}/common.sh"
 unset _b2u_install_lib_dir
@@ -32,8 +34,16 @@ activate_service_unit() {
 write_default_env_file() {
   if [[ ! -f "$B2U_ENV_FILE" ]]; then
     cat >"$B2U_ENV_FILE" <<'EOF'
-# Optional runtime arguments for bluetooth_2_usb.service.
-BLUETOOTH_2_USB_ARGS="--auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12 --hid-profile compat"
+# Structured runtime configuration for bluetooth_2_usb.service.
+B2U_AUTO_DISCOVER=1
+B2U_GRAB_DEVICES=1
+B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
+B2U_HID_PROFILE=compat
+B2U_LOG_TO_FILE=0
+B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
+B2U_DEBUG=0
+B2U_DEVICE_IDS=
+B2U_UDC_PATH=
 EOF
     chmod 0644 "$B2U_ENV_FILE"
   fi

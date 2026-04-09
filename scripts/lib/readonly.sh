@@ -6,6 +6,8 @@ fi
 readonly B2U_READONLY_SH_SOURCED=1
 
 _b2u_readonly_lib_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./paths.sh
+source "${_b2u_readonly_lib_dir}/paths.sh"
 # shellcheck source=./common.sh
 source "${_b2u_readonly_lib_dir}/common.sh"
 unset _b2u_readonly_lib_dir
@@ -80,13 +82,23 @@ EOF
 
 bluetooth_state_persistent() {
   local mount_source
+  local persist_mount_source
+  local relative_subdir
 
   load_readonly_config
   mountpoint -q /var/lib/bluetooth || return 1
   [[ -d "$B2U_PERSIST_BLUETOOTH_DIR" ]] || return 1
-  findmnt -n -o OPTIONS --target /var/lib/bluetooth 2>/dev/null | grep -qw bind || return 1
   mount_source="$(findmnt -n -o SOURCE --target /var/lib/bluetooth 2>/dev/null || true)"
-  [[ "$mount_source" == "$B2U_PERSIST_BLUETOOTH_DIR" ]]
+  if [[ "$mount_source" == "$B2U_PERSIST_BLUETOOTH_DIR" ]]; then
+    return 0
+  fi
+
+  persist_mount_source="$(findmnt -n -o SOURCE --target "$B2U_PERSIST_MOUNT" 2>/dev/null || true)"
+  [[ -n "$persist_mount_source" ]] || return 1
+
+  relative_subdir="${B2U_PERSIST_BLUETOOTH_DIR#"${B2U_PERSIST_MOUNT}"}"
+  [[ "$relative_subdir" == /* ]] || relative_subdir="/${relative_subdir}"
+  [[ "$mount_source" == "${persist_mount_source}[${relative_subdir}]" ]]
 }
 
 readonly_mode() {

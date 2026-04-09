@@ -22,6 +22,25 @@ report_status_emoji() {
   esac
 }
 
+report_status_rank() {
+  case "${1:-ok}" in
+    fail | error | red) printf '%s' "2" ;;
+    warn | warning | yellow) printf '%s' "1" ;;
+    *) printf '%s' "0" ;;
+  esac
+}
+
+report_worse_status() {
+  local current="${1:-ok}"
+  local candidate="${2:-ok}"
+
+  if (($(report_status_rank "$candidate") > $(report_status_rank "$current"))); then
+    printf '%s\n' "$candidate"
+  else
+    printf '%s\n' "$current"
+  fi
+}
+
 report_heading() {
   local outfile="$1"
   local level="$2"

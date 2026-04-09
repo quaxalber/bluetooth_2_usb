@@ -101,6 +101,8 @@ Preserve these unless the task explicitly redesigns them:
 
 - Managed installs are rooted in `/opt/bluetooth_2_usb`.
 - The service launches the module with the managed venv Python.
+- The service loads `/etc/default/bluetooth_2_usb` as structured `B2U_*`
+  configuration and starts `python -m bluetooth_2_usb.service_runner`.
 - Supported install flow:
   - on minimal Raspberry Pi OS Lite images, install `git` first if needed:
     `sudo apt update && sudo apt install -y git`
@@ -152,9 +154,10 @@ Preserve these unless the task explicitly redesigns them:
 Run the baseline checks from the repo venv:
 
 ```bash
-black --check src
-ruff check src
-python -m compileall src
+black --check src tests
+ruff check src tests
+python -m compileall src tests
+python -m unittest discover -s tests -v
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
@@ -192,6 +195,7 @@ For runtime-affecting changes, validate on real hardware when feasible:
 
 - `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh`
 - `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
+- `python -m bluetooth_2_usb --list_devices --output json`
 
 For Bluetooth-adapter or pairing issues, do not stop at
 `systemctl status bluetooth`. Also check the real controller and rfkill state:

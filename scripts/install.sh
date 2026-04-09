@@ -3,6 +3,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+# shellcheck source=./lib/paths.sh
+source "${SCRIPT_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=./lib/boot.sh
@@ -77,6 +79,9 @@ ok "Virtual environment updated at ${VENV_DIR}"
 
 install_service_unit
 write_default_env_file
+if ! "${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_config --check >/dev/null; then
+  fail "Runtime config validation failed for ${B2U_ENV_FILE}. Expected the structured B2U_* format."
+fi
 install_cli_wrapper
 systemctl daemon-reload
 activate_service_unit

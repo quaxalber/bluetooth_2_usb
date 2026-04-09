@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pyudev
-from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize, list_devices
+from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
 
 from .evdev import (
     evdev_to_usb_hid,
@@ -16,6 +16,12 @@ from .evdev import (
     get_mouse_movement,
     is_consumer_key,
     is_mouse_button,
+)
+from .inventory import (
+    DEFAULT_SKIP_NAME_PREFIXES,
+    DeviceEnumerationError,
+    auto_discover_exclusion_reason,
+    list_input_devices,
 )
 from .logging import get_logger
 
@@ -131,9 +137,10 @@ class ShortcutToggler:
         self.gadget_manager = gadget_manager
 
         self.currently_pressed: set[str] = set()
+        self._suppressed_keys: set[str] = set()
         self._shortcut_armed = True
 
-    def handle_key_event(self, event: KeyEvent) -> None:
+    def handle_key_event(self, event: KeyEvent) -> bool:
         """
         Process a key press or release to detect the toggle shortcut.
 
@@ -142,16 +149,18 @@ class ShortcutToggler:
         """
         key_name = find_key_name(event)
         if key_name is None:
-            return
+            return False
 
         if event.keystate == KeyEvent.key_down:
             self.currently_pressed.add(key_name)
         elif event.keystate == KeyEvent.key_up:
             self.currently_pressed.discard(key_name)
-            if self.shortcut_keys and (
-                key_name in self.shortcut_keys
-                or not self.shortcut_keys.issubset(self.currently_pressed)
-            ):
+            if key_name in self._suppressed_keys:
+                self._suppressed_keys.discard(key_name)
+                if not self._suppressed_keys:
+                    self._shortcut_armed = True
+                return True
+            if self.shortcut_keys and key_name in self.shortcut_keys:
                 self._shortcut_armed = True
 
         if (
@@ -160,7 +169,11 @@ class ShortcutToggler:
             and self.shortcut_keys.issubset(self.currently_pressed)
         ):
             self._shortcut_armed = False
+            self._suppressed_keys.update(self.shortcut_keys)
             self.toggle_relaying()
+            return True
+
+        return key_name in self._suppressed_keys
 
     def toggle_relaying(self) -> None:
         """
@@ -174,8 +187,6 @@ class ShortcutToggler:
             if mouse:
                 mouse.release_all()
 
-            self.currently_pressed.clear()
-            self._shortcut_armed = True
             self.relaying_active.clear()
             _logger.info("ShortcutToggler: Relaying is now OFF.")
         else:
@@ -212,15 +223,9 @@ class RelayController:
         self._device_ids = [DeviceIdentifier(id) for id in (device_identifiers or [])]
         self._auto_discover = auto_discover
         self._skip_name_prefixes = (
-            skip_name_prefixes
+            tuple(skip_name_prefixes)
             if skip_name_prefixes is not None
-            else [
-                "vc4-hdmi",
-                "vc4",
-                "gpio",
-                "pwr_button",
-                "raspberrypi-ts",
-            ]
+            else DEFAULT_SKIP_NAME_PREFIXES
         )
         self._grab_devices = grab_devices
         self._relaying_active = relaying_active
@@ -240,14 +245,23 @@ class RelayController:
         :rtype: None
         """
         try:
+            initial_devices = list_input_devices()
+        except DeviceEnumerationError as exc:
+            _logger.exception(
+                "RelayController: Failed enumerating input devices: %s", exc
+            )
+            raise
+
+        try:
             async with TaskGroup() as task_group:
                 self._task_group = task_group
                 self._loop = asyncio.get_running_loop()
                 _logger.debug("RelayController: TaskGroup started.")
 
-                for device in await async_list_input_devices():
+                for device in initial_devices:
                     if self._should_relay(device):
                         self.add_device(device.path)
+                    device.close()
 
                 # Keep running unless canceled
                 while not self._cancelled:
@@ -393,29 +407,15 @@ class RelayController:
         :return: True if we should relay it, False otherwise
         :rtype: bool
         """
-        name_lower = device.name.lower()
         if self._auto_discover:
-            for prefix in self._skip_name_prefixes:
-                if name_lower.startswith(prefix.lower()):
-                    _logger.debug(
-                        "Skipping %s during auto-discovery: name prefix %s",
-                        device,
-                        prefix,
-                    )
-                    return False
-            try:
-                capabilities = device.capabilities(verbose=False)
-            except OSError as exc:
+            exclusion_reason = auto_discover_exclusion_reason(
+                device, self._skip_name_prefixes
+            )
+            if exclusion_reason is not None:
                 _logger.debug(
-                    "Skipping %s during auto-discovery: failed to read capabilities (%s)",
+                    "Skipping %s during auto-discovery: %s",
                     device,
-                    exc,
-                )
-                return False
-            if not any(code in capabilities for code in (1, 2)):
-                _logger.debug(
-                    "Skipping %s during auto-discovery: missing EV_KEY/EV_REL capabilities",
-                    device,
+                    exclusion_reason,
                 )
                 return False
             return True
@@ -511,7 +511,8 @@ class DeviceRelay:
                 )
 
             if self._shortcut_toggler and isinstance(event, KeyEvent):
-                self._shortcut_toggler.handle_key_event(event)
+                if self._shortcut_toggler.handle_key_event(event):
+                    continue
 
             active = self._relaying_active and self._relaying_active.is_set()
 
@@ -623,14 +624,7 @@ async def async_list_input_devices() -> list[InputDevice]:
     :return: List of InputDevice objects
     :rtype: list[InputDevice]
     """
-    try:
-        return [InputDevice(path) for path in list_devices()]
-    except (OSError, FileNotFoundError) as ex:
-        _logger.critical(f"Failed listing devices: {ex}")
-        return []
-    except Exception:
-        _logger.exception("Unexpected error listing devices")
-        return []
+    return list_input_devices()
 
 
 def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:
@@ -704,23 +698,22 @@ def get_output_device(
     return gadget_manager.get_keyboard()
 
 
-class UdcStateMonitor:
+class RuntimeMonitor:
     """
-    Monitors the UDC (USB Device Controller) state and
-    sets/clears an Event when the device is configured or not.
+    Monitors runtime state changes that affect relay liveness.
+
+    This combines UDC polling and udev input hotplug observation so the CLI only
+    has one runtime monitor lifecycle to manage.
     """
 
     def __init__(
         self,
+        relay_controller: RelayController,
         relaying_active: asyncio.Event,
         udc_path: Path = Path("/sys/class/udc/20980000.usb/state"),
         poll_interval: float = 0.5,
     ) -> None:
-        """
-        :param relaying_active: Event controlling whether relaying is active
-        :param udc_path: Path to the UDC state file
-        :param poll_interval: Interval (seconds) to re-check the UDC state
-        """
+        self.relay_controller = relay_controller
         self._relaying_active = relaying_active
         self.udc_path = udc_path
         self.poll_interval = poll_interval
@@ -729,27 +722,31 @@ class UdcStateMonitor:
         self._task: asyncio.Task | None = None
         self._last_state: str | None = None
 
+        self.context = pyudev.Context()
+        self.monitor = pyudev.Monitor.from_netlink(self.context)
+        self.monitor.filter_by("input")
+        self.observer = pyudev.MonitorObserver(self.monitor, self._udev_event_callback)
+
         if not self.udc_path.is_file():
             _logger.warning(
-                f"UDC state file {self.udc_path} not found. Cable monitoring may be unavailable."
+                "UDC state file %s not found. Cable monitoring may be unavailable.",
+                self.udc_path,
             )
 
     async def __aenter__(self):
-        """
-        Async context manager entry. Starts a background task to poll the UDC state.
-        """
         self._stop = False
+        self.observer.start()
         self._task = asyncio.create_task(self._poll_state())
+        _logger.debug("RuntimeMonitor started.")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """
-        Async context manager exit. Cancels the polling task.
-        """
+        self._stop = True
+        self.observer.stop()
         if self._task:
-            self._stop = True
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
+        _logger.debug("RuntimeMonitor stopped.")
         return False
 
     async def _poll_state(self):
@@ -761,81 +758,27 @@ class UdcStateMonitor:
             await asyncio.sleep(self.poll_interval)
 
     def _read_udc_state(self) -> str:
-        """
-        Read the UDC state file. If not found, treat as "not_attached".
-
-        :return: The current UDC state (e.g. "configured")
-        :rtype: str
-        """
         try:
-            with open(self.udc_path, encoding="utf-8") as f:
-                return f.read().strip()
+            with open(self.udc_path, encoding="utf-8") as handle:
+                return handle.read().strip()
         except FileNotFoundError:
             return "not_attached"
 
     def _handle_state_change(self, new_state: str):
-        """
-        Handle a change in the UDC state. If "configured", set relaying_active.
-        Otherwise clear it.
-
-        :param new_state: The new UDC state
-        """
         _logger.debug(f"UDC state changed to '{new_state}'")
-
         if new_state == "configured":
             self._relaying_active.set()
         else:
             self._relaying_active.clear()
 
-
-class UdevEventMonitor:
-    """
-    Monitors udev for /dev/input/event* add/remove events and
-    notifies the RelayController.
-    """
-
-    def __init__(self, relay_controller: RelayController) -> None:
-        """
-        :param relay_controller: The RelayController to add/remove devices
-        :param loop: The asyncio event loop
-        """
-        self.relay_controller = relay_controller
-
-        self.context = pyudev.Context()
-        self.monitor = pyudev.Monitor.from_netlink(self.context)
-        self.monitor.filter_by("input")
-        self.observer = pyudev.MonitorObserver(self.monitor, self._udev_event_callback)
-
-    async def __aenter__(self):
-        """
-        Async context manager entry. Starts the pyudev monitor observer.
-        """
-        self.observer.start()
-        _logger.debug("UdevEventMonitor started observer.")
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """
-        Async context manager exit. Stops the pyudev monitor observer.
-        """
-        self.observer.stop()
-        _logger.debug("UdevEventMonitor stopped observer.")
-        return False
-
     def _udev_event_callback(self, action: str, device: pyudev.Device) -> None:
-        """
-        pyudev callback for input devices.
-
-        :param action: "add" or "remove"
-        :param device: The pyudev device
-        """
         device_node = device.device_node
         if not device_node or not device_node.startswith("/dev/input/event"):
             return
 
         if action == "add":
-            _logger.debug(f"UdevEventMonitor: Added input => {device_node}")
+            _logger.debug(f"RuntimeMonitor: Added input => {device_node}")
             self.relay_controller.schedule_add_device(device_node)
         elif action == "remove":
-            _logger.debug(f"UdevEventMonitor: Removed input => {device_node}")
+            _logger.debug(f"RuntimeMonitor: Removed input => {device_node}")
             self.relay_controller.schedule_remove_device(device_node)

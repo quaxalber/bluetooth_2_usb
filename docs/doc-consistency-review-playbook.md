@@ -123,7 +123,8 @@ explained where an operator would reasonably expect it.
 ### 7. Syntax and basic code health
 
 ```bash
-python -m compileall src
+python -m compileall src tests
+python -m unittest discover -s tests -v
 bash -n scripts/*.sh scripts/lib/*.sh
 ```
 

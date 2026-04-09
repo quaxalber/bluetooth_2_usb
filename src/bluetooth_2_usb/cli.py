@@ -1,11 +1,18 @@
 import asyncio
+import json
 import os
 import signal
+import sys
 from dataclasses import dataclass
 from logging import DEBUG
 from pathlib import Path
 
 from .args import Arguments, parse_args
+from .inventory import (
+    DeviceEnumerationError,
+    describe_input_devices,
+    inventory_to_text,
+)
 from .logging import add_file_handler, get_logger
 from .version import get_versioned_name
 
@@ -26,6 +33,14 @@ class EnvironmentStatus:
     @property
     def ok(self) -> bool:
         return self.configfs and self.udc_present
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "configfs": self.configfs,
+            "udc_present": self.udc_present,
+            "udc_path": str(self.udc_path) if self.udc_path else None,
+            "ok": self.ok,
+        }
 
 
 def get_udc_path() -> Path | None:
@@ -76,7 +91,11 @@ def validate_environment() -> EnvironmentStatus:
     )
 
 
-def print_environment_status(status: EnvironmentStatus) -> None:
+def print_environment_status(status: EnvironmentStatus, output: str) -> None:
+    if output == "json":
+        print(json.dumps(status.to_dict(), sort_keys=True))
+        return
+
     lines = [
         f"configfs: {'ok' if status.configfs else 'missing'}",
         f"udc: {'ok' if status.udc_present else 'missing'}",
@@ -89,32 +108,6 @@ def print_environment_status(status: EnvironmentStatus) -> None:
 def print_version() -> int:
     print(get_versioned_name())
     return EXIT_OK
-
-
-def validate_shortcut(shortcut: list[str]) -> set[str]:
-    alias_map = {
-        "SHIFT": "LEFTSHIFT",
-        "LSHIFT": "LEFTSHIFT",
-        "RSHIFT": "RIGHTSHIFT",
-        "CTRL": "LEFTCTRL",
-        "LCTRL": "LEFTCTRL",
-        "RCTRL": "RIGHTCTRL",
-        "ALT": "LEFTALT",
-        "LALT": "LEFTALT",
-        "RALT": "RIGHTALT",
-        "GUI": "LEFTMETA",
-        "LMETA": "LEFTMETA",
-        "RMETA": "RIGHTMETA",
-    }
-
-    valid_keys = set()
-    for raw_key in shortcut:
-        key_upper = raw_key.strip().upper()
-        key_upper = alias_map.get(key_upper, key_upper)
-        key_name = key_upper if key_upper.startswith("KEY_") else f"KEY_{key_upper}"
-        valid_keys.add(key_name)
-
-    return valid_keys
 
 
 def configure_logging(args: Arguments) -> None:
@@ -132,16 +125,22 @@ async def async_run(args: Arguments) -> int:
         return print_version()
 
     if args.list_devices:
-        from .relay import async_list_input_devices
+        try:
+            devices = describe_input_devices()
+        except DeviceEnumerationError as exc:
+            print(str(exc), file=sys.stderr)
+            return EXIT_ENVIRONMENT
 
-        for dev in await async_list_input_devices():
-            print(f"{dev.name}\t{dev.uniq if dev.uniq else dev.phys}\t{dev.path}")
+        if args.output == "json":
+            print(json.dumps([device.to_dict() for device in devices], sort_keys=True))
+        else:
+            print(inventory_to_text(devices))
         return EXIT_OK
 
     env_status = validate_environment()
 
     if args.validate_env:
-        print_environment_status(env_status)
+        print_environment_status(env_status, args.output)
         return EXIT_OK if env_status.ok else EXIT_ENVIRONMENT
 
     configure_logging(args)
@@ -164,9 +163,8 @@ async def async_run(args: Arguments) -> int:
     from .relay import (
         GadgetManager,
         RelayController,
+        RuntimeMonitor,
         ShortcutToggler,
-        UdcStateMonitor,
-        UdevEventMonitor,
     )
 
     gadget_manager = GadgetManager(hid_profile=args.hid_profile)
@@ -174,14 +172,13 @@ async def async_run(args: Arguments) -> int:
 
     shortcut_toggler = None
     if args.interrupt_shortcut:
-        shortcut_keys = validate_shortcut(args.interrupt_shortcut)
-        if shortcut_keys:
-            logger.debug(f"Configuring global interrupt shortcut: {shortcut_keys}")
-            shortcut_toggler = ShortcutToggler(
-                shortcut_keys=shortcut_keys,
-                relaying_active=relaying_active,
-                gadget_manager=gadget_manager,
-            )
+        shortcut_keys = set(args.interrupt_shortcut)
+        logger.debug(f"Configuring global interrupt shortcut: {shortcut_keys}")
+        shortcut_toggler = ShortcutToggler(
+            shortcut_keys=shortcut_keys,
+            relaying_active=relaying_active,
+            gadget_manager=gadget_manager,
+        )
 
     relay_controller = RelayController(
         gadget_manager=gadget_manager,
@@ -212,11 +209,10 @@ async def async_run(args: Arguments) -> int:
         signal.signal(handled_signal, _signal_handler)
 
     try:
-        async with (
-            UdevEventMonitor(relay_controller),
-            UdcStateMonitor(
-                relaying_active=relaying_active, udc_path=env_status.udc_path
-            ),
+        async with RuntimeMonitor(
+            relay_controller=relay_controller,
+            relaying_active=relaying_active,
+            udc_path=env_status.udc_path,
         ):
             relay_task = asyncio.create_task(relay_controller.async_relay_devices())
             shutdown_task = asyncio.create_task(shutdown_event.wait())

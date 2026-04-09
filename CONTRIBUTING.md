@@ -103,9 +103,10 @@ Keep code and docs aligned with that model.
 Run these from the repo venv:
 
 ```bash
-black --check src
-ruff check src
-python -m compileall src
+black --check src tests
+ruff check src tests
+python -m compileall src tests
+python -m unittest discover -s tests -v
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
@@ -131,6 +132,8 @@ From an installed deployment:
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo bluetoothctl show
+sudo btmgmt info
 ```
 
 For Pi-side validation, a local Pi with hostname `pi4b` should normally be

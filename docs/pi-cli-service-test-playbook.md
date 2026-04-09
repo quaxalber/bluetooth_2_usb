@@ -96,6 +96,8 @@ After reboot, verify:
 ssh -4 pi4b '
   systemctl is-active bluetooth_2_usb.service
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  sudo -n bluetoothctl show
+  sudo -n btmgmt info
 '
 ```
 
@@ -123,6 +125,8 @@ After reboot, verify:
 ssh -4 pi4b '
   systemctl is-active bluetooth_2_usb.service
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  sudo -n bluetoothctl show
+  sudo -n btmgmt info
 '
 ```
 
@@ -210,6 +214,7 @@ Expected outcome:
 - service integration is removed
 - checkout remains present
 - persistent mount units are disabled
+- runtime env files and wrapper are removed
 
 ## What to record
 

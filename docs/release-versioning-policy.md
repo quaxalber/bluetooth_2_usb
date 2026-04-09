@@ -66,6 +66,17 @@ This avoids hard-coded version strings in runtime code and keeps these outputs a
 - wheels and source distributions
 - installed service/runtime logs
 
+The managed `/opt/bluetooth_2_usb` clone-based install remains compatible with
+that versioning model. The installer rebuilds the venv from the checked-out Git
+tree in `/opt/bluetooth_2_usb`, so an install from the exact tagged commit will
+show that exact release version. A separate tarball install is not required for
+the runtime to report `1.0.0`.
+
+In practice:
+
+- install from checkout at tag `v1.0.0` -> runtime version `1.0.0`
+- install from later commits after `v1.0.0` -> SCM-derived development version
+
 ## Release process
 
 For an official release:
@@ -74,7 +85,7 @@ For an official release:
 2. Ensure the branch is clean and tested
 3. Create an annotated SemVer tag
 4. Push the tag
-5. Publish the GitHub release and any package artifacts
+5. Publish the GitHub release and any attached repository build artifacts
 
 Release notes should describe the current supported product surface only:
 

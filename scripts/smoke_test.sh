@@ -3,8 +3,12 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+# shellcheck source=./lib/paths.sh
+source "${SCRIPT_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=./lib/bluetooth.sh
+source "${SCRIPT_DIR}/lib/bluetooth.sh"
 # shellcheck source=./lib/boot.sh
 source "${SCRIPT_DIR}/lib/boot.sh"
 # shellcheck source=./lib/readonly.sh
@@ -13,6 +17,7 @@ source "${SCRIPT_DIR}/lib/readonly.sh"
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
 EXIT_CODE=0
+SOFT_WARNINGS=0
 
 usage() {
   cat <<EOF
@@ -41,16 +46,27 @@ ensure_root
 prepare_log "smoke"
 load_readonly_config
 
+soft_warn() {
+  warn "$1"
+  SOFT_WARNINGS=$((SOFT_WARNINGS + 1))
+}
+
 CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
 READONLY_MODE="$(readonly_mode)"
 VALIDATE_LOG="$(mktemp)"
-trap 'rm -f "$VALIDATE_LOG"' EXIT
+LIST_DEVICES_JSON="$(mktemp)"
+BLUETOOTH_SHOW_LOG="$(mktemp)"
+BTMGMT_INFO_LOG="$(mktemp)"
+SERVICE_CONFIG_LOG="$(mktemp)"
+RFKILL_LOG="$(mktemp)"
+trap 'rm -f "$VALIDATE_LOG" "$LIST_DEVICES_JSON" "$BLUETOOTH_SHOW_LOG" "$BTMGMT_INFO_LOG" "$SERVICE_CONFIG_LOG" "$RFKILL_LOG"' EXIT
 
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
 DWC2_MODE="$(dwc2_mode)"
 IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
+EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line)"
 
 modules_load_has_required_modules() {
   local module
@@ -91,10 +107,10 @@ required_modules_list() {
   printf '%s\n' "${joined%,}"
 }
 
-if grep -qE '^\s*dtoverlay=dwc2' "$CONFIG_TXT"; then
-  ok "config.txt contains a dwc2 overlay"
+if grep -qxF "$EXPECTED_OVERLAY_LINE" "$CONFIG_TXT"; then
+  ok "config.txt contains expected overlay (${EXPECTED_OVERLAY_LINE})"
 else
-  warn "config.txt is missing a dwc2 overlay"
+  warn "config.txt is missing expected overlay (${EXPECTED_OVERLAY_LINE})"
   EXIT_CODE=1
 fi
 
@@ -106,7 +122,7 @@ else
 fi
 
 if [[ "$DWC2_MODE" == "unknown" ]]; then
-  warn "Could not determine whether dwc2 is built-in or modular; boot module validation is heuristic"
+  soft_warn "Could not determine whether dwc2 is built-in or modular; boot module validation is heuristic"
 fi
 
 if [[ -d /sys/kernel/config/usb_gadget ]]; then
@@ -152,6 +168,84 @@ else
   EXIT_CODE=1
 fi
 
+if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_config --check >"$SERVICE_CONFIG_LOG" 2>&1; then
+  ok "Runtime config is valid"
+else
+  warn "Runtime config validation failed"
+  sed -n '1,20p' "$SERVICE_CONFIG_LOG" || true
+  EXIT_CODE=1
+fi
+
+if systemctl is-active bluetooth.service >/dev/null 2>&1; then
+  ok "bluetooth.service is active"
+else
+  warn "bluetooth.service is not active"
+  EXIT_CODE=1
+fi
+
+if bluetoothctl_show >"$BLUETOOTH_SHOW_LOG" 2>&1; then
+  if bluetooth_controller_powered; then
+    ok "Bluetooth controller is powered"
+  else
+    warn "Bluetooth controller is visible but not powered"
+    EXIT_CODE=1
+  fi
+else
+  warn "bluetoothctl show failed"
+  sed -n '1,20p' "$BLUETOOTH_SHOW_LOG" || true
+  EXIT_CODE=1
+fi
+
+if btmgmt_info >"$BTMGMT_INFO_LOG" 2>&1; then
+  ok "btmgmt info succeeded"
+else
+  warn "btmgmt info failed"
+  sed -n '1,20p' "$BTMGMT_INFO_LOG" || true
+  EXIT_CODE=1
+fi
+
+if bluetooth_rfkill_entries >"$RFKILL_LOG" 2>&1; then
+  if bluetooth_rfkill_blocked; then
+    warn "Bluetooth rfkill is blocking the controller"
+    cat "$RFKILL_LOG"
+    EXIT_CODE=1
+  else
+    ok "Bluetooth rfkill state is not blocked"
+  fi
+else
+  soft_warn "No bluetooth rfkill entries found"
+fi
+
+RELAYABLE_COUNT=""
+if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb --list_devices --output json >"$LIST_DEVICES_JSON" 2>&1; then
+  RELAYABLE_COUNT="$(
+    "${VENV_DIR}/bin/python" - "$LIST_DEVICES_JSON" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    devices = json.load(handle)
+print(sum(1 for device in devices if device.get("relay_candidate")))
+PY
+  )"
+  if [[ "${RELAYABLE_COUNT:-0}" -gt 0 ]]; then
+    ok "Relayable input devices detected (${RELAYABLE_COUNT})"
+  else
+    soft_warn "No relayable input devices detected"
+  fi
+else
+  warn "Device inventory failed"
+  sed -n '1,40p' "$LIST_DEVICES_JSON" || true
+  EXIT_CODE=1
+fi
+
+PAIRED_COUNT="$(bluetooth_paired_count)"
+if [[ "${PAIRED_COUNT:-0}" -gt 0 ]]; then
+  ok "Paired Bluetooth devices detected (${PAIRED_COUNT})"
+else
+  soft_warn "No paired Bluetooth devices detected"
+fi
+
 if [[ -d /var/lib/bluetooth ]]; then
   ok "Bluetooth state directory exists"
 else
@@ -191,12 +285,26 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "modules-load token: ${MODULES_LOAD_VALUE:-<missing>}"
   echo "required modules: $(required_modules_list)"
   echo "required modules status: $(required_modules_status)"
+  echo "expected overlay line: ${EXPECTED_OVERLAY_LINE}"
   echo "UDC controllers: ${UDC_LIST:-<none>}"
   echo "Readonly mode: ${READONLY_MODE}"
   echo "OverlayFS: $(overlay_status)"
   echo "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
+  echo "Relayable device count: ${RELAYABLE_COUNT:-unknown}"
+  echo "Paired Bluetooth device count: ${PAIRED_COUNT:-unknown}"
+  echo "Non-fatal warning count: ${SOFT_WARNINGS}"
   echo "## CLI validate-env output"
   cat "$VALIDATE_LOG"
+  echo "## Service config check"
+  cat "$SERVICE_CONFIG_LOG"
+  echo "## bluetoothctl show"
+  cat "$BLUETOOTH_SHOW_LOG"
+  echo "## btmgmt info"
+  cat "$BTMGMT_INFO_LOG"
+  echo "## rfkill bluetooth"
+  cat "$RFKILL_LOG"
+  echo "## Device inventory"
+  cat "$LIST_DEVICES_JSON"
   echo "## Mount details"
   findmnt -n -T /var/lib/bluetooth 2>/dev/null || true
   findmnt -n "$B2U_PERSIST_MOUNT" 2>/dev/null || true
@@ -207,7 +315,11 @@ if [[ $VERBOSE -eq 1 ]]; then
 fi
 
 if [[ $EXIT_CODE -eq 0 ]]; then
-  ok "Smoke test PASSED"
+  if [[ $SOFT_WARNINGS -gt 0 ]]; then
+    ok "Smoke test PASSED (with warnings)"
+  else
+    ok "Smoke test PASSED"
+  fi
 else
   fail "Smoke test FAILED"
 fi

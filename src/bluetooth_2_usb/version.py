@@ -11,12 +11,11 @@ except ImportError:
 
 
 def get_version() -> str:
-    if SCM_VERSION:
-        return SCM_VERSION
-
     try:
         return package_version(PACKAGE_NAME)
     except PackageNotFoundError:
+        if SCM_VERSION:
+            return SCM_VERSION
         return UNKNOWN_VERSION
 
 
