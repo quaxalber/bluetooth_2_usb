@@ -101,6 +101,13 @@ ssh -4 pi4b '
 '
 ```
 
+Interpret the smoke result conservatively:
+
+- `PASSED` is ideal
+- `PASSED (with warnings)` is still acceptable if no paired or relayable
+  devices are present yet, or if the OTG cable is not attached and the UDC
+  state is therefore not `configured`
+
 ## Update validation
 
 The supported update model is Git plus reinstall:
@@ -130,6 +137,13 @@ ssh -4 pi4b '
 '
 ```
 
+Interpret the smoke result conservatively:
+
+- `PASSED` is ideal
+- `PASSED (with warnings)` is still acceptable if no paired or relayable
+  devices are present yet, or if the OTG cable is not attached and the UDC
+  state is therefore not `configured`
+
 ## Debug validation
 
 Bounded run:
@@ -154,6 +168,7 @@ Inspect the resulting report and verify:
 - the live debug section contains real runtime output
 - the report is redacted
 - the report does not contradict the actual service and mount state
+- the reported UDC state matches the real cable/host situation
 
 ## Persistent read-only validation
 

@@ -30,7 +30,9 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 Pass criteria:
 
 - service is active
-- smoke test passes
+- smoke test passes; `PASSED (with warnings)` is acceptable at this stage if no
+  paired or relayable devices are present yet, or if the OTG cable is not yet
+  attached and the UDC state is therefore not `configured`
 - debug report is coherent and redacted
 
 ## 2. Basic relay behavior
@@ -74,7 +76,8 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 Pass criteria:
 
 - service still starts normally
-- smoke test still passes
+- smoke test still passes; `PASSED (with warnings)` is acceptable if no paired
+  or relayable devices are present yet, or if the OTG cable is not attached
 
 ## 4. Persistent read-only mode
 

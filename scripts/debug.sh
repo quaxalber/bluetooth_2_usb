@@ -289,6 +289,25 @@ if [[ -d /sys/kernel/config/usb_gadget ]]; then
 else
   section_text_block "fail" "configfs gadget path" "configfs missing"
 fi
+udc_state_path="$(
+  if [[ -x "${VENV_DIR}/bin/python" ]]; then
+    "${VENV_DIR}/bin/python" - <<'PY'
+from bluetooth_2_usb.cli import get_udc_path
+
+path = get_udc_path()
+print(path if path else "")
+PY
+  fi
+)"
+udc_state_status="warn"
+udc_state_value="udc_state=unknown"
+if [[ -n "$udc_state_path" && -f "$udc_state_path" ]]; then
+  udc_state_value="udc_state=$(tr -d '[:space:]' <"$udc_state_path" 2>/dev/null || true)"
+  if [[ "$udc_state_value" == "udc_state=configured" ]]; then
+    udc_state_status="ok"
+  fi
+fi
+section_text_block "$udc_state_status" "UDC state" "$udc_state_value" "udc_state_path=${udc_state_path:-n/a}"
 section_text_block "ok" "OverlayFS status" "overlayfs=$(overlay_status)"
 readonly_mode_status="ok"
 readonly_mode_value="readonly_mode=$(readonly_mode)"

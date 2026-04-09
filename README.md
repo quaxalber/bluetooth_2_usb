@@ -112,8 +112,7 @@ exit
 > [!NOTE]
 > Replace `A1:B2:C3:D4:E5:F6` with your device's Bluetooth MAC address.
 > Some devices trigger an interactive `bluetoothctl` authorization prompt during
-> pairing. If you see `[agent] Accept pairing (yes/no):`, answer `yes`
-> immediately or BlueZ may cancel the request.
+> pairing. Answer that prompt immediately or BlueZ may cancel the request.
 
 ### 5. Verify the installation
 
@@ -173,11 +172,10 @@ After editing that file, restart the service:
 sudo systemctl restart bluetooth_2_usb.service
 ```
 
-Note:
-
-- despite the project name, broad auto-discovery can also relay other suitable
-  Linux input devices that are visible on the Pi; the intended primary use case
-  remains Bluetooth keyboard and mouse bridging
+> [!NOTE]
+> Despite the project name, broad auto-discovery can also relay other suitable
+> Linux input devices that are visible on the Pi; the intended primary use case
+> remains Bluetooth keyboard and mouse bridging.
 
 ## CLI reference
 
@@ -189,12 +187,12 @@ Use these runtime flags when running the CLI manually.
 | `--auto_discover, -a` | Relay all readable suitable input devices automatically, except known excluded platform devices. Good default for appliance-style setups where you do not want to curate a static device list. |
 | `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events. |
 | `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Plus-separated key chord that toggles relaying on and off at runtime. Default: none, feature disabled. Example: `-s CTRL+SHIFT+F12`. |
-| `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. Combine with `--output json` for scripts or diagnostics. |
+| `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. |
 | `--log_to_file, -f` | Add file logging in addition to stdout logging. |
 | `--log_path LOG_PATH, -p LOG_PATH` | Override the path used with `--log_to_file`. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`. Example: `-p /tmp/bluetooth_2_usb.log`. |
 | `--debug, -d` | Increase log verbosity for manual troubleshooting. |
 | `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
-| `--validate-env` | Validate gadget runtime prerequisites and exit. Combine with `--output json` for machine-readable checks. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
+| `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
 | `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
 | `--hid-profile PROFILE` | USB HID profile to expose. Default: `compat`. Supported values: `compat`, `extended`. Example: `--hid-profile extended`. |
 | `--help, -h` | Show the built-in CLI help and exit. |
@@ -207,22 +205,10 @@ List available devices:
 bluetooth_2_usb -l
 ```
 
-List available devices as JSON:
-
-```bash
-bluetooth_2_usb -l --output json
-```
-
 Validate the runtime environment:
 
 ```bash
 bluetooth_2_usb --validate-env
-```
-
-Validate the runtime environment as JSON:
-
-```bash
-bluetooth_2_usb --validate-env --output json
 ```
 
 Inspect recent service logs:
@@ -404,7 +390,6 @@ Check what the runtime can actually see:
 
 ```bash
 bluetooth_2_usb -l
-bluetooth_2_usb -l --output json
 ```
 
 Then verify that `DEVICE_IDS` really matches what the runtime reports. Matching
@@ -487,7 +472,8 @@ place for inspection or later reuse.
 
 Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough.
 It records service, boot, Bluetooth, mount, and runtime state, then runs a
-bounded live foreground debug session.
+bounded live foreground debug session. The report includes the detected UDC
+state and shows whether it is currently `configured`.
 
 | Argument | Explanation / Example |
 | --- | --- |
@@ -499,7 +485,9 @@ Run the fast health check for the supported managed deployment. This is the
 first script to use after install, reboot, update, or read-only changes. It
 fails on broken platform, runtime, or Bluetooth-controller prerequisites, and
 warns when no paired or relayable devices are currently visible. In that case
-the final line stays successful but is rendered as `PASSED (with warnings)`.
+the final line stays successful but is rendered as `PASSED (with warnings)`. It
+also checks the detected UDC state and warns when the gadget controller is
+present but not currently `configured`.
 
 | Argument | Explanation / Example |
 | --- | --- |

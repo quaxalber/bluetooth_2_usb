@@ -64,6 +64,8 @@ trap 'rm -f "$VALIDATE_LOG" "$LIST_DEVICES_JSON" "$BLUETOOTH_SHOW_LOG" "$BTMGMT_
 
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
+UDC_STATE_PATH=""
+UDC_STATE_VALUE=""
 DWC2_MODE="$(dwc2_mode)"
 IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
 EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line)"
@@ -166,6 +168,26 @@ else
   warn "CLI environment validation failed"
   sed -n '1,20p' "$VALIDATE_LOG" || true
   EXIT_CODE=1
+fi
+
+if [[ -x "${VENV_DIR}/bin/python" ]]; then
+  UDC_STATE_PATH="$(
+    "${VENV_DIR}/bin/python" - <<'PY'
+from bluetooth_2_usb.cli import get_udc_path
+
+path = get_udc_path()
+print(path if path else "")
+PY
+  )"
+fi
+
+if [[ -n "$UDC_STATE_PATH" && -f "$UDC_STATE_PATH" ]]; then
+  UDC_STATE_VALUE="$(tr -d '[:space:]' <"$UDC_STATE_PATH" 2>/dev/null || true)"
+  if [[ "$UDC_STATE_VALUE" == "configured" ]]; then
+    ok "UDC state is configured"
+  else
+    soft_warn "UDC state is ${UDC_STATE_VALUE:-unknown}"
+  fi
 fi
 
 if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_config --check >"$SERVICE_CONFIG_LOG" 2>&1; then
@@ -287,6 +309,8 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "required modules status: $(required_modules_status)"
   echo "expected overlay line: ${EXPECTED_OVERLAY_LINE}"
   echo "UDC controllers: ${UDC_LIST:-<none>}"
+  echo "UDC state path: ${UDC_STATE_PATH:-<unknown>}"
+  echo "UDC state: ${UDC_STATE_VALUE:-<unknown>}"
   echo "Readonly mode: ${READONLY_MODE}"
   echo "OverlayFS: $(overlay_status)"
   echo "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
