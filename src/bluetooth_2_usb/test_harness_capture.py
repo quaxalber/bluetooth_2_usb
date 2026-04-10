@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import os
-import selectors
 import time
 from dataclasses import dataclass
-from pathlib import Path
-
-from evdev import ecodes
+from typing import Any
 
 from .test_harness_common import (
     DEFAULT_DEVICE_SUBSTRING,
@@ -15,24 +11,42 @@ from .test_harness_common import (
     EXIT_OK,
     EXIT_PREREQUISITE,
     EXIT_TIMEOUT,
+    KEY_F13,
+    KEY_F14,
+    KEY_F15,
+    KEY_VOLUMEDOWN,
+    KEY_VOLUMEUP,
+    REL_X,
+    REL_Y,
     GadgetNodes,
     HarnessResult,
-    ensure_existing_path,
     get_scenario,
 )
 
-HIDRAW_ROOT = Path("/sys/class/hidraw")
 REPORT_READ_SIZE = 64
+POLL_INTERVAL_SEC = 0.01
+GENERIC_DESKTOP_USAGE_PAGE = 0x01
+KEYBOARD_USAGE = 0x06
+MOUSE_USAGE = 0x02
+CONSUMER_USAGE_PAGE = 0x0C
+CONSUMER_USAGE = 0x01
+GADGET_VENDOR_ID = 0x1D6B
+GADGET_PRODUCT_ID = 0x0104
 
 HID_KEY_CODES = {
-    ecodes.KEY_F13: 104,
-    ecodes.KEY_F14: 105,
-    ecodes.KEY_F15: 106,
+    KEY_F13: 104,
+    KEY_F14: 105,
+    KEY_F15: 106,
 }
 
 CONSUMER_USAGES = {
-    ecodes.KEY_VOLUMEUP: 0x00E9,
-    ecodes.KEY_VOLUMEDOWN: 0x00EA,
+    KEY_VOLUMEUP: 0x00E9,
+    KEY_VOLUMEDOWN: 0x00EA,
+}
+
+REL_NAMES = {
+    REL_X: "REL_X",
+    REL_Y: "REL_Y",
 }
 
 
@@ -53,10 +67,24 @@ class CaptureMismatchError(CaptureError):
 
 
 @dataclass(frozen=True, slots=True)
+class HidDeviceInfo:
+    node: str
+    raw_path: bytes | str
+    name: str
+    manufacturer: str
+    serial: str
+    vendor_id: int
+    product_id: int
+    interface_number: int
+    usage_page: int
+    usage: int
+
+
+@dataclass(frozen=True, slots=True)
 class GadgetNodeCandidates:
-    keyboard_nodes: tuple[str, ...]
-    mouse_nodes: tuple[str, ...]
-    consumer_nodes: tuple[str, ...]
+    keyboard_nodes: tuple[HidDeviceInfo, ...]
+    mouse_nodes: tuple[HidDeviceInfo, ...]
+    consumer_nodes: tuple[HidDeviceInfo, ...]
 
     def matched_nodes(
         self,
@@ -72,18 +100,10 @@ class GadgetNodeCandidates:
 
     def to_dict(self) -> dict[str, list[str]]:
         return {
-            "keyboard_nodes": list(self.keyboard_nodes),
-            "mouse_nodes": list(self.mouse_nodes),
-            "consumer_nodes": list(self.consumer_nodes),
+            "keyboard_nodes": [info.node for info in self.keyboard_nodes],
+            "mouse_nodes": [info.node for info in self.mouse_nodes],
+            "consumer_nodes": [info.node for info in self.consumer_nodes],
         }
-
-
-@dataclass(frozen=True, slots=True)
-class HidrawInfo:
-    node: str
-    name: str
-    phys: str
-    uniq: str
 
 
 @dataclass(slots=True)
@@ -94,6 +114,8 @@ class KeyboardSequenceMatcher:
     def handle(self, report: bytes) -> None:
         payload = _normalize_keyboard_report(report)
         if payload is None:
+            if _is_ignorable_empty_report(report):
+                return
             raise CaptureMismatchError(
                 f"Unexpected keyboard report format: {report.hex(sep=' ')}"
             )
@@ -137,6 +159,8 @@ class MouseSequenceMatcher:
     def handle(self, report: bytes) -> None:
         parsed = _normalize_mouse_report(report)
         if parsed is None:
+            if _is_ignorable_empty_report(report):
+                return
             raise CaptureMismatchError(
                 f"Unexpected mouse report format: {report.hex(sep=' ')}"
             )
@@ -151,9 +175,9 @@ class MouseSequenceMatcher:
             )
 
         if rel_x:
-            self._apply_rel(ecodes.REL_X, rel_x)
+            self._apply_rel(REL_X, rel_x)
         if rel_y:
-            self._apply_rel(ecodes.REL_Y, rel_y)
+            self._apply_rel(REL_Y, rel_y)
 
         if buttons not in (0, 1, 2):
             raise CaptureMismatchError(
@@ -185,13 +209,13 @@ class MouseSequenceMatcher:
     def _apply_rel(self, code: int, value: int) -> None:
         if self.rel_index >= len(self.expected_rel_steps):
             raise CaptureMismatchError(
-                f"Unexpected extra mouse relative event {ecodes.REL.get(code, code)}={value}"
+                f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
             )
         pending_step = self.expected_rel_steps[self.rel_index]
         if pending_step.code != code or pending_step.value != value:
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
-                f"{ecodes.REL.get(code, code)}={value}; expected {pending_step.describe()}"
+                f"{REL_NAMES.get(code, code)}={value}; expected {pending_step.describe()}"
             )
         self.rel_index += 1
 
@@ -214,6 +238,8 @@ class ConsumerSequenceMatcher:
     def handle(self, report: bytes) -> None:
         usage = _normalize_consumer_report(report)
         if usage is None:
+            if _is_ignorable_empty_report(report):
+                return
             raise CaptureMismatchError(
                 f"Unexpected consumer report format: {report.hex(sep=' ')}"
             )
@@ -233,6 +259,27 @@ class ConsumerSequenceMatcher:
         return self.index >= len(self.expected_steps)
 
 
+@dataclass(slots=True)
+class _CandidateMatcher:
+    role: str
+    info: HidDeviceInfo
+    device: Any
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
+    failed_message: str | None = None
+
+    @property
+    def node(self) -> str:
+        return self.info.node
+
+    @property
+    def complete(self) -> bool:
+        return self.matcher.complete
+
+    @property
+    def failed(self) -> bool:
+        return self.failed_message is not None
+
+
 def _normalize_keyboard_report(report: bytes) -> bytes | None:
     if len(report) == 8:
         return report
@@ -243,24 +290,38 @@ def _normalize_keyboard_report(report: bytes) -> bytes | None:
 
 def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
     payload = report
+    wheel = 0
     if len(report) == 5 and report[0] == 0x02:
         payload = report[1:]
-    elif len(report) != 4:
+    elif len(report) == 4 and report[0] == 0x02:
+        payload = report[1:]
+    elif len(report) == 4:
+        payload = report
+    elif len(report) == 3:
+        payload = report
+    else:
         return None
 
     buttons = payload[0]
     rel_x = int.from_bytes(payload[1:2], "little", signed=True)
     rel_y = int.from_bytes(payload[2:3], "little", signed=True)
-    wheel = int.from_bytes(payload[3:4], "little", signed=True)
+    if len(payload) >= 4:
+        wheel = int.from_bytes(payload[3:4], "little", signed=True)
     return buttons, rel_x, rel_y, wheel
 
 
 def _normalize_consumer_report(report: bytes) -> int | None:
     if len(report) == 3 and report[0] == 0x03:
         return int.from_bytes(report[1:3], "little")
+    if len(report) == 2 and report[0] == 0x03:
+        return report[1]
     if len(report) == 2:
         return int.from_bytes(report, "little")
     return None
+
+
+def _is_ignorable_empty_report(report: bytes) -> bool:
+    return len(report) == 1 and report[0] == 0
 
 
 def _matches_device_substring(device_name: str, substring: str) -> bool:
@@ -273,42 +334,74 @@ def _matches_device_substring(device_name: str, substring: str) -> bool:
     return any(candidate and candidate in haystack for candidate in candidates)
 
 
-def _read_uevent(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key] = value
-    return values
+def _load_hidapi() -> Any:
+    try:
+        import hid  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:
+        raise MissingNodeError(
+            "Host capture requires the Python package 'hidapi' (import name: hid). "
+            "Install it in the host Python environment."
+        ) from exc
+    return hid
 
 
-def _iter_hidraw_infos(hidraw_root: Path) -> list[HidrawInfo]:
-    infos: list[HidrawInfo] = []
-    for hidraw_dir in sorted(hidraw_root.glob("hidraw*")):
-        uevent_path = hidraw_dir / "device" / "uevent"
-        if not uevent_path.is_file():
+def _render_hidapi_path(path_value: bytes | str) -> str:
+    if isinstance(path_value, bytes):
+        return path_value.decode("utf-8", errors="backslashreplace")
+    return str(path_value)
+
+
+def _role_for_device(info: HidDeviceInfo) -> str | None:
+    if info.usage_page == GENERIC_DESKTOP_USAGE_PAGE and info.usage == KEYBOARD_USAGE:
+        return "keyboard"
+    if info.usage_page == GENERIC_DESKTOP_USAGE_PAGE and info.usage == MOUSE_USAGE:
+        return "mouse"
+    if info.usage_page == CONSUMER_USAGE_PAGE and info.usage == CONSUMER_USAGE:
+        return "consumer"
+    if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
+        if info.interface_number == 0:
+            return "keyboard"
+        if info.interface_number == 1:
+            return "mouse"
+        if info.interface_number == 2:
+            return "consumer"
+    return None
+
+
+def _iter_hid_infos(hid_module: Any) -> list[HidDeviceInfo]:
+    infos: list[HidDeviceInfo] = []
+    for entry in hid_module.enumerate():
+        raw_path = entry.get("path")
+        if raw_path is None:
             continue
-        values = _read_uevent(uevent_path)
         infos.append(
-            HidrawInfo(
-                node=f"/dev/{hidraw_dir.name}",
-                name=values.get("HID_NAME", ""),
-                phys=values.get("HID_PHYS", ""),
-                uniq=values.get("HID_UNIQ", ""),
+            HidDeviceInfo(
+                node=_render_hidapi_path(raw_path),
+                raw_path=raw_path,
+                name=entry.get("product_string") or "",
+                manufacturer=entry.get("manufacturer_string") or "",
+                serial=entry.get("serial_number") or "",
+                vendor_id=int(entry.get("vendor_id") or 0),
+                product_id=int(entry.get("product_id") or 0),
+                interface_number=int(entry.get("interface_number") or 0),
+                usage_page=int(entry.get("usage_page") or 0),
+                usage=int(entry.get("usage") or 0),
             )
         )
     return infos
 
 
-def _role_for_hidraw(info: HidrawInfo) -> str | None:
-    if info.phys.endswith("/input0"):
-        return "keyboard"
-    if info.phys.endswith("/input1"):
-        return "mouse"
-    if info.phys.endswith("/input2"):
-        return "consumer"
-    return None
+def _filter_explicit_override(
+    infos: list[HidDeviceInfo],
+    override: str | None,
+    label: str,
+) -> list[HidDeviceInfo]:
+    if override is None:
+        return infos
+    matched = [info for info in infos if info.node == override]
+    if not matched:
+        raise MissingNodeError(f"{label} HID device was not found: {override}")
+    return matched
 
 
 def discover_gadget_node_candidates(
@@ -316,43 +409,46 @@ def discover_gadget_node_candidates(
     keyboard_node: str | None = None,
     mouse_node: str | None = None,
     consumer_node: str | None = None,
-    hidraw_root: Path = HIDRAW_ROOT,
+    hid_module: Any | None = None,
 ) -> GadgetNodeCandidates:
-    explicit_keyboard = ensure_existing_path(keyboard_node, "keyboard hidraw node")
-    explicit_mouse = ensure_existing_path(mouse_node, "mouse hidraw node")
-    explicit_consumer = ensure_existing_path(consumer_node, "consumer hidraw node")
+    hid_module = _load_hidapi() if hid_module is None else hid_module
 
-    keyboard_nodes: set[str] = (
-        {str(explicit_keyboard.resolve())} if explicit_keyboard else set()
-    )
-    mouse_nodes: set[str] = {str(explicit_mouse.resolve())} if explicit_mouse else set()
-    consumer_nodes: set[str] = (
-        {str(explicit_consumer.resolve())} if explicit_consumer else set()
-    )
+    keyboard_nodes: list[HidDeviceInfo] = []
+    mouse_nodes: list[HidDeviceInfo] = []
+    consumer_nodes: list[HidDeviceInfo] = []
 
-    if not hidraw_root.is_dir():
-        raise MissingNodeError(f"Hidraw sysfs directory is missing: {hidraw_root}")
-
-    for info in _iter_hidraw_infos(hidraw_root):
-        if not _matches_device_substring(info.name, device_substring):
+    for info in _iter_hid_infos(hid_module):
+        role = _role_for_device(info)
+        if role is None:
             continue
-        role = _role_for_hidraw(info)
-        if role == "keyboard" and not explicit_keyboard:
-            keyboard_nodes.add(info.node)
-        elif role == "mouse" and not explicit_mouse:
-            mouse_nodes.add(info.node)
-        elif role == "consumer" and not explicit_consumer:
-            consumer_nodes.add(info.node)
+        if not _matches_device_substring(info.name, device_substring) and not (
+            info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID
+        ):
+            continue
+        if role == "keyboard":
+            keyboard_nodes.append(info)
+        elif role == "mouse":
+            mouse_nodes.append(info)
+        elif role == "consumer":
+            consumer_nodes.append(info)
+
+    keyboard_nodes = _filter_explicit_override(
+        keyboard_nodes, keyboard_node, "Keyboard"
+    )
+    mouse_nodes = _filter_explicit_override(mouse_nodes, mouse_node, "Mouse")
+    consumer_nodes = _filter_explicit_override(
+        consumer_nodes, consumer_node, "Consumer-control"
+    )
 
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
         raise MissingNodeError(
-            f"No hidraw gadget nodes matched {device_substring!r} in {hidraw_root}"
+            f"No HID devices matched {device_substring!r} through hidapi enumeration"
         )
 
     return GadgetNodeCandidates(
-        keyboard_nodes=tuple(sorted(keyboard_nodes)),
-        mouse_nodes=tuple(sorted(mouse_nodes)),
-        consumer_nodes=tuple(sorted(consumer_nodes)),
+        keyboard_nodes=tuple(sorted(keyboard_nodes, key=lambda info: info.node)),
+        mouse_nodes=tuple(sorted(mouse_nodes, key=lambda info: info.node)),
+        consumer_nodes=tuple(sorted(consumer_nodes, key=lambda info: info.node)),
     )
 
 
@@ -361,134 +457,162 @@ def discover_gadget_nodes(
     keyboard_node: str | None = None,
     mouse_node: str | None = None,
     consumer_node: str | None = None,
-    hidraw_root: Path = HIDRAW_ROOT,
+    hid_module: Any | None = None,
 ) -> GadgetNodes:
     candidates = discover_gadget_node_candidates(
         device_substring=device_substring,
         keyboard_node=keyboard_node,
         mouse_node=mouse_node,
         consumer_node=consumer_node,
-        hidraw_root=hidraw_root,
+        hid_module=hid_module,
     )
     if len(candidates.keyboard_nodes) > 1:
         raise MissingNodeError(
-            "Multiple keyboard hidraw nodes matched: "
-            + ", ".join(sorted(candidates.keyboard_nodes))
+            "Multiple keyboard HID devices matched: "
+            + ", ".join(info.node for info in candidates.keyboard_nodes)
         )
     if len(candidates.mouse_nodes) > 1:
         raise MissingNodeError(
-            "Multiple mouse hidraw nodes matched: "
-            + ", ".join(sorted(candidates.mouse_nodes))
+            "Multiple mouse HID devices matched: "
+            + ", ".join(info.node for info in candidates.mouse_nodes)
         )
     if len(candidates.consumer_nodes) > 1:
         raise MissingNodeError(
-            "Multiple consumer hidraw nodes matched: "
-            + ", ".join(sorted(candidates.consumer_nodes))
+            "Multiple consumer-control HID devices matched: "
+            + ", ".join(info.node for info in candidates.consumer_nodes)
         )
 
     return GadgetNodes(
-        keyboard_node=next(iter(candidates.keyboard_nodes), None),
-        mouse_node=next(iter(candidates.mouse_nodes), None),
-        consumer_node=next(iter(candidates.consumer_nodes), None),
+        keyboard_node=(
+            candidates.keyboard_nodes[0].node if candidates.keyboard_nodes else None
+        ),
+        mouse_node=candidates.mouse_nodes[0].node if candidates.mouse_nodes else None,
+        consumer_node=(
+            candidates.consumer_nodes[0].node if candidates.consumer_nodes else None
+        ),
     )
 
 
-def _open_hidraw(node: str) -> int:
+def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
     try:
-        return os.open(node, os.O_RDONLY | os.O_NONBLOCK)
-    except FileNotFoundError as exc:
-        raise MissingNodeError(f"Hidraw node does not exist: {node}") from exc
-    except PermissionError as exc:
-        raise CaptureError(
-            f"Failed opening hidraw node {node}: {exc}. Install the host rule with "
-            "./scripts/install_host_hidraw_udev_rule.sh and ensure the user is in the input group."
-        ) from exc
+        device = hid_module.device()
+        device.open_path(info.raw_path)
+        device.set_nonblocking(True)
+        return device
     except OSError as exc:
-        raise CaptureError(f"Failed opening hidraw node {node}: {exc}") from exc
+        if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
+            raise CaptureError(
+                f"Failed opening HID device {info.node}: {exc}. "
+                "On Linux, install ./scripts/install_host_hidapi_udev_rule.sh "
+                "and ensure the user is in the input group."
+            ) from exc
+        raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
+    except Exception as exc:
+        raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
 
 
-@dataclass(slots=True)
-class _CandidateMatcher:
-    role: str
-    node: str
-    fd: int
-    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
-    failed_message: str | None = None
-
-    @property
-    def complete(self) -> bool:
-        return self.matcher.complete
-
-    @property
-    def failed(self) -> bool:
-        return self.failed_message is not None
+def _device_group_key(info: HidDeviceInfo) -> str:
+    node = info.node
+    if ":" in node:
+        return node.rsplit(":", 1)[0]
+    if info.serial:
+        return f"{info.vendor_id:04x}:{info.product_id:04x}:{info.serial}"
+    return node
 
 
-def run_capture(
+def _build_candidate_sets(
+    scenario_name: str, candidate_nodes: GadgetNodeCandidates
+) -> list[GadgetNodeCandidates]:
+    scenario = get_scenario(scenario_name)
+    if len(scenario.required_nodes) <= 1:
+        role = scenario.required_nodes[0]
+        infos = {
+            "keyboard": candidate_nodes.keyboard_nodes,
+            "mouse": candidate_nodes.mouse_nodes,
+            "consumer": candidate_nodes.consumer_nodes,
+        }[role]
+        return [
+            GadgetNodeCandidates(
+                keyboard_nodes=((info,) if role == "keyboard" else ()),
+                mouse_nodes=((info,) if role == "mouse" else ()),
+                consumer_nodes=((info,) if role == "consumer" else ()),
+            )
+            for info in infos
+        ]
+
+    grouped: dict[str, dict[str, list[HidDeviceInfo]]] = {}
+    for role, infos in (
+        ("keyboard", candidate_nodes.keyboard_nodes),
+        ("mouse", candidate_nodes.mouse_nodes),
+        ("consumer", candidate_nodes.consumer_nodes),
+    ):
+        for info in infos:
+            grouped.setdefault(
+                _device_group_key(info),
+                {"keyboard": [], "mouse": [], "consumer": []},
+            )[role].append(info)
+
+    candidate_sets: list[GadgetNodeCandidates] = []
+    for _, roles in sorted(grouped.items()):
+        if scenario.keyboard_enabled and not roles["keyboard"]:
+            continue
+        if scenario.mouse_enabled and not roles["mouse"]:
+            continue
+        if scenario.consumer_enabled and not roles["consumer"]:
+            continue
+        candidate_sets.append(
+            GadgetNodeCandidates(
+                keyboard_nodes=tuple(
+                    sorted(roles["keyboard"], key=lambda info: info.node)
+                ),
+                mouse_nodes=tuple(sorted(roles["mouse"], key=lambda info: info.node)),
+                consumer_nodes=tuple(
+                    sorted(roles["consumer"], key=lambda info: info.node)
+                ),
+            )
+        )
+
+    return candidate_sets or [candidate_nodes]
+
+
+def _capture_once(
     scenario_name: str,
-    timeout_sec: float = 5.0,
-    device_substring: str = DEFAULT_DEVICE_SUBSTRING,
-    keyboard_node: str | None = None,
-    mouse_node: str | None = None,
-    consumer_node: str | None = None,
-    grab_devices: bool = True,
+    timeout_sec: float,
+    candidate_nodes: GadgetNodeCandidates,
+    hid_module: Any,
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
-    try:
-        candidate_nodes = discover_gadget_node_candidates(
-            device_substring=device_substring,
-            keyboard_node=keyboard_node,
-            mouse_node=mouse_node,
-            consumer_node=consumer_node,
-        )
-    except FileNotFoundError as exc:
-        return HarnessResult(
-            command="capture",
-            scenario=scenario.name,
-            success=False,
-            exit_code=EXIT_PREREQUISITE,
-            message=str(exc),
-            details={},
-        )
-    except CaptureError as exc:
-        return HarnessResult(
-            command="capture",
-            scenario=scenario.name,
-            success=False,
-            exit_code=exc.exit_code,
-            message=str(exc),
-            details={},
-        )
 
-    selector = selectors.DefaultSelector()
-    fds: list[int] = []
-    candidates_by_fd: dict[int, _CandidateMatcher] = {}
+    candidates: list[_CandidateMatcher] = []
 
     def _active_candidates(role: str) -> list[_CandidateMatcher]:
         return [
             candidate
-            for candidate in candidates_by_fd.values()
+            for candidate in candidates
             if candidate.role == role and not candidate.failed
         ]
 
     def _completed_candidate(role: str) -> _CandidateMatcher | None:
-        for candidate in candidates_by_fd.values():
+        for candidate in candidates:
             if candidate.role == role and candidate.complete:
                 return candidate
         return None
 
     def _register_candidate(
         role: str,
-        node: str,
+        info: HidDeviceInfo,
         matcher: (
             KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
         ),
     ) -> None:
-        fd = _open_hidraw(node)
-        fds.append(fd)
-        candidate = _CandidateMatcher(role=role, node=node, fd=fd, matcher=matcher)
-        candidates_by_fd[fd] = candidate
-        selector.register(fd, selectors.EVENT_READ)
+        candidates.append(
+            _CandidateMatcher(
+                role=role,
+                info=info,
+                device=_open_hid_device(hid_module, info),
+                matcher=matcher,
+            )
+        )
 
     def _required_role_done(role: str) -> bool:
         if role == "keyboard":
@@ -506,19 +630,19 @@ def run_capture(
     try:
         if scenario.keyboard_enabled:
             if not candidate_nodes.keyboard_nodes:
-                raise MissingNodeError("Keyboard hidraw node was not found")
-            for node in candidate_nodes.keyboard_nodes:
+                raise MissingNodeError("Keyboard HID device was not found")
+            for info in candidate_nodes.keyboard_nodes:
                 _register_candidate(
-                    "keyboard", node, KeyboardSequenceMatcher(scenario.keyboard_steps)
+                    "keyboard", info, KeyboardSequenceMatcher(scenario.keyboard_steps)
                 )
 
         if scenario.mouse_enabled:
             if not candidate_nodes.mouse_nodes:
-                raise MissingNodeError("Mouse hidraw node was not found")
-            for node in candidate_nodes.mouse_nodes:
+                raise MissingNodeError("Mouse HID device was not found")
+            for info in candidate_nodes.mouse_nodes:
                 _register_candidate(
                     "mouse",
-                    node,
+                    info,
                     MouseSequenceMatcher.create(
                         scenario.mouse_rel_steps, scenario.mouse_button_steps
                     ),
@@ -526,10 +650,10 @@ def run_capture(
 
         if scenario.consumer_enabled:
             if not candidate_nodes.consumer_nodes:
-                raise MissingNodeError("Consumer hidraw node was not found")
-            for node in candidate_nodes.consumer_nodes:
+                raise MissingNodeError("Consumer-control HID device was not found")
+            for info in candidate_nodes.consumer_nodes:
                 _register_candidate(
-                    "consumer", node, ConsumerSequenceMatcher(scenario.consumer_steps)
+                    "consumer", info, ConsumerSequenceMatcher(scenario.consumer_steps)
                 )
 
         deadline = time.monotonic() + timeout_sec
@@ -552,47 +676,45 @@ def run_capture(
                     continue
                 messages = [
                     candidate.failed_message
-                    for candidate in candidates_by_fd.values()
+                    for candidate in candidates
                     if candidate.role == role and candidate.failed_message
                 ]
                 raise CaptureMismatchError(
-                    f"All {role} hidraw candidates mismatched: " + "; ".join(messages)
+                    f"All {role} HID candidates mismatched: " + "; ".join(messages)
                 )
 
-            timeout_remaining = deadline - time.monotonic()
-            if timeout_remaining <= 0:
+            if time.monotonic() >= deadline:
                 raise CaptureTimeoutError(
                     f"Timed out waiting for {scenario.name} reports after {timeout_sec}s"
                 )
 
-            events = selector.select(timeout_remaining)
-            if not events:
-                continue
-
-            for selector_key, _ in events:
-                candidate = candidates_by_fd.get(selector_key.fd)
-                if candidate is None or candidate.failed:
+            progress = False
+            for candidate in candidates:
+                if candidate.failed or candidate.complete:
                     continue
                 try:
-                    report = os.read(candidate.fd, REPORT_READ_SIZE)
-                except BlockingIOError:
-                    continue
+                    report_values = candidate.device.read(REPORT_READ_SIZE)
                 except OSError as exc:
                     raise CaptureError(
-                        f"Failed reading hidraw reports from {candidate.node}: {exc}"
+                        f"Failed reading HID reports from {candidate.node}: {exc}"
+                    ) from exc
+                except Exception as exc:
+                    raise CaptureError(
+                        f"Failed reading HID reports from {candidate.node}: {exc}"
                     ) from exc
 
-                if not report:
+                if not report_values:
                     continue
 
+                progress = True
+                report = bytes(report_values)
                 try:
                     candidate.matcher.handle(report)
                 except CaptureMismatchError as exc:
                     candidate.failed_message = f"{candidate.node}: {exc}"
-                    try:
-                        selector.unregister(candidate.fd)
-                    except Exception:
-                        pass
+
+            if not progress:
+                time.sleep(POLL_INTERVAL_SEC)
 
     except CaptureError as exc:
         return HarnessResult(
@@ -602,23 +724,18 @@ def run_capture(
             exit_code=exc.exit_code,
             message=str(exc),
             details={
-                "capture_backend": "hidraw",
+                "capture_backend": "hidapi",
                 "candidates": candidate_nodes.to_dict(),
                 "nodes": GadgetNodes(None, None, None).to_dict(),
-                "grab_devices_requested": grab_devices,
+                "timeout_sec": timeout_sec,
             },
         )
     finally:
-        for fd in fds:
+        for candidate in candidates:
             try:
-                selector.unregister(fd)
+                candidate.device.close()
             except Exception:
                 pass
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        selector.close()
 
     keyboard_matcher = _completed_candidate("keyboard")
     mouse_matcher = _completed_candidate("mouse")
@@ -629,10 +746,9 @@ def run_capture(
         consumer_node=consumer_matcher.node if consumer_matcher else None,
     )
     details: dict[str, object] = {
-        "capture_backend": "hidraw",
+        "capture_backend": "hidapi",
         "candidates": candidate_nodes.to_dict(),
         "nodes": matched_nodes.to_dict(),
-        "grab_devices_requested": grab_devices,
         "timeout_sec": timeout_sec,
     }
     if keyboard_matcher is not None:
@@ -648,6 +764,53 @@ def run_capture(
         scenario=scenario.name,
         success=True,
         exit_code=EXIT_OK,
-        message="Observed expected relay reports on gadget hidraw nodes",
+        message="Observed expected relay reports on gadget HID devices",
         details=details,
     )
+
+
+def run_capture(
+    scenario_name: str,
+    timeout_sec: float = 5.0,
+    device_substring: str = DEFAULT_DEVICE_SUBSTRING,
+    keyboard_node: str | None = None,
+    mouse_node: str | None = None,
+    consumer_node: str | None = None,
+    grab_devices: bool = True,
+) -> HarnessResult:
+    del grab_devices
+    scenario = get_scenario(scenario_name)
+
+    try:
+        hid_module = _load_hidapi()
+        candidate_nodes = discover_gadget_node_candidates(
+            device_substring=device_substring,
+            keyboard_node=keyboard_node,
+            mouse_node=mouse_node,
+            consumer_node=consumer_node,
+            hid_module=hid_module,
+        )
+    except CaptureError as exc:
+        return HarnessResult(
+            command="capture",
+            scenario=scenario.name,
+            success=False,
+            exit_code=exc.exit_code,
+            message=str(exc),
+            details={},
+        )
+
+    results: list[HarnessResult] = []
+    for candidate_set in _build_candidate_sets(scenario_name, candidate_nodes):
+        result = _capture_once(
+            scenario_name=scenario_name,
+            timeout_sec=timeout_sec,
+            candidate_nodes=candidate_set,
+            hid_module=hid_module,
+        )
+        if result.success:
+            result.details["candidates"] = candidate_nodes.to_dict()
+            return result
+        results.append(result)
+
+    return results[-1]

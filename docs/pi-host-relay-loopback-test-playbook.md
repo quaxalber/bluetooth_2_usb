@@ -5,14 +5,14 @@ without depending on a paired Bluetooth keyboard or mouse.
 
 The flow is:
 
-1. install the host-side `hidraw` udev rule
-2. start a host-side capture against the gadget `hidraw` nodes
-2. inject deterministic virtual keyboard and mouse events on the Pi
-3. verify that the capture observes the expected relayed sequence
+1. prepare a host Python environment with `hidapi`
+2. start a host-side capture against the gadget HID device
+3. inject deterministic virtual keyboard and mouse events on the Pi
+4. verify that the capture observes the expected relayed sequence
 
 This validates the path:
 
-`Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host hidraw node`
+`Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
 ## Preconditions
 
@@ -20,27 +20,23 @@ This validates the path:
 - `bluetooth_2_usb.service` is active on the Pi
 - `B2U_AUTO_DISCOVER=1` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
-- the host is Linux
+- the host Python environment has `hidapi` installed
+
+Additional Linux preconditions:
+
+- install the host-side USB udev rule
 - the host user running the capture is in the `input` group
-- the host already sees the Pi gadget `hidraw` nodes
 
-On the host, install the udev rule once:
+Prepare the host Python environment once:
 
 ```bash
-sudo ./scripts/install_host_hidraw_udev_rule.sh
+python3 -m pip install -r requirements-host-capture.txt
 ```
 
-Then verify the group membership before running the capture:
+On Linux, install the udev rule once:
 
 ```bash
-id
-```
-
-If the user is not yet in the `input` group, add it and start a fresh login
-session before continuing:
-
-```bash
-sudo usermod -aG input "$USER"
+sudo ./scripts/install_host_hidapi_udev_rule.sh
 ```
 
 Recommended baseline checks on the Pi:
@@ -50,16 +46,28 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 ```
 
-## 1. Confirm the host-side gadget nodes
+## 1. Confirm host-side enumeration
 
-On the host:
+On Linux:
 
 ```bash
-ls -l /dev/hidraw* /dev/input/by-id/*USB_Combo_Device*hidraw*
+./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
 ```
 
-You should see `hidraw` entries for the Pi gadget. After the udev rule is
-active, the matching nodes should no longer be `root:root 0600`.
+On macOS:
+
+```bash
+./scripts/host_relay_test_capture.command --scenario keyboard --timeout-sec 1 --output json
+```
+
+On Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\host_relay_test_capture.ps1 --scenario keyboard --timeout-sec 1 --output json
+```
+
+If the Pi gadget is visible, the output will include candidate keyboard, mouse,
+or consumer HID device paths even if the short timeout expires.
 
 ## 2. Start the host capture
 
@@ -71,7 +79,7 @@ From the repository checkout on the host:
 
 Default behavior:
 
-- detects the gadget `hidraw` nodes from sysfs
+- detects the gadget HID device by product name and HID usage
 - waits up to `5` seconds for the complete sequence
 
 If automatic detection is ambiguous, pin the nodes explicitly:
@@ -79,8 +87,8 @@ If automatic detection is ambiguous, pin the nodes explicitly:
 ```bash
 ./scripts/host_relay_test_capture.sh \
   --scenario combo \
-  --keyboard-node /dev/hidrawX \
-  --mouse-node /dev/hidrawY
+  --keyboard-node '<candidate keyboard path>' \
+  --mouse-node '<candidate mouse path>'
 ```
 
 Keep this command running while you trigger the Pi-side injection.
@@ -106,7 +114,7 @@ and emits this deterministic sequence:
 ## 4. Success criteria
 
 The host capture exits `0` and reports that it observed the expected relay
-reports on the host gadget `hidraw` nodes.
+reports on the host gadget HID device.
 
 The Pi-side injector exits `0` and reports that it injected the expected test
 sequence through `/dev/uinput`.
@@ -140,31 +148,28 @@ sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario consumer
 
 - the Pi gadget may not be enumerated on the host
 - the OTG cable or port may be wrong
-- the host may not expose the gadget `hidraw` interfaces yet
+- the host may not expose the gadget HID device yet
+- the host Python may not have `hidapi` installed
 
-Check:
+On Linux, also confirm that the udev rule was installed and the Pi was
+reconnected afterwards.
 
-```bash
-ls -l /dev/hidraw* /dev/input/by-id/*USB_Combo_Device*hidraw*
-```
+### Host capture fails opening the gadget HID device
 
-### Host capture fails opening the gadget hidraw nodes
-
-The host user likely cannot read `/dev/hidraw*`, or the udev rule has not been
-applied yet.
+On Linux this usually means `hidapi` can enumerate the USB gadget but lacks the
+required write access to the underlying USB device node.
 
 Check:
 
 ```bash
 id
-ls -l /dev/hidraw* /dev/input/by-id/*USB_Combo_Device*hidraw*
+ls -l /dev/bus/usb/*/*
 ```
 
-If needed, install or re-apply the rule and then start a fresh login session:
+If needed:
 
 ```bash
-sudo ./scripts/install_host_hidraw_udev_rule.sh
-sudo usermod -aG input "$USER"
+sudo ./scripts/install_host_hidapi_udev_rule.sh
 ```
 
 ### Host capture times out
@@ -172,7 +177,7 @@ sudo usermod -aG input "$USER"
 - the relay service on the Pi may not be active
 - auto-discovery may be off
 - the Pi may not have picked up the temporary virtual devices
-- the host gadget hidraw path may be present but not currently carrying reports
+- the host gadget HID device may be present but not currently carrying reports
 
 Check on the Pi:
 
@@ -194,7 +199,7 @@ ls -l /dev/uinput
 
 ### Host capture still affects the local desktop
 
-That is expected. The `hidraw` capture path is passive verification only. It
+That is expected. The host capture path is passive verification only. It
 observes the raw HID reports but does not suppress the host from processing the
 same keyboard, mouse, or consumer events.
 

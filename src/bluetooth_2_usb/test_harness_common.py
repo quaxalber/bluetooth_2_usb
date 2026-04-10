@@ -4,14 +4,42 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from evdev import ecodes
-
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_PREREQUISITE = 3
 EXIT_ACCESS = 4
 EXIT_TIMEOUT = 5
 EXIT_MISMATCH = 6
+
+EV_KEY = 1
+EV_REL = 2
+
+KEY_F13 = 183
+KEY_F14 = 184
+KEY_F15 = 185
+KEY_VOLUMEUP = 115
+KEY_VOLUMEDOWN = 114
+REL_X = 0
+REL_Y = 1
+
+EVENT_TYPE_NAMES = {
+    EV_KEY: "EV_KEY",
+    EV_REL: "EV_REL",
+}
+
+EVENT_CODE_NAMES = {
+    EV_KEY: {
+        KEY_F13: "KEY_F13",
+        KEY_F14: "KEY_F14",
+        KEY_F15: "KEY_F15",
+        KEY_VOLUMEUP: "KEY_VOLUMEUP",
+        KEY_VOLUMEDOWN: "KEY_VOLUMEDOWN",
+    },
+    EV_REL: {
+        REL_X: "REL_X",
+        REL_Y: "REL_Y",
+    },
+}
 
 SCENARIO_NAMES = ("keyboard", "mouse", "combo", "consumer")
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
@@ -30,11 +58,11 @@ class ExpectedEvent:
 
     @property
     def event_name(self) -> str:
-        return ecodes.EV.get(self.event_type, str(self.event_type))
+        return EVENT_TYPE_NAMES.get(self.event_type, str(self.event_type))
 
     @property
     def code_name(self) -> str:
-        code_table = ecodes.bytype.get(self.event_type, {})
+        code_table = EVENT_CODE_NAMES.get(self.event_type, {})
         return code_table.get(self.code, str(self.code))
 
     def describe(self) -> str:
@@ -74,26 +102,26 @@ class ScenarioDefinition:
 
 
 KEYBOARD_STEPS = (
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F13, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F13, 0),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F14, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F14, 0),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F15, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F15, 0),
+    ExpectedEvent(EV_KEY, KEY_F13, 1),
+    ExpectedEvent(EV_KEY, KEY_F13, 0),
+    ExpectedEvent(EV_KEY, KEY_F14, 1),
+    ExpectedEvent(EV_KEY, KEY_F14, 0),
+    ExpectedEvent(EV_KEY, KEY_F15, 1),
+    ExpectedEvent(EV_KEY, KEY_F15, 0),
 )
 
 MOUSE_REL_STEPS = (
-    ExpectedEvent(ecodes.EV_REL, ecodes.REL_X, 1),
-    ExpectedEvent(ecodes.EV_REL, ecodes.REL_X, -1),
-    ExpectedEvent(ecodes.EV_REL, ecodes.REL_Y, 1),
-    ExpectedEvent(ecodes.EV_REL, ecodes.REL_Y, -1),
+    ExpectedEvent(EV_REL, REL_X, 1),
+    ExpectedEvent(EV_REL, REL_X, -1),
+    ExpectedEvent(EV_REL, REL_Y, 1),
+    ExpectedEvent(EV_REL, REL_Y, -1),
 )
 
 CONSUMER_STEPS = (
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEUP, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEUP, 0),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEDOWN, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEDOWN, 0),
+    ExpectedEvent(EV_KEY, KEY_VOLUMEUP, 1),
+    ExpectedEvent(EV_KEY, KEY_VOLUMEUP, 0),
+    ExpectedEvent(EV_KEY, KEY_VOLUMEDOWN, 1),
+    ExpectedEvent(EV_KEY, KEY_VOLUMEDOWN, 0),
 )
 
 SCENARIOS = {

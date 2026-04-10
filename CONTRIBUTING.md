@@ -147,9 +147,10 @@ Use these repo-specific playbooks when they match the task:
 - `docs/release-versioning-policy.md`
 
 For relay-path changes, prefer running the host/Pi loopback harness in addition
-to the standard smoke/debug checks. It validates that host-visible gadget
-`hidraw` nodes actually receive the relayed keyboard, mouse, or consumer
-reports.
+to the standard smoke/debug checks. It validates that the host-visible gadget
+HID device actually receives the relayed keyboard, mouse, or consumer reports.
+On Linux hosts, the `hidapi` capture path also needs the host-side USB udev
+rule.
 
 ## Pull request guidelines
 

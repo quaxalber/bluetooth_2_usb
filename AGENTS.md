@@ -193,6 +193,10 @@ For runtime-affecting changes, validate on real hardware when feasible:
 - the host/Pi loopback harness from
   `docs/pi-host-relay-loopback-test-playbook.md` when the relay path itself
   changed
+- for host-side loopback capture, the host Python environment needs `hidapi`;
+  do not assume the full repo venv is available or desirable on macOS/Windows
+- on Linux hosts, the `hidapi` path also needs the USB-device udev rule from
+  `scripts/install_host_hidapi_udev_rule.sh`
 
 For Bluetooth-adapter or pairing issues, do not stop at
 `systemctl status bluetooth`. Also check the real controller and rfkill state:

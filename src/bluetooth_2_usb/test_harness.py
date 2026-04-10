@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 
-from .test_harness_capture import run_capture
 from .test_harness_common import (
     DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
@@ -13,7 +12,6 @@ from .test_harness_common import (
     SCENARIO_NAMES,
     HarnessResult,
 )
-from .test_harness_inject import run_inject
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -68,7 +66,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     capture = subparsers.add_parser(
         "capture",
-        help="Capture relay reports from the host-side gadget hidraw nodes.",
+        help="Capture relay reports from the host-side gadget HID devices.",
     )
     capture.add_argument(
         "--scenario",
@@ -85,22 +83,22 @@ def _build_parser() -> argparse.ArgumentParser:
     capture.add_argument(
         "--device-substring",
         default=DEFAULT_DEVICE_SUBSTRING,
-        help=f"Substring used to detect gadget hidraw nodes from sysfs. Default: {DEFAULT_DEVICE_SUBSTRING}",
+        help=f"Substring used to detect gadget HID devices. Default: {DEFAULT_DEVICE_SUBSTRING}",
     )
     capture.add_argument(
         "--keyboard-node",
         default=None,
-        help="Explicit keyboard hidraw node path override.",
+        help="Explicit keyboard HID device path override.",
     )
     capture.add_argument(
         "--mouse-node",
         default=None,
-        help="Explicit mouse hidraw node path override.",
+        help="Explicit mouse HID device path override.",
     )
     capture.add_argument(
         "--consumer-node",
         default=None,
-        help="Explicit consumer-control hidraw node path override.",
+        help="Explicit consumer-control HID device path override.",
     )
     capture.add_argument(
         "--output",
@@ -162,6 +160,8 @@ def run(argv: list[str] | None = None) -> int:
         return validation_error.exit_code
 
     if args.command == "inject":
+        from .test_harness_inject import run_inject
+
         result = run_inject(
             scenario_name=args.scenario,
             pre_delay_ms=args.pre_delay_ms,
@@ -171,6 +171,8 @@ def run(argv: list[str] | None = None) -> int:
             consumer_name=args.consumer_name,
         )
     else:
+        from .test_harness_capture import run_capture
+
         result = run_capture(
             scenario_name=args.scenario,
             timeout_sec=args.timeout_sec,

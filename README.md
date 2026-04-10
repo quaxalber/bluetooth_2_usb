@@ -513,28 +513,46 @@ deterministic test sequence into the running relay service.
 
 ### `host_relay_test_capture.sh`
 
-Capture host-side gadget `hidraw` reports and verify that the relay emitted the
+Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This path is passive: it verifies the raw HID reports but
 does not suppress the host from processing those same inputs. The default test
 sequence therefore uses non-text keyboard keys and tiny mouse-relative
-movements. Host-side `hidraw` access still requires the installed udev rule.
+movements. The host Python environment must have `hidapi` installed, for
+example via `python3 -m pip install -r requirements-host-capture.txt`. On
+Linux, unprivileged access also needs the host-side USB udev rule.
 
 | Argument | Explanation / Example |
 | --- | --- |
 | `--scenario {keyboard,mouse,combo,consumer}` | Expected test sequence. Default: `combo`. Example: `./scripts/host_relay_test_capture.sh --scenario combo`. |
 | `--timeout-sec TIMEOUT_SEC` | Time to wait for the full sequence. Default: `5`. |
-| `--keyboard-node PATH` | Override the detected host keyboard `hidraw` node. |
-| `--mouse-node PATH` | Override the detected host mouse `hidraw` node. |
-| `--consumer-node PATH` | Override the detected host consumer-control `hidraw` node. |
+| `--keyboard-node PATH` | Override the detected host keyboard HID device path. |
+| `--mouse-node PATH` | Override the detected host mouse HID device path. |
+| `--consumer-node PATH` | Override the detected host consumer-control HID device path. |
 
-### `install_host_hidraw_udev_rule.sh`
+### `host_relay_test_capture.command`
 
-Install the host-side udev rule that grants read access to the relay gadget
-`hidraw` nodes.
+macOS wrapper for the same host-capture flow.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| none | Run once on the Linux host that receives the Pi gadget. Example: `sudo ./scripts/install_host_hidraw_udev_rule.sh`. |
+| same as `host_relay_test_capture.sh` | Example: `./scripts/host_relay_test_capture.command --scenario combo`. |
+
+### `host_relay_test_capture.ps1`
+
+Windows PowerShell wrapper for the same host-capture flow.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| same as `host_relay_test_capture.sh` | Example: `powershell -ExecutionPolicy Bypass -File .\\scripts\\host_relay_test_capture.ps1 --scenario combo`. |
+
+### `install_host_hidapi_udev_rule.sh`
+
+Install the Linux host-side udev rule that grants `hidapi` write access to the
+USB gadget device nodes.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| none | Linux only. Run once on the receiving host. Example: `sudo ./scripts/install_host_hidapi_udev_rule.sh`. |
 
 ### `setup_persistent_bluetooth_state.sh`
 
