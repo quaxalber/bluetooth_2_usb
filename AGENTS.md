@@ -179,15 +179,8 @@ mandatory.
 
 ## Hardware validation
 
-For Pi-side validation, a local Pi with hostname `pi4b` should normally be
-reachable over SSH and should be used when the task affects runtime or managed
-deployment behavior.
-
-Important caveat:
-
-- `pi4b` is not always stable.
-- If `pi4b` is unreachable, treat that first as an environment issue that may
-  require a manual reboot by the user, not as an automatic project failure.
+For Pi-side validation, use a reachable Raspberry Pi over SSH when the task
+affects runtime or managed deployment behavior.
 
 Use `docs/pi-cli-service-test-playbook.md` for repeatable Pi-side validation.
 

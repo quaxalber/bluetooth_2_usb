@@ -136,14 +136,7 @@ sudo bluetoothctl show
 sudo btmgmt info
 ```
 
-For Pi-side validation, a local Pi with hostname `pi4b` should normally be
-reachable over SSH and should be used when feasible.
-
-Important caveat:
-
-- `pi4b` is not always stable.
-- If `pi4b` is unreachable, treat that first as an environment issue that may
-  require a manual reboot by the user, not as an automatic project failure.
+For Pi-side validation, use a reachable Raspberry Pi over SSH when feasible.
 
 Use these repo-specific playbooks when they match the task:
 

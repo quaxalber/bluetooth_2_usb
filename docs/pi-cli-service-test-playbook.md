@@ -13,16 +13,14 @@ It is intentionally focused on:
 
 ## Assumptions
 
-- local workstation has `git`, `gh`, and SSH access to the Pi
-- the Pi is normally reachable as `pi4b`
+- workstation has `git` and SSH access to the Pi
 - the Pi user has passwordless sudo:
 
 ```bash
-ssh -4 pi4b 'sudo -n true'
-```
+PI_HOST="${PI_HOST:-your-pi-host}"
 
-If `pi4b` is unreachable, treat that first as an environment problem. It may
-need a manual reboot before retrying.
+ssh -4 "$PI_HOST" 'sudo -n true'
+```
 
 ## Prepare the checkout on the Pi
 
@@ -33,15 +31,18 @@ If the Pi image does not include `git`, which is common on Raspberry Pi OS
 Lite, install it first:
 
 ```bash
-ssh -4 pi4b 'sudo -n apt update && sudo -n apt install -y git'
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" 'sudo -n apt update && sudo -n apt install -y git'
 ```
 
 For a test branch:
 
 ```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
 BRANCH="${BRANCH:-main}"
 
-ssh -4 pi4b "
+ssh -4 "$PI_HOST" "
   sudo -n rm -rf /opt/bluetooth_2_usb &&
   sudo -n git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
   sudo -n git -C /opt/bluetooth_2_usb checkout \"${BRANCH}\"
@@ -53,7 +54,9 @@ ssh -4 pi4b "
 Run this before mutating the system:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
   echo OVERLAY=$(sudo -n raspi-config nonint get_overlay_now 2>/dev/null || echo unknown)
   echo ROOT=$(findmnt -no FSTYPE,OPTIONS /)
@@ -64,7 +67,9 @@ ssh -4 pi4b '
 ## Script help surface
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --help >/dev/null
@@ -78,7 +83,9 @@ ssh -4 pi4b '
 ## Install validation
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/install.sh
 '
 ```
@@ -86,14 +93,18 @@ ssh -4 pi4b '
 Reboot and wait for SSH:
 
 ```bash
-ssh -4 pi4b 'sudo -n reboot' || true
-until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; do sleep 2; done
 ```
 
 After reboot, verify:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   systemctl is-active bluetooth_2_usb.service
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
   sudo -n bluetoothctl show
@@ -113,7 +124,9 @@ Interpret the smoke result conservatively:
 The supported update model is Git plus reinstall:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n git -C /opt/bluetooth_2_usb pull --ff-only
   sudo -n /opt/bluetooth_2_usb/scripts/install.sh
 '
@@ -122,14 +135,18 @@ ssh -4 pi4b '
 Reboot and wait for SSH so the update path is validated against the next boot:
 
 ```bash
-ssh -4 pi4b 'sudo -n reboot' || true
-until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; do sleep 2; done
 ```
 
 After reboot, verify:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   systemctl is-active bluetooth_2_usb.service
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
   sudo -n bluetoothctl show
@@ -149,7 +166,9 @@ Interpret the smoke result conservatively:
 Bounded run:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 '
 ```
@@ -157,7 +176,9 @@ ssh -4 pi4b '
 Manual interrupt path:
 
 ```bash
-ssh -4 -t pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 -t "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/debug.sh
 '
 ```
@@ -175,7 +196,9 @@ Inspect the resulting report and verify:
 Prepare the writable ext4 partition:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
   sudo -n /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
 '
@@ -184,14 +207,18 @@ ssh -4 pi4b '
 Reboot and wait for SSH after `enable_readonly_overlayfs.sh`:
 
 ```bash
-ssh -4 pi4b 'sudo -n reboot' || true
-until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; do sleep 2; done
 ```
 
 After reboot:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
@@ -201,7 +228,9 @@ ssh -4 pi4b '
 Disable read-only mode again:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
 '
 ```
@@ -209,14 +238,18 @@ ssh -4 pi4b '
 Reboot and wait for SSH after `disable_readonly_overlayfs.sh`:
 
 ```bash
-ssh -4 pi4b 'sudo -n reboot' || true
-until ssh -4 -o ConnectTimeout=5 pi4b 'true' 2>/dev/null; do sleep 2; done
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" 'sudo -n reboot' || true
+until ssh -4 -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; do sleep 2; done
 ```
 
 ## Uninstall validation
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/uninstall.sh
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
@@ -236,7 +269,9 @@ Expected outcome:
 For each run, record:
 
 ```bash
-ssh -4 pi4b '
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
   uname -a
   cat /etc/os-release
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
