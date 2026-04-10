@@ -19,8 +19,21 @@ This validates the path:
 - `bluetooth_2_usb.service` is active on the Pi
 - `B2U_AUTO_DISCOVER=1` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
-- the host is Linux and can read `/dev/input/event*`
+- the host is Linux and the user running the capture is in the `input` group
 - the host already sees the Pi gadget nodes under `/dev/input/by-id/`
+
+On the host, verify the group membership before running the capture:
+
+```bash
+id
+```
+
+If the user is not yet in the `input` group, add it and start a fresh login
+session before continuing:
+
+```bash
+sudo usermod -aG input "$USER"
+```
 
 Recommended baseline checks on the Pi:
 
@@ -44,7 +57,7 @@ You should see an `event-kbd` and an `event-mouse` entry for the Pi gadget.
 From the repository checkout on the host:
 
 ```bash
-sudo ./scripts/host_relay_test_capture.sh --scenario combo
+./scripts/host_relay_test_capture.sh --scenario combo
 ```
 
 Default behavior:
@@ -56,7 +69,7 @@ Default behavior:
 If automatic detection is ambiguous, pin the nodes explicitly:
 
 ```bash
-sudo ./scripts/host_relay_test_capture.sh \
+./scripts/host_relay_test_capture.sh \
   --scenario combo \
   --keyboard-node /dev/input/eventX \
   --mouse-node /dev/input/eventY
@@ -95,14 +108,14 @@ sequence through `/dev/uinput`.
 Keyboard-only:
 
 ```bash
-sudo ./scripts/host_relay_test_capture.sh --scenario keyboard
+./scripts/host_relay_test_capture.sh --scenario keyboard
 sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-sudo ./scripts/host_relay_test_capture.sh --scenario mouse
+./scripts/host_relay_test_capture.sh --scenario mouse
 sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario mouse
 ```
 
@@ -118,6 +131,23 @@ Check:
 
 ```bash
 ls -l /dev/input/by-id
+```
+
+### Host capture fails opening the gadget event nodes
+
+The host user likely cannot read `/dev/input/event*`.
+
+Check:
+
+```bash
+id
+ls -l /dev/input/event* /dev/input/by-id/*USB_Combo_Device*
+```
+
+If needed, add the user to the `input` group and start a fresh login session:
+
+```bash
+sudo usermod -aG input "$USER"
 ```
 
 ### Host capture times out
