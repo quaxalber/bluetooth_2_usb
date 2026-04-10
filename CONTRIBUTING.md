@@ -150,7 +150,8 @@ For relay-path changes, prefer running the host/Pi loopback harness in addition
 to the standard smoke/debug checks. It validates that the host-visible gadget
 HID device actually receives the relayed keyboard, mouse, or consumer reports.
 On Linux hosts, the `hidapi` capture path also needs the host-side USB udev
-rule.
+rule and may temporarily claim the gadget HID interfaces while the capture is
+running.
 
 ## Pull request guidelines
 

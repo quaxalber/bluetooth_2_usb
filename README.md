@@ -514,12 +514,14 @@ deterministic test sequence into the running relay service.
 ### `host_relay_test_capture.sh`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
-expected sequence. This path is passive: it verifies the raw HID reports but
-does not suppress the host from processing those same inputs. The default test
-sequence therefore uses non-text keyboard keys and tiny mouse-relative
-movements. The host Python environment must have `hidapi` installed, for
-example via `python3 -m pip install -r requirements-host-capture.txt`. On
-Linux, unprivileged access also needs the host-side USB udev rule.
+expected sequence. The host Python environment must have `hidapi` installed,
+for example via `python3 -m pip install -r requirements-host-capture.txt`. On
+Linux, unprivileged access also needs the host-side USB udev rule. Depending on
+the host HID stack, opening the gadget interfaces for capture can temporarily
+claim them while the test is running, so do not assume the local desktop will
+continue to process the same keyboard, mouse, or consumer inputs during the
+capture window. The default test sequence therefore uses non-text keyboard keys
+and tiny mouse-relative movements.
 
 | Argument | Explanation / Example |
 | --- | --- |

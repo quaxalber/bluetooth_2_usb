@@ -197,6 +197,9 @@ For runtime-affecting changes, validate on real hardware when feasible:
   do not assume the full repo venv is available or desirable on macOS/Windows
 - on Linux hosts, the `hidapi` path also needs the USB-device udev rule from
   `scripts/install_host_hidapi_udev_rule.sh`
+- host capture can temporarily claim the gadget HID interfaces while the test
+  runs; do not assume normal local desktop handling remains active during the
+  capture window
 
 For Bluetooth-adapter or pairing issues, do not stop at
 `systemctl status bluetooth`. Also check the real controller and rfkill state:

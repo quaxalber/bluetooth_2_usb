@@ -81,6 +81,8 @@ Default behavior:
 
 - detects the gadget HID device by product name and HID usage
 - waits up to `5` seconds for the complete sequence
+- may temporarily claim the gadget HID interfaces while the capture runs, so do
+  not assume the local desktop will process the same inputs during that window
 
 If automatic detection is ambiguous, pin the nodes explicitly:
 
@@ -197,15 +199,16 @@ Check:
 ls -l /dev/uinput
 ```
 
-### Host capture still affects the local desktop
+### Host capture changes local desktop behavior
 
-That is expected. The host capture path is passive verification only. It
-observes the raw HID reports but does not suppress the host from processing the
-same keyboard, mouse, or consumer events.
+That can happen. Opening the gadget HID interfaces for capture may temporarily
+claim them while the test is running, which can reduce or suppress normal local
+handling of the same keyboard, mouse, or consumer inputs.
 
-The loopback sequence intentionally uses non-text keyboard keys and tiny
-mouse-rel movements to keep those side effects small, but it is still a real
-host-visible input test.
+The loopback sequence still uses non-text keyboard keys and tiny mouse-rel
+movements so the test remains low-impact if the local desktop does process the
+events, but the capture should be treated as a dedicated verification session
+rather than as a transparent observer.
 
 ## 7. CI scope
 
