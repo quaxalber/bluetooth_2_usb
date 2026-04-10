@@ -25,9 +25,9 @@ HIDRAW_ROOT = Path("/sys/class/hidraw")
 REPORT_READ_SIZE = 64
 
 HID_KEY_CODES = {
-    ecodes.KEY_A: 4,
-    ecodes.KEY_B: 5,
-    ecodes.KEY_C: 6,
+    ecodes.KEY_F13: 104,
+    ecodes.KEY_F14: 105,
+    ecodes.KEY_F15: 106,
 }
 
 CONSUMER_USAGES = {
@@ -124,7 +124,7 @@ class KeyboardSequenceMatcher:
 class MouseSequenceMatcher:
     expected_rel_steps: tuple
     expected_button_steps: tuple
-    rel_progress: dict[int, int]
+    rel_index: int = 0
     button_index: int = 0
 
     @classmethod
@@ -132,7 +132,6 @@ class MouseSequenceMatcher:
         return cls(
             expected_rel_steps=expected_rel_steps,
             expected_button_steps=expected_button_steps,
-            rel_progress={step.code: 0 for step in expected_rel_steps},
         )
 
     def handle(self, report: bytes) -> None:
@@ -146,13 +145,17 @@ class MouseSequenceMatcher:
             raise CaptureMismatchError(
                 f"Unexpected mouse wheel movement in report {report.hex(sep=' ')}"
             )
+        if not self.expected_button_steps and buttons != 0:
+            raise CaptureMismatchError(
+                f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
+            )
 
         if rel_x:
             self._apply_rel(ecodes.REL_X, rel_x)
         if rel_y:
             self._apply_rel(ecodes.REL_Y, rel_y)
 
-        if buttons not in (0, 1):
+        if buttons not in (0, 1, 2):
             raise CaptureMismatchError(
                 f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
             )
@@ -180,23 +183,21 @@ class MouseSequenceMatcher:
             self.button_index += 1
 
     def _apply_rel(self, code: int, value: int) -> None:
-        if code not in self.rel_progress:
-            raise CaptureMismatchError(f"Unexpected mouse relative event code {code}")
-        self.rel_progress[code] += value
-        expected_total = next(
-            step.value for step in self.expected_rel_steps if step.code == code
-        )
-        if self.rel_progress[code] > expected_total:
+        if self.rel_index >= len(self.expected_rel_steps):
             raise CaptureMismatchError(
-                f"Mouse movement for code {code} exceeded expected total"
+                f"Unexpected extra mouse relative event {ecodes.REL.get(code, code)}={value}"
             )
+        pending_step = self.expected_rel_steps[self.rel_index]
+        if pending_step.code != code or pending_step.value != value:
+            raise CaptureMismatchError(
+                "Unexpected mouse relative event "
+                f"{ecodes.REL.get(code, code)}={value}; expected {pending_step.describe()}"
+            )
+        self.rel_index += 1
 
     @property
     def rel_complete(self) -> bool:
-        for step in self.expected_rel_steps:
-            if self.rel_progress.get(step.code, 0) != step.value:
-                return False
-        return True
+        return self.rel_index >= len(self.expected_rel_steps)
 
     @property
     def complete(self) -> bool:
@@ -637,11 +638,8 @@ def run_capture(
     if keyboard_matcher is not None:
         details["keyboard_steps_seen"] = keyboard_matcher.matcher.index
     if mouse_matcher is not None:
+        details["mouse_rel_steps_seen"] = mouse_matcher.matcher.rel_index
         details["mouse_button_steps_seen"] = mouse_matcher.matcher.button_index
-        details["mouse_rel_totals"] = {
-            ecodes.REL.get(code, str(code)): value
-            for code, value in sorted(mouse_matcher.matcher.rel_progress.items())
-        }
     if consumer_matcher is not None:
         details["consumer_steps_seen"] = consumer_matcher.matcher.index
 

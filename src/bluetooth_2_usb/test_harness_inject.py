@@ -30,13 +30,12 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
 
 def _keyboard_capabilities() -> dict[int, list[int]]:
     return {
-        ecodes.EV_KEY: [ecodes.KEY_A, ecodes.KEY_B, ecodes.KEY_C],
+        ecodes.EV_KEY: [ecodes.KEY_F13, ecodes.KEY_F14, ecodes.KEY_F15],
     }
 
 
 def _mouse_capabilities() -> dict[int, list[int]]:
     return {
-        ecodes.EV_KEY: [ecodes.BTN_LEFT],
         ecodes.EV_REL: [ecodes.REL_X, ecodes.REL_Y],
     }
 

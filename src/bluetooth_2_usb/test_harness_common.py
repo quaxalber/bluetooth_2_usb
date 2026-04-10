@@ -74,22 +74,19 @@ class ScenarioDefinition:
 
 
 KEYBOARD_STEPS = (
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_A, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_A, 0),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_B, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_B, 0),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_C, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_C, 0),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F13, 1),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F13, 0),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F14, 1),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F14, 0),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F15, 1),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_F15, 0),
 )
 
 MOUSE_REL_STEPS = (
-    ExpectedEvent(ecodes.EV_REL, ecodes.REL_X, 30),
-    ExpectedEvent(ecodes.EV_REL, ecodes.REL_Y, 15),
-)
-
-MOUSE_BUTTON_STEPS = (
-    ExpectedEvent(ecodes.EV_KEY, ecodes.BTN_LEFT, 1),
-    ExpectedEvent(ecodes.EV_KEY, ecodes.BTN_LEFT, 0),
+    ExpectedEvent(ecodes.EV_REL, ecodes.REL_X, 1),
+    ExpectedEvent(ecodes.EV_REL, ecodes.REL_X, -1),
+    ExpectedEvent(ecodes.EV_REL, ecodes.REL_Y, 1),
+    ExpectedEvent(ecodes.EV_REL, ecodes.REL_Y, -1),
 )
 
 CONSUMER_STEPS = (
@@ -111,14 +108,14 @@ SCENARIOS = {
         name="mouse",
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=MOUSE_BUTTON_STEPS,
+        mouse_button_steps=(),
         consumer_steps=(),
     ),
     "combo": ScenarioDefinition(
         name="combo",
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=MOUSE_BUTTON_STEPS,
+        mouse_button_steps=(),
         consumer_steps=(),
     ),
     "consumer": ScenarioDefinition(

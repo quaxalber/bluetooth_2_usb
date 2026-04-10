@@ -100,8 +100,8 @@ The injector creates temporary virtual devices named:
 
 and emits this deterministic sequence:
 
-- keyboard: `KEY_A`, `KEY_B`, `KEY_C` down/up
-- mouse: `REL_X +30`, `REL_Y +15`, `BTN_LEFT` down/up
+- keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
+- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`
 
 ## 4. Success criteria
 
@@ -194,9 +194,13 @@ ls -l /dev/uinput
 
 ### Host capture still affects the local desktop
 
-The `hidraw` capture path should not inject input into the desktop at all. If
-you still observe host-side effects, confirm that the host capture is using the
-`hidraw` path and not an older checkout of the evdev-based harness.
+That is expected. The `hidraw` capture path is passive verification only. It
+observes the raw HID reports but does not suppress the host from processing the
+same keyboard, mouse, or consumer events.
+
+The loopback sequence intentionally uses non-text keyboard keys and tiny
+mouse-rel movements to keep those side effects small, but it is still a real
+host-visible input test.
 
 ## 7. CI scope
 

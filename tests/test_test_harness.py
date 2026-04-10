@@ -20,7 +20,6 @@ from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
-    MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
     SCENARIOS,
 )
@@ -55,8 +54,8 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(combo.required_nodes, ("keyboard", "mouse"))
         self.assertEqual(len(combo.keyboard_steps), 6)
-        self.assertEqual(len(combo.mouse_rel_steps), 2)
-        self.assertEqual(len(combo.mouse_button_steps), 2)
+        self.assertEqual(len(combo.mouse_rel_steps), 4)
+        self.assertEqual(len(combo.mouse_button_steps), 0)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
@@ -138,11 +137,11 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
 
         reports = (
-            bytes([0x00, 0x00, 0x04, 0, 0, 0, 0, 0]),
+            bytes([0x00, 0x00, 0x68, 0, 0, 0, 0, 0]),
             bytes([0x00] * 8),
-            bytes([0x00, 0x00, 0x05, 0, 0, 0, 0, 0]),
+            bytes([0x00, 0x00, 0x69, 0, 0, 0, 0, 0]),
             bytes([0x00] * 8),
-            bytes([0x00, 0x00, 0x06, 0, 0, 0, 0, 0]),
+            bytes([0x00, 0x00, 0x6A, 0, 0, 0, 0, 0]),
             bytes([0x00] * 8),
         )
         for report in reports:
@@ -154,11 +153,11 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
 
         reports = (
-            bytes([0x01, 0x00, 0x00, 0x04, 0, 0, 0, 0, 0]),
+            bytes([0x01, 0x00, 0x00, 0x68, 0, 0, 0, 0, 0]),
             bytes([0x01] + [0x00] * 8),
-            bytes([0x01, 0x00, 0x00, 0x05, 0, 0, 0, 0, 0]),
+            bytes([0x01, 0x00, 0x00, 0x69, 0, 0, 0, 0, 0]),
             bytes([0x01] + [0x00] * 8),
-            bytes([0x01, 0x00, 0x00, 0x06, 0, 0, 0, 0, 0]),
+            bytes([0x01, 0x00, 0x00, 0x6A, 0, 0, 0, 0, 0]),
             bytes([0x01] + [0x00] * 8),
         )
         for report in reports:
@@ -174,23 +173,27 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
 
 class MouseSequenceMatcherTest(unittest.TestCase):
-    def test_mouse_matcher_accepts_split_relative_motion_and_button_steps(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, MOUSE_BUTTON_STEPS)
+    def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 
-        matcher.handle(bytes([0x02, 0x00, 10, 0, 0]))
-        matcher.handle(bytes([0x02, 0x00, 20, 0, 0]))
-        matcher.handle(bytes([0x02, 0x00, 0, 5, 0]))
-        matcher.handle(bytes([0x02, 0x00, 0, 10, 0]))
-        matcher.handle(bytes([0x02, 0x01, 0, 0, 0]))
-        matcher.handle(bytes([0x02, 0x00, 0, 0, 0]))
+        matcher.handle(bytes([0x02, 0x00, 0x01, 0x00, 0x00]))
+        matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
+        matcher.handle(bytes([0x02, 0x00, 0x00, 0x01, 0x00]))
+        matcher.handle(bytes([0x02, 0x00, 0x00, 0xFF, 0x00]))
 
         self.assertTrue(matcher.complete)
 
-    def test_mouse_matcher_rejects_button_before_relative_motion(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, MOUSE_BUTTON_STEPS)
+    def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 
-        with self.assertRaisesRegex(CaptureMismatchError, "before movement"):
-            matcher.handle(bytes([0x02, 0x01, 0, 0, 0]))
+        with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
+            matcher.handle(bytes([0x02, 0x02, 0, 0, 0]))
+
+    def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+
+        with self.assertRaisesRegex(CaptureMismatchError, "expected EV_REL/REL_X=1"):
+            matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
 
 
 class ConsumerSequenceMatcherTest(unittest.TestCase):

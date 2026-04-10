@@ -514,9 +514,10 @@ deterministic test sequence into the running relay service.
 ### `host_relay_test_capture.sh`
 
 Capture host-side gadget `hidraw` reports and verify that the relay emitted the
-expected sequence. This path avoids desktop side effects more reliably than the
-old event-node grab approach, but it requires host-side `hidraw` access via the
-installed udev rule.
+expected sequence. This path is passive: it verifies the raw HID reports but
+does not suppress the host from processing those same inputs. The default test
+sequence therefore uses non-text keyboard keys and tiny mouse-relative
+movements. Host-side `hidraw` access still requires the installed udev rule.
 
 | Argument | Explanation / Example |
 | --- | --- |
