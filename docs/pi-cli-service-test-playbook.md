@@ -74,6 +74,7 @@ ssh -4 "$PI_HOST" '
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --help >/dev/null
@@ -190,6 +191,15 @@ Inspect the resulting report and verify:
 - the report is redacted
 - the report does not contradict the actual service and mount state
 - the reported UDC state matches the real cable/host situation
+
+## Relay loopback validation
+
+If the Pi is physically attached to a Linux host through the gadget data path,
+run the end-to-end relay loopback harness from
+`docs/pi-host-relay-loopback-test-playbook.md`.
+
+This is the most direct way to verify that relayed input events actually arrive
+at the host without depending on a paired Bluetooth device.
 
 ## Persistent read-only validation
 

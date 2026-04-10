@@ -29,6 +29,7 @@ Before making changes, read:
 Use these repo-specific playbooks when they match the task:
 
 - `docs/pi-cli-service-test-playbook.md`
+- `docs/pi-host-relay-loopback-test-playbook.md`
 - `docs/pi-manual-test-plan.md`
 - `docs/doc-consistency-review-playbook.md`
 - `docs/release-versioning-policy.md`
@@ -189,6 +190,9 @@ For runtime-affecting changes, validate on real hardware when feasible:
 - `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh`
 - `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
 - `python -m bluetooth_2_usb --list_devices --output json`
+- the host/Pi loopback harness from
+  `docs/pi-host-relay-loopback-test-playbook.md` when the relay path itself
+  changed
 
 For Bluetooth-adapter or pairing issues, do not stop at
 `systemctl status bluetooth`. Also check the real controller and rfkill state:

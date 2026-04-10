@@ -51,6 +51,8 @@ for s in \
   scripts/uninstall.sh \
   scripts/debug.sh \
   scripts/smoke_test.sh \
+  scripts/pi_relay_test_inject.sh \
+  scripts/host_relay_test_capture.sh \
   scripts/enable_readonly_overlayfs.sh \
   scripts/disable_readonly_overlayfs.sh \
   scripts/setup_persistent_bluetooth_state.sh

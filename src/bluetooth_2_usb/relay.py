@@ -492,7 +492,13 @@ class DeviceRelay:
                 self._input_device.ungrab()
                 self._currently_grabbed = False
             except Exception as ex:
-                _logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
+                if isinstance(ex, OSError) and ex.errno == 19:
+                    _logger.debug(
+                        "Skipping ungrab for %s because the device disappeared.",
+                        self._input_device.path,
+                    )
+                else:
+                    _logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
         return False
 
     async def async_relay_events_loop(self) -> None:

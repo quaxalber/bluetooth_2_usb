@@ -343,6 +343,10 @@ Use `smoke_test.sh` as the quick health gate and `debug.sh` as the fuller
 redacted state snapshot. The subsections below are only for follow-up checks
 that go beyond what those two tools already collect.
 
+For a real end-to-end relay check without depending on a paired Bluetooth
+device, use the host/Pi loopback harness in
+`docs/pi-host-relay-loopback-test-playbook.md`.
+
 ### The service does not start
 
 ```bash
@@ -412,6 +416,9 @@ check the physical path:
 - after boot-config changes, rerun
   `sudo /opt/bluetooth_2_usb/scripts/install.sh` and reboot
   before concluding the relay path is broken
+
+If you need to isolate the relay path from Bluetooth pairing state, run the
+host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
 
 ### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active
 
@@ -492,6 +499,32 @@ present but not currently `configured`.
 | Argument | Explanation / Example |
 | --- | --- |
 | `--verbose` | Print the fuller health-check output instead of the compact pass/fail view. Default: disabled. Example: `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose`. |
+
+### `pi_relay_test_inject.sh`
+
+Create temporary virtual keyboard and mouse devices on the Pi and inject a
+deterministic test sequence into the running relay service.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| `--scenario {keyboard,mouse,combo}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo`. |
+| `--pre-delay-ms PRE_DELAY_MS` | Wait after creating the virtual devices before sending events. Default: `1000`. |
+| `--event-gap-ms EVENT_GAP_MS` | Delay between injected events. Default: `40`. |
+
+### `host_relay_test_capture.sh`
+
+Capture host-side gadget events and verify that the relay emitted the expected
+sequence. The script grabs the gadget keyboard and mouse nodes exclusively by
+default so the test input does not leak into normal desktop applications while
+the capture is active.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| `--scenario {keyboard,mouse,combo}` | Expected test sequence. Default: `combo`. Example: `sudo ./scripts/host_relay_test_capture.sh --scenario combo`. |
+| `--timeout-sec TIMEOUT_SEC` | Time to wait for the full sequence. Default: `5`. |
+| `--keyboard-node PATH` | Override the detected host keyboard gadget node. |
+| `--mouse-node PATH` | Override the detected host mouse gadget node. |
+| `--no-grab` | Disable exclusive grabs on the gadget nodes for debugging only. Default: grabbing is enabled. |
 
 ### `setup_persistent_bluetooth_state.sh`
 
