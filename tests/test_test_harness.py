@@ -70,13 +70,20 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 discover_gadget_nodes(by_id_root=root)
 
     def test_explicit_override_bypasses_auto_detection(self) -> None:
-        nodes = discover_gadget_nodes(
-            keyboard_node="/dev/input/event8",
-            mouse_node="/dev/input/event9",
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            keyboard = root / "event8"
+            mouse = root / "event9"
+            keyboard.touch()
+            mouse.touch()
 
-        self.assertEqual(nodes.keyboard_node, "/dev/input/event8")
-        self.assertEqual(nodes.mouse_node, "/dev/input/event9")
+            nodes = discover_gadget_nodes(
+                keyboard_node=str(keyboard),
+                mouse_node=str(mouse),
+            )
+
+        self.assertEqual(nodes.keyboard_node, str(keyboard.resolve()))
+        self.assertEqual(nodes.mouse_node, str(mouse.resolve()))
 
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
