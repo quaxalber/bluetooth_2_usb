@@ -3,6 +3,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+# shellcheck source=./lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=./lib/paths.sh
 source "${SCRIPT_DIR}/lib/paths.sh"
 
@@ -25,9 +27,6 @@ case "${1:-}" in
     ;;
 esac
 
-[[ -x "${PYTHON_BIN}" ]] || {
-  printf 'Managed Python not found: %s\n' "${PYTHON_BIN}" >&2
-  exit 1
-}
+[[ -x "${PYTHON_BIN}" ]] || fail "Managed Python not found: ${PYTHON_BIN}"
 
 exec "${PYTHON_BIN}" -m bluetooth_2_usb.test_harness inject "$@"

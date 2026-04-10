@@ -7,16 +7,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from evdev import ecodes
-
 from bluetooth_2_usb.test_harness import run as run_harness
 from bluetooth_2_usb.test_harness_capture import (
     CaptureMismatchError,
+    ConsumerSequenceMatcher,
     KeyboardSequenceMatcher,
     MouseSequenceMatcher,
+    discover_gadget_node_candidates,
     discover_gadget_nodes,
 )
 from bluetooth_2_usb.test_harness_common import (
+    CONSUMER_STEPS,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
     MOUSE_BUTTON_STEPS,
@@ -25,8 +26,27 @@ from bluetooth_2_usb.test_harness_common import (
 )
 
 
-def _event(event_type: int, code: int, value: int) -> SimpleNamespace:
-    return SimpleNamespace(type=event_type, code=code, value=value)
+def _write_hidraw_uevent(
+    root: Path,
+    hidraw_name: str,
+    *,
+    device_name: str = "quaxalber USB Combo Device",
+    phys: str,
+    uniq: str = "213374badcafe",
+) -> None:
+    device_dir = root / hidraw_name / "device"
+    device_dir.mkdir(parents=True)
+    (device_dir / "uevent").write_text(
+        "\n".join(
+            [
+                f"HID_NAME={device_name}",
+                f"HID_PHYS={phys}",
+                f"HID_UNIQ={uniq}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 class ScenarioDefinitionTest(unittest.TestCase):
@@ -38,83 +58,131 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(len(combo.mouse_rel_steps), 2)
         self.assertEqual(len(combo.mouse_button_steps), 2)
 
+    def test_consumer_scenario_contains_volume_sequence(self) -> None:
+        consumer = SCENARIOS["consumer"]
+
+        self.assertEqual(consumer.required_nodes, ("consumer",))
+        self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
+
 
 class GadgetNodeDiscoveryTest(unittest.TestCase):
-    def test_discovery_deduplicates_symlink_aliases(self) -> None:
+    def test_discovery_groups_hidraw_nodes_by_input_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            event4 = root / "event4"
-            event5 = root / "event5"
-            event4.touch()
-            event5.touch()
-            (root / "usb-foo_USB_Combo_Device-event-kbd").symlink_to(event4)
-            (root / "usb-bar_USB_Combo_Device-event-kbd").symlink_to(event4)
-            (root / "usb-foo_USB_Combo_Device-event-mouse").symlink_to(event5)
+            _write_hidraw_uevent(root, "hidraw7", phys="usb-x/input0")
+            _write_hidraw_uevent(root, "hidraw8", phys="usb-x/input1")
+            _write_hidraw_uevent(root, "hidraw9", phys="usb-x/input2")
+            _write_hidraw_uevent(
+                root,
+                "hidraw10",
+                device_name="some other device",
+                phys="usb-y/input2",
+            )
 
-            nodes = discover_gadget_nodes(by_id_root=root)
+            candidates = discover_gadget_node_candidates(hidraw_root=root)
 
-        self.assertEqual(nodes.keyboard_node, str(event4.resolve()))
-        self.assertEqual(nodes.mouse_node, str(event5.resolve()))
+        self.assertEqual(candidates.keyboard_nodes, ("/dev/hidraw7",))
+        self.assertEqual(candidates.mouse_nodes, ("/dev/hidraw8",))
+        self.assertEqual(candidates.consumer_nodes, ("/dev/hidraw9",))
+
+    def test_discovery_returns_multiple_candidates_when_duplicate_hidraws_exist(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _write_hidraw_uevent(root, "hidraw7", phys="usb-a/input2")
+            _write_hidraw_uevent(root, "hidraw12", phys="usb-b/input2")
+
+            candidates = discover_gadget_node_candidates(hidraw_root=root)
+
+        self.assertEqual(candidates.keyboard_nodes, ())
+        self.assertEqual(candidates.mouse_nodes, ())
+        self.assertEqual(
+            candidates.consumer_nodes,
+            ("/dev/hidraw12", "/dev/hidraw7"),
+        )
 
     def test_discovery_rejects_multiple_distinct_keyboard_nodes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            event4 = root / "event4"
-            event6 = root / "event6"
-            event4.touch()
-            event6.touch()
-            (root / "usb-a_USB_Combo_Device-event-kbd").symlink_to(event4)
-            (root / "usb-b_USB_Combo_Device-event-kbd").symlink_to(event6)
+            _write_hidraw_uevent(root, "hidraw7", phys="usb-a/input0")
+            _write_hidraw_uevent(root, "hidraw8", phys="usb-b/input0")
 
-            with self.assertRaisesRegex(Exception, "Multiple keyboard gadget nodes"):
-                discover_gadget_nodes(by_id_root=root)
+            with self.assertRaisesRegex(Exception, "Multiple keyboard hidraw nodes"):
+                discover_gadget_nodes(hidraw_root=root)
 
     def test_explicit_override_bypasses_auto_detection(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            keyboard = root / "event8"
-            mouse = root / "event9"
+            keyboard = root / "hidraw20"
+            mouse = root / "hidraw21"
+            consumer = root / "hidraw22"
             keyboard.touch()
             mouse.touch()
+            consumer.touch()
 
             nodes = discover_gadget_nodes(
                 keyboard_node=str(keyboard),
                 mouse_node=str(mouse),
+                consumer_node=str(consumer),
+                hidraw_root=root,
             )
 
         self.assertEqual(nodes.keyboard_node, str(keyboard.resolve()))
         self.assertEqual(nodes.mouse_node, str(mouse.resolve()))
+        self.assertEqual(nodes.consumer_node, str(consumer.resolve()))
 
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
-    def test_keyboard_matcher_accepts_expected_sequence(self) -> None:
+    def test_keyboard_matcher_accepts_boot_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
 
-        for step_event in SCENARIOS["keyboard"].keyboard_steps:
-            matcher.handle(
-                _event(step_event.event_type, step_event.code, step_event.value)
-            )
+        reports = (
+            bytes([0x00, 0x00, 0x04, 0, 0, 0, 0, 0]),
+            bytes([0x00] * 8),
+            bytes([0x00, 0x00, 0x05, 0, 0, 0, 0, 0]),
+            bytes([0x00] * 8),
+            bytes([0x00, 0x00, 0x06, 0, 0, 0, 0, 0]),
+            bytes([0x00] * 8),
+        )
+        for report in reports:
+            matcher.handle(report)
 
         self.assertTrue(matcher.complete)
 
-    def test_keyboard_matcher_rejects_unexpected_event(self) -> None:
+    def test_keyboard_matcher_accepts_report_id_keyboard_reports(self) -> None:
+        matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
+
+        reports = (
+            bytes([0x01, 0x00, 0x00, 0x04, 0, 0, 0, 0, 0]),
+            bytes([0x01] + [0x00] * 8),
+            bytes([0x01, 0x00, 0x00, 0x05, 0, 0, 0, 0, 0]),
+            bytes([0x01] + [0x00] * 8),
+            bytes([0x01, 0x00, 0x00, 0x06, 0, 0, 0, 0, 0]),
+            bytes([0x01] + [0x00] * 8),
+        )
+        for report in reports:
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
+    def test_keyboard_matcher_rejects_unexpected_report(self) -> None:
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
 
         with self.assertRaises(CaptureMismatchError):
-            matcher.handle(_event(ecodes.EV_KEY, ecodes.KEY_A, 0))
+            matcher.handle(bytes([0x00] * 8))
 
 
 class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_split_relative_motion_and_button_steps(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, MOUSE_BUTTON_STEPS)
 
-        matcher.handle(_event(ecodes.EV_REL, ecodes.REL_X, 10))
-        matcher.handle(_event(ecodes.EV_REL, ecodes.REL_X, 20))
-        matcher.handle(_event(ecodes.EV_SYN, ecodes.SYN_REPORT, 0))
-        matcher.handle(_event(ecodes.EV_REL, ecodes.REL_Y, 5))
-        matcher.handle(_event(ecodes.EV_REL, ecodes.REL_Y, 10))
-        matcher.handle(_event(ecodes.EV_KEY, ecodes.BTN_LEFT, 1))
-        matcher.handle(_event(ecodes.EV_KEY, ecodes.BTN_LEFT, 0))
+        matcher.handle(bytes([0x02, 0x00, 10, 0, 0]))
+        matcher.handle(bytes([0x02, 0x00, 20, 0, 0]))
+        matcher.handle(bytes([0x02, 0x00, 0, 5, 0]))
+        matcher.handle(bytes([0x02, 0x00, 0, 10, 0]))
+        matcher.handle(bytes([0x02, 0x01, 0, 0, 0]))
+        matcher.handle(bytes([0x02, 0x00, 0, 0, 0]))
 
         self.assertTrue(matcher.complete)
 
@@ -122,7 +190,28 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, MOUSE_BUTTON_STEPS)
 
         with self.assertRaisesRegex(CaptureMismatchError, "before movement"):
-            matcher.handle(_event(ecodes.EV_KEY, ecodes.BTN_LEFT, 1))
+            matcher.handle(bytes([0x02, 0x01, 0, 0, 0]))
+
+
+class ConsumerSequenceMatcherTest(unittest.TestCase):
+    def test_consumer_matcher_accepts_volume_sequence(self) -> None:
+        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+
+        for report in (
+            bytes([0x03, 0xE9, 0x00]),
+            bytes([0x03, 0x00, 0x00]),
+            bytes([0x03, 0xEA, 0x00]),
+            bytes([0x03, 0x00, 0x00]),
+        ):
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
+    def test_consumer_matcher_rejects_unexpected_usage(self) -> None:
+        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+
+        with self.assertRaises(CaptureMismatchError):
+            matcher.handle(bytes([0x03, 0x00, 0x00]))
 
 
 class TestHarnessCliTest(unittest.TestCase):

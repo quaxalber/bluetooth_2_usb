@@ -7,6 +7,7 @@ from evdev import UInput, ecodes
 
 from .test_harness_common import (
     COMBO_MOUSE_DELAY_MS,
+    DEFAULT_CONSUMER_NAME,
     DEFAULT_KEYBOARD_NAME,
     DEFAULT_MOUSE_NAME,
     EXIT_ACCESS,
@@ -40,12 +41,19 @@ def _mouse_capabilities() -> dict[int, list[int]]:
     }
 
 
+def _consumer_capabilities() -> dict[int, list[int]]:
+    return {
+        ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN],
+    }
+
+
 def run_inject(
     scenario_name: str,
     pre_delay_ms: int = 1000,
     event_gap_ms: int = 40,
     keyboard_name: str = DEFAULT_KEYBOARD_NAME,
     mouse_name: str = DEFAULT_MOUSE_NAME,
+    consumer_name: str = DEFAULT_CONSUMER_NAME,
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
 
@@ -59,7 +67,7 @@ def run_inject(
             details={"uinput_path": str(UINPUT_PATH)},
         )
 
-    if not keyboard_name.strip() or not mouse_name.strip():
+    if not keyboard_name.strip() or not mouse_name.strip() or not consumer_name.strip():
         return HarnessResult(
             command="inject",
             scenario=scenario.name,
@@ -71,11 +79,14 @@ def run_inject(
 
     keyboard = None
     mouse = None
+    consumer = None
     try:
         if scenario.keyboard_enabled:
             keyboard = UInput(_keyboard_capabilities(), name=keyboard_name)
         if scenario.mouse_enabled:
             mouse = UInput(_mouse_capabilities(), name=mouse_name)
+        if scenario.consumer_enabled:
+            consumer = UInput(_consumer_capabilities(), name=consumer_name)
     except PermissionError as exc:
         return HarnessResult(
             command="inject",
@@ -111,6 +122,10 @@ def run_inject(
             for step_event in scenario.mouse_button_steps:
                 _send_step(mouse, step_event, event_gap_ms)
 
+        if consumer is not None:
+            for step_event in scenario.consumer_steps:
+                _send_step(consumer, step_event, event_gap_ms)
+
         time.sleep(POST_INJECT_DELAY_MS / 1000.0)
     except OSError as exc:
         return HarnessResult(
@@ -123,9 +138,12 @@ def run_inject(
                 "uinput_path": str(UINPUT_PATH),
                 "keyboard_name": keyboard_name if keyboard is not None else None,
                 "mouse_name": mouse_name if mouse is not None else None,
+                "consumer_name": consumer_name if consumer is not None else None,
             },
         )
     finally:
+        if consumer is not None:
+            consumer.close()
         if mouse is not None:
             mouse.close()
         if keyboard is not None:
@@ -133,6 +151,7 @@ def run_inject(
 
     injected_events = len(scenario.keyboard_steps) + len(scenario.mouse_rel_steps)
     injected_events += len(scenario.mouse_button_steps)
+    injected_events += len(scenario.consumer_steps)
     return HarnessResult(
         command="inject",
         scenario=scenario.name,
@@ -143,6 +162,7 @@ def run_inject(
             "uinput_path": str(UINPUT_PATH),
             "keyboard_name": keyboard_name if scenario.keyboard_enabled else None,
             "mouse_name": mouse_name if scenario.mouse_enabled else None,
+            "consumer_name": consumer_name if scenario.consumer_enabled else None,
             "pre_delay_ms": pre_delay_ms,
             "event_gap_ms": event_gap_ms,
             "post_delay_ms": POST_INJECT_DELAY_MS,

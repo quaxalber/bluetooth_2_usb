@@ -13,10 +13,11 @@ EXIT_ACCESS = 4
 EXIT_TIMEOUT = 5
 EXIT_MISMATCH = 6
 
-SCENARIO_NAMES = ("keyboard", "mouse", "combo")
+SCENARIO_NAMES = ("keyboard", "mouse", "combo", "consumer")
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
 DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
+DEFAULT_CONSUMER_NAME = "B2U Test Consumer"
 COMBO_MOUSE_DELAY_MS = 150
 POST_INJECT_DELAY_MS = 300
 
@@ -46,6 +47,7 @@ class ScenarioDefinition:
     keyboard_steps: tuple[ExpectedEvent, ...]
     mouse_rel_steps: tuple[ExpectedEvent, ...]
     mouse_button_steps: tuple[ExpectedEvent, ...]
+    consumer_steps: tuple[ExpectedEvent, ...]
 
     @property
     def keyboard_enabled(self) -> bool:
@@ -56,12 +58,18 @@ class ScenarioDefinition:
         return bool(self.mouse_rel_steps or self.mouse_button_steps)
 
     @property
+    def consumer_enabled(self) -> bool:
+        return bool(self.consumer_steps)
+
+    @property
     def required_nodes(self) -> tuple[str, ...]:
         nodes: list[str] = []
         if self.keyboard_enabled:
             nodes.append("keyboard")
         if self.mouse_enabled:
             nodes.append("mouse")
+        if self.consumer_enabled:
+            nodes.append("consumer")
         return tuple(nodes)
 
 
@@ -84,24 +92,41 @@ MOUSE_BUTTON_STEPS = (
     ExpectedEvent(ecodes.EV_KEY, ecodes.BTN_LEFT, 0),
 )
 
+CONSUMER_STEPS = (
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEUP, 1),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEUP, 0),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEDOWN, 1),
+    ExpectedEvent(ecodes.EV_KEY, ecodes.KEY_VOLUMEDOWN, 0),
+)
+
 SCENARIOS = {
     "keyboard": ScenarioDefinition(
         name="keyboard",
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=(),
         mouse_button_steps=(),
+        consumer_steps=(),
     ),
     "mouse": ScenarioDefinition(
         name="mouse",
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
+        consumer_steps=(),
     ),
     "combo": ScenarioDefinition(
         name="combo",
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
+        consumer_steps=(),
+    ),
+    "consumer": ScenarioDefinition(
+        name="consumer",
+        keyboard_steps=(),
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=CONSUMER_STEPS,
     ),
 }
 
@@ -110,11 +135,13 @@ SCENARIOS = {
 class GadgetNodes:
     keyboard_node: str | None
     mouse_node: str | None
+    consumer_node: str | None
 
     def to_dict(self) -> dict[str, str | None]:
         return {
             "keyboard_node": self.keyboard_node,
             "mouse_node": self.mouse_node,
+            "consumer_node": self.consumer_node,
         }
 
 
@@ -170,6 +197,7 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
         "mouse_button_steps": [
             event_to_dict(step) for step in scenario.mouse_button_steps
         ],
+        "consumer_steps": [event_to_dict(step) for step in scenario.consumer_steps],
     }
 
 

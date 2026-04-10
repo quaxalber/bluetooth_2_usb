@@ -5,13 +5,14 @@ without depending on a paired Bluetooth keyboard or mouse.
 
 The flow is:
 
-1. start a host-side capture against the gadget event nodes
+1. install the host-side `hidraw` udev rule
+2. start a host-side capture against the gadget `hidraw` nodes
 2. inject deterministic virtual keyboard and mouse events on the Pi
 3. verify that the capture observes the expected relayed sequence
 
 This validates the path:
 
-`Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host event node`
+`Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host hidraw node`
 
 ## Preconditions
 
@@ -19,10 +20,17 @@ This validates the path:
 - `bluetooth_2_usb.service` is active on the Pi
 - `B2U_AUTO_DISCOVER=1` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
-- the host is Linux and the user running the capture is in the `input` group
-- the host already sees the Pi gadget nodes under `/dev/input/by-id/`
+- the host is Linux
+- the host user running the capture is in the `input` group
+- the host already sees the Pi gadget `hidraw` nodes
 
-On the host, verify the group membership before running the capture:
+On the host, install the udev rule once:
+
+```bash
+sudo ./scripts/install_host_hidraw_udev_rule.sh
+```
+
+Then verify the group membership before running the capture:
 
 ```bash
 id
@@ -47,10 +55,11 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 On the host:
 
 ```bash
-ls -1 /dev/input/by-id | grep 'USB_Combo_Device'
+ls -l /dev/hidraw* /dev/input/by-id/*USB_Combo_Device*hidraw*
 ```
 
-You should see an `event-kbd` and an `event-mouse` entry for the Pi gadget.
+You should see `hidraw` entries for the Pi gadget. After the udev rule is
+active, the matching nodes should no longer be `root:root 0600`.
 
 ## 2. Start the host capture
 
@@ -62,8 +71,7 @@ From the repository checkout on the host:
 
 Default behavior:
 
-- detects the gadget nodes from `/dev/input/by-id/`
-- grabs the gadget keyboard and mouse nodes exclusively
+- detects the gadget `hidraw` nodes from sysfs
 - waits up to `5` seconds for the complete sequence
 
 If automatic detection is ambiguous, pin the nodes explicitly:
@@ -71,8 +79,8 @@ If automatic detection is ambiguous, pin the nodes explicitly:
 ```bash
 ./scripts/host_relay_test_capture.sh \
   --scenario combo \
-  --keyboard-node /dev/input/eventX \
-  --mouse-node /dev/input/eventY
+  --keyboard-node /dev/hidrawX \
+  --mouse-node /dev/hidrawY
 ```
 
 Keep this command running while you trigger the Pi-side injection.
@@ -98,7 +106,7 @@ and emits this deterministic sequence:
 ## 4. Success criteria
 
 The host capture exits `0` and reports that it observed the expected relay
-events on the host gadget nodes.
+reports on the host gadget `hidraw` nodes.
 
 The Pi-side injector exits `0` and reports that it injected the expected test
 sequence through `/dev/uinput`.
@@ -119,34 +127,43 @@ Mouse-only:
 sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario mouse
 ```
 
+Consumer-control only:
+
+```bash
+./scripts/host_relay_test_capture.sh --scenario consumer
+sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario consumer
+```
+
 ## 6. Failure interpretation
 
 ### Host capture says no gadget nodes were found
 
 - the Pi gadget may not be enumerated on the host
 - the OTG cable or port may be wrong
-- the host may see the device under a different by-id name than expected
+- the host may not expose the gadget `hidraw` interfaces yet
 
 Check:
 
 ```bash
-ls -l /dev/input/by-id
+ls -l /dev/hidraw* /dev/input/by-id/*USB_Combo_Device*hidraw*
 ```
 
-### Host capture fails opening the gadget event nodes
+### Host capture fails opening the gadget hidraw nodes
 
-The host user likely cannot read `/dev/input/event*`.
+The host user likely cannot read `/dev/hidraw*`, or the udev rule has not been
+applied yet.
 
 Check:
 
 ```bash
 id
-ls -l /dev/input/event* /dev/input/by-id/*USB_Combo_Device*
+ls -l /dev/hidraw* /dev/input/by-id/*USB_Combo_Device*hidraw*
 ```
 
-If needed, add the user to the `input` group and start a fresh login session:
+If needed, install or re-apply the rule and then start a fresh login session:
 
 ```bash
+sudo ./scripts/install_host_hidraw_udev_rule.sh
 sudo usermod -aG input "$USER"
 ```
 
@@ -155,7 +172,7 @@ sudo usermod -aG input "$USER"
 - the relay service on the Pi may not be active
 - auto-discovery may be off
 - the Pi may not have picked up the temporary virtual devices
-- the host gadget path may be present but not currently carrying events
+- the host gadget hidraw path may be present but not currently carrying reports
 
 Check on the Pi:
 
@@ -175,10 +192,11 @@ Check:
 ls -l /dev/uinput
 ```
 
-### Host capture interferes with the local desktop
+### Host capture still affects the local desktop
 
-The default capture path grabs the gadget nodes exclusively and should avoid
-that. If you disabled grabbing with `--no-grab`, rerun without it.
+The `hidraw` capture path should not inject input into the desktop at all. If
+you still observe host-side effects, confirm that the host capture is using the
+`hidraw` path and not an older checkout of the evdev-based harness.
 
 ## 7. CI scope
 

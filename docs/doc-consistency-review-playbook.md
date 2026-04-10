@@ -53,6 +53,7 @@ for s in \
   scripts/smoke_test.sh \
   scripts/pi_relay_test_inject.sh \
   scripts/host_relay_test_capture.sh \
+  scripts/install_host_hidraw_udev_rule.sh \
   scripts/enable_readonly_overlayfs.sh \
   scripts/disable_readonly_overlayfs.sh \
   scripts/setup_persistent_bluetooth_state.sh

@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.relay import RuntimeMonitor, ShortcutToggler
+from bluetooth_2_usb.relay import GadgetManager, RuntimeMonitor, ShortcutToggler
 
 
 class _FakeKeyboard:
@@ -123,3 +123,37 @@ class RuntimeMonitorTest(unittest.TestCase):
 
         self.assertEqual(relay_controller.added, ["/dev/input/event7"])
         self.assertEqual(relay_controller.removed, ["/dev/input/event7"])
+
+
+class GadgetManagerProfileTest(unittest.TestCase):
+    def test_compat_profile_keeps_boot_keyboard_and_real_mouse(self) -> None:
+        fake_device = SimpleNamespace(
+            BOOT_KEYBOARD="boot-keyboard",
+            KEYBOARD="keyboard",
+            MOUSE="mouse",
+            CONSUMER_CONTROL="consumer",
+        )
+
+        with patch(
+            "bluetooth_2_usb.relay.import_module",
+            return_value=SimpleNamespace(Device=fake_device),
+        ):
+            devices = GadgetManager("compat")._requested_devices()
+
+        self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
+
+    def test_extended_profile_uses_report_id_devices(self) -> None:
+        fake_device = SimpleNamespace(
+            BOOT_KEYBOARD="boot-keyboard",
+            KEYBOARD="keyboard",
+            MOUSE="mouse",
+            CONSUMER_CONTROL="consumer",
+        )
+
+        with patch(
+            "bluetooth_2_usb.relay.import_module",
+            return_value=SimpleNamespace(Device=fake_device),
+        ):
+            devices = GadgetManager("extended")._requested_devices()
+
+        self.assertEqual(devices, ["keyboard", "mouse", "consumer"])

@@ -147,8 +147,9 @@ Use these repo-specific playbooks when they match the task:
 - `docs/release-versioning-policy.md`
 
 For relay-path changes, prefer running the host/Pi loopback harness in addition
-to the standard smoke/debug checks. It validates that host-visible gadget event
-nodes actually receive the relayed keyboard and mouse events.
+to the standard smoke/debug checks. It validates that host-visible gadget
+`hidraw` nodes actually receive the relayed keyboard, mouse, or consumer
+reports.
 
 ## Pull request guidelines
 

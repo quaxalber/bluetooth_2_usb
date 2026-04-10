@@ -5,6 +5,7 @@ import json
 
 from .test_harness_capture import run_capture
 from .test_harness_common import (
+    DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
     DEFAULT_MOUSE_NAME,
@@ -54,6 +55,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Virtual mouse name. Default: {DEFAULT_MOUSE_NAME}",
     )
     inject.add_argument(
+        "--consumer-name",
+        default=DEFAULT_CONSUMER_NAME,
+        help=f"Virtual consumer-control device name. Default: {DEFAULT_CONSUMER_NAME}",
+    )
+    inject.add_argument(
         "--output",
         choices=["text", "json"],
         default="text",
@@ -62,7 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     capture = subparsers.add_parser(
         "capture",
-        help="Capture relay events from the host-side gadget event nodes.",
+        help="Capture relay reports from the host-side gadget hidraw nodes.",
     )
     capture.add_argument(
         "--scenario",
@@ -79,23 +85,22 @@ def _build_parser() -> argparse.ArgumentParser:
     capture.add_argument(
         "--device-substring",
         default=DEFAULT_DEVICE_SUBSTRING,
-        help=f"Substring used to detect gadget nodes in /dev/input/by-id. Default: {DEFAULT_DEVICE_SUBSTRING}",
+        help=f"Substring used to detect gadget hidraw nodes from sysfs. Default: {DEFAULT_DEVICE_SUBSTRING}",
     )
     capture.add_argument(
         "--keyboard-node",
         default=None,
-        help="Explicit keyboard event node path override.",
+        help="Explicit keyboard hidraw node path override.",
     )
     capture.add_argument(
         "--mouse-node",
         default=None,
-        help="Explicit mouse event node path override.",
+        help="Explicit mouse hidraw node path override.",
     )
     capture.add_argument(
-        "--no-grab",
-        action="store_true",
-        default=False,
-        help="Do not grab the gadget nodes exclusively during capture.",
+        "--consumer-node",
+        default=None,
+        help="Explicit consumer-control hidraw node path override.",
     )
     capture.add_argument(
         "--output",
@@ -163,6 +168,7 @@ def run(argv: list[str] | None = None) -> int:
             event_gap_ms=args.event_gap_ms,
             keyboard_name=args.keyboard_name,
             mouse_name=args.mouse_name,
+            consumer_name=args.consumer_name,
         )
     else:
         result = run_capture(
@@ -171,7 +177,7 @@ def run(argv: list[str] | None = None) -> int:
             device_substring=args.device_substring,
             keyboard_node=args.keyboard_node,
             mouse_node=args.mouse_node,
-            grab_devices=not args.no_grab,
+            consumer_node=args.consumer_node,
         )
 
     _print_result(result, args.output)

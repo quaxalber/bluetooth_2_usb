@@ -1,0 +1,1 @@
+SUBSYSTEM=="hidraw", ATTRS{manufacturer}=="quaxalber", ATTRS{product}=="USB Combo Device", MODE="0660", GROUP="input", TAG+="uaccess"

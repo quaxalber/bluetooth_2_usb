@@ -194,7 +194,7 @@ Use these runtime flags when running the CLI manually.
 | `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
 | `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
 | `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
-| `--hid-profile PROFILE` | USB HID profile to expose. Default: `compat`. Supported values: `compat`, `extended`. Example: `--hid-profile extended`. |
+| `--hid-profile PROFILE` | USB HID profile to expose. Default: `compat`. Supported values: `compat`, `extended`. `compat` keeps a boot keyboard on interface 0 and exposes the mouse as a separate HID function. `extended` uses report-ID based keyboard, mouse, and consumer-control functions. Example: `--hid-profile extended`. |
 | `--help, -h` | Show the built-in CLI help and exit. |
 
 ## Day-to-day usage
@@ -507,24 +507,33 @@ deterministic test sequence into the running relay service.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--scenario {keyboard,mouse,combo}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo`. |
+| `--scenario {keyboard,mouse,combo,consumer}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo`. |
 | `--pre-delay-ms PRE_DELAY_MS` | Wait after creating the virtual devices before sending events. Default: `1000`. |
 | `--event-gap-ms EVENT_GAP_MS` | Delay between injected events. Default: `40`. |
 
 ### `host_relay_test_capture.sh`
 
-Capture host-side gadget events and verify that the relay emitted the expected
-sequence. The script grabs the gadget keyboard and mouse nodes exclusively by
-default so the test input does not leak into normal desktop applications while
-the capture is active.
+Capture host-side gadget `hidraw` reports and verify that the relay emitted the
+expected sequence. This path avoids desktop side effects more reliably than the
+old event-node grab approach, but it requires host-side `hidraw` access via the
+installed udev rule.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--scenario {keyboard,mouse,combo}` | Expected test sequence. Default: `combo`. Example: `sudo ./scripts/host_relay_test_capture.sh --scenario combo`. |
+| `--scenario {keyboard,mouse,combo,consumer}` | Expected test sequence. Default: `combo`. Example: `./scripts/host_relay_test_capture.sh --scenario combo`. |
 | `--timeout-sec TIMEOUT_SEC` | Time to wait for the full sequence. Default: `5`. |
-| `--keyboard-node PATH` | Override the detected host keyboard gadget node. |
-| `--mouse-node PATH` | Override the detected host mouse gadget node. |
-| `--no-grab` | Disable exclusive grabs on the gadget nodes for debugging only. Default: grabbing is enabled. |
+| `--keyboard-node PATH` | Override the detected host keyboard `hidraw` node. |
+| `--mouse-node PATH` | Override the detected host mouse `hidraw` node. |
+| `--consumer-node PATH` | Override the detected host consumer-control `hidraw` node. |
+
+### `install_host_hidraw_udev_rule.sh`
+
+Install the host-side udev rule that grants read access to the relay gadget
+`hidraw` nodes.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| none | Run once on the Linux host that receives the Pi gadget. Example: `sudo ./scripts/install_host_hidraw_udev_rule.sh`. |
 
 ### `setup_persistent_bluetooth_state.sh`
 
