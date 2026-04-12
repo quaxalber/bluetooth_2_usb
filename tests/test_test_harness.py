@@ -1,5 +1,7 @@
+import importlib
 import io
 import json
+import sys
 import unittest
 from contextlib import redirect_stdout
 from types import SimpleNamespace
@@ -398,6 +400,36 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                     consumer_nodes=(),
                 ),
             )
+
+    def test_windows_backend_imports_with_missing_non_windows_handle_aliases(
+        self,
+    ) -> None:
+        if sys.platform == "win32":
+            self.skipTest("Non-Windows import fallback is not exercised on Windows")
+
+        missing_names = ("HCURSOR", "HICON", "HBRUSH")
+        original_values = {
+            name: getattr(test_harness_capture_windows.wintypes, name)
+            for name in missing_names
+            if hasattr(test_harness_capture_windows.wintypes, name)
+        }
+        try:
+            for name in missing_names:
+                if hasattr(test_harness_capture_windows.wintypes, name):
+                    delattr(test_harness_capture_windows.wintypes, name)
+
+            reloaded = importlib.reload(test_harness_capture_windows)
+
+            self.assertIs(reloaded.wintypes.HCURSOR, reloaded.ctypes.c_void_p)
+            self.assertIs(reloaded.wintypes.HICON, reloaded.ctypes.c_void_p)
+            self.assertIs(reloaded.wintypes.HBRUSH, reloaded.ctypes.c_void_p)
+        finally:
+            for name in missing_names:
+                if hasattr(test_harness_capture_windows.wintypes, name):
+                    delattr(test_harness_capture_windows.wintypes, name)
+            for name, value in original_values.items():
+                setattr(test_harness_capture_windows.wintypes, name, value)
+            importlib.reload(test_harness_capture_windows)
 
 
 class TestHarnessCliTest(unittest.TestCase):

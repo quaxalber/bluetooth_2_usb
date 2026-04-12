@@ -21,6 +21,35 @@ from .test_harness_capture import (
 )
 from .test_harness_common import EXIT_OK, get_scenario
 
+IS_WINDOWS = sys.platform == "win32"
+
+if not IS_WINDOWS:
+    # Some non-Windows Python builds expose an incomplete ctypes.wintypes
+    # surface even though the module itself imports successfully.
+    for _name, _fallback in {
+        "ATOM": ctypes.c_ushort,
+        "BOOL": ctypes.c_long,
+        "DWORD": ctypes.c_ulong,
+        "HANDLE": ctypes.c_void_p,
+        "HBRUSH": ctypes.c_void_p,
+        "HCURSOR": ctypes.c_void_p,
+        "HICON": ctypes.c_void_p,
+        "HINSTANCE": ctypes.c_void_p,
+        "HMENU": ctypes.c_void_p,
+        "HMODULE": ctypes.c_void_p,
+        "HWND": ctypes.c_void_p,
+        "LONG": ctypes.c_long,
+        "LPARAM": ctypes.c_long,
+        "LPCWSTR": ctypes.c_wchar_p,
+        "LPVOID": ctypes.c_void_p,
+        "UINT": ctypes.c_uint,
+        "ULONG": ctypes.c_ulong,
+        "USHORT": ctypes.c_ushort,
+        "WPARAM": ctypes.c_ulong,
+    }.items():
+        if not hasattr(wintypes, _name):
+            setattr(wintypes, _name, _fallback)
+
 WM_INPUT = 0x00FF
 WM_CLOSE = 0x0010
 WM_DESTROY = 0x0002
@@ -194,9 +223,6 @@ class RAWHIDHEADER(ctypes.Structure):
         ("dwSizeHid", wintypes.DWORD),
         ("dwCount", wintypes.DWORD),
     ]
-
-
-IS_WINDOWS = sys.platform == "win32"
 
 
 class _UnsupportedWin32DLL:
