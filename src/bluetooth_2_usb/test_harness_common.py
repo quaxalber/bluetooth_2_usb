@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
+import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -10,6 +14,7 @@ EXIT_PREREQUISITE = 3
 EXIT_ACCESS = 4
 EXIT_TIMEOUT = 5
 EXIT_MISMATCH = 6
+EXIT_INTERRUPTED = 130
 
 EV_KEY = 1
 EV_REL = 2
@@ -49,7 +54,117 @@ DEFAULT_CONSUMER_NAME = "B2U Test Consumer"
 COMBO_MOUSE_DELAY_MS = 150
 # Keep injected uinput devices alive long enough for hotplug auto-discovery
 # on slower Pi/Windows paths, especially with the extended HID profile.
-POST_INJECT_DELAY_MS = 3000
+POST_INJECT_DELAY_MS = 0
+HARNESS_LOCK_PATH = Path(tempfile.gettempdir()) / "bluetooth_2_usb_test_harness.lock"
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
+
+class HarnessBusyError(RuntimeError):
+    exit_code = EXIT_ACCESS
+
+
+class HarnessInterrupted(KeyboardInterrupt):
+    exit_code = EXIT_INTERRUPTED
+
+    def __init__(self, signum: int | None = None) -> None:
+        self.signum = signum
+        signal_name = None
+        if signum is not None:
+            try:
+                signal_name = signal.Signals(signum).name
+            except ValueError:
+                signal_name = None
+        self.signal_name = signal_name
+        message = (
+            f"Harness interrupted by {signal_name}"
+            if signal_name is not None
+            else "Harness interrupted"
+        )
+        super().__init__(message)
+
+
+def _lock_harness_file(lock_handle) -> None:
+    if os.name == "nt":
+        lock_handle.seek(0)
+        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
+        return
+    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock_harness_file(lock_handle) -> None:
+    if os.name == "nt":
+        lock_handle.seek(0)
+        try:
+            msvcrt.locking(lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        return
+    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def harness_session(command: str, scenario: str):
+    lock_handle = HARNESS_LOCK_PATH.open("a+", encoding="utf-8")
+    try:
+        if lock_handle.tell() == 0:
+            lock_handle.write("\n")
+            lock_handle.flush()
+        try:
+            _lock_harness_file(lock_handle)
+        except OSError as exc:
+            raise HarnessBusyError(
+                "Another Bluetooth-2-USB test harness session is already running "
+                f"(lock: {HARNESS_LOCK_PATH})"
+            ) from exc
+
+        metadata = json.dumps(
+            {
+                "pid": os.getpid(),
+                "command": command,
+                "scenario": scenario,
+            },
+            sort_keys=True,
+        )
+        lock_handle.seek(0)
+        lock_handle.truncate()
+        lock_handle.write(metadata)
+        lock_handle.flush()
+
+        handled_signals = [
+            sig
+            for sig in (
+                signal.SIGINT,
+                signal.SIGTERM,
+                getattr(signal, "SIGHUP", None),
+                getattr(signal, "SIGQUIT", None),
+            )
+            if sig is not None
+        ]
+        previous_handlers = {
+            handled_signal: signal.getsignal(handled_signal)
+            for handled_signal in handled_signals
+        }
+
+        def _raise_interrupted(received_signal: int, _frame) -> None:
+            raise HarnessInterrupted(received_signal)
+
+        for handled_signal in handled_signals:
+            signal.signal(handled_signal, _raise_interrupted)
+
+        try:
+            yield
+        finally:
+            for handled_signal, previous_handler in previous_handlers.items():
+                signal.signal(handled_signal, previous_handler)
+    finally:
+        try:
+            _unlock_harness_file(lock_handle)
+        finally:
+            lock_handle.close()
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,9 +8,14 @@ from .test_harness_common import (
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
     DEFAULT_MOUSE_NAME,
+    EXIT_INTERRUPTED,
     EXIT_USAGE,
+    HARNESS_LOCK_PATH,
     SCENARIO_NAMES,
+    HarnessBusyError,
+    HarnessInterrupted,
     HarnessResult,
+    harness_session,
 )
 
 
@@ -159,27 +164,59 @@ def run(argv: list[str] | None = None) -> int:
         _print_result(validation_error, args.output)
         return validation_error.exit_code
 
-    if args.command == "inject":
-        from .test_harness_inject import run_inject
+    try:
+        with harness_session(args.command, args.scenario):
+            if args.command == "inject":
+                from .test_harness_inject import run_inject
 
-        result = run_inject(
-            scenario_name=args.scenario,
-            pre_delay_ms=args.pre_delay_ms,
-            event_gap_ms=args.event_gap_ms,
-            keyboard_name=args.keyboard_name,
-            mouse_name=args.mouse_name,
-            consumer_name=args.consumer_name,
+                result = run_inject(
+                    scenario_name=args.scenario,
+                    pre_delay_ms=args.pre_delay_ms,
+                    event_gap_ms=args.event_gap_ms,
+                    keyboard_name=args.keyboard_name,
+                    mouse_name=args.mouse_name,
+                    consumer_name=args.consumer_name,
+                )
+            else:
+                from .test_harness_capture import run_capture
+
+                result = run_capture(
+                    scenario_name=args.scenario,
+                    timeout_sec=args.timeout_sec,
+                    device_substring=args.device_substring,
+                    keyboard_node=args.keyboard_node,
+                    mouse_node=args.mouse_node,
+                    consumer_node=args.consumer_node,
+                )
+    except HarnessBusyError as exc:
+        result = HarnessResult(
+            command=args.command,
+            scenario=args.scenario,
+            success=False,
+            exit_code=exc.exit_code,
+            message=str(exc),
+            details={"lock_path": str(HARNESS_LOCK_PATH)},
         )
-    else:
-        from .test_harness_capture import run_capture
-
-        result = run_capture(
-            scenario_name=args.scenario,
-            timeout_sec=args.timeout_sec,
-            device_substring=args.device_substring,
-            keyboard_node=args.keyboard_node,
-            mouse_node=args.mouse_node,
-            consumer_node=args.consumer_node,
+    except HarnessInterrupted as exc:
+        details = {}
+        if exc.signal_name is not None:
+            details["signal"] = exc.signal_name
+        result = HarnessResult(
+            command=args.command,
+            scenario=args.scenario,
+            success=False,
+            exit_code=EXIT_INTERRUPTED,
+            message=str(exc),
+            details=details,
+        )
+    except KeyboardInterrupt:
+        result = HarnessResult(
+            command=args.command,
+            scenario=args.scenario,
+            success=False,
+            exit_code=EXIT_INTERRUPTED,
+            message="Harness interrupted",
+            details={},
         )
 
     _print_result(result, args.output)

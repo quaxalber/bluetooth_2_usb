@@ -1,11 +1,19 @@
 import asyncio
+import errno
+import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.relay import GadgetManager, RuntimeMonitor, ShortcutToggler
+from bluetooth_2_usb.relay import (
+    GadgetManager,
+    RelayController,
+    RuntimeMonitor,
+    ShortcutToggler,
+)
 
 
 class _FakeKeyboard:
@@ -62,6 +70,18 @@ class _FakeObserver:
 
     def stop(self) -> None:
         self.started = False
+
+
+class _FakeLoop:
+    def __init__(self) -> None:
+        self.soon_threadsafe_calls = []
+        self.soon_calls = []
+
+    def call_soon_threadsafe(self, callback, *args) -> None:
+        self.soon_threadsafe_calls.append((callback, args))
+
+    def call_soon(self, callback, *args) -> None:
+        self.soon_calls.append((callback, args))
 
 
 class ShortcutTogglerTest(unittest.TestCase):
@@ -178,4 +198,79 @@ class GadgetManagerProfileTest(unittest.TestCase):
             bad.write_text("not-a-device", encoding="utf-8")
             with patch.object(manager, "_expected_hidg_paths", return_value=(bad,)):
                 with self.assertRaisesRegex(RuntimeError, str(bad)):
-                    manager._validate_hidg_nodes()
+                    manager._validate_hidg_nodes(
+                        timeout_sec=0,
+                        poll_interval_sec=0,
+                    )
+
+    def test_validate_hidg_nodes_waits_for_delayed_nodes(self) -> None:
+        manager = GadgetManager("compat")
+
+        with patch.object(
+            manager,
+            "_collect_invalid_hidg_nodes",
+            side_effect=[["/dev/hidg0 (missing)"], []],
+        ) as collect_invalid:
+            with patch("bluetooth_2_usb.relay.time.sleep") as sleep:
+                manager._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
+
+        self.assertEqual(collect_invalid.call_count, 2)
+        sleep.assert_called_once_with(0.01)
+
+    def test_collect_invalid_hidg_nodes_rejects_unopenable_character_devices(
+        self,
+    ) -> None:
+        manager = GadgetManager("compat")
+        path = Path("/dev/hidg0")
+        stats = SimpleNamespace(
+            st_mode=stat.S_IFCHR | 0o600, st_rdev=os.makedev(236, 0)
+        )
+
+        with patch.object(manager, "_expected_hidg_paths", return_value=(path,)):
+            with patch.object(Path, "stat", return_value=stats):
+                with patch(
+                    "bluetooth_2_usb.relay.os.open",
+                    side_effect=OSError(errno.ENODEV, "No such device"),
+                ):
+                    invalid_paths = manager._collect_invalid_hidg_nodes()
+
+        self.assertEqual(invalid_paths, ["/dev/hidg0 (No such device)"])
+
+
+class RelayControllerHotplugTest(unittest.TestCase):
+    def test_schedule_add_device_queues_until_controller_is_ready(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            device_identifiers=[],
+        )
+
+        controller.schedule_add_device("/dev/input/event7")
+
+        self.assertEqual(controller._pending_add_paths, ["/dev/input/event7"])
+
+        fake_loop = _FakeLoop()
+        controller._loop = fake_loop
+        controller._task_group = object()
+        controller._hotplug_ready = True
+
+        controller._flush_pending_adds()
+
+        self.assertEqual(controller._pending_add_paths, [])
+        self.assertEqual(len(fake_loop.soon_calls), 1)
+        callback, args = fake_loop.soon_calls[0]
+        self.assertIs(callback.__func__, controller._schedule_add_retry.__func__)
+        self.assertEqual(
+            args,
+            ("/dev/input/event7", controller.HOTPLUG_ADD_MAX_RETRIES),
+        )
+
+    def test_schedule_remove_device_drops_queued_startup_add(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            device_identifiers=[],
+        )
+
+        controller.schedule_add_device("/dev/input/event7")
+        controller.schedule_remove_device("/dev/input/event7")
+
+        self.assertEqual(controller._pending_add_paths, [])

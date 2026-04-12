@@ -4,6 +4,8 @@ import asyncio
 import os
 import re
 import stat
+import threading
+import time
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
@@ -43,6 +45,9 @@ class GadgetManager:
     :ivar _enabled: Indicates whether the gadgets have been enabled
     """
 
+    HIDG_NODE_READY_TIMEOUT_SEC = 2.0
+    HIDG_NODE_POLL_INTERVAL_SEC = 0.05
+
     def __init__(self, hid_profile: str = "compat") -> None:
         """
         Initialize without enabling devices. Call enable_gadgets() to enable them.
@@ -68,34 +73,73 @@ class GadgetManager:
 
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(
-            Path(f"/dev/hidg{index}") for index, _ in enumerate(self._requested_devices())
+            Path(f"/dev/hidg{index}")
+            for index, _ in enumerate(self._requested_devices())
         )
 
-    def _prune_stale_hidg_nodes(self) -> None:
+    def _prune_stale_hidg_nodes(
+        self, *, remove_character_devices: bool = False
+    ) -> None:
         for path in self._expected_hidg_paths():
             try:
                 mode = path.stat().st_mode
             except FileNotFoundError:
                 continue
-            if stat.S_ISCHR(mode):
+            if stat.S_ISCHR(mode) and not remove_character_devices:
                 continue
-            _logger.warning("Removing stale non-character HID gadget path %s", path)
+            _logger.warning("Removing stale HID gadget path %s", path)
             path.unlink()
 
-    def _validate_hidg_nodes(self) -> None:
+    def _collect_invalid_hidg_nodes(self) -> list[str]:
         invalid_paths: list[str] = []
-        for path in self._expected_hidg_paths():
+        for index, path in enumerate(self._expected_hidg_paths()):
             try:
-                mode = path.stat().st_mode
+                stats = path.stat()
             except FileNotFoundError:
                 invalid_paths.append(f"{path} (missing)")
                 continue
+            mode = stats.st_mode
             if not stat.S_ISCHR(mode):
                 invalid_paths.append(f"{path} (mode=0o{mode:o})")
-        if invalid_paths:
-            raise RuntimeError(
-                "USB HID gadget nodes are not healthy: " + ", ".join(invalid_paths)
-            )
+                continue
+            if os.minor(stats.st_rdev) != index:
+                invalid_paths.append(
+                    f"{path} (minor={os.minor(stats.st_rdev)}, expected={index})"
+                )
+                continue
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+            except OSError as exc:
+                message = exc.strerror or exc.__class__.__name__
+                invalid_paths.append(f"{path} ({message})")
+                continue
+            os.close(fd)
+        return invalid_paths
+
+    def _validate_hidg_nodes(
+        self,
+        timeout_sec: float | None = None,
+        poll_interval_sec: float | None = None,
+    ) -> None:
+        timeout_sec = (
+            self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
+        )
+        poll_interval_sec = (
+            self.HIDG_NODE_POLL_INTERVAL_SEC
+            if poll_interval_sec is None
+            else poll_interval_sec
+        )
+        deadline = time.monotonic() + max(timeout_sec, 0.0)
+
+        while True:
+            invalid_paths = self._collect_invalid_hidg_nodes()
+            if not invalid_paths:
+                return
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    "USB HID gadget nodes are not healthy: " + ", ".join(invalid_paths)
+                )
+            time.sleep(poll_interval_sec)
 
     def enable_gadgets(self) -> None:
         """
@@ -104,7 +148,7 @@ class GadgetManager:
         """
         usb_hid = import_module("usb_hid")
         usb_hid.disable()
-        self._prune_stale_hidg_nodes()
+        self._prune_stale_hidg_nodes(remove_character_devices=True)
 
         usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
         try:
@@ -114,7 +158,7 @@ class GadgetManager:
                 "Retrying HID gadget initialization after stale node validation failure"
             )
             usb_hid.disable()
-            self._prune_stale_hidg_nodes()
+            self._prune_stale_hidg_nodes(remove_character_devices=True)
             usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
             self._validate_hidg_nodes()
         enabled_devices = list(usb_hid.devices)  # type: ignore[attr-defined]
@@ -284,6 +328,9 @@ class RelayController:
         self._task_group: TaskGroup | None = None
         self._cancelled = False
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._hotplug_ready = False
+        self._pending_add_paths: list[str] = []
+        self._pending_add_lock = threading.Lock()
 
     async def async_relay_devices(self) -> None:
         """
@@ -312,6 +359,9 @@ class RelayController:
                         self.add_device(device.path)
                     device.close()
 
+                self._hotplug_ready = True
+                self._flush_pending_adds()
+
                 # Keep running unless canceled
                 while not self._cancelled:
                     await asyncio.sleep(0.1)
@@ -320,13 +370,27 @@ class RelayController:
                 "RelayController: Exception in TaskGroup", exc_info=exc_grp
             )
         finally:
+            self._hotplug_ready = False
             self._task_group = None
             self._loop = None
             _logger.debug("RelayController: TaskGroup exited.")
 
     def schedule_add_device(self, device_path: str) -> None:
+        if self._cancelled:
+            _logger.debug(
+                "Ignoring add for %s; controller is shutting down.", device_path
+            )
+            return
+        if not self._hotplug_ready:
+            self._queue_pending_add(device_path)
+            _logger.debug(
+                "Queueing add for %s until the relay controller is ready.",
+                device_path,
+            )
+            return
+
         loop = self._loop
-        if loop is None or self._task_group is None or self._cancelled:
+        if loop is None or self._task_group is None:
             _logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
             return
 
@@ -340,6 +404,39 @@ class RelayController:
             _logger.debug(
                 "Ignoring add for %s; controller is shutting down.",
                 device_path,
+            )
+
+    def _queue_pending_add(self, device_path: str) -> None:
+        with self._pending_add_lock:
+            if device_path not in self._pending_add_paths:
+                self._pending_add_paths.append(device_path)
+
+    def _discard_pending_add(self, device_path: str) -> bool:
+        with self._pending_add_lock:
+            try:
+                self._pending_add_paths.remove(device_path)
+            except ValueError:
+                return False
+            return True
+
+    def _pop_pending_adds(self) -> list[str]:
+        with self._pending_add_lock:
+            pending = list(self._pending_add_paths)
+            self._pending_add_paths.clear()
+        return pending
+
+    def _flush_pending_adds(self) -> None:
+        loop = self._loop
+        if (
+            not self._hotplug_ready
+            or loop is None
+            or self._task_group is None
+            or self._cancelled
+        ):
+            return
+        for device_path in self._pop_pending_adds():
+            loop.call_soon(
+                self._schedule_add_retry, device_path, self.HOTPLUG_ADD_MAX_RETRIES
             )
 
     def _schedule_add_retry(self, device_path: str, retries_remaining: int) -> None:
@@ -392,6 +489,13 @@ class RelayController:
         self.add_device(device_path)
 
     def schedule_remove_device(self, device_path: str) -> None:
+        if not self._hotplug_ready:
+            if self._discard_pending_add(device_path):
+                _logger.debug(
+                    "Dropped queued add for %s because the device was removed before startup completed.",
+                    device_path,
+                )
+            return
         loop = self._loop
         if loop is None or self._cancelled:
             _logger.debug(

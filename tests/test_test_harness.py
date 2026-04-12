@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from bluetooth_2_usb import test_harness_capture_windows
 from bluetooth_2_usb.test_harness import run as run_harness
 from bluetooth_2_usb.test_harness_capture import (
     CaptureMismatchError,
@@ -21,11 +22,13 @@ from bluetooth_2_usb.test_harness_capture_windows import (
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
+    EXIT_INTERRUPTED,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
-    HarnessResult,
     MOUSE_REL_STEPS,
     SCENARIOS,
+    HarnessBusyError,
+    HarnessResult,
 )
 
 
@@ -205,6 +208,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
         )
 
+
 class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_boot_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
@@ -383,6 +387,18 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
         self.assertIsNone(_keyboard_event_to_report(0x41, is_key_up=False))
 
+    def test_windows_backend_refuses_non_windows_runtime(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "only available on Windows"):
+            test_harness_capture_windows.run_windows_raw_input_capture(
+                scenario_name="keyboard",
+                timeout_sec=1.0,
+                candidate_nodes=test_harness_capture_windows.GadgetNodeCandidates(
+                    keyboard_nodes=(),
+                    mouse_nodes=(),
+                    consumer_nodes=(),
+                ),
+            )
+
 
 class TestHarnessCliTest(unittest.TestCase):
     def test_inject_usage_error_returns_exit_usage(self) -> None:
@@ -435,6 +451,33 @@ class TestHarnessCliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, EXIT_PREREQUISITE)
         self.assertIn("Keyboard HID device was not found", stdout.getvalue())
+
+    def test_harness_reports_busy_lock_cleanly(self) -> None:
+        stdout = io.StringIO()
+
+        with patch(
+            "bluetooth_2_usb.test_harness.harness_session",
+            side_effect=HarnessBusyError("busy"),
+        ):
+            with redirect_stdout(stdout):
+                exit_code = run_harness(["capture"])
+
+        self.assertEqual(exit_code, HarnessBusyError.exit_code)
+        self.assertIn("busy", stdout.getvalue())
+        self.assertIn("lock_path", stdout.getvalue())
+
+    def test_harness_reports_interrupt_cleanly(self) -> None:
+        stdout = io.StringIO()
+
+        with patch(
+            "bluetooth_2_usb.test_harness_inject.run_inject",
+            side_effect=KeyboardInterrupt,
+        ):
+            with redirect_stdout(stdout):
+                exit_code = run_harness(["inject"])
+
+        self.assertEqual(exit_code, EXIT_INTERRUPTED)
+        self.assertIn("Harness interrupted", stdout.getvalue())
 
     def test_windows_capture_uses_raw_input_backend_for_non_consumer_scenarios(
         self,
