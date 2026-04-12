@@ -13,7 +13,6 @@ from .test_harness_common import (
     EXIT_ACCESS,
     EXIT_OK,
     EXIT_PREREQUISITE,
-    POST_INJECT_DELAY_MS,
     HarnessResult,
     get_scenario,
     scenario_to_dict,
@@ -125,7 +124,6 @@ def run_inject(
             for step_event in scenario.consumer_steps:
                 _send_step(consumer, step_event, event_gap_ms)
 
-        time.sleep(POST_INJECT_DELAY_MS / 1000.0)
     except OSError as exc:
         return HarnessResult(
             command="inject",
@@ -164,7 +162,6 @@ def run_inject(
             "consumer_name": consumer_name if scenario.consumer_enabled else None,
             "pre_delay_ms": pre_delay_ms,
             "event_gap_ms": event_gap_ms,
-            "post_delay_ms": POST_INJECT_DELAY_MS,
             "expected": scenario_to_dict(scenario),
             "injected_event_count": injected_events,
         },
