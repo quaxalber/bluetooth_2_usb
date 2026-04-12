@@ -47,7 +47,9 @@ DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
 DEFAULT_CONSUMER_NAME = "B2U Test Consumer"
 COMBO_MOUSE_DELAY_MS = 150
-POST_INJECT_DELAY_MS = 300
+# Keep injected uinput devices alive long enough for hotplug auto-discovery
+# on slower Pi/Windows paths, especially with the extended HID profile.
+POST_INJECT_DELAY_MS = 3000
 
 
 @dataclass(frozen=True, slots=True)

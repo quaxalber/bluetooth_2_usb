@@ -11,14 +11,19 @@ from bluetooth_2_usb.test_harness_capture import (
     ConsumerSequenceMatcher,
     KeyboardSequenceMatcher,
     MouseSequenceMatcher,
-    _build_candidate_sets,
     discover_gadget_node_candidates,
     discover_gadget_nodes,
+)
+from bluetooth_2_usb.test_harness_capture_windows import (
+    _device_matches_token,
+    _extract_device_token,
+    _keyboard_event_to_report,
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
+    HarnessResult,
     MOUSE_REL_STEPS,
     SCENARIOS,
 )
@@ -200,31 +205,6 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
         )
 
-    def test_single_role_candidate_sets_are_split_per_device(self) -> None:
-        hid_module = _FakeHidModule(
-            [
-                _hid_entry("1-2.1.2:1.1", usage_page=0x01, usage=0x02),
-                _hid_entry("1-2.1.3:1.1", usage_page=0x01, usage=0x02),
-            ]
-        )
-
-        candidates = discover_gadget_node_candidates(hid_module=hid_module)
-        candidate_sets = _build_candidate_sets("mouse", candidates)
-
-        self.assertEqual(len(candidate_sets), 2)
-        self.assertEqual(
-            [candidate_set.mouse_nodes[0].node for candidate_set in candidate_sets],
-            ["1-2.1.2:1.1", "1-2.1.3:1.1"],
-        )
-        self.assertTrue(
-            all(
-                candidate_set.keyboard_nodes == ()
-                and candidate_set.consumer_nodes == ()
-                for candidate_set in candidate_sets
-            )
-        )
-
-
 class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_boot_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
@@ -360,6 +340,50 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
             matcher.handle(bytes([0x03, 0x00, 0x00]))
 
 
+class WindowsRawInputHelpersTest(unittest.TestCase):
+    def test_extract_device_token_reads_vid_pid_and_interface(self) -> None:
+        token = _extract_device_token(
+            r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{...}\KBD"
+        )
+
+        self.assertEqual(token, "vid_1d6b&pid_0104&mi_00")
+
+    def test_device_matches_token_accepts_normalized_raw_input_names(self) -> None:
+        self.assertTrue(
+            _device_matches_token(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000".lower(),
+                ("vid_1d6b&pid_0104&mi_00",),
+            )
+        )
+
+    def test_device_matches_token_uses_simple_vid_pid_interface_tokens(self) -> None:
+        self.assertTrue(
+            _device_matches_token(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                ("vid_1d6b&pid_0104&mi_00",),
+            )
+        )
+        self.assertTrue(
+            _device_matches_token(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&2b6bd27c&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                ("vid_1d6b&pid_0104&mi_00",),
+            )
+        )
+
+    def test_keyboard_event_to_report_builds_boot_keyboard_reports(self) -> None:
+        self.assertEqual(
+            _keyboard_event_to_report(0x7C, is_key_up=False),
+            bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]),
+        )
+        self.assertEqual(
+            _keyboard_event_to_report(0x7C, is_key_up=True),
+            bytes([0x00] * 8),
+        )
+
+    def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
+        self.assertIsNone(_keyboard_event_to_report(0x41, is_key_up=False))
+
+
 class TestHarnessCliTest(unittest.TestCase):
     def test_inject_usage_error_returns_exit_usage(self) -> None:
         stdout = io.StringIO()
@@ -411,3 +435,110 @@ class TestHarnessCliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, EXIT_PREREQUISITE)
         self.assertIn("Keyboard HID device was not found", stdout.getvalue())
+
+    def test_windows_capture_uses_raw_input_backend_for_non_consumer_scenarios(
+        self,
+    ) -> None:
+        candidate_nodes = discover_gadget_node_candidates(
+            keyboard_node="kbd0",
+            mouse_node="mouse0",
+            hid_module=_FakeHidModule(
+                [
+                    _hid_entry(
+                        "kbd0",
+                        vendor_id=0x1D6B,
+                        product_id=0x0104,
+                        interface_number=0,
+                        usage_page=0x01,
+                        usage=0x06,
+                    ),
+                    _hid_entry(
+                        "mouse0",
+                        vendor_id=0x1D6B,
+                        product_id=0x0104,
+                        interface_number=1,
+                        usage_page=0x01,
+                        usage=0x02,
+                    ),
+                ]
+            ),
+        )
+
+        with patch("bluetooth_2_usb.test_harness_capture.sys.platform", "win32"):
+            with patch(
+                "bluetooth_2_usb.test_harness_capture._load_hidapi",
+                return_value=_FakeHidModule(
+                    [
+                        _hid_entry(
+                            "kbd0",
+                            vendor_id=0x1D6B,
+                            product_id=0x0104,
+                            interface_number=0,
+                            usage_page=0x01,
+                            usage=0x06,
+                        ),
+                        _hid_entry(
+                            "mouse0",
+                            vendor_id=0x1D6B,
+                            product_id=0x0104,
+                            interface_number=1,
+                            usage_page=0x01,
+                            usage=0x02,
+                        ),
+                    ]
+                ),
+            ):
+                with patch(
+                    "bluetooth_2_usb.test_harness_capture_windows.run_windows_raw_input_capture",
+                    return_value=HarnessResult(
+                        command="capture",
+                        scenario="combo",
+                        success=True,
+                        exit_code=0,
+                        message="ok",
+                        details={"nodes": candidate_nodes.matched_nodes().to_dict()},
+                    ),
+                ) as run_backend:
+                    exit_code = run_harness(["capture", "--scenario", "combo"])
+
+        self.assertEqual(exit_code, 0)
+        run_backend.assert_called_once()
+
+    def test_windows_capture_keeps_consumer_on_hidapi_backend(self) -> None:
+        consumer_hid = _FakeHidModule(
+            [
+                _hid_entry(
+                    "consumer0",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=2,
+                    usage_page=0x0C,
+                    usage=0x01,
+                ),
+            ]
+        )
+
+        with patch("bluetooth_2_usb.test_harness_capture.sys.platform", "win32"):
+            with patch(
+                "bluetooth_2_usb.test_harness_capture._load_hidapi",
+                return_value=consumer_hid,
+            ):
+                with patch(
+                    "bluetooth_2_usb.test_harness_capture_windows.run_windows_raw_input_capture"
+                ) as run_backend:
+                    with patch(
+                        "bluetooth_2_usb.test_harness_capture._capture_once",
+                        return_value=HarnessResult(
+                            command="capture",
+                            scenario="consumer",
+                            success=True,
+                            exit_code=0,
+                            message="ok",
+                            details={"capture_backend": "hidapi"},
+                        ),
+                    ) as capture_once:
+                        exit_code = run_harness(["capture", "--scenario", "consumer"])
+
+        self.assertEqual(exit_code, 0)
+        capture_once.assert_called_once()
+        run_backend.assert_not_called()

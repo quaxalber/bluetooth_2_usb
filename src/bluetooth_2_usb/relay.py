@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import stat
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
@@ -60,7 +62,40 @@ class GadgetManager:
         if self._hid_profile == "extended":
             return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
 
-        return [device.BOOT_KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
+        # Keep the Windows-validated compatibility ordering from v0.8.2/v0.9.1:
+        # boot mouse first, then keyboard, then consumer control.
+        return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
+
+    def _expected_hidg_paths(self) -> tuple[Path, ...]:
+        return tuple(
+            Path(f"/dev/hidg{index}") for index, _ in enumerate(self._requested_devices())
+        )
+
+    def _prune_stale_hidg_nodes(self) -> None:
+        for path in self._expected_hidg_paths():
+            try:
+                mode = path.stat().st_mode
+            except FileNotFoundError:
+                continue
+            if stat.S_ISCHR(mode):
+                continue
+            _logger.warning("Removing stale non-character HID gadget path %s", path)
+            path.unlink()
+
+    def _validate_hidg_nodes(self) -> None:
+        invalid_paths: list[str] = []
+        for path in self._expected_hidg_paths():
+            try:
+                mode = path.stat().st_mode
+            except FileNotFoundError:
+                invalid_paths.append(f"{path} (missing)")
+                continue
+            if not stat.S_ISCHR(mode):
+                invalid_paths.append(f"{path} (mode=0o{mode:o})")
+        if invalid_paths:
+            raise RuntimeError(
+                "USB HID gadget nodes are not healthy: " + ", ".join(invalid_paths)
+            )
 
     def enable_gadgets(self) -> None:
         """
@@ -69,8 +104,19 @@ class GadgetManager:
         """
         usb_hid = import_module("usb_hid")
         usb_hid.disable()
+        self._prune_stale_hidg_nodes()
 
         usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
+        try:
+            self._validate_hidg_nodes()
+        except RuntimeError:
+            _logger.warning(
+                "Retrying HID gadget initialization after stale node validation failure"
+            )
+            usb_hid.disable()
+            self._prune_stale_hidg_nodes()
+            usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
+            self._validate_hidg_nodes()
         enabled_devices = list(usb_hid.devices)  # type: ignore[attr-defined]
 
         from adafruit_hid.consumer_control import ConsumerControl
@@ -200,6 +246,9 @@ class RelayController:
     Monitors add/remove events from udev and includes optional auto-discovery.
     """
 
+    HOTPLUG_ADD_RETRY_DELAY_SEC = 0.2
+    HOTPLUG_ADD_MAX_RETRIES = 10
+
     def __init__(
         self,
         gadget_manager: GadgetManager,
@@ -282,28 +331,65 @@ class RelayController:
             return
 
         try:
-            device = InputDevice(device_path)
-        except (OSError, FileNotFoundError):
-            _logger.debug(f"{device_path} vanished before hotplug filtering.")
-            return
-
-        try:
-            if not self._should_relay(device):
-                _logger.debug(
-                    "Skipping hotplugged device %s because it does not match relay filters.",
-                    device,
-                )
-                return
-        finally:
-            device.close()
-
-        try:
-            loop.call_soon_threadsafe(self.add_device, device_path)
+            loop.call_soon_threadsafe(
+                self._schedule_add_retry,
+                device_path,
+                self.HOTPLUG_ADD_MAX_RETRIES,
+            )
         except RuntimeError:
             _logger.debug(
                 "Ignoring add for %s; controller is shutting down.",
                 device_path,
             )
+
+    def _schedule_add_retry(self, device_path: str, retries_remaining: int) -> None:
+        loop = self._loop
+        if loop is None or self._task_group is None or self._cancelled:
+            _logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
+            return
+
+        try:
+            device = InputDevice(device_path)
+        except (OSError, FileNotFoundError):
+            if retries_remaining > 0:
+                _logger.debug(
+                    "%s vanished before hotplug filtering; retrying (%s left).",
+                    device_path,
+                    retries_remaining,
+                )
+                loop.call_later(
+                    self.HOTPLUG_ADD_RETRY_DELAY_SEC,
+                    self._schedule_add_retry,
+                    device_path,
+                    retries_remaining - 1,
+                )
+            else:
+                _logger.debug(f"{device_path} vanished before hotplug filtering.")
+            return
+
+        try:
+            if not self._should_relay(device):
+                if retries_remaining > 0:
+                    _logger.debug(
+                        "Hotplugged device %s is not ready for relay filters yet; retrying (%s left).",
+                        device,
+                        retries_remaining,
+                    )
+                    loop.call_later(
+                        self.HOTPLUG_ADD_RETRY_DELAY_SEC,
+                        self._schedule_add_retry,
+                        device_path,
+                        retries_remaining - 1,
+                    )
+                else:
+                    _logger.debug(
+                        "Skipping hotplugged device %s because it does not match relay filters.",
+                        device,
+                    )
+                return
+        finally:
+            device.close()
+        self.add_device(device_path)
 
     def schedule_remove_device(self, device_path: str) -> None:
         loop = self._loop

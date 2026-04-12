@@ -1,5 +1,7 @@
 import asyncio
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -126,10 +128,11 @@ class RuntimeMonitorTest(unittest.TestCase):
 
 
 class GadgetManagerProfileTest(unittest.TestCase):
-    def test_compat_profile_keeps_boot_keyboard_and_real_mouse(self) -> None:
+    def test_compat_profile_uses_boot_mouse_then_keyboard(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
+            BOOT_MOUSE="boot-mouse",
             MOUSE="mouse",
             CONSUMER_CONTROL="consumer",
         )
@@ -140,12 +143,13 @@ class GadgetManagerProfileTest(unittest.TestCase):
         ):
             devices = GadgetManager("compat")._requested_devices()
 
-        self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
+        self.assertEqual(devices, ["boot-mouse", "keyboard", "consumer"])
 
     def test_extended_profile_uses_report_id_devices(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
+            BOOT_MOUSE="boot-mouse",
             MOUSE="mouse",
             CONSUMER_CONTROL="consumer",
         )
@@ -157,3 +161,21 @@ class GadgetManagerProfileTest(unittest.TestCase):
             devices = GadgetManager("extended")._requested_devices()
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
+
+    def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
+        manager = GadgetManager("compat")
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = Path(tmp) / "hidg1"
+            stale.write_text("stale", encoding="utf-8")
+            with patch.object(manager, "_expected_hidg_paths", return_value=(stale,)):
+                manager._prune_stale_hidg_nodes()
+            self.assertFalse(stale.exists())
+
+    def test_validate_hidg_nodes_rejects_regular_files(self) -> None:
+        manager = GadgetManager("compat")
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "hidg1"
+            bad.write_text("not-a-device", encoding="utf-8")
+            with patch.object(manager, "_expected_hidg_paths", return_value=(bad,)):
+                with self.assertRaisesRegex(RuntimeError, str(bad)):
+                    manager._validate_hidg_nodes()

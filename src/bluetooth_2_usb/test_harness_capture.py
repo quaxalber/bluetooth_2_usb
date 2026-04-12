@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -511,70 +512,6 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
 
 
-def _device_group_key(info: HidDeviceInfo) -> str:
-    node = info.node
-    if ":" in node:
-        return node.rsplit(":", 1)[0]
-    if info.serial:
-        return f"{info.vendor_id:04x}:{info.product_id:04x}:{info.serial}"
-    return node
-
-
-def _build_candidate_sets(
-    scenario_name: str, candidate_nodes: GadgetNodeCandidates
-) -> list[GadgetNodeCandidates]:
-    scenario = get_scenario(scenario_name)
-    if len(scenario.required_nodes) <= 1:
-        role = scenario.required_nodes[0]
-        infos = {
-            "keyboard": candidate_nodes.keyboard_nodes,
-            "mouse": candidate_nodes.mouse_nodes,
-            "consumer": candidate_nodes.consumer_nodes,
-        }[role]
-        return [
-            GadgetNodeCandidates(
-                keyboard_nodes=((info,) if role == "keyboard" else ()),
-                mouse_nodes=((info,) if role == "mouse" else ()),
-                consumer_nodes=((info,) if role == "consumer" else ()),
-            )
-            for info in infos
-        ]
-
-    grouped: dict[str, dict[str, list[HidDeviceInfo]]] = {}
-    for role, infos in (
-        ("keyboard", candidate_nodes.keyboard_nodes),
-        ("mouse", candidate_nodes.mouse_nodes),
-        ("consumer", candidate_nodes.consumer_nodes),
-    ):
-        for info in infos:
-            grouped.setdefault(
-                _device_group_key(info),
-                {"keyboard": [], "mouse": [], "consumer": []},
-            )[role].append(info)
-
-    candidate_sets: list[GadgetNodeCandidates] = []
-    for _, roles in sorted(grouped.items()):
-        if scenario.keyboard_enabled and not roles["keyboard"]:
-            continue
-        if scenario.mouse_enabled and not roles["mouse"]:
-            continue
-        if scenario.consumer_enabled and not roles["consumer"]:
-            continue
-        candidate_sets.append(
-            GadgetNodeCandidates(
-                keyboard_nodes=tuple(
-                    sorted(roles["keyboard"], key=lambda info: info.node)
-                ),
-                mouse_nodes=tuple(sorted(roles["mouse"], key=lambda info: info.node)),
-                consumer_nodes=tuple(
-                    sorted(roles["consumer"], key=lambda info: info.node)
-                ),
-            )
-        )
-
-    return candidate_sets or [candidate_nodes]
-
-
 def _capture_once(
     scenario_name: str,
     timeout_sec: float,
@@ -800,17 +737,22 @@ def run_capture(
             details={},
         )
 
-    results: list[HarnessResult] = []
-    for candidate_set in _build_candidate_sets(scenario_name, candidate_nodes):
-        result = _capture_once(
+    if sys.platform == "win32" and scenario_name != "consumer":
+        from .test_harness_capture_windows import run_windows_raw_input_capture
+
+        result = run_windows_raw_input_capture(
             scenario_name=scenario_name,
             timeout_sec=timeout_sec,
-            candidate_nodes=candidate_set,
-            hid_module=hid_module,
+            candidate_nodes=candidate_nodes,
         )
-        if result.success:
-            result.details["candidates"] = candidate_nodes.to_dict()
-            return result
-        results.append(result)
+        result.details["candidates"] = candidate_nodes.to_dict()
+        return result
 
-    return results[-1]
+    result = _capture_once(
+        scenario_name=scenario_name,
+        timeout_sec=timeout_sec,
+        candidate_nodes=candidate_nodes,
+        hid_module=hid_module,
+    )
+    result.details["candidates"] = candidate_nodes.to_dict()
+    return result
