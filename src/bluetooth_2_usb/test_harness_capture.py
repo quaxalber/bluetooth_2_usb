@@ -314,6 +314,8 @@ def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
 def _normalize_consumer_report(report: bytes) -> int | None:
     if len(report) == 3 and report[0] == 0x03:
         return int.from_bytes(report[1:3], "little")
+    if len(report) == 3 and report[0] == 0x00:
+        return int.from_bytes(report[1:3], "little")
     if len(report) == 2 and report[0] == 0x03:
         return report[1]
     if len(report) == 2:

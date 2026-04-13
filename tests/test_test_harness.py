@@ -326,6 +326,19 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_consumer_matcher_accepts_zero_prefixed_raw_input_reports(self) -> None:
+        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+
+        for report in (
+            bytes([0x00, 0xE9, 0x00]),
+            bytes([0x00, 0x00, 0x00]),
+            bytes([0x00, 0xEA, 0x00]),
+            bytes([0x00, 0x00, 0x00]),
+        ):
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
     def test_consumer_matcher_accepts_compact_report_id_format(self) -> None:
         matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
 
