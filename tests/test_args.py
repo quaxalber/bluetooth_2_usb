@@ -22,3 +22,8 @@ class ParseArgsTest(unittest.TestCase):
             args.interrupt_shortcut,
             ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"],
         )
+
+    def test_boot_keyboard_profile_is_accepted(self) -> None:
+        args = parse_args(["--hid-profile", "boot_keyboard"])
+
+        self.assertEqual(args.hid_profile, "boot_keyboard")

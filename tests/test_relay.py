@@ -84,6 +84,25 @@ class _FakeLoop:
         self.soon_calls.append((callback, args))
 
 
+class _FakeTaskHandle:
+    def __init__(self) -> None:
+        self.cancel_calls = 0
+
+    def cancel(self) -> None:
+        self.cancel_calls += 1
+
+    def done(self) -> bool:
+        return False
+
+
+class _FakeInputHandle:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         event_state = asyncio.Event()
@@ -182,6 +201,23 @@ class GadgetManagerProfileTest(unittest.TestCase):
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
+    def test_boot_keyboard_profile_uses_boot_keyboard_then_mouse(self) -> None:
+        fake_device = SimpleNamespace(
+            BOOT_KEYBOARD="boot-keyboard",
+            KEYBOARD="keyboard",
+            BOOT_MOUSE="boot-mouse",
+            MOUSE="mouse",
+            CONSUMER_CONTROL="consumer",
+        )
+
+        with patch(
+            "bluetooth_2_usb.relay.import_module",
+            return_value=SimpleNamespace(Device=fake_device),
+        ):
+            devices = GadgetManager("boot_keyboard")._requested_devices()
+
+        self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
+
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
         manager = GadgetManager("compat")
         with tempfile.TemporaryDirectory() as tmp:
@@ -274,3 +310,27 @@ class RelayControllerHotplugTest(unittest.TestCase):
         controller.schedule_remove_device("/dev/input/event7")
 
         self.assertEqual(controller._pending_add_paths, [])
+
+    def test_request_shutdown_cancels_active_tasks_and_closes_devices(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            device_identifiers=[],
+            relaying_active=relaying_active,
+        )
+        task = _FakeTaskHandle()
+        device = _FakeInputHandle()
+        controller._active_tasks["/dev/input/event7"] = task
+        controller._active_devices["/dev/input/event7"] = device
+        controller._pending_add_paths.append("/dev/input/event8")
+        controller._hotplug_ready = True
+
+        controller.request_shutdown()
+
+        self.assertTrue(controller._cancelled)
+        self.assertFalse(controller._hotplug_ready)
+        self.assertFalse(relaying_active.is_set())
+        self.assertEqual(controller._pending_add_paths, [])
+        self.assertEqual(task.cancel_calls, 1)
+        self.assertEqual(device.close_calls, 1)

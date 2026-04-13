@@ -83,3 +83,17 @@ class ServiceConfigTest(unittest.TestCase):
         self.assertIn("--debug", argv)
         self.assertIn("/tmp/debug log.txt", argv)
         self.assertIn("'MX Keys'", command)
+
+    def test_accepts_boot_keyboard_hid_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text(
+                "B2U_HID_PROFILE=boot_keyboard\n",
+                encoding="utf-8",
+            )
+
+            config = load_service_config(env_file)
+            argv = build_cli_argv(config)
+
+        self.assertEqual(config.hid_profile, "boot_keyboard")
+        self.assertIn("boot_keyboard", argv)

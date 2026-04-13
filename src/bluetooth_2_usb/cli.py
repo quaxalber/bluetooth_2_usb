@@ -120,6 +120,68 @@ def configure_logging(args: Arguments) -> None:
     logger.debug(f"CLI args: {args}")
 
 
+def _install_shutdown_signal_handlers(
+    shutdown_event: asyncio.Event,
+    *,
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> tuple[dict[int, signal.Handlers], tuple[int, ...]]:
+    active_loop = asyncio.get_running_loop() if loop is None else loop
+    previous_handlers: dict[int, signal.Handlers] = {}
+    loop_handled_signals: list[int] = []
+
+    def _request_shutdown(sig_name: str) -> None:
+        logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
+        shutdown_event.set()
+
+    def _signal_handler(sig: int, frame) -> None:
+        del frame
+        sig_name = signal.Signals(sig).name
+        _request_shutdown(sig_name)
+        try:
+            active_loop.call_soon_threadsafe(shutdown_event.set)
+        except RuntimeError:
+            shutdown_event.set()
+
+    for handled_signal in (
+        signal.SIGINT,
+        signal.SIGTERM,
+        signal.SIGHUP,
+        signal.SIGQUIT,
+    ):
+        sig_name = signal.Signals(handled_signal).name
+        add_signal_handler = getattr(active_loop, "add_signal_handler", None)
+        if add_signal_handler is not None:
+            try:
+                active_loop.add_signal_handler(
+                    handled_signal,
+                    _request_shutdown,
+                    sig_name,
+                )
+                loop_handled_signals.append(handled_signal)
+                continue
+            except (NotImplementedError, RuntimeError, ValueError):
+                pass
+        previous_handlers[handled_signal] = signal.getsignal(handled_signal)
+        signal.signal(handled_signal, _signal_handler)
+
+    return previous_handlers, tuple(loop_handled_signals)
+
+
+def _restore_signal_handlers(
+    previous_handlers: dict[int, signal.Handlers],
+    loop_handled_signals: tuple[int, ...],
+    *,
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> None:
+    active_loop = asyncio.get_running_loop() if loop is None else loop
+    for handled_signal in loop_handled_signals:
+        remove_signal_handler = getattr(active_loop, "remove_signal_handler", None)
+        if remove_signal_handler is not None:
+            remove_signal_handler(handled_signal)
+    for handled_signal, previous_handler in previous_handlers.items():
+        signal.signal(handled_signal, previous_handler)
+
+
 async def async_run(args: Arguments) -> int:
     if args.version:
         return print_version()
@@ -191,22 +253,9 @@ async def async_run(args: Arguments) -> int:
 
     logger.debug(f"Detected UDC state file: {env_status.udc_path}")
     shutdown_event = asyncio.Event()
-    previous_handlers = {}
-
-    def _signal_handler(sig: int, frame) -> None:
-        del frame
-        sig_name = signal.Signals(sig).name
-        logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
-        shutdown_event.set()
-
-    for handled_signal in (
-        signal.SIGINT,
-        signal.SIGTERM,
-        signal.SIGHUP,
-        signal.SIGQUIT,
-    ):
-        previous_handlers[handled_signal] = signal.getsignal(handled_signal)
-        signal.signal(handled_signal, _signal_handler)
+    previous_handlers, loop_handled_signals = _install_shutdown_signal_handlers(
+        shutdown_event
+    )
 
     try:
         async with RuntimeMonitor(
@@ -222,6 +271,7 @@ async def async_run(args: Arguments) -> int:
             )
 
             if relay_task in done:
+                relay_controller.request_shutdown()
                 if relay_task.cancelled():
                     logger.error(
                         "Relay task was cancelled before shutdown was requested."
@@ -243,12 +293,15 @@ async def async_run(args: Arguments) -> int:
                 return EXIT_RUNTIME
 
             logger.debug("Shutdown event triggered. Cancelling relay task...")
+            relay_controller.request_shutdown()
             relay_task.cancel()
             shutdown_task.cancel()
             await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
     finally:
-        for handled_signal, previous_handler in previous_handlers.items():
-            signal.signal(handled_signal, previous_handler)
+        _restore_signal_handlers(
+            previous_handlers,
+            loop_handled_signals,
+        )
 
     return EXIT_OK
 

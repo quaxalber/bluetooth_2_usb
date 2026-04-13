@@ -105,7 +105,7 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
         elif key == "B2U_INTERRUPT_SHORTCUT":
             config.interrupt_shortcut = value
         elif key == "B2U_HID_PROFILE":
-            if value not in {"compat", "extended"}:
+            if value not in {"compat", "extended", "boot_keyboard"}:
                 raise ServiceConfigError(
                     f"{env_file}:{line_number}: invalid B2U_HID_PROFILE {value!r}"
                 )

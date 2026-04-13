@@ -490,6 +490,40 @@ def _device_matches_token(device_name: str, tokens: tuple[str, ...]) -> bool:
     return False
 
 
+def _validate_candidate_token_disjointness(
+    *,
+    keyboard_tokens: tuple[str, ...],
+    mouse_tokens: tuple[str, ...],
+    consumer_tokens: tuple[str, ...],
+) -> None:
+    overlaps: list[str] = []
+
+    keyboard_mouse_overlap = sorted(set(keyboard_tokens) & set(mouse_tokens))
+    if keyboard_mouse_overlap:
+        overlaps.append(
+            "keyboard/mouse=" + ", ".join(keyboard_mouse_overlap)
+        )
+
+    keyboard_consumer_overlap = sorted(set(keyboard_tokens) & set(consumer_tokens))
+    if keyboard_consumer_overlap:
+        overlaps.append(
+            "keyboard/consumer=" + ", ".join(keyboard_consumer_overlap)
+        )
+
+    mouse_consumer_overlap = sorted(set(mouse_tokens) & set(consumer_tokens))
+    if mouse_consumer_overlap:
+        overlaps.append(
+            "mouse/consumer=" + ", ".join(mouse_consumer_overlap)
+        )
+
+    if overlaps:
+        raise CaptureMismatchError(
+            "Windows capture candidates overlap across roles: "
+            + "; ".join(overlaps)
+            + ". Current VID/PID(/MI) token matching cannot disambiguate this layout."
+        )
+
+
 def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
     hid_code = VK_TO_HID.get(vkey)
     if hid_code is None:
@@ -972,6 +1006,12 @@ def run_windows_raw_input_capture(
         consumer_tokens = _extract_device_tokens(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )
+
+    _validate_candidate_token_disjointness(
+        keyboard_tokens=keyboard_tokens,
+        mouse_tokens=mouse_tokens,
+        consumer_tokens=consumer_tokens,
+    )
 
     result = _pump_raw_input(
         timeout_sec=timeout_sec,

@@ -66,6 +66,8 @@ class GadgetManager:
 
         if self._hid_profile == "extended":
             return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
+        if self._hid_profile == "boot_keyboard":
+            return [device.BOOT_KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
 
         # Keep the Windows-validated compatibility ordering from v0.8.2/v0.9.1:
         # boot mouse first, then keyboard, then consumer control.
@@ -325,6 +327,7 @@ class RelayController:
         self._shortcut_toggler = shortcut_toggler
 
         self._active_tasks: dict[str, Task] = {}
+        self._active_devices: dict[str, InputDevice] = {}
         self._task_group: TaskGroup | None = None
         self._cancelled = False
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -374,6 +377,26 @@ class RelayController:
             self._task_group = None
             self._loop = None
             _logger.debug("RelayController: TaskGroup exited.")
+
+    def request_shutdown(self) -> None:
+        """
+        Stop scheduling new relay work and actively unwind existing device tasks.
+
+        This is used during service shutdown and profile restarts so we do not
+        wait indefinitely for evdev readers to notice cancellation on their own.
+        """
+        if self._cancelled:
+            return
+
+        self._cancelled = True
+        self._hotplug_ready = False
+        self._pop_pending_adds()
+
+        if self._relaying_active is not None:
+            self._relaying_active.clear()
+
+        for device_path in list(self._active_tasks):
+            self.remove_device(device_path)
 
     def schedule_add_device(self, device_path: str) -> None:
         if self._cancelled:
@@ -550,6 +573,7 @@ class RelayController:
             device.close()
             return
         self._active_tasks[device.path] = task
+        self._active_devices[device.path] = device
         _logger.debug(f"Created task for {device}.")
 
     def remove_device(self, device_path: str) -> None:
@@ -559,11 +583,17 @@ class RelayController:
         :param device_path: The path of the device to remove
         """
         task = self._active_tasks.pop(device_path, None)
+        device = self._active_devices.pop(device_path, None)
         if task and not task.done():
             task.cancel()
             _logger.debug(f"Cancelled relay for {device_path}.")
         else:
             _logger.debug(f"No active task found for {device_path} to remove.")
+        if device is not None:
+            try:
+                device.close()
+            except Exception:
+                _logger.debug("Ignoring close failure for %s during removal.", device_path)
 
     async def _async_relay_events(self, device: InputDevice) -> None:
         """
@@ -689,6 +719,10 @@ class DeviceRelay:
                     )
                 else:
                     _logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
+        try:
+            self._input_device.close()
+        except Exception:
+            _logger.debug("Ignoring close failure for %s", self._input_device.path)
         return False
 
     async def async_relay_events_loop(self) -> None:

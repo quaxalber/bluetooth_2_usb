@@ -21,6 +21,7 @@ from bluetooth_2_usb.test_harness_capture_windows import (
     _device_matches_token,
     _extract_device_token,
     _keyboard_event_to_report,
+    _validate_candidate_token_disjointness,
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
@@ -374,6 +375,26 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&2b6bd27c&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 ("vid_1d6b&pid_0104&mi_00",),
             )
+        )
+
+    def test_validate_candidate_token_disjointness_rejects_overlapping_roles(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            CaptureMismatchError,
+            "keyboard/mouse=vid_1d6b&pid_0104&mi_00",
+        ):
+            _validate_candidate_token_disjointness(
+                keyboard_tokens=("vid_1d6b&pid_0104&mi_00", "vid_1d6b&pid_0104&mi_01"),
+                mouse_tokens=("vid_1d6b&pid_0104&mi_00",),
+                consumer_tokens=("vid_1d6b&pid_0104&mi_02",),
+            )
+
+    def test_validate_candidate_token_disjointness_accepts_disjoint_roles(self) -> None:
+        _validate_candidate_token_disjointness(
+            keyboard_tokens=("vid_1d6b&pid_0104&mi_01",),
+            mouse_tokens=("vid_1d6b&pid_0104&mi_00",),
+            consumer_tokens=("vid_1d6b&pid_0104&mi_02",),
         )
 
     def test_keyboard_event_to_report_builds_boot_keyboard_reports(self) -> None:

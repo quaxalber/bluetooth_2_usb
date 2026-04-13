@@ -1,5 +1,6 @@
 import io
 import json
+import signal
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
@@ -9,6 +10,86 @@ from bluetooth_2_usb.inventory import DeviceEnumerationError, InputDeviceMetadat
 
 
 class CliTest(unittest.TestCase):
+    def test_install_shutdown_signal_handlers_prefers_loop_signal_handlers(self) -> None:
+        shutdown_event = cli.asyncio.Event()
+
+        class _FakeLoop:
+            def __init__(self) -> None:
+                self.add_calls = []
+                self.remove_calls = []
+
+            def add_signal_handler(self, sig, callback, sig_name) -> None:
+                self.add_calls.append((sig, callback, sig_name))
+
+            def remove_signal_handler(self, sig) -> None:
+                self.remove_calls.append(sig)
+
+        fake_loop = _FakeLoop()
+
+        with patch("bluetooth_2_usb.cli.signal.signal") as install_handler:
+            previous_handlers, loop_handled_signals = (
+                cli._install_shutdown_signal_handlers(
+                    shutdown_event, loop=fake_loop
+                )
+            )
+
+        self.assertEqual(previous_handlers, {})
+        self.assertEqual(
+            loop_handled_signals,
+            (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT),
+        )
+        self.assertEqual(len(fake_loop.add_calls), 4)
+        install_handler.assert_not_called()
+
+        fake_loop.add_calls[1][1](fake_loop.add_calls[1][2])
+        self.assertTrue(shutdown_event.is_set())
+
+        cli._restore_signal_handlers(
+            previous_handlers,
+            loop_handled_signals,
+            loop=fake_loop,
+        )
+        self.assertEqual(
+            fake_loop.remove_calls,
+            [signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT],
+        )
+
+    def test_install_shutdown_signal_handlers_wakes_event_loop_threadsafe(self) -> None:
+        shutdown_event = cli.asyncio.Event()
+        registered_handlers = {}
+
+        class _FakeLoop:
+            def __init__(self) -> None:
+                self.callbacks = []
+
+            def call_soon_threadsafe(self, callback) -> None:
+                self.callbacks.append(callback)
+
+        fake_loop = _FakeLoop()
+
+        with patch("bluetooth_2_usb.cli.signal.getsignal", side_effect=lambda sig: sig):
+            with patch(
+                "bluetooth_2_usb.cli.signal.signal",
+                side_effect=lambda sig, handler: registered_handlers.setdefault(
+                    sig, handler
+                ),
+            ):
+                previous_handlers, loop_handled_signals = (
+                    cli._install_shutdown_signal_handlers(
+                    shutdown_event, loop=fake_loop
+                )
+                )
+
+        self.assertEqual(
+            set(previous_handlers),
+            {signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT},
+        )
+        self.assertEqual(loop_handled_signals, ())
+
+        registered_handlers[signal.SIGTERM](signal.SIGTERM, None)
+
+        self.assertEqual(fake_loop.callbacks, [shutdown_event.set])
+
     def test_list_devices_error_returns_environment_exit(self) -> None:
         with patch(
             "bluetooth_2_usb.cli.describe_input_devices",
