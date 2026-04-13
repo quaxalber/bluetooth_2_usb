@@ -43,7 +43,8 @@ For each file under `docs/`, verify that:
 
 ### 2. Script interfaces
 
-Compare the docs against the current `--help` output of all managed scripts:
+Compare the docs against the current `--help` output of all managed scripts and
+wrapper entrypoints:
 
 ```bash
 for s in \
@@ -62,6 +63,14 @@ do
   bash "$s" --help
   echo
 done
+
+echo "==== scripts/host_relay_test_capture.command"
+./scripts/host_relay_test_capture.command --help
+echo
+
+echo "==== scripts/host_relay_test_capture.ps1"
+powershell -ExecutionPolicy Bypass -File .\\scripts\\host_relay_test_capture.ps1 --help
+echo
 ```
 
 ### 3. Python CLI interface

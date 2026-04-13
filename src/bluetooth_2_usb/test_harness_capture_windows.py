@@ -747,8 +747,8 @@ def _pump_raw_input(
         else None
     )
 
+    # Keep the ctypes callback alive for the lifetime of the message window.
     hwnd, wndproc = _create_message_window()
-    del wndproc
     _register_raw_input(hwnd)
     deadline = time.monotonic() + timeout_sec
     msg = MSG()

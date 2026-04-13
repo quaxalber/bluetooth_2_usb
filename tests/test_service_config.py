@@ -75,7 +75,7 @@ class ServiceConfigTest(unittest.TestCase):
             config = load_service_config(env_file)
             argv = build_cli_argv(config, append_debug=True)
             command = build_shell_command(
-                "python -m bluetooth_2_usb", env_file=env_file, append_debug=True
+                "python -m bluetooth_2_usb", config=config, append_debug=True
             )
 
         self.assertIn("--auto_discover", argv)

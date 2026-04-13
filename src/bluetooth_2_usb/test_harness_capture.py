@@ -727,7 +727,9 @@ def run_capture(
     consumer_node: str | None = None,
     grab_devices: bool = True,
 ) -> HarnessResult:
-    del grab_devices
+    # hidapi capture does not offer exclusive-grab semantics; keep the parameter
+    # for CLI parity with other backends.
+    _ = grab_devices
     scenario = get_scenario(scenario_name)
 
     try:

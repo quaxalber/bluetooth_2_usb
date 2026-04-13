@@ -49,6 +49,7 @@ MODEL="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
 DWC2_MODE="$(dwc2_mode)"
 OVERLAY_LINE="$(board_overlay_line "$MODEL")"
 MODULES="$(required_boot_modules_csv)"
+PRE_REBOOT_EXIT=3
 
 info "Detected model: ${MODEL:-unknown}"
 info "Using boot directory: ${BOOT_DIR}"
@@ -57,8 +58,6 @@ info "Detected dwc2 mode: ${DWC2_MODE}"
 apt-get update -y
 apt-get install -y --no-install-recommends git python3 python3-pip python3-venv python3-dev
 
-backup_file "$CONFIG_TXT"
-backup_file "$CMDLINE_TXT"
 normalize_dwc2_overlay "$CONFIG_TXT" "$OVERLAY_LINE"
 normalize_modules_load "$CMDLINE_TXT" "$MODULES"
 ok "Boot configuration updated"
@@ -93,10 +92,17 @@ else
   fail "CLI version check failed"
 fi
 
-if "${VENV_DIR}/bin/python" -m bluetooth_2_usb --validate-env; then
+set +e
+"${VENV_DIR}/bin/python" -m bluetooth_2_usb --validate-env
+validate_exit=$?
+set -e
+
+if [[ $validate_exit -eq 0 ]]; then
   ok "Environment validation passed"
-else
+elif [[ $validate_exit -eq $PRE_REBOOT_EXIT ]]; then
   warn "Environment validation reports missing runtime prerequisites until after reboot"
+else
+  fail "Environment validation failed with exit code ${validate_exit}"
 fi
 
 cat <<EOF

@@ -58,6 +58,9 @@ dwc2_mode() {
     printf '%s\n' "module"
     return
   fi
+  # Last-resort heuristic only: /sys/module/dwc2 can exist for both built-in and
+  # loadable-module cases, so this branch may misclassify when earlier kernel
+  # config checks could not determine the mode.
   if [[ -d /sys/module/dwc2 ]]; then
     printf '%s\n' "builtin"
     return
@@ -98,6 +101,9 @@ normalize_dwc2_overlay() {
   local config_file="$1"
   local overlay_line="$2"
 
+  [[ -f "$config_file" ]] || fail "Boot config file not found: ${config_file}"
+  [[ -w "$config_file" ]] || fail "Boot config file is not writable: ${config_file}"
+  backup_file "$config_file" || fail "Failed to back up ${config_file}"
   require_commands python3
   python3 - "$config_file" "$overlay_line" <<'PY'
 from pathlib import Path
@@ -129,6 +135,9 @@ normalize_modules_load() {
   local cmdline_file="$1"
   local modules="$2"
 
+  [[ -f "$cmdline_file" ]] || fail "Boot cmdline file not found: ${cmdline_file}"
+  [[ -w "$cmdline_file" ]] || fail "Boot cmdline file is not writable: ${cmdline_file}"
+  backup_file "$cmdline_file" || fail "Failed to back up ${cmdline_file}"
   require_commands python3
   python3 - "$cmdline_file" "$modules" <<'PY'
 from pathlib import Path

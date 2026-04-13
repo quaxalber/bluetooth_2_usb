@@ -95,6 +95,8 @@ if [[ -d /var/lib/bluetooth ]]; then
     fi
     cleanup_seed_lock
     trap - EXIT
+  else
+    fail "Failed to acquire seed lock ${seed_lock_dir} for ${PERSIST_BLUETOOTH_DIR}"
   fi
 fi
 touch "${PERSIST_BLUETOOTH_DIR}/.b2u-persistent-state"

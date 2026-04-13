@@ -30,6 +30,7 @@ if ($env:HOST_CAPTURE_PYTHON -and (Test-PythonHasHid $env:HOST_CAPTURE_PYTHON)) 
       $PythonBin = "py -3"
     }
   } catch {
+    # Intentionally ignored so the wrapper can fall through to the final error path.
   }
 }
 

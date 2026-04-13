@@ -315,6 +315,9 @@ class HarnessResult:
 
 
 def get_scenario(name: str) -> ScenarioDefinition:
+    if name not in SCENARIOS:
+        valid_names = ", ".join(SCENARIO_NAMES)
+        raise ValueError(f"Unknown scenario {name!r}. Expected one of: {valid_names}")
     return SCENARIOS[name]
 
 

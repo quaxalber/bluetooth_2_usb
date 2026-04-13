@@ -145,10 +145,15 @@ def build_cli_argv(config: ServiceConfig, *, append_debug: bool = False) -> list
 
 
 def build_shell_command(
-    executable: str, *, env_file: Path = DEFAULT_ENV_FILE, append_debug: bool = False
+    executable: str,
+    *,
+    config: ServiceConfig | None = None,
+    env_file: Path = DEFAULT_ENV_FILE,
+    append_debug: bool = False,
 ) -> str:
+    resolved_config = load_service_config(env_file) if config is None else config
     command = shlex.split(executable) + build_cli_argv(
-        load_service_config(env_file), append_debug=append_debug
+        resolved_config, append_debug=append_debug
     )
     return shlex.join(command)
 
@@ -193,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             build_shell_command(
                 args.executable,
+                config=config,
                 append_debug=args.append_debug,
                 env_file=DEFAULT_ENV_FILE,
             )

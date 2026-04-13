@@ -121,6 +121,9 @@ write_persist_mount_unit() {
   local fs_type="$3"
   local unit_name
 
+  [[ -n "$persist_spec" ]] || fail "Persistent mount spec must not be empty."
+  [[ "$persist_spec" != *$'\n'* ]] || fail "Persistent mount spec must not contain newlines."
+  [[ "$persist_spec" =~ ^[A-Za-z0-9_./:=-]+$ ]] || fail "Persistent mount spec contains unsupported characters: ${persist_spec}"
   unit_name="$(persist_mount_unit_name "$mount_path")"
   cat >"/etc/systemd/system/${unit_name}" <<EOF
 [Unit]

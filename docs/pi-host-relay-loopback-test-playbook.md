@@ -200,7 +200,7 @@ Check on the Pi:
 ```bash
 systemctl is-active bluetooth_2_usb.service
 sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
-journalctl -u bluetooth_2_usb.service -n 100 --no-pager
+sudo journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 
 ### Pi injection fails with missing `/dev/uinput`

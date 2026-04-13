@@ -240,7 +240,7 @@ fi
 
 RELAYABLE_COUNT=""
 if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb --list_devices --output json >"$LIST_DEVICES_JSON" 2>&1; then
-  RELAYABLE_COUNT="$(
+  if RELAYABLE_COUNT="$(
     "${VENV_DIR}/bin/python" - "$LIST_DEVICES_JSON" <<'PY'
 import json
 import sys
@@ -249,11 +249,17 @@ with open(sys.argv[1], encoding="utf-8") as handle:
     devices = json.load(handle)
 print(sum(1 for device in devices if device.get("relay_candidate")))
 PY
-  )"
-  if [[ "${RELAYABLE_COUNT:-0}" -gt 0 ]]; then
-    ok "Relayable input devices detected (${RELAYABLE_COUNT})"
+  )"; then
+    if [[ "${RELAYABLE_COUNT:-0}" -gt 0 ]]; then
+      ok "Relayable input devices detected (${RELAYABLE_COUNT})"
+    else
+      soft_warn "No relayable input devices detected"
+    fi
   else
-    soft_warn "No relayable input devices detected"
+    RELAYABLE_COUNT=0
+    warn "Failed to parse relayable device inventory from ${LIST_DEVICES_JSON}"
+    sed -n '1,40p' "$LIST_DEVICES_JSON" || true
+    EXIT_CODE=1
   fi
 else
   warn "Device inventory failed"

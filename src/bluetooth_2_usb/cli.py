@@ -231,7 +231,6 @@ async def async_run(args: Arguments) -> int:
         return EXIT_ENVIRONMENT
 
     relaying_active = asyncio.Event()
-    relaying_active.clear()
 
     from .relay import (
         GadgetManager,

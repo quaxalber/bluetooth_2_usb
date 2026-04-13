@@ -263,6 +263,8 @@ ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/uninstall.sh
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
+  systemctl is-enabled var-lib-bluetooth.mount >/dev/null 2>&1 && echo mount-enabled || echo mount-disabled
+  systemctl is-active var-lib-bluetooth.mount >/dev/null 2>&1 && echo mount-active || echo mount-inactive
   test -d /opt/bluetooth_2_usb && echo checkout-present || echo checkout-missing
 '
 ```

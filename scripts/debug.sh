@@ -61,7 +61,12 @@ CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
 REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
 INITIAL_SERVICE_STATE="$(systemctl is-active "${B2U_SERVICE_UNIT}" 2>/dev/null || true)"
-load_readonly_config
+PARSE_ERROR=0
+if (load_readonly_config) >/dev/null 2>&1; then
+  load_readonly_config
+else
+  PARSE_ERROR=1
+fi
 
 DEBUG_CMD=""
 CONFIG_SUMMARY_JSON=""
@@ -310,14 +315,22 @@ fi
 section_text_block "$udc_state_status" "UDC state" "$udc_state_value" "udc_state_path=${udc_state_path:-n/a}"
 section_text_block "ok" "OverlayFS status" "overlayfs=$(overlay_status)"
 readonly_mode_status="ok"
-readonly_mode_value="readonly_mode=$(readonly_mode)"
+readonly_mode_value="readonly_mode=disabled"
 persist_status="ok"
 persist_value="bluetooth_state_persistent=no"
-if bluetooth_state_persistent 2>/dev/null; then
-  persist_status="ok"
-  persist_value="bluetooth_state_persistent=yes"
-elif [[ "$(overlay_status)" == "enabled" || -f "$B2U_READONLY_ENV_FILE" ]]; then
-  persist_status="warn"
+if [[ -f "$B2U_READONLY_ENV_FILE" ]] && [[ -s "$B2U_READONLY_ENV_FILE" ]] && [[ $PARSE_ERROR -eq 1 ]]; then
+  readonly_mode_status="fail"
+  readonly_mode_value="readonly_mode=<config parse error>"
+  persist_status="fail"
+  persist_value="bluetooth_state_persistent=<config parse error>"
+else
+  readonly_mode_value="readonly_mode=$(readonly_mode)"
+  if bluetooth_state_persistent 2>/dev/null; then
+    persist_status="ok"
+    persist_value="bluetooth_state_persistent=yes"
+  elif [[ "$(overlay_status)" == "enabled" || -f "$B2U_READONLY_ENV_FILE" ]]; then
+    persist_status="warn"
+  fi
 fi
 section_text_block "$readonly_mode_status" "Read-only mode" "$readonly_mode_value"
 section_text_block "$persist_status" "Persistent Bluetooth-state detection" "$persist_value"
