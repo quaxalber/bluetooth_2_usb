@@ -130,6 +130,28 @@ class GadgetManager:
 
         raise ValueError(f"Unsupported HID profile: {self._hid_profile}")
 
+    def _usb_identity_overrides(self) -> dict[str, str]:
+        profile_code = {
+            "boot_keyboard": "0x0201",
+            "boot_mouse": "0x0202",
+            "nonboot": "0x0203",
+        }[self._hid_profile]
+        serial_suffix = {
+            "boot_keyboard": "bk",
+            "boot_mouse": "bm",
+            "nonboot": "nb",
+        }[self._hid_profile]
+        product_name = {
+            "boot_keyboard": "USB Combo Device (boot keyboard)",
+            "boot_mouse": "USB Combo Device (boot mouse)",
+            "nonboot": "USB Combo Device (nonboot)",
+        }[self._hid_profile]
+        return {
+            "B2U_USB_BCD_DEVICE": profile_code,
+            "B2U_USB_PRODUCT": product_name,
+            "B2U_USB_SERIALNUMBER": f"213374badcafe-{serial_suffix}",
+        }
+
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(
             Path(f"/dev/hidg{index}")
@@ -206,6 +228,7 @@ class GadgetManager:
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
         usb_hid = import_module("usb_hid")
+        os.environ.update(self._usb_identity_overrides())
         usb_hid.disable()
         self._prune_stale_hidg_nodes(remove_character_devices=True)
 

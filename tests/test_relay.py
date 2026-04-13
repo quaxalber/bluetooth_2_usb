@@ -218,6 +218,29 @@ class GadgetManagerProfileTest(unittest.TestCase):
 
         self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
 
+    def test_boot_keyboard_profile_sets_distinct_usb_identity(self) -> None:
+        identity = GadgetManager("boot_keyboard")._usb_identity_overrides()
+
+        self.assertEqual(identity["B2U_USB_BCD_DEVICE"], "0x0201")
+        self.assertEqual(identity["B2U_USB_SERIALNUMBER"], "213374badcafe-bk")
+        self.assertEqual(
+            identity["B2U_USB_PRODUCT"], "USB Combo Device (boot keyboard)"
+        )
+
+    def test_boot_mouse_profile_sets_distinct_usb_identity(self) -> None:
+        identity = GadgetManager("boot_mouse")._usb_identity_overrides()
+
+        self.assertEqual(identity["B2U_USB_BCD_DEVICE"], "0x0202")
+        self.assertEqual(identity["B2U_USB_SERIALNUMBER"], "213374badcafe-bm")
+        self.assertEqual(identity["B2U_USB_PRODUCT"], "USB Combo Device (boot mouse)")
+
+    def test_nonboot_profile_sets_distinct_usb_identity(self) -> None:
+        identity = GadgetManager("nonboot")._usb_identity_overrides()
+
+        self.assertEqual(identity["B2U_USB_BCD_DEVICE"], "0x0203")
+        self.assertEqual(identity["B2U_USB_SERIALNUMBER"], "213374badcafe-nb")
+        self.assertEqual(identity["B2U_USB_PRODUCT"], "USB Combo Device (nonboot)")
+
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
         manager = GadgetManager("boot_mouse")
         with tempfile.TemporaryDirectory() as tmp:
