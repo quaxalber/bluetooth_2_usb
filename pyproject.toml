@@ -9,7 +9,7 @@ description = "Convert a Raspberry Pi into a HID relay translating Bluetooth key
 authors = [
     { name = "quaxalber", email = "pypi@quaxalber.de" },
 ]
-license = {text = "MIT"}
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = [
@@ -33,7 +33,6 @@ keywords = [
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware :: Universal Serial Bus (USB) :: Human Interface Device (HID)",
     "Intended Audience :: Developers",
@@ -45,7 +44,31 @@ classifiers = [
 Homepage = "https://github.com/quaxalber/bluetooth_2_usb"
 Issues = "https://github.com/quaxalber/bluetooth_2_usb/issues"
 
+[project.scripts]
+bluetooth_2_usb = "bluetooth_2_usb.cli:run"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools_scm]
+write_to = "src/bluetooth_2_usb/_version.py"
+tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["F", "I", "B", "UP"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

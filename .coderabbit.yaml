@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "en-US"
+early_access: false
+tone_instructions: >
+  Prioritize real functional regressions, install and update breakage, Raspberry Pi
+  OTG and HID runtime risks, Bluetooth persistence issues, and missing validation.
+  Keep comments concise and avoid low-value style nitpicks.
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  review_details: false
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+
+chat:
+  auto_reply: true

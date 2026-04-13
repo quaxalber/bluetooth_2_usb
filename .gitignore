@@ -15,6 +15,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!scripts/lib/
+!scripts/lib/common.sh
 lib64/
 parts/
 sdist/
@@ -25,6 +27,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+src/bluetooth_2_usb/_version.py
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

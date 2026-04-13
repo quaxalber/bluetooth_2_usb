@@ -1,119 +1,188 @@
-<!-- omit in toc -->
-# Contributing to Bluetooth 2 USB
+# Contributing to Bluetooth-2-USB
 
-Thank you for considering contributing to Bluetooth 2 USB! We value your effort and are happy to provide guidelines to help you get started. Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open-source project. But don't be too concerned if you're still new to all this. The maintainers are happy to assist and guide new contributors!
+Thanks for your interest in contributing.
 
-<!-- omit in toc -->
-## Table of Contents
+This guide focuses on the repo-specific workflow needed to make changes that are
+easy to review and validate.
 
-- [1. Code of Conduct](#1-code-of-conduct)
-- [2. Getting Started](#2-getting-started)
-- [3. Coding Style](#3-coding-style)
-  - [3.1. Best Practices for Clean and Maintainable Code](#31-best-practices-for-clean-and-maintainable-code)
-    - [3.1.1. General Guidelines](#311-general-guidelines)
-    - [3.1.2. Object-Oriented Programming (OOP) Guidelines](#312-object-oriented-programming-oop-guidelines)
-  - [3.2. Code Formatting with Black](#32-code-formatting-with-black)
-- [4. Pull Requests](#4-pull-requests)
-- [5. Reporting Issues](#5-reporting-issues)
+## Development environment
 
-## 1. Code of Conduct
+Meaningful runtime validation requires Linux, and changes that affect USB gadget
+behavior should be tested on a real Raspberry Pi with an OTG-capable connection
+to a target host.
 
-By participating in this project, you are expected to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## 2. Getting Started
-
-- [Fork the repository](https://docs.github.com/en/get-started/quickstart/fork-a-repo) on GitHub
- 
-- Install required packages to your Linux machine:
- 
-  ```console
-  sudo apt update && sudo apt install -y git python3.11 python3.11-venv
-  ```
-
-- Clone the forked repository and `cd` into it:
- 
-  ```console
-  git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git && cd bluetooth_2_usb
-  ```
-
-- Create a Python virtual environment:
- 
-  ```console
-  python3.11 -m venv venv
-  ```
- 
-- Install dependencies in `venv`:
- 
-  ```console
-  venv/bin/pip3.11 install -r requirements.txt
-  ``` 
-
-- Open the repo in your favorite IDE
- 
-- Make sure that your IDE is using `python3.11` from `bluetooth_2_usb/venv/bin/`, e.g., in VS Code:
- 
-  `CTRL + SHIFT + P` > type `Python Select Interpreter` > select `Enter interpreter path` > select `Find...`
-
-## 3. Coding Style
-
-We value code readability and consistency. To ensure that your contributions align with the project's coding style, please follow these guidelines:
-
-### 3.1. Best Practices for Clean and Maintainable Code
-
-Adherence to widely accepted best practices is crucial for creating code that is clean, maintainable, and efficient. Below are some of the general guidelines you should follow, particularly with regard to Object-Oriented Programming (OOP).
-
-#### 3.1.1. General Guidelines
-
-- Opt for readability over compact code: make sure your code is easy to read and understand.
-- Use [meaningful](https://www.youtube.com/watch?v=-J3wNP6u5YU) variable and function names.
-- Keep functions [small and focused](https://www.youtube.com/watch?v=CFRhGnuXG-4).
-- Document your code [properly](https://www.youtube.com/watch?v=Bf7vDBBOBUA) with comments and docstrings.
-
-#### 3.1.2. Object-Oriented Programming (OOP) Guidelines
-
-- Use encapsulation by limiting the direct manipulation of object attributes and using methods instead.
-- Employ inheritance [wisely](https://www.youtube.com/watch?v=hxGOiiR9ZKg) to reuse code and create a logical relationship between classes.
-- Leverage [polymorphism](https://www.youtube.com/watch?v=rQlMtztiAoA) to allow objects to take on more than one form.
-- Follow the Single Responsibility Principle: a class should have only one reason to change.
-- Make use of [design patterns](https://www.youtube.com/watch?v=J1f5b4vcxCQ) where appropriate.
-
-To learn more about OOP and best practices, consider reviewing:
-
-- [All videos by CodeAesthetic](https://www.youtube.com/@CodeAesthetic)
-- [Clean Code by Robert C. Martin](https://www.amazon.com/Clean-Code-Handbook-Software-Craftsmanship/dp/0132350882)
-- [Python 3 Object-Oriented Programming by Dusty Phillips](https://www.amazon.com/Python-3-Object-Oriented-Programming/dp/1789615852)
-- [The SOLID Principles in Python](https://realpython.com/tutorials/solid/)
-
-### 3.2. Code Formatting with Black
-
-We use [Black](https://black.readthedocs.io/en/stable/) for code formatting. Before committing any code, please make sure to run Black to keep the coding style consistent:
-
-Install Black:
+### Basic setup
 
 ```bash
-pip install black
+sudo apt update
+sudo apt install -y git python3 python3-venv
+
+git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git
+cd bluetooth_2_usb
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -U pip setuptools wheel
+pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 ```
 
-Run Black:
+Use this venv for repo-local validation. Do not silently fall back to system
+Python when the venv workflow applies.
+
+## Project layout
+
+The files most contributors will touch are:
+
+- `src/bluetooth_2_usb/`
+  Python package for the CLI, runtime logic, argument parsing, logging, and
+  relay behavior
+- `scripts/`
+  Install, uninstall, smoke-test, debug, and persistent read-only helper scripts
+- `bluetooth_2_usb.service`
+  systemd unit template used by the installer
+- `.github/workflows/ci.yml`
+  Baseline CI checks run on pull requests
+
+## Managed deployment model
+
+The supported deployment model is intentionally narrow:
+
+- install root: `/opt/bluetooth_2_usb`
+- service unit: `bluetooth_2_usb.service`
+- runtime config: `/etc/default/bluetooth_2_usb`
+
+The operational install flow is:
 
 ```bash
-black .
+sudo apt update
+sudo apt install -y git
+sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb
+sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
-This will automatically reformat your code to conform to the project's coding style. There are also plugins available for many IDEs, e.g. [for vscode](https://code.visualstudio.com/docs/python/formatting).
+The operational update flow is:
 
-## 4. Pull Requests
+```bash
+sudo git -C /opt/bluetooth_2_usb pull --ff-only
+sudo /opt/bluetooth_2_usb/scripts/install.sh
+```
 
-- Create a new branch for each feature or bugfix you are working on.
-- Commit your changes following the [coding style](#3-coding-style) guidelines. Add concise commit messages.
-- Push your changes to your fork.
-- [Create a new Pull Request](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests) targeting the main branch of the official repository. A short description helps the maintainers reviewing the changes.
+Keep code and docs aligned with that model.
 
-## 5. Reporting Issues
+## Quality expectations
 
-Please use the GitHub [issue tracker](https://github.com/quaxalber/bluetooth_2_usb/issues) to report any bugs or to request new features. Make sure to check for existing issues that are related to yours before creating a new one.
+### Python
 
----
+- Python 3.11+
+- Format with Black
+- Lint with Ruff
+- Prefer small, direct control flow over clever abstractions
+- Keep CLI behavior and help text stable unless intentionally changed
 
-Thank you for taking the time to contribute!
+### Shell
 
+- Write for `bash`
+- Quote variables consistently
+- Fail early on invalid input
+- Keep shared helpers in `scripts/lib/common.sh` genuinely generic
+- Keep managed paths and service constants out of `common.sh`
+- Move boot/install/read-only workflow helpers into dedicated shell libs instead
+  of expanding `common.sh`
+- Keep report-only helpers in `scripts/lib/report.sh`
+- Treat install and readonly flows as production code, not convenience glue
+
+### Documentation
+
+- Prefer operational accuracy over marketing language
+- Keep commands copy-pasteable
+- Parameterize examples unless a fixed value is intentionally required
+- Keep docs aligned with current script interfaces and managed paths
+
+## Baseline local checks
+
+Run these from the repo venv:
+
+```bash
+black --check src tests
+ruff check src tests
+python -m compileall src tests
+python -m unittest discover -s tests -v
+python -m bluetooth_2_usb --help
+python -m bluetooth_2_usb --version
+python -m bluetooth_2_usb --validate-env || test $? -eq 3
+shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
+shellcheck -x scripts/*.sh scripts/lib/*.sh
+bash -n scripts/*.sh scripts/lib/*.sh
+yamllint .github/workflows/ci.yml
+python -m build
+```
+
+> [!NOTE]
+> Outside a properly configured Raspberry Pi gadget environment,
+> `--validate-env` may exit with status `3`. That is expected on a normal
+> workstation and should not be treated as a failure by itself.
+
+## Hardware validation
+
+If your change affects runtime behavior, installation, service startup, USB
+gadget setup, or persistent read-only operation, validate it on a real Pi.
+
+From an installed deployment:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo bluetoothctl show
+sudo btmgmt info
+```
+
+For Pi-side validation, use a reachable Raspberry Pi over SSH when feasible.
+
+Use these repo-specific playbooks when they match the task:
+
+- `docs/pi-cli-service-test-playbook.md`
+- `docs/pi-host-relay-loopback-test-playbook.md`
+- `docs/pi-manual-test-plan.md`
+- `docs/doc-consistency-review-playbook.md`
+- `docs/release-versioning-policy.md`
+
+For relay-path changes, prefer running the host/Pi loopback harness in addition
+to the standard smoke/debug checks. It validates that the host-visible gadget
+HID device actually receives the relayed keyboard, mouse, or consumer reports.
+On Linux hosts, the `hidapi` capture path also needs the host-side USB udev
+rule and may temporarily claim the gadget HID interfaces while the capture is
+running.
+
+## Pull request guidelines
+
+When you open a pull request:
+
+- keep the scope focused
+- explain what changed and why
+- describe how you tested it
+- include the target host type used for validation when it matters
+- update docs when behavior, commands, paths, or defaults change
+
+If you address review feedback, verify each point against the current code.
+Do not assume an old resolved thread is still satisfied after later commits.
+Also check grouped nitpicks and summary comments, not just unresolved inline
+threads. If you intentionally decline a review suggestion, explain that
+decision directly on the PR at the relevant thread or comment.
+
+## Reporting issues
+
+Please include as much of the following as you can:
+
+- target host type
+- whether persistent read-only mode is enabled
+- exact commands or scripts used
+- output from `smoke_test.sh --verbose`
+- output from `debug.sh --duration 10`
+- clear reproduction steps
+
+## Community expectations
+
+Please be respectful, constructive, and patient in all project interactions.
+
+Assume good intent, focus feedback on the technical work, and help keep the
+project welcoming to people with different levels of experience.

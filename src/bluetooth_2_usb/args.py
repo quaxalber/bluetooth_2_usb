@@ -1,9 +1,46 @@
 import argparse
-import atexit
-import sys
-from typing import Optional
 
-import usb_hid
+
+def _parse_device_ids(raw_value: str) -> list[str]:
+    device_ids = [
+        device_id.strip() for device_id in raw_value.split(",") if device_id.strip()
+    ]
+    if not device_ids:
+        raise argparse.ArgumentTypeError("DEVICE_IDS must not be empty.")
+    return device_ids
+
+
+def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
+    from .evdev import ecodes
+
+    alias_map = {
+        "SHIFT": "LEFTSHIFT",
+        "LSHIFT": "LEFTSHIFT",
+        "RSHIFT": "RIGHTSHIFT",
+        "CTRL": "LEFTCTRL",
+        "LCTRL": "LEFTCTRL",
+        "RCTRL": "RIGHTCTRL",
+        "ALT": "LEFTALT",
+        "LALT": "LEFTALT",
+        "RALT": "RIGHTALT",
+        "GUI": "LEFTMETA",
+        "LMETA": "LEFTMETA",
+        "RMETA": "RIGHTMETA",
+    }
+    parsed_keys = []
+    for raw_key in raw_value.split("+"):
+        key = raw_key.strip().upper()
+        if not key:
+            continue
+        normalized = alias_map.get(key, key)
+        key_name = normalized if normalized.startswith("KEY_") else f"KEY_{normalized}"
+        if not hasattr(ecodes, key_name):
+            raise argparse.ArgumentTypeError(f"Unknown shortcut key: {raw_key}")
+        parsed_keys.append(key_name)
+
+    if not parsed_keys:
+        raise argparse.ArgumentTypeError("Shortcut must contain at least one key.")
+    return parsed_keys
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
@@ -11,7 +48,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         super().__init__(
             *args,
             add_help=False,
-            description="Bluetooth to USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
+            description="Bluetooth-2-USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
             formatter_class=argparse.RawTextHelpFormatter,
             **kwargs,
         )
@@ -22,7 +59,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "--device_ids",
             "-i",
-            type=lambda input: [id.strip() for id in input.split(",")],
+            type=_parse_device_ids,
             default=None,
             help="Comma-separated list of identifiers for input devices to be relayed.\nAn identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\nExample: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\nDefault: None",
         )
@@ -43,9 +80,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "--interrupt_shortcut",
             "-s",
-            type=lambda input: [
-                key.strip().upper() for key in input.split("+") if key.strip()
-            ],
+            type=_parse_interrupt_shortcut,
             default=None,
             help=(
                 "A plus-separated list of key names to press simultaneously in order to "
@@ -89,20 +124,30 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Display the version number of this software and exit.",
         )
         self.add_argument(
+            "--validate-env",
+            action="store_true",
+            default=False,
+            help="Validate the gadget runtime prerequisites and exit.",
+        )
+        self.add_argument(
+            "--output",
+            choices=["text", "json"],
+            default="text",
+            help="Output format for --list_devices and --validate-env. Default: text",
+        )
+        self.add_argument(
+            "--hid-profile",
+            choices=["boot_keyboard", "boot_mouse", "nonboot"],
+            default="boot_keyboard",
+            help="USB HID profile to expose. Default: boot_keyboard",
+        )
+        self.add_argument(
             "--help",
             "-h",
             action="help",
             default=argparse.SUPPRESS,
             help="Show this help message and exit.",
         )
-
-    def print_help(self) -> None:
-        """
-        When the script is run with help or version flag, we need to unregister usb_hid.disable() from atexit
-        because else an exception occurs if the script is already running, e.g. as service.
-        """
-        atexit.unregister(usb_hid.disable)
-        super().print_help()
 
 
 class _HelpAction(argparse._HelpAction):
@@ -122,19 +167,25 @@ class Arguments:
         "_log_path",
         "_debug",
         "_version",
+        "_validate_env",
+        "_output",
+        "_hid_profile",
     ]
 
     def __init__(
         self,
-        device_ids: Optional[list[str]],
+        device_ids: list[str] | None,
         auto_discover: bool,
         grab_devices: bool,
-        interrupt_shortcut: Optional[list[str]],
+        interrupt_shortcut: list[str] | None,
         list_devices: bool,
         log_to_file: bool,
         log_path: str,
         debug: bool,
         version: bool,
+        validate_env: bool,
+        output: str,
+        hid_profile: str,
     ) -> None:
         self._device_ids = device_ids
         self._auto_discover = auto_discover
@@ -145,9 +196,12 @@ class Arguments:
         self._log_path = log_path
         self._debug = debug
         self._version = version
+        self._validate_env = validate_env
+        self._output = output
+        self._hid_profile = hid_profile
 
     @property
-    def device_ids(self) -> Optional[list[str]]:
+    def device_ids(self) -> list[str] | None:
         return self._device_ids
 
     @property
@@ -159,7 +213,7 @@ class Arguments:
         return self._grab_devices
 
     @property
-    def interrupt_shortcut(self) -> Optional[list[str]]:
+    def interrupt_shortcut(self) -> list[str] | None:
         return self._interrupt_shortcut
 
     @property
@@ -182,20 +236,38 @@ class Arguments:
     def version(self) -> bool:
         return self._version
 
+    @property
+    def validate_env(self) -> bool:
+        return self._validate_env
+
+    @property
+    def output(self) -> str:
+        return self._output
+
+    @property
+    def hid_profile(self) -> str:
+        return self._hid_profile
+
     def __str__(self) -> str:
         slot_values = [f"{slot[1:]}={getattr(self, slot)}" for slot in self.__slots__]
         return ", ".join(slot_values)
 
 
-def parse_args() -> Arguments:
+def parse_args(argv: list[str] | None = None) -> Arguments:
     parser = CustomArgumentParser()
-
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Check if no arguments were provided
-    if len(sys.argv) == 1:
+    if argv is None:
+        from sys import argv as sys_argv
+
+        provided_argv = sys_argv[1:]
+    else:
+        provided_argv = argv
+
+    if len(provided_argv) == 0:
         parser.print_help()
-        sys.exit(1)
+        raise SystemExit(2)
 
     return Arguments(
         device_ids=args.device_ids,
@@ -207,4 +279,7 @@ def parse_args() -> Arguments:
         log_path=args.log_path,
         debug=args.debug,
         version=args.version,
+        validate_env=args.validate_env,
+        output=args.output,
+        hid_profile=args.hid_profile,
     )

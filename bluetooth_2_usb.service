@@ -1,12 +1,26 @@
 [Unit]
-Description=Bluetooth to USB HID relay
-After=multi-user.target
+Description=Bluetooth-2-USB HID relay
+Requires=bluetooth.service
+RequiresMountsFor=/var/lib/bluetooth
+After=bluetooth.service local-fs.target
 
 [Service]
+Type=simple
 User=root
-ExecStart=/usr/bin/bluetooth_2_usb --auto_discover --grab_devices --interrupt_shortcut CTRL+SHIFT+F12
+Group=root
+WorkingDirectory=/opt/bluetooth_2_usb
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/default/bluetooth_2_usb
+ExecStart=/opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb.service_runner
 Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=15s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+LogsDirectory=bluetooth_2_usb
+ReadWritePaths=/var/lib/bluetooth
 
 [Install]
 WantedBy=multi-user.target

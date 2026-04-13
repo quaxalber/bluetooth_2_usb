@@ -1,21 +1,27 @@
-# --------------------------------------------------------------------------
-# Gather everything into a single, convenient namespace.
-# --------------------------------------------------------------------------
+from __future__ import annotations
 
-from .args import Arguments, parse_args
-from .evdev import (
-    ecodes,
-    evdev_to_usb_hid,
-    find_key_name,
-    find_usage_name,
-    get_mouse_movement,
-    is_consumer_key,
-    is_mouse_button,
-)
-from .logging import add_file_handler, get_logger
-from .relay import (
-    DeviceIdentifier,
-    DeviceRelay,
-    RelayController,
-    async_list_input_devices,
-)
+from typing import TYPE_CHECKING, Any
+
+from .version import get_version
+
+if TYPE_CHECKING:
+    from .args import Arguments
+else:
+    Arguments = Any
+
+__version__ = get_version()
+
+
+def parse_args(*args: Any, **kwargs: Any) -> Arguments:
+    from .args import parse_args as _parse_args
+
+    return _parse_args(*args, **kwargs)
+
+
+def run(*args: Any, **kwargs: Any) -> int:
+    from .cli import run as _run
+
+    return _run(*args, **kwargs)
+
+
+__all__ = ["Arguments", "parse_args", "run", "__version__"]
