@@ -20,7 +20,7 @@ class ServiceConfig:
     auto_discover: bool = True
     grab_devices: bool = True
     interrupt_shortcut: str = "CTRL+SHIFT+F12"
-    hid_profile: str = "compat"
+    hid_profile: str = "boot_keyboard"
     log_to_file: bool = False
     log_path: str = DEFAULT_LOG_PATH
     debug: bool = False
@@ -105,7 +105,7 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
         elif key == "B2U_INTERRUPT_SHORTCUT":
             config.interrupt_shortcut = value
         elif key == "B2U_HID_PROFILE":
-            if value not in {"compat", "extended", "boot_keyboard"}:
+            if value not in {"boot_keyboard", "boot_mouse", "nonboot"}:
                 raise ServiceConfigError(
                     f"{env_file}:{line_number}: invalid B2U_HID_PROFILE {value!r}"
                 )

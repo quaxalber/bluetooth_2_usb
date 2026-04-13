@@ -23,7 +23,23 @@ class ParseArgsTest(unittest.TestCase):
             ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"],
         )
 
-    def test_boot_keyboard_profile_is_accepted(self) -> None:
-        args = parse_args(["--hid-profile", "boot_keyboard"])
+    def test_boot_keyboard_profile_is_default(self) -> None:
+        args = parse_args(["--version"])
 
         self.assertEqual(args.hid_profile, "boot_keyboard")
+
+    def test_boot_mouse_profile_is_accepted(self) -> None:
+        args = parse_args(["--hid-profile", "boot_mouse"])
+
+        self.assertEqual(args.hid_profile, "boot_mouse")
+
+    def test_nonboot_profile_is_accepted(self) -> None:
+        args = parse_args(["--hid-profile", "nonboot"])
+
+        self.assertEqual(args.hid_profile, "nonboot")
+
+    def test_legacy_profile_names_are_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            parse_args(["--hid-profile", "compat"])
+
+        self.assertEqual(ctx.exception.code, 2)

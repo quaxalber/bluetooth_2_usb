@@ -5,7 +5,7 @@ import sys
 import unittest
 from contextlib import redirect_stdout
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from bluetooth_2_usb import test_harness_capture_windows
 from bluetooth_2_usb.test_harness import run as run_harness
@@ -18,7 +18,9 @@ from bluetooth_2_usb.test_harness_capture import (
     discover_gadget_nodes,
 )
 from bluetooth_2_usb.test_harness_capture_windows import (
+    _device_matches_candidate,
     _device_matches_token,
+    _extract_device_names,
     _extract_device_token,
     _keyboard_event_to_report,
     _validate_candidate_token_disjointness,
@@ -363,6 +365,28 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             )
         )
 
+    def test_extract_device_names_normalizes_windows_hid_paths(self) -> None:
+        self.assertEqual(
+            _extract_device_names(
+                (
+                    r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{GUID}",
+                    r"\\?\hid#vid_1d6b&pid_0104&mi_00#9&314c2078&0&0000#{guid}",
+                )
+            ),
+            (r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{guid}",),
+        )
+
+    def test_device_matches_candidate_prefers_exact_normalized_hid_paths(self) -> None:
+        self.assertTrue(
+            _device_matches_candidate(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                (
+                    r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                ),
+                ("vid_1d6b&pid_0104&mi_01",),
+            )
+        )
+
     def test_device_matches_token_uses_simple_vid_pid_interface_tokens(self) -> None:
         self.assertTrue(
             _device_matches_token(
@@ -411,6 +435,9 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertIsNone(_keyboard_event_to_report(0x41, is_key_up=False))
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
+        if sys.platform == "win32":
+            self.skipTest("Non-Windows runtime guard is not exercised on Windows")
+
         with self.assertRaisesRegex(RuntimeError, "only available on Windows"):
             test_harness_capture_windows.run_windows_raw_input_capture(
                 scenario_name="keyboard",
@@ -521,10 +548,11 @@ class TestHarnessCliTest(unittest.TestCase):
 
     def test_harness_reports_interrupt_cleanly(self) -> None:
         stdout = io.StringIO()
+        fake_inject_module = SimpleNamespace(run_inject=Mock(side_effect=KeyboardInterrupt))
 
-        with patch(
-            "bluetooth_2_usb.test_harness_inject.run_inject",
-            side_effect=KeyboardInterrupt,
+        with patch.dict(
+            "sys.modules",
+            {"bluetooth_2_usb.test_harness_inject": fake_inject_module},
         ):
             with redirect_stdout(stdout):
                 exit_code = run_harness(["inject"])
@@ -600,7 +628,7 @@ class TestHarnessCliTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
 
-    def test_windows_capture_keeps_consumer_on_hidapi_backend(self) -> None:
+    def test_windows_capture_uses_raw_input_backend_for_consumer_scenarios(self) -> None:
         consumer_hid = _FakeHidModule(
             [
                 _hid_entry(
@@ -620,21 +648,21 @@ class TestHarnessCliTest(unittest.TestCase):
                 return_value=consumer_hid,
             ):
                 with patch(
-                    "bluetooth_2_usb.test_harness_capture_windows.run_windows_raw_input_capture"
+                    "bluetooth_2_usb.test_harness_capture_windows.run_windows_raw_input_capture",
+                    return_value=HarnessResult(
+                        command="capture",
+                        scenario="consumer",
+                        success=True,
+                        exit_code=0,
+                        message="ok",
+                        details={"capture_backend": "raw_input"},
+                    ),
                 ) as run_backend:
                     with patch(
-                        "bluetooth_2_usb.test_harness_capture._capture_once",
-                        return_value=HarnessResult(
-                            command="capture",
-                            scenario="consumer",
-                            success=True,
-                            exit_code=0,
-                            message="ok",
-                            details={"capture_backend": "hidapi"},
-                        ),
+                        "bluetooth_2_usb.test_harness_capture._capture_once"
                     ) as capture_once:
                         exit_code = run_harness(["capture", "--scenario", "consumer"])
 
         self.assertEqual(exit_code, 0)
-        capture_once.assert_called_once()
-        run_backend.assert_not_called()
+        run_backend.assert_called_once()
+        capture_once.assert_not_called()

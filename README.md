@@ -148,7 +148,7 @@ Default content:
 B2U_AUTO_DISCOVER=1
 B2U_GRAB_DEVICES=1
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_HID_PROFILE=compat
+B2U_HID_PROFILE=boot_keyboard
 B2U_LOG_TO_FILE=0
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=0
@@ -194,7 +194,7 @@ Use these runtime flags when running the CLI manually.
 | `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
 | `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
 | `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
-| `--hid-profile PROFILE` | USB HID profile to expose. Default: `compat`. Supported values: `compat`, `extended`, `boot_keyboard`. `compat` keeps the Windows-validated boot-mouse-first ordering. `extended` uses report-ID based keyboard, mouse, and consumer-control functions. `boot_keyboard` exposes a boot keyboard plus separate mouse and consumer-control functions. Example: `--hid-profile extended`. |
+| `--hid-profile PROFILE` | USB HID profile to expose. Default: `boot_keyboard`. Supported values: `boot_keyboard`, `boot_mouse`, `nonboot`. `boot_keyboard` exposes a boot keyboard plus separate mouse and consumer-control functions and is the preferred choice for stricter pre-OS hosts. `boot_mouse` exposes a boot mouse plus separate keyboard and consumer-control functions. `nonboot` uses report-ID based keyboard, mouse, and consumer-control functions. Example: `--hid-profile nonboot`. |
 | `--help, -h` | Show the built-in CLI help and exit. |
 
 ## Day-to-day usage

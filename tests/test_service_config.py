@@ -20,7 +20,7 @@ class ServiceConfigTest(unittest.TestCase):
                         "B2U_AUTO_DISCOVER=0",
                         "B2U_GRAB_DEVICES=1",
                         "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_HID_PROFILE=extended",
+                        "B2U_HID_PROFILE=nonboot",
                         "B2U_LOG_TO_FILE=1",
                         "B2U_LOG_PATH='/tmp/custom log.txt'",
                         "B2U_DEBUG=1",
@@ -36,7 +36,7 @@ class ServiceConfigTest(unittest.TestCase):
 
         self.assertFalse(config.auto_discover)
         self.assertTrue(config.grab_devices)
-        self.assertEqual(config.hid_profile, "extended")
+        self.assertEqual(config.hid_profile, "nonboot")
         self.assertTrue(config.log_to_file)
         self.assertEqual(config.log_path, "/tmp/custom log.txt")
         self.assertTrue(config.debug)
@@ -60,7 +60,7 @@ class ServiceConfigTest(unittest.TestCase):
                         "B2U_AUTO_DISCOVER=1",
                         "B2U_GRAB_DEVICES=1",
                         "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_HID_PROFILE=compat",
+                        "B2U_HID_PROFILE=boot_mouse",
                         "B2U_LOG_TO_FILE=1",
                         "B2U_LOG_PATH='/tmp/debug log.txt'",
                         "B2U_DEBUG=0",
@@ -97,3 +97,19 @@ class ServiceConfigTest(unittest.TestCase):
 
         self.assertEqual(config.hid_profile, "boot_keyboard")
         self.assertIn("boot_keyboard", argv)
+
+    def test_rejects_legacy_hid_profile_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("B2U_HID_PROFILE=compat\n", encoding="utf-8")
+
+            with self.assertRaises(ServiceConfigError):
+                load_service_config(env_file)
+
+    def test_defaults_to_boot_keyboard_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "missing"
+
+            config = load_service_config(env_file)
+
+        self.assertEqual(config.hid_profile, "boot_keyboard")

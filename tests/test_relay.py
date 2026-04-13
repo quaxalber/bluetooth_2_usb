@@ -167,7 +167,7 @@ class RuntimeMonitorTest(unittest.TestCase):
 
 
 class GadgetManagerProfileTest(unittest.TestCase):
-    def test_compat_profile_uses_boot_mouse_then_keyboard(self) -> None:
+    def test_boot_mouse_profile_uses_boot_mouse_then_keyboard(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
@@ -180,11 +180,11 @@ class GadgetManagerProfileTest(unittest.TestCase):
             "bluetooth_2_usb.relay.import_module",
             return_value=SimpleNamespace(Device=fake_device),
         ):
-            devices = GadgetManager("compat")._requested_devices()
+            devices = GadgetManager("boot_mouse")._requested_devices()
 
         self.assertEqual(devices, ["boot-mouse", "keyboard", "consumer"])
 
-    def test_extended_profile_uses_report_id_devices(self) -> None:
+    def test_nonboot_profile_uses_report_id_devices(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
@@ -197,7 +197,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
             "bluetooth_2_usb.relay.import_module",
             return_value=SimpleNamespace(Device=fake_device),
         ):
-            devices = GadgetManager("extended")._requested_devices()
+            devices = GadgetManager("nonboot")._requested_devices()
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
@@ -219,7 +219,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
         self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
 
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
-        manager = GadgetManager("compat")
+        manager = GadgetManager("boot_mouse")
         with tempfile.TemporaryDirectory() as tmp:
             stale = Path(tmp) / "hidg1"
             stale.write_text("stale", encoding="utf-8")
@@ -228,7 +228,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
             self.assertFalse(stale.exists())
 
     def test_validate_hidg_nodes_rejects_regular_files(self) -> None:
-        manager = GadgetManager("compat")
+        manager = GadgetManager("boot_mouse")
         with tempfile.TemporaryDirectory() as tmp:
             bad = Path(tmp) / "hidg1"
             bad.write_text("not-a-device", encoding="utf-8")
@@ -240,7 +240,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
                     )
 
     def test_validate_hidg_nodes_waits_for_delayed_nodes(self) -> None:
-        manager = GadgetManager("compat")
+        manager = GadgetManager("boot_mouse")
 
         with patch.object(
             manager,
@@ -256,7 +256,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
     def test_collect_invalid_hidg_nodes_rejects_unopenable_character_devices(
         self,
     ) -> None:
-        manager = GadgetManager("compat")
+        manager = GadgetManager("boot_mouse")
         path = Path("/dev/hidg0")
         stats = SimpleNamespace(
             st_mode=stat.S_IFCHR | 0o600, st_rdev=os.makedev(236, 0)

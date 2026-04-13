@@ -48,7 +48,7 @@ class GadgetManager:
     HIDG_NODE_READY_TIMEOUT_SEC = 2.0
     HIDG_NODE_POLL_INTERVAL_SEC = 0.05
 
-    def __init__(self, hid_profile: str = "compat") -> None:
+    def __init__(self, hid_profile: str = "boot_keyboard") -> None:
         """
         Initialize without enabling devices. Call enable_gadgets() to enable them.
         """
@@ -64,14 +64,14 @@ class GadgetManager:
         usb_hid = import_module("usb_hid")
         device = usb_hid.Device
 
-        if self._hid_profile == "extended":
-            return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
         if self._hid_profile == "boot_keyboard":
             return [device.BOOT_KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
+        if self._hid_profile == "boot_mouse":
+            return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
+        if self._hid_profile == "nonboot":
+            return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
 
-        # Keep the Windows-validated compatibility ordering from v0.8.2/v0.9.1:
-        # boot mouse first, then keyboard, then consumer control.
-        return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
+        raise ValueError(f"Unsupported HID profile: {self._hid_profile}")
 
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(

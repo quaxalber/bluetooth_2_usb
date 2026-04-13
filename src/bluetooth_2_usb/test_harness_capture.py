@@ -737,7 +737,7 @@ def run_capture(
             details={},
         )
 
-    if sys.platform == "win32" and scenario_name != "consumer":
+    if sys.platform == "win32":
         from .test_harness_capture_windows import run_windows_raw_input_capture
 
         result = run_windows_raw_input_capture(

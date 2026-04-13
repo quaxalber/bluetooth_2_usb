@@ -38,7 +38,7 @@ write_default_env_file() {
 B2U_AUTO_DISCOVER=1
 B2U_GRAB_DEVICES=1
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_HID_PROFILE=compat
+B2U_HID_PROFILE=boot_keyboard
 B2U_LOG_TO_FILE=0
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=0
