@@ -1,7 +1,19 @@
 from functools import lru_cache
 from importlib import import_module
+from typing import Any
 
-from evdev import InputEvent, KeyEvent, RelEvent
+try:
+    from evdev import InputEvent, KeyEvent, RelEvent
+except ModuleNotFoundError:
+    InputEvent = Any  # type: ignore[assignment]
+
+    class KeyEvent:
+        key_down = 1
+        key_hold = 2
+        key_up = 0
+
+    class RelEvent:
+        pass
 
 from .logging import get_logger
 

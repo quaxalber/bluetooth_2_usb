@@ -328,7 +328,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
 
         controller.request_shutdown()
 
-        self.assertTrue(controller._cancelled)
+        self.assertTrue(controller._shutdown_event.is_set())
         self.assertFalse(controller._hotplug_ready)
         self.assertFalse(relaying_active.is_set())
         self.assertEqual(controller._pending_add_paths, [])

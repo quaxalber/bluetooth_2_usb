@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-
-from evdev import InputDevice, list_devices
-from evdev import ecodes as native_ecodes
+from types import SimpleNamespace
+from typing import Any
 
 from .logging import get_logger
 
@@ -17,14 +16,27 @@ DEFAULT_SKIP_NAME_PREFIXES = (
     "raspberrypi-ts",
 )
 
+
+class DeviceEnumerationError(RuntimeError):
+    pass
+
+
+try:
+    from evdev import InputDevice, list_devices
+    from evdev import ecodes as native_ecodes
+except ModuleNotFoundError as exc:
+    InputDevice = Any  # type: ignore[assignment]
+    list_devices = None  # type: ignore[assignment]
+    native_ecodes = SimpleNamespace(EV_KEY=0x01, EV_REL=0x02)
+    _EVDEV_IMPORT_ERROR: ModuleNotFoundError | None = exc
+else:
+    _EVDEV_IMPORT_ERROR = None
+
+
 EVENT_TYPE_NAMES = {
     native_ecodes.EV_KEY: "EV_KEY",
     native_ecodes.EV_REL: "EV_REL",
 }
-
-
-class DeviceEnumerationError(RuntimeError):
-    pass
 
 
 @dataclass(slots=True)
@@ -67,6 +79,10 @@ def auto_discover_exclusion_reason(
 
 
 def list_input_device_paths() -> list[str]:
+    if _EVDEV_IMPORT_ERROR is not None or list_devices is None:
+        raise DeviceEnumerationError(
+            "python-evdev is required to enumerate input devices on this host"
+        ) from _EVDEV_IMPORT_ERROR
     try:
         return list(list_devices())
     except (OSError, FileNotFoundError) as exc:

@@ -6,20 +6,20 @@ import sys
 from dataclasses import dataclass
 from logging import DEBUG
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .args import Arguments, parse_args
-from .inventory import (
-    DeviceEnumerationError,
-    describe_input_devices,
-    inventory_to_text,
-)
 from .logging import add_file_handler, get_logger
 from .version import get_versioned_name
+
+if TYPE_CHECKING:
+    from .args import Arguments
+    from .inventory import DeviceEnumerationError
 
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_ENVIRONMENT = 3
 EXIT_RUNTIME = 4
+GRACEFUL_SHUTDOWN_TIMEOUT_SEC = 10.0
 
 logger = get_logger()
 
@@ -120,6 +120,15 @@ def configure_logging(args: Arguments) -> None:
     logger.debug(f"CLI args: {args}")
 
 
+def _handled_shutdown_signals() -> tuple[signal.Signals, ...]:
+    signals = [signal.SIGINT, signal.SIGTERM]
+    for optional_name in ("SIGHUP", "SIGQUIT"):
+        optional_signal = getattr(signal, optional_name, None)
+        if optional_signal is not None:
+            signals.append(optional_signal)
+    return tuple(signals)
+
+
 def _install_shutdown_signal_handlers(
     shutdown_event: asyncio.Event,
     *,
@@ -142,12 +151,7 @@ def _install_shutdown_signal_handlers(
         except RuntimeError:
             shutdown_event.set()
 
-    for handled_signal in (
-        signal.SIGINT,
-        signal.SIGTERM,
-        signal.SIGHUP,
-        signal.SIGQUIT,
-    ):
+    for handled_signal in _handled_shutdown_signals():
         sig_name = signal.Signals(handled_signal).name
         add_signal_handler = getattr(active_loop, "add_signal_handler", None)
         if add_signal_handler is not None:
@@ -187,6 +191,12 @@ async def async_run(args: Arguments) -> int:
         return print_version()
 
     if args.list_devices:
+        from .inventory import (
+            DeviceEnumerationError,
+            describe_input_devices,
+            inventory_to_text,
+        )
+
         try:
             devices = describe_input_devices()
         except DeviceEnumerationError as exc:
@@ -294,9 +304,20 @@ async def async_run(args: Arguments) -> int:
 
             logger.debug("Shutdown event triggered. Cancelling relay task...")
             relay_controller.request_shutdown()
-            relay_task.cancel()
             shutdown_task.cancel()
-            await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
+            try:
+                await asyncio.wait_for(
+                    relay_task,
+                    timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Relay shutdown exceeded %.1fs; cancelling remaining tasks.",
+                    GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                )
+                relay_task.cancel()
+                await asyncio.gather(relay_task, return_exceptions=True)
+            await asyncio.gather(shutdown_task, return_exceptions=True)
     finally:
         _restore_signal_handlers(
             previous_handlers,
@@ -307,6 +328,8 @@ async def async_run(args: Arguments) -> int:
 
 
 def run(argv: list[str] | None = None) -> int:
+    from .args import parse_args
+
     try:
         args = parse_args(argv)
     except SystemExit as exc:

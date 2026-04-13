@@ -1,7 +1,5 @@
 import argparse
 
-from .evdev import ecodes
-
 
 def _parse_device_ids(raw_value: str) -> list[str]:
     device_ids = [
@@ -13,6 +11,8 @@ def _parse_device_ids(raw_value: str) -> list[str]:
 
 
 def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
+    from .evdev import ecodes
+
     alias_map = {
         "SHIFT": "LEFTSHIFT",
         "LSHIFT": "LEFTSHIFT",

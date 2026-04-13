@@ -329,11 +329,14 @@ class RelayController:
         self._active_tasks: dict[str, Task] = {}
         self._active_devices: dict[str, InputDevice] = {}
         self._task_group: TaskGroup | None = None
-        self._cancelled = False
+        self._shutdown_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._hotplug_ready = False
         self._pending_add_paths: list[str] = []
         self._pending_add_lock = threading.Lock()
+
+    def _shutdown_requested(self) -> bool:
+        return self._shutdown_event.is_set()
 
     async def async_relay_devices(self) -> None:
         """
@@ -365,9 +368,7 @@ class RelayController:
                 self._hotplug_ready = True
                 self._flush_pending_adds()
 
-                # Keep running unless canceled
-                while not self._cancelled:
-                    await asyncio.sleep(0.1)
+                await self._shutdown_event.wait()
         except* Exception as exc_grp:
             _logger.exception(
                 "RelayController: Exception in TaskGroup", exc_info=exc_grp
@@ -385,21 +386,31 @@ class RelayController:
         This is used during service shutdown and profile restarts so we do not
         wait indefinitely for evdev readers to notice cancellation on their own.
         """
-        if self._cancelled:
+        if self._shutdown_requested():
             return
 
-        self._cancelled = True
+        self._shutdown_event.set()
         self._hotplug_ready = False
         self._pop_pending_adds()
 
         if self._relaying_active is not None:
             self._relaying_active.clear()
 
-        for device_path in list(self._active_tasks):
-            self.remove_device(device_path)
+        def _begin_shutdown() -> None:
+            for device_path in list(self._active_tasks):
+                self.remove_device(device_path)
+
+        loop = self._loop
+        if loop is not None:
+            try:
+                loop.call_soon_threadsafe(_begin_shutdown)
+                return
+            except RuntimeError:
+                pass
+        _begin_shutdown()
 
     def schedule_add_device(self, device_path: str) -> None:
-        if self._cancelled:
+        if self._shutdown_requested():
             _logger.debug(
                 "Ignoring add for %s; controller is shutting down.", device_path
             )
@@ -454,7 +465,7 @@ class RelayController:
             not self._hotplug_ready
             or loop is None
             or self._task_group is None
-            or self._cancelled
+            or self._shutdown_requested()
         ):
             return
         for device_path in self._pop_pending_adds():
@@ -464,7 +475,7 @@ class RelayController:
 
     def _schedule_add_retry(self, device_path: str, retries_remaining: int) -> None:
         loop = self._loop
-        if loop is None or self._task_group is None or self._cancelled:
+        if loop is None or self._task_group is None or self._shutdown_requested():
             _logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
             return
 
@@ -520,7 +531,7 @@ class RelayController:
                 )
             return
         loop = self._loop
-        if loop is None or self._cancelled:
+        if loop is None or self._shutdown_requested():
             _logger.debug(
                 f"Ignoring remove for {device_path}; event loop is unavailable."
             )
@@ -948,7 +959,7 @@ class RuntimeMonitor:
         self.udc_path = udc_path
         self.poll_interval = poll_interval
 
-        self._stop = False
+        self._stop_event = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._last_state: str | None = None
 
@@ -964,14 +975,14 @@ class RuntimeMonitor:
             )
 
     async def __aenter__(self):
-        self._stop = False
+        self._stop_event.clear()
         self.observer.start()
         self._task = asyncio.create_task(self._poll_state())
         _logger.debug("RuntimeMonitor started.")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self._stop = True
+        self._stop_event.set()
         self.observer.stop()
         if self._task:
             self._task.cancel()
@@ -980,12 +991,18 @@ class RuntimeMonitor:
         return False
 
     async def _poll_state(self):
-        while not self._stop:
+        while not self._stop_event.is_set():
             new_state = self._read_udc_state()
             if new_state != self._last_state:
                 self._handle_state_change(new_state)
                 self._last_state = new_state
-            await asyncio.sleep(self.poll_interval)
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(),
+                    timeout=self.poll_interval,
+                )
+            except asyncio.TimeoutError:
+                pass
 
     def _read_udc_state(self) -> str:
         try:

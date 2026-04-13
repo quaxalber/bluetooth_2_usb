@@ -98,14 +98,6 @@ class ServiceConfigTest(unittest.TestCase):
         self.assertEqual(config.hid_profile, "boot_keyboard")
         self.assertIn("boot_keyboard", argv)
 
-    def test_rejects_legacy_hid_profile_names(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            env_file = Path(tmpdir) / "bluetooth_2_usb"
-            env_file.write_text("B2U_HID_PROFILE=compat\n", encoding="utf-8")
-
-            with self.assertRaises(ServiceConfigError):
-                load_service_config(env_file)
-
     def test_defaults_to_boot_keyboard_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "missing"

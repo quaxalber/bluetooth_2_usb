@@ -49,38 +49,6 @@ EOF
   fi
 }
 
-normalize_default_env_file() {
-  [[ -f "$B2U_ENV_FILE" ]] || return 0
-
-  B2U_ENV_PATH="$B2U_ENV_FILE" python3 <<'PY'
-from pathlib import Path
-import os
-
-env_path = Path(os.environ["B2U_ENV_PATH"])
-lines = env_path.read_text(encoding="utf-8").splitlines()
-valid_profiles = {"boot_keyboard", "boot_mouse", "nonboot"}
-legacy_profile_map = {"compat": "boot_mouse", "extended": "nonboot"}
-updated_lines: list[str] = []
-seen_profile = False
-
-for line in lines:
-    if line.startswith("B2U_HID_PROFILE="):
-        seen_profile = True
-        raw_value = line.split("=", 1)[1].strip()
-        normalized_value = legacy_profile_map.get(raw_value, raw_value)
-        if normalized_value not in valid_profiles:
-            normalized_value = "boot_keyboard"
-        updated_lines.append(f"B2U_HID_PROFILE={normalized_value}")
-    else:
-        updated_lines.append(line)
-
-if not seen_profile:
-    updated_lines.append("B2U_HID_PROFILE=boot_keyboard")
-
-env_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
-PY
-}
-
 install_cli_wrapper() {
   cat >/usr/local/bin/bluetooth_2_usb <<EOF
 #!/usr/bin/env bash

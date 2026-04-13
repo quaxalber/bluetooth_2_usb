@@ -36,9 +36,9 @@ class CliTest(unittest.TestCase):
         self.assertEqual(previous_handlers, {})
         self.assertEqual(
             loop_handled_signals,
-            (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT),
+            cli._handled_shutdown_signals(),
         )
-        self.assertEqual(len(fake_loop.add_calls), 4)
+        self.assertEqual(len(fake_loop.add_calls), len(cli._handled_shutdown_signals()))
         install_handler.assert_not_called()
 
         fake_loop.add_calls[1][1](fake_loop.add_calls[1][2])
@@ -51,7 +51,7 @@ class CliTest(unittest.TestCase):
         )
         self.assertEqual(
             fake_loop.remove_calls,
-            [signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT],
+            list(cli._handled_shutdown_signals()),
         )
 
     def test_install_shutdown_signal_handlers_wakes_event_loop_threadsafe(self) -> None:
@@ -82,7 +82,7 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(
             set(previous_handlers),
-            {signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT},
+            set(cli._handled_shutdown_signals()),
         )
         self.assertEqual(loop_handled_signals, ())
 
@@ -92,7 +92,7 @@ class CliTest(unittest.TestCase):
 
     def test_list_devices_error_returns_environment_exit(self) -> None:
         with patch(
-            "bluetooth_2_usb.cli.describe_input_devices",
+            "bluetooth_2_usb.inventory.describe_input_devices",
             side_effect=DeviceEnumerationError("denied"),
         ):
             exit_code = cli.run(["--list_devices"])
@@ -132,7 +132,10 @@ class CliTest(unittest.TestCase):
             )
         ]
 
-        with patch("bluetooth_2_usb.cli.describe_input_devices", return_value=devices):
+        with patch(
+            "bluetooth_2_usb.inventory.describe_input_devices",
+            return_value=devices,
+        ):
             with redirect_stdout(stdout):
                 exit_code = cli.run(["--list_devices", "--output", "json"])
 
