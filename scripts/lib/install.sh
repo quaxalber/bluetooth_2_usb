@@ -52,11 +52,11 @@ EOF
 normalize_default_env_file() {
   [[ -f "$B2U_ENV_FILE" ]] || return 0
 
-  B2U_ENV_FILE="$B2U_ENV_FILE" python3 <<'PY'
+  B2U_ENV_PATH="$B2U_ENV_FILE" python3 <<'PY'
 from pathlib import Path
 import os
 
-env_path = Path(os.environ["B2U_ENV_FILE"])
+env_path = Path(os.environ["B2U_ENV_PATH"])
 lines = env_path.read_text(encoding="utf-8").splitlines()
 valid_profiles = {"boot_keyboard", "boot_mouse", "nonboot"}
 legacy_profile_map = {"compat": "boot_mouse", "extended": "nonboot"}
