@@ -362,6 +362,14 @@ def _role_for_device(info: HidDeviceInfo) -> str | None:
     if info.usage_page == CONSUMER_USAGE_PAGE and info.usage == CONSUMER_USAGE:
         return "consumer"
     if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
+        product_name = info.name.lower()
+        if "boot mouse" in product_name:
+            if info.interface_number == 0:
+                return "mouse"
+            if info.interface_number == 1:
+                return "keyboard"
+            if info.interface_number == 2:
+                return "consumer"
         if info.interface_number == 0:
             return "keyboard"
         if info.interface_number == 1:
@@ -415,12 +423,13 @@ def discover_gadget_node_candidates(
     hid_module: Any | None = None,
 ) -> GadgetNodeCandidates:
     hid_module = _load_hidapi() if hid_module is None else hid_module
+    infos = _iter_hid_infos(hid_module)
 
     keyboard_nodes: list[HidDeviceInfo] = []
     mouse_nodes: list[HidDeviceInfo] = []
     consumer_nodes: list[HidDeviceInfo] = []
 
-    for info in _iter_hid_infos(hid_module):
+    for info in infos:
         role = _role_for_device(info)
         if role is None:
             continue
@@ -435,13 +444,14 @@ def discover_gadget_node_candidates(
         elif role == "consumer":
             consumer_nodes.append(info)
 
-    keyboard_nodes = _filter_explicit_override(
-        keyboard_nodes, keyboard_node, "Keyboard"
-    )
-    mouse_nodes = _filter_explicit_override(mouse_nodes, mouse_node, "Mouse")
-    consumer_nodes = _filter_explicit_override(
-        consumer_nodes, consumer_node, "Consumer-control"
-    )
+    if keyboard_node is not None:
+        keyboard_nodes = _filter_explicit_override(infos, keyboard_node, "Keyboard")
+    if mouse_node is not None:
+        mouse_nodes = _filter_explicit_override(infos, mouse_node, "Mouse")
+    if consumer_node is not None:
+        consumer_nodes = _filter_explicit_override(
+            infos, consumer_node, "Consumer-control"
+        )
 
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
         raise MissingNodeError(

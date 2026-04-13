@@ -211,6 +211,105 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
         )
 
+    def test_discovery_maps_boot_mouse_linux_gadget_interfaces_by_product_name(
+        self,
+    ) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry(
+                    "1-2.1.2:1.0",
+                    device_name="USB Combo Device (boot mouse)",
+                    serial="213374badcafe-bm",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=0,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "1-2.1.2:1.1",
+                    device_name="USB Combo Device (boot mouse)",
+                    serial="213374badcafe-bm",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=1,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "1-2.1.2:1.2",
+                    device_name="USB Combo Device (boot mouse)",
+                    serial="213374badcafe-bm",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=2,
+                    usage_page=0,
+                    usage=0,
+                ),
+            ]
+        )
+
+        candidates = discover_gadget_node_candidates(hid_module=hid_module)
+
+        self.assertEqual(
+            [info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.1"]
+        )
+        self.assertEqual(
+            [info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.0"]
+        )
+        self.assertEqual(
+            [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
+        )
+
+    def test_explicit_override_accepts_boot_mouse_linux_gadget_interfaces(
+        self,
+    ) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry(
+                    "1-2.1.2:1.0",
+                    device_name="USB Combo Device (boot mouse)",
+                    serial="213374badcafe-bm",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=0,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "1-2.1.2:1.1",
+                    device_name="USB Combo Device (boot mouse)",
+                    serial="213374badcafe-bm",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=1,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "1-2.1.2:1.2",
+                    device_name="USB Combo Device (boot mouse)",
+                    serial="213374badcafe-bm",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=2,
+                    usage_page=0,
+                    usage=0,
+                ),
+            ]
+        )
+
+        nodes = discover_gadget_nodes(
+            keyboard_node="1-2.1.2:1.1",
+            mouse_node="1-2.1.2:1.0",
+            consumer_node="1-2.1.2:1.2",
+            hid_module=hid_module,
+        )
+
+        self.assertEqual(nodes.keyboard_node, "1-2.1.2:1.1")
+        self.assertEqual(nodes.mouse_node, "1-2.1.2:1.0")
+        self.assertEqual(nodes.consumer_node, "1-2.1.2:1.2")
+
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_boot_keyboard_reports(self) -> None:
