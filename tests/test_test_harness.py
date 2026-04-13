@@ -475,9 +475,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertTrue(
             _device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                (
-                    r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
-                ),
+                (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
             )
         )
 
@@ -499,9 +497,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertTrue(
             _device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                (
-                    r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",
-                ),
+                (r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",),
             )
         )
 
