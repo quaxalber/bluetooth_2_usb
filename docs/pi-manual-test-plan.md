@@ -199,7 +199,7 @@ the actual hostname or IP of the Pi under test:
 
 ```bash
 ping -c 5 <pi-host-or-ip>
-ssh -4 <pi-host-or-ip> 'hostname'
+ssh <pi-host-or-ip> 'hostname'
 ```
 
 Pass criteria:

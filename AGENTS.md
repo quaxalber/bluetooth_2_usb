@@ -193,13 +193,26 @@ For runtime-affecting changes, validate on real hardware when feasible:
 - the host/Pi loopback harness from
   `docs/pi-host-relay-loopback-test-playbook.md` when the relay path itself
   changed
-- for host-side loopback capture, the host Python environment needs `hidapi`;
-  do not assume the full repo venv is available or desirable on macOS/Windows
+- for host-side loopback capture, the host Python environment needs `hidapi`
+  for gadget discovery; on Windows the strict event-capture backend is Raw
+  Input for keyboard, mouse, consumer, and combo scenarios
+- do not assume the full repo venv is available or desirable on macOS/Windows
 - on Linux hosts, the `hidapi` path also needs the USB-device udev rule from
   `scripts/install_host_hidapi_udev_rule.sh`
 - host capture can temporarily claim the gadget HID interfaces while the test
   runs; do not assume normal local desktop handling remains active during the
   capture window
+- before each new Windows validation run for a changed HID profile or
+  descriptor layout:
+  1. set the Pi HID profile
+  2. reboot the Pi
+  3. ask the user for a Windows PnP admin reset
+  4. wait for explicit confirmation before starting host capture
+- the loopback harness uses a single lock file and does not support parallel
+  inject/capture runs
+- if a harness run looks wedged, check stale lock files on both sides:
+  `%TEMP%/bluetooth_2_usb_test_harness.lock` on the host and
+  `/tmp/bluetooth_2_usb_test_harness.lock` on the Pi
 
 For Bluetooth-adapter or pairing issues, do not stop at
 `systemctl status bluetooth`. Also check the real controller and rfkill state:

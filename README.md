@@ -516,12 +516,29 @@ deterministic test sequence into the running relay service.
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. The host Python environment must have `hidapi` installed,
 for example via `python3 -m pip install -r requirements-host-capture.txt`. On
-Linux, unprivileged access also needs the host-side USB udev rule. Depending on
-the host HID stack, opening the gadget interfaces for capture can temporarily
-claim them while the test is running, so do not assume the local desktop will
-continue to process the same keyboard, mouse, or consumer inputs during the
-capture window. The default test sequence therefore uses non-text keyboard keys
-and tiny mouse-relative movements.
+Windows, `hidapi` is used for gadget discovery and candidate enumeration, while
+strict event capture for `keyboard`, `mouse`, `consumer`, and `combo` runs
+through Raw Input. On Linux, unprivileged access also needs the host-side USB
+udev rule. Depending on the host HID stack, opening the gadget interfaces for
+capture can temporarily claim them while the test is running, so do not assume
+the local desktop will continue to process the same keyboard, mouse, or
+consumer inputs during the capture window. The default test sequence therefore
+uses non-text keyboard keys and tiny mouse-relative movements.
+
+The harness is single-run only and uses a lock file. If a previous run was
+interrupted, clear stale lock files before retrying:
+
+- host: `%TEMP%\\bluetooth_2_usb_test_harness.lock` on Windows
+- host: `/tmp/bluetooth_2_usb_test_harness.lock` on Linux and macOS
+- Pi: `/tmp/bluetooth_2_usb_test_harness.lock`
+
+Before each fresh Windows validation run after changing the Pi HID profile or
+descriptor layout:
+
+1. set the target Pi HID profile
+2. reboot the Pi
+3. perform a Windows PnP admin reset
+4. only then start the host capture
 
 | Argument | Explanation / Example |
 | --- | --- |

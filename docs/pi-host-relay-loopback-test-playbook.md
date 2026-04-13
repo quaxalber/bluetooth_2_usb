@@ -20,7 +20,7 @@ This validates the path:
 - `bluetooth_2_usb.service` is active on the Pi
 - `B2U_AUTO_DISCOVER=1` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
-- the host Python environment has `hidapi` installed
+- the host Python environment has `hidapi` installed for gadget discovery
 
 Additional Linux preconditions:
 
@@ -67,7 +67,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\host_relay_test_capture.ps1 -
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
-or consumer HID device paths even if the short timeout expires.
+or consumer HID device paths even if the short timeout expires. On Windows,
+strict capture of the actual relay sequence uses Raw Input; `hidapi` remains a
+discovery step, not the primary event backend.
 
 ## 2. Start the host capture
 
@@ -83,6 +85,8 @@ Default behavior:
 - waits up to `5` seconds for the complete sequence
 - may temporarily claim the gadget HID interfaces while the capture runs, so do
   not assume the local desktop will process the same inputs during that window
+- uses a single harness lock file; do not run multiple inject/capture sessions
+  in parallel against the same host/Pi pair
 
 If automatic detection is ambiguous, pin the nodes explicitly:
 
@@ -94,6 +98,14 @@ If automatic detection is ambiguous, pin the nodes explicitly:
 ```
 
 Keep this command running while you trigger the Pi-side injection.
+
+Before each fresh Windows validation run after changing the Pi HID profile or
+descriptor layout:
+
+1. set the Pi HID profile
+2. reboot the Pi
+3. perform a Windows PnP admin reset
+4. only then start the host capture
 
 ## 3. Trigger the Pi-side injection
 
@@ -151,7 +163,7 @@ sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario consumer
 - the Pi gadget may not be enumerated on the host
 - the OTG cable or port may be wrong
 - the host may not expose the gadget HID device yet
-- the host Python may not have `hidapi` installed
+- the host Python may not have `hidapi` installed for discovery
 
 On Linux, also confirm that the udev rule was installed and the Pi was
 reconnected afterwards.
@@ -180,6 +192,8 @@ sudo ./scripts/install_host_hidapi_udev_rule.sh
 - auto-discovery may be off
 - the Pi may not have picked up the temporary virtual devices
 - the host gadget HID device may be present but not currently carrying reports
+- on Windows, candidate enumeration may be fine while Raw Input still sees the
+  wrong device instance after a stale PnP state; re-run the PnP admin reset
 
 Check on the Pi:
 
@@ -209,6 +223,17 @@ The loopback sequence still uses non-text keyboard keys and tiny mouse-rel
 movements so the test remains low-impact if the local desktop does process the
 events, but the capture should be treated as a dedicated verification session
 rather than as a transparent observer.
+
+### Harness says it is already running
+
+The harness uses a single lock file and will reject parallel runs. If no other
+run is active, clear the stale lock file and retry.
+
+Lock paths:
+
+- host Windows: `%TEMP%\bluetooth_2_usb_test_harness.lock`
+- host Linux/macOS: `/tmp/bluetooth_2_usb_test_harness.lock`
+- Pi: `/tmp/bluetooth_2_usb_test_harness.lock`
 
 ## 7. CI scope
 
