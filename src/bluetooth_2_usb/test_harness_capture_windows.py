@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import ctypes
-import os
-import re
 import sys
 import time
 from ctypes import wintypes
@@ -257,7 +255,6 @@ RIDI_DEVICENAME = 0x20000007
 RIDI_DEVICEINFO = 0x2000000B
 WM_QUIT = 0x0012
 
-_DEVICE_TOKEN_RE = re.compile(r"vid_[0-9a-f]{4}&pid_[0-9a-f]{4}(?:&mi_[0-9a-f]{2})?")
 if IS_WINDOWS:
     user32.DefWindowProcW.argtypes = (
         wintypes.HWND,
@@ -336,7 +333,6 @@ if IS_WINDOWS:
 class _RawInputCandidate:
     role: str
     candidate_names: tuple[str, ...]
-    tokens: tuple[str, ...]
     matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
     matched_name: str | None = None
     matched_reports: list[str] = field(default_factory=list)
@@ -353,12 +349,6 @@ class _RawInputCandidate:
 
 @dataclass(slots=True)
 class _RawInputDebug:
-    keyboard_candidate_names: tuple[str, ...]
-    mouse_candidate_names: tuple[str, ...]
-    consumer_candidate_names: tuple[str, ...]
-    keyboard_tokens: tuple[str, ...]
-    mouse_tokens: tuple[str, ...]
-    consumer_tokens: tuple[str, ...]
     total_messages_seen: int = 0
     keyboard_messages_seen: int = 0
     mouse_messages_seen: int = 0
@@ -415,8 +405,8 @@ class _RawInputDebug:
         event: dict[str, object] = {
             "role": role,
             "device_name": device_name,
-            "expected_token": token,
-            "matched_token": matched,
+            "expected_identity": token,
+            "matched_candidate": matched,
         }
         if report is not None:
             event["report_hex"] = report.hex(" ")
@@ -434,12 +424,6 @@ class _RawInputDebug:
         assert self.sample_events is not None
         assert self.raw_device_list is not None
         return {
-            "keyboard_candidate_names": list(self.keyboard_candidate_names),
-            "mouse_candidate_names": list(self.mouse_candidate_names),
-            "consumer_candidate_names": list(self.consumer_candidate_names),
-            "keyboard_tokens": list(self.keyboard_tokens),
-            "mouse_tokens": list(self.mouse_tokens),
-            "consumer_tokens": list(self.consumer_tokens),
             "total_messages_seen": self.total_messages_seen,
             "keyboard_messages_seen": self.keyboard_messages_seen,
             "mouse_messages_seen": self.mouse_messages_seen,
@@ -453,24 +437,6 @@ class _RawInputDebug:
         }
 
 
-def _extract_device_token(node: str | None) -> str | None:
-    if not node:
-        return None
-    match = _DEVICE_TOKEN_RE.search(node.lower())
-    if not match:
-        return None
-    return match.group(0)
-
-
-def _extract_device_tokens(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
-    tokens: list[str] = []
-    for node in nodes:
-        token = _extract_device_token(node)
-        if token and token not in tokens:
-            tokens.append(token)
-    return tuple(tokens)
-
-
 def _extract_device_names(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
     names: list[str] = []
     for node in nodes:
@@ -482,69 +448,34 @@ def _extract_device_names(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _extract_candidate_tokens(candidate_nodes: GadgetNodeCandidates) -> tuple[str, ...]:
-    return _extract_device_tokens(
-        tuple(
-            info.node
-            for info in (
-                candidate_nodes.keyboard_nodes
-                + candidate_nodes.mouse_nodes
-                + candidate_nodes.consumer_nodes
-            )
-        )
-    )
-
-
 def _normalize_device_name(name: str) -> str:
     return name.lower().replace("#", "\\")
 
 
-def _device_matches_token(device_name: str, tokens: tuple[str, ...]) -> bool:
-    if not tokens:
-        return "vid_1d6b" in device_name and "pid_0104" in device_name
-    for token in tokens:
-        if token.replace("&", "\\") in device_name or token in device_name:
-            return True
-    return False
+def _stable_device_identity(name: str) -> str:
+    normalized = _normalize_device_name(name)
+    if normalized.startswith("\\\\?\\"):
+        normalized = normalized[4:]
+    parts = [part for part in normalized.split("\\") if part]
+    if len(parts) >= 3 and parts[0] == "hid":
+        return "\\".join(parts[:3])
+    return normalized
 
 
 def _device_matches_candidate(
     device_name: str,
     candidate_names: tuple[str, ...],
-    tokens: tuple[str, ...],
 ) -> bool:
     normalized_name = _normalize_device_name(device_name)
-    if candidate_names and normalized_name in candidate_names:
+    if not candidate_names:
+        return False
+    if normalized_name in candidate_names:
         return True
-    return _device_matches_token(normalized_name, tokens)
-
-
-def _validate_candidate_token_disjointness(
-    *,
-    keyboard_tokens: tuple[str, ...],
-    mouse_tokens: tuple[str, ...],
-    consumer_tokens: tuple[str, ...],
-) -> None:
-    overlaps: list[str] = []
-
-    keyboard_mouse_overlap = sorted(set(keyboard_tokens) & set(mouse_tokens))
-    if keyboard_mouse_overlap:
-        overlaps.append("keyboard/mouse=" + ", ".join(keyboard_mouse_overlap))
-
-    keyboard_consumer_overlap = sorted(set(keyboard_tokens) & set(consumer_tokens))
-    if keyboard_consumer_overlap:
-        overlaps.append("keyboard/consumer=" + ", ".join(keyboard_consumer_overlap))
-
-    mouse_consumer_overlap = sorted(set(mouse_tokens) & set(consumer_tokens))
-    if mouse_consumer_overlap:
-        overlaps.append("mouse/consumer=" + ", ".join(mouse_consumer_overlap))
-
-    if overlaps:
-        raise CaptureMismatchError(
-            "Windows capture candidates overlap across roles: "
-            + "; ".join(overlaps)
-            + ". Current VID/PID(/MI) token matching cannot disambiguate this layout."
-        )
+    stable_identity = _stable_device_identity(device_name)
+    return any(
+        _stable_device_identity(candidate_name) == stable_identity
+        for candidate_name in candidate_names
+    )
 
 
 def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
@@ -786,20 +717,15 @@ def _extract_raw_hid_reports(raw_bytes: bytes) -> list[bytes]:
 def _pump_raw_input(
     timeout_sec: float,
     keyboard_candidate_names: tuple[str, ...],
-    keyboard_tokens: tuple[str, ...],
     mouse_candidate_names: tuple[str, ...],
-    mouse_tokens: tuple[str, ...],
     consumer_candidate_names: tuple[str, ...],
-    consumer_tokens: tuple[str, ...],
     scenario_name: str,
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
-    debug_only = os.environ.get("B2U_RAW_INPUT_DEBUG_ONLY") == "1"
     keyboard_candidate = (
         _RawInputCandidate(
             "keyboard",
             keyboard_candidate_names,
-            keyboard_tokens,
             KeyboardSequenceMatcher(scenario.keyboard_steps),
         )
         if scenario.keyboard_enabled
@@ -809,7 +735,6 @@ def _pump_raw_input(
         _RawInputCandidate(
             "mouse",
             mouse_candidate_names,
-            mouse_tokens,
             MouseSequenceMatcher.create(
                 scenario.mouse_rel_steps, scenario.mouse_button_steps
             ),
@@ -821,7 +746,6 @@ def _pump_raw_input(
         _RawInputCandidate(
             "consumer",
             consumer_candidate_names,
-            consumer_tokens,
             ConsumerSequenceMatcher(scenario.consumer_steps),
         )
         if scenario.consumer_enabled
@@ -833,20 +757,7 @@ def _pump_raw_input(
     _register_raw_input(hwnd)
     deadline = time.monotonic() + timeout_sec
     msg = MSG()
-    debug = _RawInputDebug(
-        keyboard_candidate_names=(
-            keyboard_candidate.candidate_names if keyboard_candidate else ()
-        ),
-        mouse_candidate_names=(
-            mouse_candidate.candidate_names if mouse_candidate else ()
-        ),
-        consumer_candidate_names=(
-            consumer_candidate.candidate_names if consumer_candidate else ()
-        ),
-        keyboard_tokens=keyboard_candidate.tokens if keyboard_candidate else (),
-        mouse_tokens=mouse_candidate.tokens if mouse_candidate else (),
-        consumer_tokens=consumer_candidate.tokens if consumer_candidate else (),
-    )
+    debug = _RawInputDebug()
     debug.raw_device_list = _list_raw_input_devices()
 
     try:
@@ -865,7 +776,6 @@ def _pump_raw_input(
                         matched = _device_matches_candidate(
                             device_name,
                             keyboard_candidate.candidate_names,
-                            keyboard_candidate.tokens,
                         )
                         report = _keyboard_event_to_report(
                             raw.keyboard.VKey,
@@ -874,7 +784,7 @@ def _pump_raw_input(
                         debug.note_event(
                             role="keyboard",
                             device_name=device_name,
-                            token="|".join(keyboard_candidate.tokens) or None,
+                            token=None,
                             matched=matched,
                             report=report,
                             vkey=raw.keyboard.VKey,
@@ -886,19 +796,17 @@ def _pump_raw_input(
                             continue
                         keyboard_candidate.matched_name = device_name
                         keyboard_candidate.note_report(report)
-                        if not debug_only:
-                            keyboard_candidate.matcher.handle(report)
+                        keyboard_candidate.matcher.handle(report)
 
                     elif raw.header.dwType == RIM_TYPEMOUSE and mouse_candidate:
                         matched = _device_matches_candidate(
                             device_name,
                             mouse_candidate.candidate_names,
-                            mouse_candidate.tokens,
                         )
                         debug.note_event(
                             role="mouse",
                             device_name=device_name,
-                            token="|".join(mouse_candidate.tokens) or None,
+                            token=None,
                             matched=matched,
                             rel_x=raw.mouse.lLastX,
                             rel_y=raw.mouse.lLastY,
@@ -908,19 +816,17 @@ def _pump_raw_input(
                         mouse_candidate.matched_name = device_name
                         for report in _mouse_event_to_reports(raw.mouse):
                             mouse_candidate.note_report(report)
-                            if not debug_only:
-                                mouse_candidate.matcher.handle(report)
+                            mouse_candidate.matcher.handle(report)
                     elif raw.header.dwType == RIM_TYPEHID and consumer_candidate:
                         matched = _device_matches_candidate(
                             device_name,
                             consumer_candidate.candidate_names,
-                            consumer_candidate.tokens,
                         )
                         for report in _extract_raw_hid_reports(raw_bytes):
                             debug.note_event(
                                 role="consumer",
                                 device_name=device_name,
-                                token="|".join(consumer_candidate.tokens) or None,
+                                token=None,
                                 matched=matched,
                                 report=report,
                             )
@@ -928,13 +834,12 @@ def _pump_raw_input(
                                 continue
                             consumer_candidate.matched_name = device_name
                             consumer_candidate.note_report(report)
-                            if not debug_only:
-                                consumer_candidate.matcher.handle(report)
+                            consumer_candidate.matcher.handle(report)
 
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
 
-            if not debug_only and (
+            if (
                 (keyboard_candidate is None or keyboard_candidate.complete)
                 and (mouse_candidate is None or mouse_candidate.complete)
                 and (consumer_candidate is None or consumer_candidate.complete)
@@ -1006,11 +911,7 @@ def _pump_raw_input(
         scenario=scenario.name,
         success=False,
         exit_code=CaptureTimeoutError.exit_code,
-        message=(
-            f"Observed raw input for {timeout_sec}s without strict matching"
-            if debug_only
-            else f"Timed out waiting for {scenario.name} events after {timeout_sec}s"
-        ),
+        message=f"Timed out waiting for {scenario.name} events after {timeout_sec}s",
         details={
             "capture_backend": "raw_input",
             "timeout_sec": timeout_sec,
@@ -1030,18 +931,12 @@ def run_windows_raw_input_capture(
 
     scenario = get_scenario(scenario_name)
     keyboard_candidate_names: tuple[str, ...] = ()
-    keyboard_tokens: tuple[str, ...] = ()
     mouse_candidate_names: tuple[str, ...] = ()
-    mouse_tokens: tuple[str, ...] = ()
     consumer_candidate_names: tuple[str, ...] = ()
-    consumer_tokens: tuple[str, ...] = ()
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
             raise MissingNodeError("Keyboard HID device was not found")
         keyboard_candidate_names = _extract_device_names(
-            tuple(info.node for info in candidate_nodes.keyboard_nodes)
-        )
-        keyboard_tokens = _extract_device_tokens(
             tuple(info.node for info in candidate_nodes.keyboard_nodes)
         )
     if scenario.mouse_enabled:
@@ -1050,27 +945,18 @@ def run_windows_raw_input_capture(
         mouse_candidate_names = _extract_device_names(
             tuple(info.node for info in candidate_nodes.mouse_nodes)
         )
-        mouse_tokens = _extract_device_tokens(
-            tuple(info.node for info in candidate_nodes.mouse_nodes)
-        )
     if scenario.consumer_enabled:
         if not candidate_nodes.consumer_nodes:
             raise MissingNodeError("Consumer-control HID device was not found")
         consumer_candidate_names = _extract_device_names(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )
-        consumer_tokens = _extract_device_tokens(
-            tuple(info.node for info in candidate_nodes.consumer_nodes)
-        )
 
     result = _pump_raw_input(
         timeout_sec=timeout_sec,
         keyboard_candidate_names=keyboard_candidate_names,
-        keyboard_tokens=keyboard_tokens,
         mouse_candidate_names=mouse_candidate_names,
-        mouse_tokens=mouse_tokens,
         consumer_candidate_names=consumer_candidate_names,
-        consumer_tokens=consumer_tokens,
         scenario_name=scenario_name,
     )
     result.details.setdefault("candidates", candidate_nodes.to_dict())

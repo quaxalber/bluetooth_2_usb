@@ -19,11 +19,9 @@ from bluetooth_2_usb.test_harness_capture import (
 )
 from bluetooth_2_usb.test_harness_capture_windows import (
     _device_matches_candidate,
-    _device_matches_token,
     _extract_device_names,
-    _extract_device_token,
     _keyboard_event_to_report,
-    _validate_candidate_token_disjointness,
+    _stable_device_identity,
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
@@ -363,21 +361,6 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
-    def test_extract_device_token_reads_vid_pid_and_interface(self) -> None:
-        token = _extract_device_token(
-            r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{...}\KBD"
-        )
-
-        self.assertEqual(token, "vid_1d6b&pid_0104&mi_00")
-
-    def test_device_matches_token_accepts_normalized_raw_input_names(self) -> None:
-        self.assertTrue(
-            _device_matches_token(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000".lower(),
-                ("vid_1d6b&pid_0104&mi_00",),
-            )
-        )
-
     def test_extract_device_names_normalizes_windows_hid_paths(self) -> None:
         self.assertEqual(
             _extract_device_names(
@@ -396,42 +379,41 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 (
                     r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 ),
-                ("vid_1d6b&pid_0104&mi_01",),
             )
         )
 
-    def test_device_matches_token_uses_simple_vid_pid_interface_tokens(self) -> None:
+    def test_stable_device_identity_ignores_guid_and_suffix_differences(self) -> None:
+        self.assertEqual(
+            _stable_device_identity(
+                r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}\KBD"
+            ),
+            r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
+        )
+        self.assertEqual(
+            _stable_device_identity(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{884b96c3-56ef-11d1-bc8c-00a0c91405dd}"
+            ),
+            r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
+        )
+
+    def test_device_matches_candidate_on_shared_hid_instance_identity(self) -> None:
         self.assertTrue(
-            _device_matches_token(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                ("vid_1d6b&pid_0104&mi_00",),
-            )
-        )
-        self.assertTrue(
-            _device_matches_token(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&2b6bd27c&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                ("vid_1d6b&pid_0104&mi_00",),
+            _device_matches_candidate(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                (
+                    r"\\?\HID#VID_1D6B&PID_0104&MI_01#9&2217c3c8&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",
+                ),
             )
         )
 
-    def test_validate_candidate_token_disjointness_rejects_overlapping_roles(
-        self,
-    ) -> None:
-        with self.assertRaisesRegex(
-            CaptureMismatchError,
-            "keyboard/mouse=vid_1d6b&pid_0104&mi_00",
-        ):
-            _validate_candidate_token_disjointness(
-                keyboard_tokens=("vid_1d6b&pid_0104&mi_00", "vid_1d6b&pid_0104&mi_01"),
-                mouse_tokens=("vid_1d6b&pid_0104&mi_00",),
-                consumer_tokens=("vid_1d6b&pid_0104&mi_02",),
+    def test_device_does_not_match_different_hid_instance_identity(self) -> None:
+        self.assertFalse(
+            _device_matches_candidate(
+                r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                (
+                    r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",
+                ),
             )
-
-    def test_validate_candidate_token_disjointness_accepts_disjoint_roles(self) -> None:
-        _validate_candidate_token_disjointness(
-            keyboard_tokens=("vid_1d6b&pid_0104&mi_01",),
-            mouse_tokens=("vid_1d6b&pid_0104&mi_00",),
-            consumer_tokens=("vid_1d6b&pid_0104&mi_02",),
         )
 
     def test_keyboard_event_to_report_builds_boot_keyboard_reports(self) -> None:
