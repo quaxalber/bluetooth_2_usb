@@ -529,21 +529,15 @@ def _validate_candidate_token_disjointness(
 
     keyboard_mouse_overlap = sorted(set(keyboard_tokens) & set(mouse_tokens))
     if keyboard_mouse_overlap:
-        overlaps.append(
-            "keyboard/mouse=" + ", ".join(keyboard_mouse_overlap)
-        )
+        overlaps.append("keyboard/mouse=" + ", ".join(keyboard_mouse_overlap))
 
     keyboard_consumer_overlap = sorted(set(keyboard_tokens) & set(consumer_tokens))
     if keyboard_consumer_overlap:
-        overlaps.append(
-            "keyboard/consumer=" + ", ".join(keyboard_consumer_overlap)
-        )
+        overlaps.append("keyboard/consumer=" + ", ".join(keyboard_consumer_overlap))
 
     mouse_consumer_overlap = sorted(set(mouse_tokens) & set(consumer_tokens))
     if mouse_consumer_overlap:
-        overlaps.append(
-            "mouse/consumer=" + ", ".join(mouse_consumer_overlap)
-        )
+        overlaps.append("mouse/consumer=" + ", ".join(mouse_consumer_overlap))
 
     if overlaps:
         raise CaptureMismatchError(
@@ -843,7 +837,9 @@ def _pump_raw_input(
         keyboard_candidate_names=(
             keyboard_candidate.candidate_names if keyboard_candidate else ()
         ),
-        mouse_candidate_names=mouse_candidate.candidate_names if mouse_candidate else (),
+        mouse_candidate_names=(
+            mouse_candidate.candidate_names if mouse_candidate else ()
+        ),
         consumer_candidate_names=(
             consumer_candidate.candidate_names if consumer_candidate else ()
         ),

@@ -15,7 +15,6 @@ from .version import get_versioned_name
 
 if TYPE_CHECKING:
     from .args import Arguments
-    from .inventory import DeviceEnumerationError
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -312,7 +311,7 @@ async def async_run(args: Arguments) -> int:
                     relay_task,
                     timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     "Relay shutdown exceeded %.1fs; cancelling remaining tasks.",
                     GRACEFUL_SHUTDOWN_TIMEOUT_SEC,

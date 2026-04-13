@@ -10,7 +10,9 @@ from bluetooth_2_usb.inventory import DeviceEnumerationError, InputDeviceMetadat
 
 
 class CliTest(unittest.TestCase):
-    def test_install_shutdown_signal_handlers_prefers_loop_signal_handlers(self) -> None:
+    def test_install_shutdown_signal_handlers_prefers_loop_signal_handlers(
+        self,
+    ) -> None:
         shutdown_event = cli.asyncio.Event()
 
         class _FakeLoop:
@@ -28,9 +30,7 @@ class CliTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.cli.signal.signal") as install_handler:
             previous_handlers, loop_handled_signals = (
-                cli._install_shutdown_signal_handlers(
-                    shutdown_event, loop=fake_loop
-                )
+                cli._install_shutdown_signal_handlers(shutdown_event, loop=fake_loop)
             )
 
         self.assertEqual(previous_handlers, {})
@@ -76,8 +76,8 @@ class CliTest(unittest.TestCase):
             ):
                 previous_handlers, loop_handled_signals = (
                     cli._install_shutdown_signal_handlers(
-                    shutdown_event, loop=fake_loop
-                )
+                        shutdown_event, loop=fake_loop
+                    )
                 )
 
         self.assertEqual(

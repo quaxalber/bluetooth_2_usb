@@ -15,6 +15,7 @@ except ModuleNotFoundError:
     class RelEvent:
         pass
 
+
 from .logging import get_logger
 
 _logger = get_logger()

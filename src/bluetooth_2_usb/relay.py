@@ -9,10 +9,38 @@ import time
 from asyncio import Task, TaskGroup
 from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-import pyudev
-from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
+try:
+    from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
+except ModuleNotFoundError:
+    InputEvent = Any  # type: ignore[assignment]
+
+    class InputDevice:
+        def __init__(self, path: str = "", name: str = "", uniq: str = "") -> None:
+            self.path = path
+            self.name = name
+            self.uniq = uniq
+
+        async def async_read_loop(self):
+            if False:
+                yield None
+            return
+
+        def close(self) -> None:
+            return None
+
+    class KeyEvent:
+        key_down = 1
+        key_hold = 2
+        key_up = 0
+
+    class RelEvent:
+        pass
+
+    def categorize(event):
+        return event
+
 
 from .evdev import (
     evdev_to_usb_hid,
@@ -30,6 +58,35 @@ from .inventory import (
 from .logging import get_logger
 
 _logger = get_logger()
+
+try:
+    import pyudev
+except ModuleNotFoundError:
+
+    class _MissingPyudevModule:
+        class Device:
+            device_node = None
+
+        class Context:
+            def __init__(self, *_args, **_kwargs) -> None:
+                raise ModuleNotFoundError(
+                    "pyudev is required for runtime monitoring on this platform."
+                )
+
+        class Monitor:
+            @staticmethod
+            def from_netlink(*_args, **_kwargs):
+                raise ModuleNotFoundError(
+                    "pyudev is required for runtime monitoring on this platform."
+                )
+
+        class MonitorObserver:
+            def __init__(self, *_args, **_kwargs) -> None:
+                raise ModuleNotFoundError(
+                    "pyudev is required for runtime monitoring on this platform."
+                )
+
+    pyudev = _MissingPyudevModule()
 
 if TYPE_CHECKING:
     from adafruit_hid.consumer_control import ConsumerControl
@@ -65,11 +122,11 @@ class GadgetManager:
         device = usb_hid.Device
 
         if self._hid_profile == "boot_keyboard":
-            return [device.BOOT_KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
+            return [device.BOOT_KEYBOARD, device.BOOT_MOUSE, device.CONSUMER_CONTROL]
         if self._hid_profile == "boot_mouse":
             return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
         if self._hid_profile == "nonboot":
-            return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
+            return [device.KEYBOARD, device.BOOT_MOUSE, device.CONSUMER_CONTROL]
 
         raise ValueError(f"Unsupported HID profile: {self._hid_profile}")
 
@@ -604,7 +661,9 @@ class RelayController:
             try:
                 device.close()
             except Exception:
-                _logger.debug("Ignoring close failure for %s during removal.", device_path)
+                _logger.debug(
+                    "Ignoring close failure for %s during removal.", device_path
+                )
 
     async def _async_relay_events(self, device: InputDevice) -> None:
         """
@@ -1001,7 +1060,7 @@ class RuntimeMonitor:
                     self._stop_event.wait(),
                     timeout=self.poll_interval,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     def _read_udc_state(self) -> str:

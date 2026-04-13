@@ -548,7 +548,9 @@ class TestHarnessCliTest(unittest.TestCase):
 
     def test_harness_reports_interrupt_cleanly(self) -> None:
         stdout = io.StringIO()
-        fake_inject_module = SimpleNamespace(run_inject=Mock(side_effect=KeyboardInterrupt))
+        fake_inject_module = SimpleNamespace(
+            run_inject=Mock(side_effect=KeyboardInterrupt)
+        )
 
         with patch.dict(
             "sys.modules",
@@ -628,7 +630,9 @@ class TestHarnessCliTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
 
-    def test_windows_capture_uses_raw_input_backend_for_consumer_scenarios(self) -> None:
+    def test_windows_capture_uses_raw_input_backend_for_consumer_scenarios(
+        self,
+    ) -> None:
         consumer_hid = _FakeHidModule(
             [
                 _hid_entry(

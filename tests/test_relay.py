@@ -1,6 +1,6 @@
 import asyncio
 import errno
-import os
+import re
 import stat
 import tempfile
 import unittest
@@ -184,7 +184,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
 
         self.assertEqual(devices, ["boot-mouse", "keyboard", "consumer"])
 
-    def test_nonboot_profile_uses_report_id_devices(self) -> None:
+    def test_nonboot_profile_uses_boot_mouse_transport(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
@@ -199,9 +199,9 @@ class GadgetManagerProfileTest(unittest.TestCase):
         ):
             devices = GadgetManager("nonboot")._requested_devices()
 
-        self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
+        self.assertEqual(devices, ["keyboard", "boot-mouse", "consumer"])
 
-    def test_boot_keyboard_profile_uses_boot_keyboard_then_mouse(self) -> None:
+    def test_boot_keyboard_profile_uses_boot_keyboard_then_boot_mouse(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
@@ -216,7 +216,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
         ):
             devices = GadgetManager("boot_keyboard")._requested_devices()
 
-        self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
+        self.assertEqual(devices, ["boot-keyboard", "boot-mouse", "consumer"])
 
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
         manager = GadgetManager("boot_mouse")
@@ -233,7 +233,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
             bad = Path(tmp) / "hidg1"
             bad.write_text("not-a-device", encoding="utf-8")
             with patch.object(manager, "_expected_hidg_paths", return_value=(bad,)):
-                with self.assertRaisesRegex(RuntimeError, str(bad)):
+                with self.assertRaisesRegex(RuntimeError, re.escape(str(bad))):
                     manager._validate_hidg_nodes(
                         timeout_sec=0,
                         poll_interval_sec=0,
@@ -258,19 +258,23 @@ class GadgetManagerProfileTest(unittest.TestCase):
     ) -> None:
         manager = GadgetManager("boot_mouse")
         path = Path("/dev/hidg0")
-        stats = SimpleNamespace(
-            st_mode=stat.S_IFCHR | 0o600, st_rdev=os.makedev(236, 0)
-        )
+        stats = SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=0)
 
         with patch.object(manager, "_expected_hidg_paths", return_value=(path,)):
             with patch.object(Path, "stat", return_value=stats):
                 with patch(
-                    "bluetooth_2_usb.relay.os.open",
-                    side_effect=OSError(errno.ENODEV, "No such device"),
+                    "bluetooth_2_usb.relay.os.minor",
+                    return_value=0,
+                    create=True,
                 ):
-                    invalid_paths = manager._collect_invalid_hidg_nodes()
+                    with patch("bluetooth_2_usb.relay.os.O_NONBLOCK", 0, create=True):
+                        with patch(
+                            "bluetooth_2_usb.relay.os.open",
+                            side_effect=OSError(errno.ENODEV, "No such device"),
+                        ):
+                            invalid_paths = manager._collect_invalid_hidg_nodes()
 
-        self.assertEqual(invalid_paths, ["/dev/hidg0 (No such device)"])
+        self.assertEqual(invalid_paths, [f"{path} (No such device)"])
 
 
 class RelayControllerHotplugTest(unittest.TestCase):
