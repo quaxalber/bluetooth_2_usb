@@ -11,13 +11,13 @@ report_ensure_final_newline() {
   perl -0pe 's/(?<!\n)\z/\n/'
 }
 
-report_status_emoji() {
+report_status_marker() {
   case "${1:-}" in
     "" | none) printf '%s' "" ;;
-    ok | pass | green) printf '%s' "🟢" ;;
-    info | blue) printf '%s' "🔵" ;;
-    warn | warning | yellow) printf '%s' "🟡" ;;
-    fail | error | red) printf '%s' "🔴" ;;
+    ok | pass | green) printf '%s' "[OK]" ;;
+    info | blue) printf '%s' "[INFO]" ;;
+    warn | warning | yellow) printf '%s' "[WARN]" ;;
+    fail | error | red) printf '%s' "[FAIL]" ;;
     *) printf '%s' "" ;;
   esac
 }
@@ -47,7 +47,7 @@ report_heading() {
   local status="$3"
   local title="$4"
   local marker
-  marker="$(report_status_emoji "$status")"
+  marker="$(report_status_marker "$status")"
   if [[ -n "$marker" ]]; then
     printf '%s %s %s\n' "$level" "$marker" "$title" >>"$outfile"
   else

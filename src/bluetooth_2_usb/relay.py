@@ -122,11 +122,11 @@ class GadgetManager:
         device = usb_hid.Device
 
         if self._hid_profile == "boot_keyboard":
-            return [device.BOOT_KEYBOARD, device.BOOT_MOUSE, device.CONSUMER_CONTROL]
+            return [device.BOOT_KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
         if self._hid_profile == "boot_mouse":
             return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
         if self._hid_profile == "nonboot":
-            return [device.KEYBOARD, device.BOOT_MOUSE, device.CONSUMER_CONTROL]
+            return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
 
         raise ValueError(f"Unsupported HID profile: {self._hid_profile}")
 

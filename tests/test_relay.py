@@ -184,7 +184,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
 
         self.assertEqual(devices, ["boot-mouse", "keyboard", "consumer"])
 
-    def test_nonboot_profile_uses_boot_mouse_transport(self) -> None:
+    def test_nonboot_profile_uses_nonboot_devices(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
@@ -199,9 +199,9 @@ class GadgetManagerProfileTest(unittest.TestCase):
         ):
             devices = GadgetManager("nonboot")._requested_devices()
 
-        self.assertEqual(devices, ["keyboard", "boot-mouse", "consumer"])
+        self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
-    def test_boot_keyboard_profile_uses_boot_keyboard_then_boot_mouse(self) -> None:
+    def test_boot_keyboard_profile_uses_boot_keyboard_then_nonboot_mouse(self) -> None:
         fake_device = SimpleNamespace(
             BOOT_KEYBOARD="boot-keyboard",
             KEYBOARD="keyboard",
@@ -216,7 +216,7 @@ class GadgetManagerProfileTest(unittest.TestCase):
         ):
             devices = GadgetManager("boot_keyboard")._requested_devices()
 
-        self.assertEqual(devices, ["boot-keyboard", "boot-mouse", "consumer"])
+        self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
 
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
         manager = GadgetManager("boot_mouse")

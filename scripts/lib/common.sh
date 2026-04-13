@@ -17,19 +17,19 @@ timestamp() {
 }
 
 info() {
-  printf "${BLUE}ℹ %s${NC}\n" "$*"
+  printf "${BLUE}[i] %s${NC}\n" "$*"
 }
 
 ok() {
-  printf "${GREEN}✓ %s${NC}\n" "$*"
+  printf "${GREEN}[+] %s${NC}\n" "$*"
 }
 
 warn() {
-  printf "${YELLOW}⚠ %s${NC}\n" "$*"
+  printf "${YELLOW}[!] %s${NC}\n" "$*"
 }
 
 fail() {
-  printf "${RED}✖ %s${NC}\n" "$1" >&2
+  printf "${RED}[x] %s${NC}\n" "$1" >&2
   exit "${2:-1}"
 }
 
