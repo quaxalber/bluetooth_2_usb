@@ -332,7 +332,7 @@ if IS_WINDOWS:
 @dataclass(slots=True)
 class _RawInputCandidate:
     role: str
-    candidate_names: tuple[str, ...]
+    candidate_identities: tuple[str, ...]
     matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
     matched_name: str | None = None
     matched_reports: list[str] = field(default_factory=list)
@@ -376,7 +376,8 @@ class _RawInputDebug:
         *,
         role: str,
         device_name: str,
-        token: str | None,
+        device_identity: str,
+        candidate_identities: tuple[str, ...],
         matched: bool,
         report: bytes | None = None,
         vkey: int | None = None,
@@ -405,7 +406,8 @@ class _RawInputDebug:
         event: dict[str, object] = {
             "role": role,
             "device_name": device_name,
-            "expected_identity": token,
+            "device_identity": device_identity,
+            "candidate_identities": list(candidate_identities),
             "matched_candidate": matched,
         }
         if report is not None:
@@ -437,15 +439,15 @@ class _RawInputDebug:
         }
 
 
-def _extract_device_names(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
-    names: list[str] = []
+def _extract_device_identities(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
+    identities: list[str] = []
     for node in nodes:
         if not node:
             continue
-        normalized = _normalize_device_name(node)
-        if normalized not in names:
-            names.append(normalized)
-    return tuple(names)
+        identity = _stable_device_identity(node)
+        if identity not in identities:
+            identities.append(identity)
+    return tuple(identities)
 
 
 def _normalize_device_name(name: str) -> str:
@@ -464,18 +466,11 @@ def _stable_device_identity(name: str) -> str:
 
 def _device_matches_candidate(
     device_name: str,
-    candidate_names: tuple[str, ...],
+    candidate_identities: tuple[str, ...],
 ) -> bool:
-    normalized_name = _normalize_device_name(device_name)
-    if not candidate_names:
+    if not candidate_identities:
         return False
-    if normalized_name in candidate_names:
-        return True
-    stable_identity = _stable_device_identity(device_name)
-    return any(
-        _stable_device_identity(candidate_name) == stable_identity
-        for candidate_name in candidate_names
-    )
+    return _stable_device_identity(device_name) in candidate_identities
 
 
 def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
@@ -716,16 +711,16 @@ def _extract_raw_hid_reports(raw_bytes: bytes) -> list[bytes]:
 
 def _pump_raw_input(
     timeout_sec: float,
-    keyboard_candidate_names: tuple[str, ...],
-    mouse_candidate_names: tuple[str, ...],
-    consumer_candidate_names: tuple[str, ...],
+    keyboard_candidate_identities: tuple[str, ...],
+    mouse_candidate_identities: tuple[str, ...],
+    consumer_candidate_identities: tuple[str, ...],
     scenario_name: str,
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
     keyboard_candidate = (
         _RawInputCandidate(
             "keyboard",
-            keyboard_candidate_names,
+            keyboard_candidate_identities,
             KeyboardSequenceMatcher(scenario.keyboard_steps),
         )
         if scenario.keyboard_enabled
@@ -734,7 +729,7 @@ def _pump_raw_input(
     mouse_candidate = (
         _RawInputCandidate(
             "mouse",
-            mouse_candidate_names,
+            mouse_candidate_identities,
             MouseSequenceMatcher.create(
                 scenario.mouse_rel_steps, scenario.mouse_button_steps
             ),
@@ -745,7 +740,7 @@ def _pump_raw_input(
     consumer_candidate = (
         _RawInputCandidate(
             "consumer",
-            consumer_candidate_names,
+            consumer_candidate_identities,
             ConsumerSequenceMatcher(scenario.consumer_steps),
         )
         if scenario.consumer_enabled
@@ -771,11 +766,12 @@ def _pump_raw_input(
                         device_name = _get_raw_input_device_name(raw.header.hDevice)
                     except OSError:
                         device_name = "<unavailable>"
+                    device_identity = _stable_device_identity(device_name)
 
                     if raw.header.dwType == RIM_TYPEKEYBOARD and keyboard_candidate:
                         matched = _device_matches_candidate(
                             device_name,
-                            keyboard_candidate.candidate_names,
+                            keyboard_candidate.candidate_identities,
                         )
                         report = _keyboard_event_to_report(
                             raw.keyboard.VKey,
@@ -784,7 +780,8 @@ def _pump_raw_input(
                         debug.note_event(
                             role="keyboard",
                             device_name=device_name,
-                            token=None,
+                            device_identity=device_identity,
+                            candidate_identities=keyboard_candidate.candidate_identities,
                             matched=matched,
                             report=report,
                             vkey=raw.keyboard.VKey,
@@ -801,12 +798,13 @@ def _pump_raw_input(
                     elif raw.header.dwType == RIM_TYPEMOUSE and mouse_candidate:
                         matched = _device_matches_candidate(
                             device_name,
-                            mouse_candidate.candidate_names,
+                            mouse_candidate.candidate_identities,
                         )
                         debug.note_event(
                             role="mouse",
                             device_name=device_name,
-                            token=None,
+                            device_identity=device_identity,
+                            candidate_identities=mouse_candidate.candidate_identities,
                             matched=matched,
                             rel_x=raw.mouse.lLastX,
                             rel_y=raw.mouse.lLastY,
@@ -820,13 +818,16 @@ def _pump_raw_input(
                     elif raw.header.dwType == RIM_TYPEHID and consumer_candidate:
                         matched = _device_matches_candidate(
                             device_name,
-                            consumer_candidate.candidate_names,
+                            consumer_candidate.candidate_identities,
                         )
                         for report in _extract_raw_hid_reports(raw_bytes):
                             debug.note_event(
                                 role="consumer",
                                 device_name=device_name,
-                                token=None,
+                                device_identity=device_identity,
+                                candidate_identities=(
+                                    consumer_candidate.candidate_identities
+                                ),
                                 matched=matched,
                                 report=report,
                             )
@@ -930,33 +931,33 @@ def run_windows_raw_input_capture(
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
-    keyboard_candidate_names: tuple[str, ...] = ()
-    mouse_candidate_names: tuple[str, ...] = ()
-    consumer_candidate_names: tuple[str, ...] = ()
+    keyboard_candidate_identities: tuple[str, ...] = ()
+    mouse_candidate_identities: tuple[str, ...] = ()
+    consumer_candidate_identities: tuple[str, ...] = ()
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
             raise MissingNodeError("Keyboard HID device was not found")
-        keyboard_candidate_names = _extract_device_names(
+        keyboard_candidate_identities = _extract_device_identities(
             tuple(info.node for info in candidate_nodes.keyboard_nodes)
         )
     if scenario.mouse_enabled:
         if not candidate_nodes.mouse_nodes:
             raise MissingNodeError("Mouse HID device was not found")
-        mouse_candidate_names = _extract_device_names(
+        mouse_candidate_identities = _extract_device_identities(
             tuple(info.node for info in candidate_nodes.mouse_nodes)
         )
     if scenario.consumer_enabled:
         if not candidate_nodes.consumer_nodes:
             raise MissingNodeError("Consumer-control HID device was not found")
-        consumer_candidate_names = _extract_device_names(
+        consumer_candidate_identities = _extract_device_identities(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )
 
     result = _pump_raw_input(
         timeout_sec=timeout_sec,
-        keyboard_candidate_names=keyboard_candidate_names,
-        mouse_candidate_names=mouse_candidate_names,
-        consumer_candidate_names=consumer_candidate_names,
+        keyboard_candidate_identities=keyboard_candidate_identities,
+        mouse_candidate_identities=mouse_candidate_identities,
+        consumer_candidate_identities=consumer_candidate_identities,
         scenario_name=scenario_name,
     )
     result.details.setdefault("candidates", candidate_nodes.to_dict())

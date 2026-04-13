@@ -19,7 +19,7 @@ from bluetooth_2_usb.test_harness_capture import (
 )
 from bluetooth_2_usb.test_harness_capture_windows import (
     _device_matches_candidate,
-    _extract_device_names,
+    _extract_device_identities,
     _keyboard_event_to_report,
     _stable_device_identity,
 )
@@ -361,23 +361,23 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
-    def test_extract_device_names_normalizes_windows_hid_paths(self) -> None:
+    def test_extract_device_identities_collapses_windows_hid_paths(self) -> None:
         self.assertEqual(
-            _extract_device_names(
+            _extract_device_identities(
                 (
                     r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{GUID}",
                     r"\\?\hid#vid_1d6b&pid_0104&mi_00#9&314c2078&0&0000#{guid}",
                 )
             ),
-            (r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{guid}",),
+            (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
         )
 
-    def test_device_matches_candidate_prefers_exact_normalized_hid_paths(self) -> None:
+    def test_device_matches_candidate_on_same_hid_instance_identity(self) -> None:
         self.assertTrue(
             _device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (
-                    r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                    r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
                 ),
             )
         )
@@ -401,7 +401,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             _device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (
-                    r"\\?\HID#VID_1D6B&PID_0104&MI_01#9&2217c3c8&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",
+                    r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",
                 ),
             )
         )
