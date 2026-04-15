@@ -50,7 +50,7 @@ from .evdev import (
     is_mouse_button,
 )
 from .gadget_config import rebuild_gadget
-from .hid_descriptors import build_profile
+from .hid_layout import build_default_layout
 from .inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
@@ -107,7 +107,7 @@ class GadgetManager:
     HIDG_NODE_READY_TIMEOUT_SEC = 2.0
     HIDG_NODE_POLL_INTERVAL_SEC = 0.05
 
-    def __init__(self, hid_profile: str = "boot_keyboard") -> None:
+    def __init__(self) -> None:
         """
         Initialize without enabling devices. Call enable_gadgets() to enable them.
         """
@@ -117,35 +117,9 @@ class GadgetManager:
             "consumer": None,
         }
         self._enabled = False
-        self._hid_profile = hid_profile
 
     def _requested_devices(self):
-        return list(build_profile(self._hid_profile).devices)
-
-    def _usb_identity_overrides(self) -> dict[str, str]:
-        profile_code = {
-            "boot_keyboard": "0x0201",
-            "boot_mouse": "0x0202",
-            "nonboot": "0x0203",
-            "cherry_combo": "0x0204",
-        }[self._hid_profile]
-        serial_suffix = {
-            "boot_keyboard": "bk",
-            "boot_mouse": "bm",
-            "nonboot": "nb",
-            "cherry_combo": "cc",
-        }[self._hid_profile]
-        product_name = {
-            "boot_keyboard": "USB Combo Device (boot keyboard)",
-            "boot_mouse": "USB Combo Device (boot mouse)",
-            "nonboot": "USB Combo Device (nonboot)",
-            "cherry_combo": "USB Combo Device (cherry combo)",
-        }[self._hid_profile]
-        return {
-            "B2U_USB_BCD_DEVICE": profile_code,
-            "B2U_USB_PRODUCT": product_name,
-            "B2U_USB_SERIALNUMBER": f"213374badcafe-{serial_suffix}",
-        }
+        return list(build_default_layout().devices)
 
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(
@@ -223,7 +197,7 @@ class GadgetManager:
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
         self._prune_stale_hidg_nodes(remove_character_devices=True)
-        enabled_devices = list(rebuild_gadget(build_profile(self._hid_profile)))
+        enabled_devices = list(rebuild_gadget(build_default_layout()))
         try:
             self._validate_hidg_nodes()
         except RuntimeError:
@@ -231,7 +205,7 @@ class GadgetManager:
                 "Retrying HID gadget initialization after stale node validation failure"
             )
             self._prune_stale_hidg_nodes(remove_character_devices=True)
-            enabled_devices = list(rebuild_gadget(build_profile(self._hid_profile)))
+            enabled_devices = list(rebuild_gadget(build_default_layout()))
             self._validate_hidg_nodes()
 
         from adafruit_hid.consumer_control import ConsumerControl
@@ -243,11 +217,7 @@ class GadgetManager:
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
         self._enabled = True
 
-        _logger.debug(
-            "USB HID gadgets re-initialized for profile %s: %s",
-            self._hid_profile,
-            enabled_devices,
-        )
+        _logger.debug("USB HID gadgets initialized: %s", enabled_devices)
 
     def get_keyboard(self) -> Keyboard | None:
         """

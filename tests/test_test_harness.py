@@ -229,15 +229,15 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
         )
 
-    def test_discovery_maps_boot_mouse_linux_gadget_interfaces_by_product_name(
+    def test_discovery_maps_default_linux_gadget_interfaces_by_interface_number(
         self,
     ) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
                     "1-2.1.2:1.0",
-                    device_name="USB Combo Device (boot mouse)",
-                    serial="213374badcafe-bm",
+                    device_name="USB Combo Device",
+                    serial="213374badcafe",
                     vendor_id=0x1D6B,
                     product_id=0x0104,
                     interface_number=0,
@@ -246,8 +246,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.1",
-                    device_name="USB Combo Device (boot mouse)",
-                    serial="213374badcafe-bm",
+                    device_name="USB Combo Device",
+                    serial="213374badcafe",
                     vendor_id=0x1D6B,
                     product_id=0x0104,
                     interface_number=1,
@@ -256,8 +256,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.2",
-                    device_name="USB Combo Device (boot mouse)",
-                    serial="213374badcafe-bm",
+                    device_name="USB Combo Device",
+                    serial="213374badcafe",
                     vendor_id=0x1D6B,
                     product_id=0x0104,
                     interface_number=2,
@@ -270,24 +270,24 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         candidates = discover_gadget_node_candidates(hid_module=hid_module)
 
         self.assertEqual(
-            [info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.1"]
+            [info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"]
         )
         self.assertEqual(
-            [info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.0"]
+            [info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"]
         )
         self.assertEqual(
             [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
         )
 
-    def test_explicit_override_accepts_boot_mouse_linux_gadget_interfaces(
+    def test_explicit_override_accepts_default_linux_gadget_interfaces(
         self,
     ) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
                     "1-2.1.2:1.0",
-                    device_name="USB Combo Device (boot mouse)",
-                    serial="213374badcafe-bm",
+                    device_name="USB Combo Device",
+                    serial="213374badcafe",
                     vendor_id=0x1D6B,
                     product_id=0x0104,
                     interface_number=0,
@@ -296,8 +296,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.1",
-                    device_name="USB Combo Device (boot mouse)",
-                    serial="213374badcafe-bm",
+                    device_name="USB Combo Device",
+                    serial="213374badcafe",
                     vendor_id=0x1D6B,
                     product_id=0x0104,
                     interface_number=1,
@@ -306,8 +306,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.2",
-                    device_name="USB Combo Device (boot mouse)",
-                    serial="213374badcafe-bm",
+                    device_name="USB Combo Device",
+                    serial="213374badcafe",
                     vendor_id=0x1D6B,
                     product_id=0x0104,
                     interface_number=2,
@@ -330,7 +330,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
-    def test_keyboard_matcher_accepts_boot_keyboard_reports(self) -> None:
+    def test_keyboard_matcher_accepts_eight_byte_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
 
         reports = (
@@ -529,7 +529,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             )
         )
 
-    def test_keyboard_event_to_report_builds_boot_keyboard_reports(self) -> None:
+    def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
             _keyboard_event_to_report(0x7C, is_key_up=False),
             bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]),

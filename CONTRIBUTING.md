@@ -63,8 +63,7 @@ sudo /opt/bluetooth_2_usb/scripts/install.sh
 The operational update flow is:
 
 ```bash
-sudo git -C /opt/bluetooth_2_usb pull --ff-only
-sudo /opt/bluetooth_2_usb/scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
 Keep code and docs aligned with that model.

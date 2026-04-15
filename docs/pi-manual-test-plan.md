@@ -62,8 +62,7 @@ Purpose:
 Steps:
 
 ```bash
-sudo git -C /opt/bluetooth_2_usb pull --ff-only
-sudo /opt/bluetooth_2_usb/scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
 After reboot if boot settings changed:

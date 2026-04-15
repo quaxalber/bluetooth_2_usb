@@ -5,7 +5,7 @@ from pathlib import Path
 
 import usb_hid
 
-from .hid_descriptors import GadgetHidDevice, GadgetProfile
+from .hid_layout import GadgetHidDevice, GadgetLayout
 
 GADGET_ROOT = Path(usb_hid.gadget_root)
 CONFIG_NAME = "c.1"
@@ -72,7 +72,7 @@ def _resolve_udc_name() -> str:
     return controllers[0]
 
 
-def rebuild_gadget(profile: GadgetProfile) -> tuple[GadgetHidDevice, ...]:
+def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
     _teardown_existing_gadget()
 
     function_root = GADGET_ROOT / "functions"
@@ -84,7 +84,7 @@ def rebuild_gadget(profile: GadgetProfile) -> tuple[GadgetHidDevice, ...]:
     config_strings.mkdir(parents=True, exist_ok=True)
     gadget_strings.mkdir(parents=True, exist_ok=True)
 
-    _write_text(GADGET_ROOT / "bcdDevice", profile.bcd_device)
+    _write_text(GADGET_ROOT / "bcdDevice", layout.bcd_device)
     _write_text(GADGET_ROOT / "bcdUSB", DEFAULT_BCD_USB)
     _write_text(GADGET_ROOT / "bDeviceClass", "0x00")
     _write_text(GADGET_ROOT / "bDeviceProtocol", "0x00")
@@ -92,17 +92,17 @@ def rebuild_gadget(profile: GadgetProfile) -> tuple[GadgetHidDevice, ...]:
     _write_text(GADGET_ROOT / "bMaxPacketSize0", DEFAULT_BMAX_PACKET_SIZE0)
     _write_text(GADGET_ROOT / "idProduct", DEFAULT_PRODUCT_ID)
     _write_text(GADGET_ROOT / "idVendor", DEFAULT_VENDOR_ID)
-    _write_text(gadget_strings / "serialnumber", profile.serial_number)
+    _write_text(gadget_strings / "serialnumber", layout.serial_number)
     _write_text(gadget_strings / "manufacturer", DEFAULT_MANUFACTURER)
-    _write_text(gadget_strings / "product", profile.product_name)
+    _write_text(gadget_strings / "product", layout.product_name)
 
-    _write_text(config_strings / "configuration", profile.configuration_name)
-    _write_text(config_root / "MaxPower", str(profile.max_power))
-    _write_text(config_root / "bmAttributes", hex(profile.bm_attributes))
-    if profile.max_speed is not None:
-        _write_text(GADGET_ROOT / "max_speed", profile.max_speed)
+    _write_text(config_strings / "configuration", layout.configuration_name)
+    _write_text(config_root / "MaxPower", str(layout.max_power))
+    _write_text(config_root / "bmAttributes", hex(layout.bm_attributes))
+    if layout.max_speed is not None:
+        _write_text(GADGET_ROOT / "max_speed", layout.max_speed)
 
-    for device in profile.devices:
+    for device in layout.devices:
         device_root = function_root / f"hid.usb{device.function_index}"
         device_root.mkdir(parents=True, exist_ok=True)
         _write_text(device_root / "protocol", str(device.protocol))
@@ -113,10 +113,10 @@ def rebuild_gadget(profile: GadgetProfile) -> tuple[GadgetHidDevice, ...]:
 
     _write_text(GADGET_ROOT / "UDC", _resolve_udc_name())
 
-    usb_hid.devices = list(profile.devices)
-    for device in profile.devices:
+    usb_hid.devices = list(layout.devices)
+    for device in layout.devices:
         try:
             device.path = device.get_device_path()
         except FileNotFoundError:
             device.path = None
-    return profile.devices
+    return layout.devices

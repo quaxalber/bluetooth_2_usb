@@ -49,6 +49,7 @@ wrapper entrypoints:
 ```bash
 for s in \
   scripts/install.sh \
+  scripts/update.sh \
   scripts/uninstall.sh \
   scripts/debug.sh \
   scripts/smoke_test.sh \

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import usb_hid
 
-CHERRY_KEYBOARD_DESCRIPTOR = bytes.fromhex(
+DEFAULT_KEYBOARD_DESCRIPTOR = bytes.fromhex(
     "05010906a101050719e029e715002501750195088102950175088101"
     "95037501050819012903910295057501910195067508150026ff0005"
     "0719002aff008100c0"
@@ -86,8 +86,7 @@ class GadgetHidDevice(usb_hid.Device):
 
 
 @dataclass(frozen=True, slots=True)
-class GadgetProfile:
-    name: str
+class GadgetLayout:
     devices: tuple[GadgetHidDevice, ...]
     bcd_device: str
     product_name: str
@@ -98,15 +97,15 @@ class GadgetProfile:
     max_speed: str | None = None
 
 
-def _build_boot_keyboard_profile() -> GadgetProfile:
-    return GadgetProfile(
-        name="boot_keyboard",
+def build_default_layout() -> GadgetLayout:
+    return GadgetLayout(
         devices=(
             GadgetHidDevice.from_existing(
                 usb_hid.Device.BOOT_KEYBOARD,
                 function_index=0,
                 protocol=1,
                 subclass=1,
+                descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.MOUSE,
@@ -121,110 +120,10 @@ def _build_boot_keyboard_profile() -> GadgetProfile:
                 subclass=0,
             ),
         ),
-        bcd_device="0x0201",
-        product_name="USB Combo Device (boot keyboard)",
-        serial_number="213374badcafe-bk",
-    )
-
-
-def _build_boot_mouse_profile() -> GadgetProfile:
-    return GadgetProfile(
-        name="boot_mouse",
-        devices=(
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.BOOT_MOUSE,
-                function_index=0,
-                protocol=2,
-                subclass=1,
-            ),
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.KEYBOARD,
-                function_index=1,
-                protocol=0,
-                subclass=0,
-            ),
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.CONSUMER_CONTROL,
-                function_index=2,
-                protocol=0,
-                subclass=0,
-            ),
-        ),
-        bcd_device="0x0202",
-        product_name="USB Combo Device (boot mouse)",
-        serial_number="213374badcafe-bm",
-    )
-
-
-def _build_nonboot_profile() -> GadgetProfile:
-    return GadgetProfile(
-        name="nonboot",
-        devices=(
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.KEYBOARD,
-                function_index=0,
-                protocol=0,
-                subclass=0,
-            ),
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.MOUSE,
-                function_index=1,
-                protocol=0,
-                subclass=0,
-            ),
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.CONSUMER_CONTROL,
-                function_index=2,
-                protocol=0,
-                subclass=0,
-            ),
-        ),
-        bcd_device="0x0203",
-        product_name="USB Combo Device (nonboot)",
-        serial_number="213374badcafe-nb",
-    )
-
-
-def _build_cherry_combo_profile() -> GadgetProfile:
-    return GadgetProfile(
-        name="cherry_combo",
-        devices=(
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.BOOT_KEYBOARD,
-                function_index=0,
-                protocol=1,
-                subclass=1,
-                descriptor=CHERRY_KEYBOARD_DESCRIPTOR,
-                name="cherry keyboard gadget",
-            ),
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.MOUSE,
-                function_index=1,
-                protocol=0,
-                subclass=0,
-            ),
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.CONSUMER_CONTROL,
-                function_index=2,
-                protocol=0,
-                subclass=0,
-            ),
-        ),
-        bcd_device="0x0204",
-        product_name="USB Combo Device (cherry combo)",
-        serial_number="213374badcafe-cc",
+        bcd_device="0x0205",
+        product_name="USB Combo Device",
+        serial_number="213374badcafe",
         max_power=100,
         bm_attributes=0xA0,
+        max_speed="high-speed",
     )
-
-
-def build_profile(name: str) -> GadgetProfile:
-    if name == "boot_keyboard":
-        return _build_boot_keyboard_profile()
-    if name == "boot_mouse":
-        return _build_boot_mouse_profile()
-    if name == "nonboot":
-        return _build_nonboot_profile()
-    if name == "cherry_combo":
-        return _build_cherry_combo_profile()
-    raise ValueError(f"Unsupported HID profile: {name}")

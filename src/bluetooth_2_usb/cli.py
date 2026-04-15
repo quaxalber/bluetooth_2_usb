@@ -219,7 +219,6 @@ async def async_run(args: Arguments) -> int:
     configure_logging(args)
 
     logger.info(f"Launching {get_versioned_name()}")
-    logger.info(f"HID profile: {args.hid_profile}")
 
     if not env_status.ok:
         if not env_status.configfs:
@@ -239,7 +238,7 @@ async def async_run(args: Arguments) -> int:
         ShortcutToggler,
     )
 
-    gadget_manager = GadgetManager(hid_profile=args.hid_profile)
+    gadget_manager = GadgetManager()
     gadget_manager.enable_gadgets()
 
     shortcut_toggler = None

@@ -110,7 +110,7 @@ If possible, power the Pi from a separate stable power supply using the power-on
 - Bluetooth keyboard and mouse input relayed as standard USB HID
 - Auto-discovery and auto-reconnect for supported input devices
 - Optional input grabbing so the Pi does not also consume local keyboard and mouse events
-- HID compatibility profiles for stricter hosts and pre-OS environments
+- A fixed strict-host USB HID layout aimed at pre-OS environments and picky hosts
 - A small, well-supported diagnostics surface built around `--validate-env`, `smoke_test.sh`, and `debug.sh`
 - Optional persistent read-only operation with writable Bluetooth state on a separate ext4 filesystem
 - A single supported managed-install workflow in `/opt/bluetooth_2_usb`
@@ -149,7 +149,6 @@ Default content:
 B2U_AUTO_DISCOVER=1
 B2U_GRAB_DEVICES=1
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_HID_PROFILE=boot_keyboard
 B2U_LOG_TO_FILE=0
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=0
@@ -162,12 +161,18 @@ Meaning:
 - `B2U_AUTO_DISCOVER=1` relays all suitable readable input devices except known excluded platform devices.
 - `B2U_GRAB_DEVICES=1` grabs the selected input devices so the Pi stops consuming their local events.
 - `B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12` defines a plus-separated key chord that toggles relaying on and off at runtime.
-- `B2U_HID_PROFILE=boot_keyboard` selects the USB HID profile exposed to the host.
 - `B2U_LOG_TO_FILE=0` disables file logging by default.
 - `B2U_LOG_PATH=...` controls the file path used when file logging is enabled.
 - `B2U_DEBUG=0` keeps normal log verbosity.
 - `B2U_DEVICE_IDS` is the precise alternative when you want to pin the runtime to specific event paths, Bluetooth MACs, or case-insensitive device-name fragments.
 - `B2U_UDC_PATH` is optional and only needed if you must pin UDC detection on a system with multiple gadget-capable controllers.
+
+The host-facing USB gadget is fixed to one layout:
+
+- boot-protocol keyboard interface first
+- mouse interface second
+- consumer-control interface third
+- `MaxPower=100`, `bmAttributes=0xa0`, and `max_speed=high-speed`
 
 After editing that file, restart the service:
 
@@ -177,28 +182,6 @@ sudo systemctl restart bluetooth_2_usb.service
 
 > [!NOTE]
 > Despite the project name, broad auto-discovery can also relay other suitable Linux input devices that are visible on the Pi; the intended primary use case remains Bluetooth keyboard and mouse bridging.
-
-### HID profiles
-
-Bluetooth-2-USB supports four host-facing HID layouts:
-
-- `boot_keyboard`
-  - default
-  - exposes a boot keyboard plus a nonboot mouse and a separate consumer-control function
-  - best starting point for stricter pre-OS hosts and firmware menus
-- `boot_mouse`
-  - exposes a boot mouse plus separate keyboard and consumer-control functions
-  - useful when mouse compatibility is the primary concern
-- `nonboot`
-  - exposes nonboot keyboard, mouse, and consumer-control functions
-  - suitable for hosts that do not require boot-protocol behavior
-- `cherry_combo`
-  - exposes the same three-function layout as `boot_keyboard`
-  - keeps the current mouse and consumer-control functions
-  - swaps in a Cherry-inspired boot-keyboard descriptor plus stricter USB power and remote-wakeup settings
-  - useful for hosts that are picky during pre-OS or resume flows
-
-For most installations, start with `boot_keyboard` and only switch profiles when you are diagnosing compatibility on a specific host.
 
 ## CLI reference
 
@@ -217,11 +200,6 @@ Use these runtime flags when running the CLI manually.
 | `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
 | `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
 | `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
-<<<<<<< HEAD
-| `--hid-profile PROFILE` | USB HID profile to expose. Default: `boot_keyboard`. Supported values: `boot_keyboard`, `boot_mouse`, `nonboot`, `cherry_combo`. `boot_keyboard` exposes a boot keyboard plus a nonboot mouse and a separate consumer-control function, making it the preferred choice for stricter pre-OS hosts. `boot_mouse` exposes a boot mouse plus separate keyboard and consumer-control functions. `nonboot` uses nonboot keyboard, mouse, and consumer-control functions. `cherry_combo` keeps the same three-function layout and the current mouse and consumer-control functions, but swaps in a Cherry-inspired boot-keyboard descriptor plus stricter USB power and remote-wakeup settings for hosts that are picky during pre-OS or resume flows. Example: `--hid-profile cherry_combo`. |
-=======
-| `--hid-profile PROFILE` | USB HID profile to expose. Default: `boot_keyboard`. Supported values: `boot_keyboard`, `boot_mouse`, `nonboot`, `cherry_combo`. `boot_keyboard` exposes a boot keyboard plus a nonboot mouse and a separate consumer-control function, making it the preferred choice for stricter pre-OS hosts. `boot_mouse` exposes a boot mouse plus separate keyboard and consumer-control functions. `nonboot` uses nonboot keyboard, mouse, and consumer-control functions. `cherry_combo` keeps the same three-function layout and the current mouse and consumer-control functions, but swaps in a Cherry-inspired boot-keyboard descriptor plus stricter USB power and remote-wakeup settings for hosts that are picky during pre-OS or resume flows. Example: `--hid-profile cherry_combo`. |
->>>>>>> ae7977c (Add cherry combo profile and fix HID burst relay)
 | `--help, -h` | Show the built-in CLI help and exit. |
 
 ## Day-to-day usage
@@ -261,14 +239,12 @@ sudo systemctl restart bluetooth_2_usb.service
 Update the managed checkout and re-apply the system integration:
 
 ```bash
-sudo git -C /opt/bluetooth_2_usb pull --ff-only
-sudo /opt/bluetooth_2_usb/scripts/install.sh
+sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
-This keeps the operational model simple:
-
-- Git decides which commit or branch you are on.
-- `install.sh` reapplies boot config, the virtual environment, the service, and the wrapper for the current checkout.
+`update.sh` fast-forwards the current checked-out branch, refuses to overwrite a
+dirty managed checkout, and then runs `install.sh` to reapply boot config, the
+virtual environment, the service, and the wrapper.
 
 ## Uninstalling
 
@@ -425,6 +401,19 @@ If the service looks healthy but the target host still does not react, also chec
 
 If you need to isolate the relay path from Bluetooth pairing state, run the host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
 
+### Wake from host sleep remains limited
+
+The current fixed USB HID layout improves strict pre-OS behavior, including the
+ThinkPad cold-boot path to BitLocker, but wake from host sleep still does not
+work reliably.
+
+This appears to require kernel-side support in the Raspberry Pi USB HID gadget
+path rather than a further `bluetooth_2_usb` userspace change. Raspberry Pi
+Linux issue [#3977](https://github.com/raspberrypi/linux/issues/3977) suggests
+this may be possible with a kernel patch or equivalent gadget wakeup support.
+
+Treat this as a known platform limitation for now.
+
 ### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active
 
 Do not treat `systemctl status bluetooth` on its own as a health check. A running `bluetooth.service` can still leave the controller powered off or rfkill-blocked.
@@ -461,7 +450,11 @@ All managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after ins
 
 ### `install.sh`
 
-Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install. This is the main deployment entrypoint for first install and for later re-application after `git pull`.
+Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install. This is the main deployment entrypoint for first install and for explicit re-application of the current checkout.
+
+### `update.sh`
+
+Fast-forward the managed checkout and then call `install.sh`. This is the supported update path for an existing managed deployment.
 
 ### `uninstall.sh`
 
@@ -503,9 +496,9 @@ The harness is single-run only and uses a lock file. If a previous run was inter
 - host: `/tmp/bluetooth_2_usb_test_harness.lock` on Linux and macOS
 - Pi: `/tmp/bluetooth_2_usb_test_harness.lock`
 
-Before each fresh Windows validation run after changing the Pi HID profile or descriptor layout:
+Before each fresh Windows validation run after changing the gadget descriptor layout or USB identity:
 
-1. set the target Pi HID profile
+1. set the target Pi to the intended software revision
 2. reboot the Pi
 3. perform a Windows PnP admin reset
 4. only then start the host capture

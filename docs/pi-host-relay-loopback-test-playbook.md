@@ -99,10 +99,10 @@ If automatic detection is ambiguous, pin the nodes explicitly:
 
 Keep this command running while you trigger the Pi-side injection.
 
-Before each fresh Windows validation run after changing the Pi HID profile or
-descriptor layout:
+Before each fresh Windows validation run after changing the gadget descriptor
+layout or USB identity:
 
-1. set the Pi HID profile
+1. set the Pi to the intended software revision
 2. reboot the Pi
 3. perform a Windows PnP admin reset
 4. only then start the host capture

@@ -38,7 +38,6 @@ write_default_env_file() {
 B2U_AUTO_DISCOVER=1
 B2U_GRAB_DEVICES=1
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_HID_PROFILE=boot_keyboard
 B2U_LOG_TO_FILE=0
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=0
@@ -47,6 +46,22 @@ B2U_UDC_PATH=
 EOF
     chmod 0644 "$B2U_ENV_FILE"
   fi
+}
+
+normalize_runtime_env_file() {
+  local tmp=""
+
+  [[ -f "$B2U_ENV_FILE" ]] || return 0
+  if ! grep -Eq '^[[:space:]]*B2U_HID_PROFILE=' "$B2U_ENV_FILE"; then
+    return 0
+  fi
+
+  backup_file "$B2U_ENV_FILE"
+  tmp="${B2U_ENV_FILE}.tmp.$$"
+  awk '!/^[[:space:]]*B2U_HID_PROFILE=/' "$B2U_ENV_FILE" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$B2U_ENV_FILE"
+  warn "Removed legacy B2U_HID_PROFILE from ${B2U_ENV_FILE}; the runtime now exposes a single fixed USB HID layout."
 }
 
 install_cli_wrapper() {
