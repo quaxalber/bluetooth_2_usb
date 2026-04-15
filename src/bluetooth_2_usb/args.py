@@ -57,18 +57,18 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
     def _add_arguments(self) -> None:
         self.add_argument(
-            "--device_ids",
-            "-i",
-            type=_parse_device_ids,
-            default=None,
-            help="Comma-separated list of identifiers for input devices to be relayed.\nAn identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\nExample: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\nDefault: None",
-        )
-        self.add_argument(
             "--auto_discover",
             "-a",
             action="store_true",
             default=False,
             help="Enable auto-discovery mode. All readable input devices will be relayed automatically.\nDefault: disabled",
+        )
+        self.add_argument(
+            "--device_ids",
+            "-i",
+            type=_parse_device_ids,
+            default=None,
+            help="Comma-separated list of identifiers for input devices to be relayed.\nAn identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\nExample: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\nDefault: None",
         )
         self.add_argument(
             "--grab_devices",

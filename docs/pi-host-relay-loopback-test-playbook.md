@@ -54,11 +54,15 @@ On Linux:
 ./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
 ```
 
-On macOS:
+Experimental: macOS
 
 ```bash
-./scripts/host_relay_test_capture.command --scenario keyboard --timeout-sec 1 --output json
+./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
 ```
+
+> [!NOTE]
+> Experimental - unvalidated on real macOS hosts. The macOS variant uses the
+> same shell wrapper, but it has not yet been validated on real macOS hardware.
 
 On Windows:
 

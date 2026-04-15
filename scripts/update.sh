@@ -12,8 +12,8 @@ usage() {
   cat <<EOF
 Usage: sudo ./scripts/update.sh
 
-Fast-forward the current managed checkout in ${B2U_INSTALL_DIR} and then
-reapply the managed install via ${B2U_INSTALL_DIR}/scripts/install.sh.
+Fast-forward the current managed checkout in ${B2U_INSTALL_DIR}. If the checkout
+changes, reapply the managed install via ${B2U_INSTALL_DIR}/scripts/install.sh.
 EOF
 }
 
@@ -41,12 +41,19 @@ fi
 
 CURRENT_BRANCH="$(git -C "${B2U_INSTALL_DIR}" symbolic-ref --quiet --short HEAD)" \
   || fail "Refusing to update a detached HEAD in ${B2U_INSTALL_DIR}."
+BEFORE_HEAD="$(git -C "${B2U_INSTALL_DIR}" rev-parse HEAD)"
 
 info "Fetching origin for branch ${CURRENT_BRANCH}"
 git -C "${B2U_INSTALL_DIR}" fetch --tags --prune origin
 
 info "Fast-forwarding ${CURRENT_BRANCH}"
 git -C "${B2U_INSTALL_DIR}" pull --ff-only origin "${CURRENT_BRANCH}"
+AFTER_HEAD="$(git -C "${B2U_INSTALL_DIR}" rev-parse HEAD)"
+
+if [[ "$BEFORE_HEAD" == "$AFTER_HEAD" ]]; then
+  ok "Managed checkout is already up to date; skipping reinstall."
+  exit 0
+fi
 
 info "Reapplying managed install"
 "${B2U_INSTALL_DIR}/scripts/install.sh"

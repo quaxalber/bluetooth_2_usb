@@ -65,10 +65,6 @@ do
   echo
 done
 
-echo "==== scripts/host_relay_test_capture.command"
-./scripts/host_relay_test_capture.command --help
-echo
-
 echo "==== scripts/host_relay_test_capture.ps1"
 powershell -ExecutionPolicy Bypass -File .\\scripts\\host_relay_test_capture.ps1 --help
 echo

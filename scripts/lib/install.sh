@@ -36,12 +36,12 @@ write_default_env_file() {
     cat >"$B2U_ENV_FILE" <<'EOF'
 # Structured runtime configuration for bluetooth_2_usb.service.
 B2U_AUTO_DISCOVER=1
+B2U_DEVICE_IDS=
 B2U_GRAB_DEVICES=1
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
 B2U_LOG_TO_FILE=0
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=0
-B2U_DEVICE_IDS=
 B2U_UDC_PATH=
 EOF
     chmod 0644 "$B2U_ENV_FILE"
@@ -107,10 +107,11 @@ rebuild_venv_atomically() {
   local venv_dir="$1"
   local package_dir="$2"
   local staging_dir="${venv_dir}.new"
-  local backup_dir=""
-  local backup_path=""
+  local previous_dir="${venv_dir}.old.$$"
+  local moved_previous=0
 
   rm -rf "$staging_dir"
+  rm -rf "$previous_dir"
   recreate_venv "$staging_dir" || {
     rm -rf "$staging_dir"
     return 1
@@ -126,29 +127,23 @@ rebuild_venv_atomically() {
   fi
 
   if [[ -e "$venv_dir" ]]; then
-    backup_dir="${venv_dir}.bak.$(timestamp)"
-    mv "$venv_dir" "$backup_dir" || {
+    mv "$venv_dir" "$previous_dir" || {
       rm -rf "$staging_dir"
       return 1
     }
+    moved_previous=1
   fi
 
   if mv "$staging_dir" "$venv_dir"; then
     repair_venv_shebangs "$venv_dir" "$staging_dir"
-    if [[ -n "$backup_dir" ]]; then
-      info "Previous virtual environment backed up to ${backup_dir}"
-      for backup_path in "${venv_dir}".bak.*; do
-        [[ -e "$backup_path" ]] || break
-        [[ "$backup_path" == "$backup_dir" ]] && continue
-        rm -rf "$backup_path"
-      done
-    fi
+    rm -rf "$previous_dir"
     return 0
   fi
 
   warn "Failed to activate the new virtual environment."
-  if [[ -n "$backup_dir" ]]; then
-    warn "Previous virtual environment remains available at ${backup_dir}."
+  rm -rf "$venv_dir"
+  if [[ $moved_previous -eq 1 && -e "$previous_dir" ]]; then
+    mv "$previous_dir" "$venv_dir" || warn "Failed to restore the previous virtual environment."
   fi
   return 1
 }

@@ -18,12 +18,12 @@ class ServiceConfigError(ValueError):
 @dataclass(slots=True)
 class ServiceConfig:
     auto_discover: bool = True
+    device_ids: list[str] = field(default_factory=list)
     grab_devices: bool = True
     interrupt_shortcut: str = "CTRL+SHIFT+F12"
     log_to_file: bool = False
     log_path: str = DEFAULT_LOG_PATH
     debug: bool = False
-    device_ids: list[str] = field(default_factory=list)
     udc_path: str = ""
 
     def to_dict(self) -> dict[str, object]:

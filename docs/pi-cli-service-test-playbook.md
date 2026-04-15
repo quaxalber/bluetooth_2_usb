@@ -133,6 +133,9 @@ ssh -4 "$PI_HOST" '
 '
 ```
 
+If no new commit is available on the checked-out branch, this should exit `0`
+without rebuilding the managed virtual environment or restarting the service.
+
 Reboot and wait for SSH so the update path is validated against the next boot:
 
 ```bash
