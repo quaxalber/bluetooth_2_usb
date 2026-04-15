@@ -61,7 +61,7 @@ Important:
 Files and directories that matter most:
 
 - `src/bluetooth_2_usb/`
-  Python package for CLI, runtime, HID profiles, relay logic, logging, and
+  Python package for CLI, runtime, HID layout, relay logic, logging, and
   version handling
 - `scripts/`
   Managed install, uninstall, smoke/debug, and persistent read-only helpers
@@ -110,8 +110,7 @@ Preserve these unless the task explicitly redesigns them:
   - clone to `/opt/bluetooth_2_usb`
   - run `sudo /opt/bluetooth_2_usb/scripts/install.sh`
 - Supported update flow:
-  - `sudo git -C /opt/bluetooth_2_usb pull --ff-only`
-  - `sudo /opt/bluetooth_2_usb/scripts/install.sh`
+  - `sudo /opt/bluetooth_2_usb/scripts/update.sh`
 - Shell scripts should fail loudly on ambiguous or unsafe input.
 - Boot changes should be conservative and leave timestamped backups, but scripts
   should not attempt automatic rollback restores.
@@ -202,9 +201,9 @@ For runtime-affecting changes, validate on real hardware when feasible:
 - host capture can temporarily claim the gadget HID interfaces while the test
   runs; do not assume normal local desktop handling remains active during the
   capture window
-- before each new Windows validation run for a changed HID profile or
-  descriptor layout:
-  1. set the Pi HID profile
+- before each new Windows validation run for a changed gadget descriptor
+  layout or USB identity:
+  1. set the Pi to the intended software revision
   2. reboot the Pi
   3. ask the user for a Windows PnP admin reset
   4. wait for explicit confirmation before starting host capture

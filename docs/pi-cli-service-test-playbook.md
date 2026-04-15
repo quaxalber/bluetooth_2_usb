@@ -71,6 +71,7 @@ PI_HOST="${PI_HOST:-your-pi-host}"
 
 ssh -4 "$PI_HOST" '
   bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/update.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
@@ -122,14 +123,13 @@ Interpret the smoke result conservatively:
 
 ## Update validation
 
-The supported update model is Git plus reinstall:
+The supported update model is the managed update wrapper:
 
 ```bash
 PI_HOST="${PI_HOST:-your-pi-host}"
 
 ssh -4 "$PI_HOST" '
-  sudo -n git -C /opt/bluetooth_2_usb pull --ff-only
-  sudo -n /opt/bluetooth_2_usb/scripts/install.sh
+  sudo -n /opt/bluetooth_2_usb/scripts/update.sh
 '
 ```
 

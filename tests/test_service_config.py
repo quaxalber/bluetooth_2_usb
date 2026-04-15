@@ -20,7 +20,6 @@ class ServiceConfigTest(unittest.TestCase):
                         "B2U_AUTO_DISCOVER=0",
                         "B2U_GRAB_DEVICES=1",
                         "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_HID_PROFILE=nonboot",
                         "B2U_LOG_TO_FILE=1",
                         "B2U_LOG_PATH='/tmp/custom log.txt'",
                         "B2U_DEBUG=1",
@@ -36,7 +35,6 @@ class ServiceConfigTest(unittest.TestCase):
 
         self.assertFalse(config.auto_discover)
         self.assertTrue(config.grab_devices)
-        self.assertEqual(config.hid_profile, "nonboot")
         self.assertTrue(config.log_to_file)
         self.assertEqual(config.log_path, "/tmp/custom log.txt")
         self.assertTrue(config.debug)
@@ -60,7 +58,6 @@ class ServiceConfigTest(unittest.TestCase):
                         "B2U_AUTO_DISCOVER=1",
                         "B2U_GRAB_DEVICES=1",
                         "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_HID_PROFILE=boot_mouse",
                         "B2U_LOG_TO_FILE=1",
                         "B2U_LOG_PATH='/tmp/debug log.txt'",
                         "B2U_DEBUG=0",
@@ -84,7 +81,7 @@ class ServiceConfigTest(unittest.TestCase):
         self.assertIn("/tmp/debug log.txt", argv)
         self.assertIn("'MX Keys'", command)
 
-    def test_accepts_boot_keyboard_hid_profile(self) -> None:
+    def test_legacy_hid_profile_key_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
@@ -92,30 +89,14 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            config = load_service_config(env_file)
-            argv = build_cli_argv(config)
+            with self.assertRaises(ServiceConfigError):
+                load_service_config(env_file)
 
-        self.assertEqual(config.hid_profile, "boot_keyboard")
-        self.assertIn("boot_keyboard", argv)
-
-    def test_defaults_to_boot_keyboard_profile(self) -> None:
+    def test_defaults_do_not_emit_removed_hid_profile_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "missing"
 
             config = load_service_config(env_file)
-
-        self.assertEqual(config.hid_profile, "boot_keyboard")
-
-    def test_accepts_cherry_combo_hid_profile(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            env_file = Path(tmpdir) / "bluetooth_2_usb"
-            env_file.write_text(
-                "B2U_HID_PROFILE=cherry_combo\n",
-                encoding="utf-8",
-            )
-
-            config = load_service_config(env_file)
             argv = build_cli_argv(config)
 
-        self.assertEqual(config.hid_profile, "cherry_combo")
-        self.assertIn("cherry_combo", argv)
+        self.assertNotIn("--hid-profile", argv)

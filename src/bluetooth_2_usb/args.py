@@ -136,12 +136,6 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Output format for --list_devices and --validate-env. Default: text",
         )
         self.add_argument(
-            "--hid-profile",
-            choices=["boot_keyboard", "boot_mouse", "nonboot", "cherry_combo"],
-            default="boot_keyboard",
-            help="USB HID profile to expose. Default: boot_keyboard",
-        )
-        self.add_argument(
             "--help",
             "-h",
             action="help",
@@ -169,7 +163,6 @@ class Arguments:
         "_version",
         "_validate_env",
         "_output",
-        "_hid_profile",
     ]
 
     def __init__(
@@ -185,7 +178,6 @@ class Arguments:
         version: bool,
         validate_env: bool,
         output: str,
-        hid_profile: str,
     ) -> None:
         self._device_ids = device_ids
         self._auto_discover = auto_discover
@@ -198,7 +190,6 @@ class Arguments:
         self._version = version
         self._validate_env = validate_env
         self._output = output
-        self._hid_profile = hid_profile
 
     @property
     def device_ids(self) -> list[str] | None:
@@ -244,10 +235,6 @@ class Arguments:
     def output(self) -> str:
         return self._output
 
-    @property
-    def hid_profile(self) -> str:
-        return self._hid_profile
-
     def __str__(self) -> str:
         slot_values = [f"{slot[1:]}={getattr(self, slot)}" for slot in self.__slots__]
         return ", ".join(slot_values)
@@ -281,5 +268,4 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         version=args.version,
         validate_env=args.validate_env,
         output=args.output,
-        hid_profile=args.hid_profile,
     )

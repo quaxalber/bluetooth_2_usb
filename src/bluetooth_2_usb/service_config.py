@@ -20,7 +20,6 @@ class ServiceConfig:
     auto_discover: bool = True
     grab_devices: bool = True
     interrupt_shortcut: str = "CTRL+SHIFT+F12"
-    hid_profile: str = "boot_keyboard"
     log_to_file: bool = False
     log_path: str = DEFAULT_LOG_PATH
     debug: bool = False
@@ -70,7 +69,6 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
         "B2U_AUTO_DISCOVER",
         "B2U_GRAB_DEVICES",
         "B2U_INTERRUPT_SHORTCUT",
-        "B2U_HID_PROFILE",
         "B2U_LOG_TO_FILE",
         "B2U_LOG_PATH",
         "B2U_DEBUG",
@@ -104,17 +102,6 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
             config.grab_devices = _parse_bool(value, key)
         elif key == "B2U_INTERRUPT_SHORTCUT":
             config.interrupt_shortcut = value
-        elif key == "B2U_HID_PROFILE":
-            if value not in {
-                "boot_keyboard",
-                "boot_mouse",
-                "nonboot",
-                "cherry_combo",
-            }:
-                raise ServiceConfigError(
-                    f"{env_file}:{line_number}: invalid B2U_HID_PROFILE {value!r}"
-                )
-            config.hid_profile = value
         elif key == "B2U_LOG_TO_FILE":
             config.log_to_file = _parse_bool(value, key)
         elif key == "B2U_LOG_PATH":
@@ -145,7 +132,6 @@ def build_cli_argv(config: ServiceConfig, *, append_debug: bool = False) -> list
         argv.extend(["--log_path", config.log_path])
     if config.debug or append_debug:
         argv.append("--debug")
-    argv.extend(["--hid-profile", config.hid_profile])
     return argv
 
 

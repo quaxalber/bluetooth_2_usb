@@ -381,14 +381,6 @@ def _role_for_device(info: HidDeviceInfo) -> str | None:
     if info.usage_page == CONSUMER_USAGE_PAGE and info.usage == CONSUMER_USAGE:
         return "consumer"
     if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
-        product_name = info.name.lower()
-        if "boot mouse" in product_name:
-            if info.interface_number == 0:
-                return "mouse"
-            if info.interface_number == 1:
-                return "keyboard"
-            if info.interface_number == 2:
-                return "consumer"
         if info.interface_number == 0:
             return "keyboard"
         if info.interface_number == 1:

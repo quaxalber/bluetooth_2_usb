@@ -318,7 +318,7 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
 _TEXT_BURST_STEPS: list[ExpectedEvent] = []
 _append_text_steps(
     _TEXT_BURST_STEPS,
-    "boot_keyboard BOOT_KEYBOARD boot_keyboard BOOT_KEYBOARD",
+    "KEYBOARD KEYBOARD keyboard KEYBOARD",
 )
 TEXT_BURST_STEPS = tuple(_TEXT_BURST_STEPS)
 
