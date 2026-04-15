@@ -3,8 +3,12 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
+from adafruit_hid.keycode import Keycode
+
+from .evdev import evdev_to_usb_hid
 from .test_harness_common import (
     DEFAULT_DEVICE_SUBSTRING,
     EXIT_ACCESS,
@@ -12,9 +16,6 @@ from .test_harness_common import (
     EXIT_OK,
     EXIT_PREREQUISITE,
     EXIT_TIMEOUT,
-    KEY_F13,
-    KEY_F14,
-    KEY_F15,
     KEY_VOLUMEDOWN,
     KEY_VOLUMEUP,
     REL_X,
@@ -33,12 +34,6 @@ CONSUMER_USAGE_PAGE = 0x0C
 CONSUMER_USAGE = 0x01
 GADGET_VENDOR_ID = 0x1D6B
 GADGET_PRODUCT_ID = 0x0104
-
-HID_KEY_CODES = {
-    KEY_F13: 104,
-    KEY_F14: 105,
-    KEY_F15: 106,
-}
 
 CONSUMER_USAGES = {
     KEY_VOLUMEUP: 0x00E9,
@@ -111,6 +106,11 @@ class GadgetNodeCandidates:
 class KeyboardSequenceMatcher:
     expected_steps: tuple
     index: int = 0
+    _modifier_state: int = 0
+    _pressed_keys: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        self._pressed_keys = ()
 
     def handle(self, report: bytes) -> None:
         payload = _normalize_keyboard_report(report)
@@ -124,19 +124,38 @@ class KeyboardSequenceMatcher:
             return
 
         expected = self.expected_steps[self.index]
-        if expected.value == 1:
-            hid_code = HID_KEY_CODES[expected.code]
-            pressed = tuple(code for code in payload[2:] if code)
-            if pressed != (hid_code,):
-                raise CaptureMismatchError(
-                    f"Unexpected keyboard report {report.hex(sep=' ')}; expected key {hid_code}"
-                )
-        else:
-            if any(payload):
-                raise CaptureMismatchError(
-                    f"Unexpected keyboard release report {report.hex(sep=' ')}"
-                )
+        expected_payload = self._apply_expected_step(expected)
+        if payload != expected_payload:
+            raise CaptureMismatchError(
+                f"Unexpected keyboard report {report.hex(sep=' ')}; expected {expected_payload.hex(sep=' ')}"
+            )
         self.index += 1
+
+    def _apply_expected_step(self, expected) -> bytes:
+        hid_code, _ = evdev_to_usb_hid(
+            SimpleNamespace(scancode=expected.code, keystate=expected.value)
+        )
+        if hid_code is None:
+            raise CaptureMismatchError(
+                f"Expected keyboard step {expected.describe()} is not mappable to HID"
+            )
+        modifier = Keycode.modifier_bit(hid_code)
+        if expected.value == 1:
+            if modifier:
+                self._modifier_state |= modifier
+            elif hid_code not in self._pressed_keys:
+                self._pressed_keys = (*self._pressed_keys, hid_code)
+        elif expected.value == 0:
+            if modifier:
+                self._modifier_state &= ~modifier
+            else:
+                self._pressed_keys = tuple(
+                    key for key in self._pressed_keys if key != hid_code
+                )
+
+        keys = list(self._pressed_keys[:6])
+        keys.extend([0] * (6 - len(keys)))
+        return bytes([self._modifier_state, 0, *keys])
 
     @property
     def complete(self) -> bool:

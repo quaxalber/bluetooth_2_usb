@@ -13,6 +13,7 @@ from .test_harness_common import (
     EXIT_ACCESS,
     EXIT_OK,
     EXIT_PREREQUISITE,
+    SCENARIOS,
     HarnessResult,
     get_scenario,
     scenario_to_dict,
@@ -28,8 +29,15 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
 
 
 def _keyboard_capabilities() -> dict[int, list[int]]:
+    keyboard_codes = sorted(
+        {
+            step.code
+            for scenario in SCENARIOS.values()
+            for step in scenario.keyboard_steps
+        }
+    )
     return {
-        ecodes.EV_KEY: [ecodes.KEY_F13, ecodes.KEY_F14, ecodes.KEY_F15],
+        ecodes.EV_KEY: keyboard_codes,
     }
 
 

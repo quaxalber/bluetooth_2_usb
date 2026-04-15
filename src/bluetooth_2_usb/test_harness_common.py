@@ -22,8 +22,20 @@ EV_REL = 2
 KEY_F13 = 183
 KEY_F14 = 184
 KEY_F15 = 185
+KEY_A = 30
+KEY_E = 18
+KEY_K = 37
+KEY_O = 24
+KEY_R = 19
+KEY_T = 20
+KEY_Y = 21
+KEY_B = 48
+KEY_D = 32
+KEY_LEFTSHIFT = 42
 KEY_VOLUMEUP = 115
 KEY_VOLUMEDOWN = 114
+KEY_MINUS = 12
+KEY_SPACE = 57
 REL_X = 0
 REL_Y = 1
 
@@ -37,8 +49,20 @@ EVENT_CODE_NAMES = {
         KEY_F13: "KEY_F13",
         KEY_F14: "KEY_F14",
         KEY_F15: "KEY_F15",
+        KEY_A: "KEY_A",
+        KEY_E: "KEY_E",
+        KEY_K: "KEY_K",
+        KEY_O: "KEY_O",
+        KEY_R: "KEY_R",
+        KEY_T: "KEY_T",
+        KEY_Y: "KEY_Y",
+        KEY_B: "KEY_B",
+        KEY_D: "KEY_D",
+        KEY_LEFTSHIFT: "KEY_LEFTSHIFT",
         KEY_VOLUMEUP: "KEY_VOLUMEUP",
         KEY_VOLUMEDOWN: "KEY_VOLUMEDOWN",
+        KEY_MINUS: "KEY_MINUS",
+        KEY_SPACE: "KEY_SPACE",
     },
     EV_REL: {
         REL_X: "REL_X",
@@ -46,7 +70,7 @@ EVENT_CODE_NAMES = {
     },
 }
 
-SCENARIO_NAMES = ("keyboard", "mouse", "combo", "consumer")
+SCENARIO_NAMES = ("keyboard", "mouse", "combo", "consumer", "text_burst")
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
 DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
@@ -238,6 +262,66 @@ CONSUMER_STEPS = (
     ExpectedEvent(EV_KEY, KEY_VOLUMEDOWN, 0),
 )
 
+
+def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
+    key_map = {
+        "a": KEY_A,
+        "b": KEY_B,
+        "d": KEY_D,
+        "e": KEY_E,
+        "k": KEY_K,
+        "o": KEY_O,
+        "r": KEY_R,
+        "t": KEY_T,
+        "y": KEY_Y,
+    }
+    for char in text:
+        if char == " ":
+            steps.extend(
+                (
+                    ExpectedEvent(EV_KEY, KEY_SPACE, 1),
+                    ExpectedEvent(EV_KEY, KEY_SPACE, 0),
+                )
+            )
+            continue
+        if char == "_":
+            steps.extend(
+                (
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 1),
+                    ExpectedEvent(EV_KEY, KEY_MINUS, 1),
+                    ExpectedEvent(EV_KEY, KEY_MINUS, 0),
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 0),
+                )
+            )
+            continue
+
+        key_code = key_map[char.lower()]
+        if char.isupper():
+            steps.extend(
+                (
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 1),
+                    ExpectedEvent(EV_KEY, key_code, 1),
+                    ExpectedEvent(EV_KEY, key_code, 0),
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 0),
+                )
+            )
+            continue
+
+        steps.extend(
+            (
+                ExpectedEvent(EV_KEY, key_code, 1),
+                ExpectedEvent(EV_KEY, key_code, 0),
+            )
+        )
+
+
+_TEXT_BURST_STEPS: list[ExpectedEvent] = []
+_append_text_steps(
+    _TEXT_BURST_STEPS,
+    "boot_keyboard BOOT_KEYBOARD boot_keyboard BOOT_KEYBOARD",
+)
+TEXT_BURST_STEPS = tuple(_TEXT_BURST_STEPS)
+
 SCENARIOS = {
     "keyboard": ScenarioDefinition(
         name="keyboard",
@@ -266,6 +350,13 @@ SCENARIOS = {
         mouse_rel_steps=(),
         mouse_button_steps=(),
         consumer_steps=CONSUMER_STEPS,
+    ),
+    "text_burst": ScenarioDefinition(
+        name="text_burst",
+        keyboard_steps=TEXT_BURST_STEPS,
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=(),
     ),
 }
 
