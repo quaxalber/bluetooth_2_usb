@@ -107,8 +107,7 @@ rebuild_venv_atomically() {
   local venv_dir="$1"
   local package_dir="$2"
   local staging_dir="${venv_dir}.new"
-  local backup_dir=""
-  local backup_path=""
+  local previous_dir="${venv_dir}.old.$$"
 
   rm -rf "$staging_dir"
   recreate_venv "$staging_dir" || {
@@ -126,8 +125,8 @@ rebuild_venv_atomically() {
   fi
 
   if [[ -e "$venv_dir" ]]; then
-    backup_dir="${venv_dir}.bak.$(timestamp)"
-    mv "$venv_dir" "$backup_dir" || {
+    rm -rf "$previous_dir"
+    mv "$venv_dir" "$previous_dir" || {
       rm -rf "$staging_dir"
       return 1
     }
@@ -135,20 +134,14 @@ rebuild_venv_atomically() {
 
   if mv "$staging_dir" "$venv_dir"; then
     repair_venv_shebangs "$venv_dir" "$staging_dir"
-    if [[ -n "$backup_dir" ]]; then
-      info "Previous virtual environment backed up to ${backup_dir}"
-      for backup_path in "${venv_dir}".bak.*; do
-        [[ -e "$backup_path" ]] || break
-        [[ "$backup_path" == "$backup_dir" ]] && continue
-        rm -rf "$backup_path"
-      done
-    fi
+    rm -rf "$previous_dir"
     return 0
   fi
 
   warn "Failed to activate the new virtual environment."
-  if [[ -n "$backup_dir" ]]; then
-    warn "Previous virtual environment remains available at ${backup_dir}."
+  rm -rf "$venv_dir"
+  if [[ -e "$previous_dir" ]]; then
+    mv "$previous_dir" "$venv_dir" || warn "Failed to restore the previous virtual environment."
   fi
   return 1
 }

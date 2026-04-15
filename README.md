@@ -243,8 +243,9 @@ sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
 `update.sh` fast-forwards the current checked-out branch, refuses to overwrite a
-dirty managed checkout, and then runs `install.sh` to reapply boot config, the
-virtual environment, the service, and the wrapper.
+dirty managed checkout, and only runs `install.sh` when the checkout actually
+changed. If the current branch is already up to date, it exits successfully
+without rebuilding the virtual environment or restarting the service.
 
 ## Uninstalling
 
@@ -454,7 +455,10 @@ Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install. Thi
 
 ### `update.sh`
 
-Fast-forward the managed checkout and then call `install.sh`. This is the supported update path for an existing managed deployment.
+Fast-forward the managed checkout and call `install.sh` only when the checkout
+changed. If the current branch is already up to date, the script exits
+successfully without reinstalling anything. This is the supported update path
+for an existing managed deployment.
 
 ### `uninstall.sh`
 

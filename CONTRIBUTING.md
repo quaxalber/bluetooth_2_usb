@@ -66,6 +66,9 @@ The operational update flow is:
 sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
+If the checkout is already current, `update.sh` should complete successfully
+without triggering a reinstall.
+
 Keep code and docs aligned with that model.
 
 ## Quality expectations

@@ -65,6 +65,9 @@ Steps:
 sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
+If the checkout is already current, expect a successful no-op rather than a
+forced reinstall.
+
 After reboot if boot settings changed:
 
 ```bash
