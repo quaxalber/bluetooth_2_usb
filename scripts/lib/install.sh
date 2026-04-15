@@ -108,8 +108,10 @@ rebuild_venv_atomically() {
   local package_dir="$2"
   local staging_dir="${venv_dir}.new"
   local previous_dir="${venv_dir}.old.$$"
+  local moved_previous=0
 
   rm -rf "$staging_dir"
+  rm -rf "$previous_dir"
   recreate_venv "$staging_dir" || {
     rm -rf "$staging_dir"
     return 1
@@ -125,11 +127,11 @@ rebuild_venv_atomically() {
   fi
 
   if [[ -e "$venv_dir" ]]; then
-    rm -rf "$previous_dir"
     mv "$venv_dir" "$previous_dir" || {
       rm -rf "$staging_dir"
       return 1
     }
+    moved_previous=1
   fi
 
   if mv "$staging_dir" "$venv_dir"; then
@@ -140,7 +142,7 @@ rebuild_venv_atomically() {
 
   warn "Failed to activate the new virtual environment."
   rm -rf "$venv_dir"
-  if [[ -e "$previous_dir" ]]; then
+  if [[ $moved_previous -eq 1 && -e "$previous_dir" ]]; then
     mv "$previous_dir" "$venv_dir" || warn "Failed to restore the previous virtual environment."
   fi
   return 1
