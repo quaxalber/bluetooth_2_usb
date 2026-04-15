@@ -37,3 +37,8 @@ class ParseArgsTest(unittest.TestCase):
         args = parse_args(["--hid-profile", "nonboot"])
 
         self.assertEqual(args.hid_profile, "nonboot")
+
+    def test_cherry_combo_profile_is_accepted(self) -> None:
+        args = parse_args(["--hid-profile", "cherry_combo"])
+
+        self.assertEqual(args.hid_profile, "cherry_combo")

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import re
 import stat
 import threading
 import time
 from asyncio import Task, TaskGroup
-from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -49,6 +49,8 @@ from .evdev import (
     is_consumer_key,
     is_mouse_button,
 )
+from .gadget_config import rebuild_gadget
+from .hid_descriptors import build_profile
 from .inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
@@ -118,33 +120,26 @@ class GadgetManager:
         self._hid_profile = hid_profile
 
     def _requested_devices(self):
-        usb_hid = import_module("usb_hid")
-        device = usb_hid.Device
-
-        if self._hid_profile == "boot_keyboard":
-            return [device.BOOT_KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
-        if self._hid_profile == "boot_mouse":
-            return [device.BOOT_MOUSE, device.KEYBOARD, device.CONSUMER_CONTROL]
-        if self._hid_profile == "nonboot":
-            return [device.KEYBOARD, device.MOUSE, device.CONSUMER_CONTROL]
-
-        raise ValueError(f"Unsupported HID profile: {self._hid_profile}")
+        return list(build_profile(self._hid_profile).devices)
 
     def _usb_identity_overrides(self) -> dict[str, str]:
         profile_code = {
             "boot_keyboard": "0x0201",
             "boot_mouse": "0x0202",
             "nonboot": "0x0203",
+            "cherry_combo": "0x0204",
         }[self._hid_profile]
         serial_suffix = {
             "boot_keyboard": "bk",
             "boot_mouse": "bm",
             "nonboot": "nb",
+            "cherry_combo": "cc",
         }[self._hid_profile]
         product_name = {
             "boot_keyboard": "USB Combo Device (boot keyboard)",
             "boot_mouse": "USB Combo Device (boot mouse)",
             "nonboot": "USB Combo Device (nonboot)",
+            "cherry_combo": "USB Combo Device (cherry combo)",
         }[self._hid_profile]
         return {
             "B2U_USB_BCD_DEVICE": profile_code,
@@ -227,23 +222,17 @@ class GadgetManager:
         Disable and re-enable usb_hid devices, then store references
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
-        usb_hid = import_module("usb_hid")
-        os.environ.update(self._usb_identity_overrides())
-        usb_hid.disable()
         self._prune_stale_hidg_nodes(remove_character_devices=True)
-
-        usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
+        enabled_devices = list(rebuild_gadget(build_profile(self._hid_profile)))
         try:
             self._validate_hidg_nodes()
         except RuntimeError:
             _logger.warning(
                 "Retrying HID gadget initialization after stale node validation failure"
             )
-            usb_hid.disable()
             self._prune_stale_hidg_nodes(remove_character_devices=True)
-            usb_hid.enable(self._requested_devices())  # type: ignore[arg-type]
+            enabled_devices = list(rebuild_gadget(build_profile(self._hid_profile)))
             self._validate_hidg_nodes()
-        enabled_devices = list(usb_hid.devices)  # type: ignore[attr-defined]
 
         from adafruit_hid.consumer_control import ConsumerControl
         from adafruit_hid.keyboard import Keyboard
@@ -678,15 +667,15 @@ class RelayController:
         if task and not task.done():
             task.cancel()
             _logger.debug(f"Cancelled relay for {device_path}.")
-        else:
-            _logger.debug(f"No active task found for {device_path} to remove.")
-        if device is not None:
-            try:
-                device.close()
-            except Exception:
-                _logger.debug(
-                    "Ignoring close failure for %s during removal.", device_path
-                )
+            return
+
+        _logger.debug(f"No active task found for {device_path} to remove.")
+        if device is None:
+            return
+        try:
+            device.close()
+        except Exception:
+            _logger.debug("Ignoring close failure for %s during removal.", device_path)
 
     async def _async_relay_events(self, device: InputDevice) -> None:
         """
@@ -744,6 +733,9 @@ class DeviceRelay:
     - Retries HID writes if they raise BlockingIOError.
     """
 
+    HID_WRITE_MAX_TRIES = 3
+    HID_WRITE_RETRY_DELAY_SEC = 0.01
+
     def __init__(
         self,
         input_device: InputDevice,
@@ -766,6 +758,8 @@ class DeviceRelay:
         self._shortcut_toggler = shortcut_toggler
 
         self._currently_grabbed = False
+        self._hid_write_retries = 0
+        self._hid_write_failures = 0
 
     def __str__(self) -> str:
         return f"relay for {self._input_device}"
@@ -805,18 +799,57 @@ class DeviceRelay:
                 self._input_device.ungrab()
                 self._currently_grabbed = False
             except Exception as ex:
-                if isinstance(ex, OSError) and ex.errno == 19:
+                self._currently_grabbed = False
+                if self._should_ignore_ungrab_error(ex):
                     _logger.debug(
-                        "Skipping ungrab for %s because the device disappeared.",
+                        "Skipping ungrab for %s because the device is no longer available.",
                         self._input_device.path,
                     )
                 else:
                     _logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
         try:
+            self._release_gadget_states()
+        except Exception:
+            _logger.debug("Ignoring gadget state release failure for %s", self)
+        try:
             self._input_device.close()
         except Exception:
             _logger.debug("Ignoring close failure for %s", self._input_device.path)
         return False
+
+    def _should_ignore_ungrab_error(self, ex: Exception) -> bool:
+        return isinstance(ex, OSError) and ex.errno in (errno.ENODEV, errno.EBADF)
+
+    def _release_gadget_states(self) -> None:
+        keyboard = self._gadget_manager.get_keyboard()
+        mouse = self._gadget_manager.get_mouse()
+        if keyboard is not None:
+            keyboard.release_all()
+        if mouse is not None:
+            mouse.release_all()
+
+    def _update_grab_state(self, active: bool) -> None:
+        if self._grab_device and active and not self._currently_grabbed:
+            try:
+                self._input_device.grab()
+                self._currently_grabbed = True
+                _logger.debug(f"Grabbed {self._input_device}")
+            except Exception as ex:
+                _logger.warning(f"Could not grab {self._input_device}: {ex}")
+        elif self._grab_device and not active and self._currently_grabbed:
+            try:
+                self._input_device.ungrab()
+                self._currently_grabbed = False
+                _logger.debug(f"Ungrabbed {self._input_device}")
+            except Exception as ex:
+                self._currently_grabbed = False
+                if self._should_ignore_ungrab_error(ex):
+                    _logger.debug(
+                        "Skipping ungrab for %s because the device is no longer available.",
+                        self._input_device.path,
+                    )
+                else:
+                    _logger.warning(f"Could not ungrab {self._input_device}: {ex}")
 
     async def async_relay_events_loop(self) -> None:
         """
@@ -825,41 +858,39 @@ class DeviceRelay:
 
         :return: None
         """
-        async for input_event in self._input_device.async_read_loop():
-            event = categorize(input_event)
+        try:
+            async for input_event in self._input_device.async_read_loop():
+                event = categorize(input_event)
 
-            if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
-                _logger.debug(
-                    f"Received {event} from {self._input_device.name} ({self._input_device.path})"
-                )
+                if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
+                    _logger.debug(
+                        f"Received {event} from {self._input_device.name} ({self._input_device.path})"
+                    )
 
-            if self._shortcut_toggler and isinstance(event, KeyEvent):
-                if self._shortcut_toggler.handle_key_event(event):
+                if self._shortcut_toggler and isinstance(event, KeyEvent):
+                    if self._shortcut_toggler.handle_key_event(event):
+                        continue
+
+                active = bool(self._relaying_active and self._relaying_active.is_set())
+                self._update_grab_state(active)
+
+                if not active:
                     continue
 
-            active = self._relaying_active and self._relaying_active.is_set()
-
-            # Dynamically grab/ungrab if relaying state changes
-            if self._grab_device and active and not self._currently_grabbed:
-                try:
-                    self._input_device.grab()
-                    self._currently_grabbed = True
-                    _logger.debug(f"Grabbed {self._input_device}")
-                except Exception as ex:
-                    _logger.warning(f"Could not grab {self._input_device}: {ex}")
-
-            elif self._grab_device and not active and self._currently_grabbed:
-                try:
-                    self._input_device.ungrab()
-                    self._currently_grabbed = False
-                    _logger.debug(f"Ungrabbed {self._input_device}")
-                except Exception as ex:
-                    _logger.warning(f"Could not ungrab {self._input_device}: {ex}")
-
-            if not active:
-                continue
-
-            await self._process_event_with_retry(event)
+                await self._process_event_with_retry(event)
+        except OSError as ex:
+            if ex.errno != errno.ENODEV:
+                raise
+            _logger.debug(
+                "Stopping relay loop for %s because the input device disappeared.",
+                self._input_device.path,
+            )
+        _logger.debug(
+            "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
+            self._input_device.path,
+            self._hid_write_retries,
+            self._hid_write_failures,
+        )
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
         """
@@ -868,19 +899,22 @@ class DeviceRelay:
 
         :param event: The InputEvent to process
         """
-        max_tries = 3
-        retry_delay = 0.1
+        max_tries = self.HID_WRITE_MAX_TRIES
+        retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
         for attempt in range(1, max_tries + 1):
             try:
                 relay_event(event, self._gadget_manager)
                 return
             except BlockingIOError:
                 if attempt < max_tries:
+                    self._hid_write_retries += 1
                     _logger.debug(f"HID write blocked ({attempt}/{max_tries})")
                     await asyncio.sleep(retry_delay)
                 else:
+                    self._hid_write_failures += 1
                     _logger.warning(f"HID write blocked ({attempt}/{max_tries})")
             except BrokenPipeError:
+                self._hid_write_failures += 1
                 _logger.warning(
                     "BrokenPipeError: USB cable likely disconnected or power-only. "
                     "Pausing relay.\nSee: "
@@ -890,6 +924,7 @@ class DeviceRelay:
                     self._relaying_active.clear()
                 return
             except Exception:
+                self._hid_write_failures += 1
                 _logger.exception(f"Error processing {event}")
                 return
 

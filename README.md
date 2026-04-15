@@ -180,7 +180,7 @@ sudo systemctl restart bluetooth_2_usb.service
 
 ### HID profiles
 
-Bluetooth-2-USB supports three host-facing HID layouts:
+Bluetooth-2-USB supports four host-facing HID layouts:
 
 - `boot_keyboard`
   - default
@@ -192,6 +192,11 @@ Bluetooth-2-USB supports three host-facing HID layouts:
 - `nonboot`
   - exposes nonboot keyboard, mouse, and consumer-control functions
   - suitable for hosts that do not require boot-protocol behavior
+- `cherry_combo`
+  - exposes the same three-function layout as `boot_keyboard`
+  - keeps the current mouse and consumer-control functions
+  - swaps in a Cherry-inspired boot-keyboard descriptor plus stricter USB power and remote-wakeup settings
+  - useful for hosts that are picky during pre-OS or resume flows
 
 For most installations, start with `boot_keyboard` and only switch profiles when you are diagnosing compatibility on a specific host.
 
@@ -212,7 +217,11 @@ Use these runtime flags when running the CLI manually.
 | `--version, -v` | Print the installed Bluetooth-2-USB version and exit. |
 | `--validate-env` | Validate gadget runtime prerequisites and exit. On non-gadget systems this is expected to fail fast and report the missing prerequisites. |
 | `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
-| `--hid-profile PROFILE` | USB HID profile to expose. Supported values: `boot_keyboard`, `boot_mouse`, `nonboot`. Example: `--hid-profile nonboot`. |
+<<<<<<< HEAD
+| `--hid-profile PROFILE` | USB HID profile to expose. Default: `boot_keyboard`. Supported values: `boot_keyboard`, `boot_mouse`, `nonboot`, `cherry_combo`. `boot_keyboard` exposes a boot keyboard plus a nonboot mouse and a separate consumer-control function, making it the preferred choice for stricter pre-OS hosts. `boot_mouse` exposes a boot mouse plus separate keyboard and consumer-control functions. `nonboot` uses nonboot keyboard, mouse, and consumer-control functions. `cherry_combo` keeps the same three-function layout and the current mouse and consumer-control functions, but swaps in a Cherry-inspired boot-keyboard descriptor plus stricter USB power and remote-wakeup settings for hosts that are picky during pre-OS or resume flows. Example: `--hid-profile cherry_combo`. |
+=======
+| `--hid-profile PROFILE` | USB HID profile to expose. Default: `boot_keyboard`. Supported values: `boot_keyboard`, `boot_mouse`, `nonboot`, `cherry_combo`. `boot_keyboard` exposes a boot keyboard plus a nonboot mouse and a separate consumer-control function, making it the preferred choice for stricter pre-OS hosts. `boot_mouse` exposes a boot mouse plus separate keyboard and consumer-control functions. `nonboot` uses nonboot keyboard, mouse, and consumer-control functions. `cherry_combo` keeps the same three-function layout and the current mouse and consumer-control functions, but swaps in a Cherry-inspired boot-keyboard descriptor plus stricter USB power and remote-wakeup settings for hosts that are picky during pre-OS or resume flows. Example: `--hid-profile cherry_combo`. |
+>>>>>>> ae7977c (Add cherry combo profile and fix HID burst relay)
 | `--help, -h` | Show the built-in CLI help and exit. |
 
 ## Day-to-day usage
@@ -480,7 +489,7 @@ Create temporary virtual keyboard and mouse devices on the Pi and inject a deter
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--scenario {keyboard,mouse,combo,consumer}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo`. |
+| `--scenario {keyboard,mouse,combo,consumer,text_burst}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo`. |
 | `--pre-delay-ms PRE_DELAY_MS` | Wait after creating the virtual devices before sending events. Default: `1000`. |
 | `--event-gap-ms EVENT_GAP_MS` | Delay between injected events. Default: `40`. |
 
@@ -503,7 +512,7 @@ Before each fresh Windows validation run after changing the Pi HID profile or de
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--scenario {keyboard,mouse,combo,consumer}` | Expected test sequence. Default: `combo`. Example: `./scripts/host_relay_test_capture.sh --scenario combo`. |
+| `--scenario {keyboard,mouse,combo,consumer,text_burst}` | Expected test sequence. Default: `combo`. Example: `./scripts/host_relay_test_capture.sh --scenario combo`. |
 | `--timeout-sec TIMEOUT_SEC` | Time to wait for the full sequence. Default: `5`. |
 | `--keyboard-node PATH` | Override the detected host keyboard HID device path. |
 | `--mouse-node PATH` | Override the detected host mouse HID device path. |

@@ -8,7 +8,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import usb_hid
+
+from bluetooth_2_usb.gadget_config import rebuild_gadget
+from bluetooth_2_usb.hid_descriptors import (
+    CHERRY_KEYBOARD_DESCRIPTOR,
+    GadgetHidDevice,
+    build_profile,
+)
 from bluetooth_2_usb.relay import (
+    DeviceRelay,
     GadgetManager,
     RelayController,
     RuntimeMonitor,
@@ -103,6 +112,54 @@ class _FakeInputHandle:
         self.close_calls += 1
 
 
+class _FakeGrabInputDevice:
+    def __init__(self, *, ungrab_errno: int | None = None) -> None:
+        self.path = "/dev/input/event-grab"
+        self.name = "grab-test-device"
+        self.close_calls = 0
+        self.grab_calls = 0
+        self.ungrab_calls = 0
+        self._ungrab_errno = ungrab_errno
+
+    def grab(self) -> None:
+        self.grab_calls += 1
+
+    def ungrab(self) -> None:
+        self.ungrab_calls += 1
+        if self._ungrab_errno is not None:
+            raise OSError(self._ungrab_errno, "Bad file descriptor")
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+class _QueueTestKeyEvent:
+    key_down = 1
+    key_hold = 2
+    key_up = 0
+
+    def __init__(self, scancode: int, keystate: int) -> None:
+        self.scancode = scancode
+        self.keystate = keystate
+
+
+class _QueueInputDevice:
+    def __init__(self, events, *, removal_errno: int | None = None) -> None:
+        self.path = "/dev/input/event-test"
+        self.name = "queue-test-device"
+        self._events = list(events)
+        self._removal_errno = removal_errno
+
+    async def async_read_loop(self):
+        for event in self._events:
+            yield event
+        if self._removal_errno is not None:
+            raise OSError(self._removal_errno, "No such device")
+
+    def close(self) -> None:
+        return None
+
+
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         event_state = asyncio.Event()
@@ -168,55 +225,75 @@ class RuntimeMonitorTest(unittest.TestCase):
 
 class GadgetManagerProfileTest(unittest.TestCase):
     def test_boot_mouse_profile_uses_boot_mouse_then_keyboard(self) -> None:
-        fake_device = SimpleNamespace(
-            BOOT_KEYBOARD="boot-keyboard",
-            KEYBOARD="keyboard",
-            BOOT_MOUSE="boot-mouse",
-            MOUSE="mouse",
-            CONSUMER_CONTROL="consumer",
-        )
-
         with patch(
-            "bluetooth_2_usb.relay.import_module",
-            return_value=SimpleNamespace(Device=fake_device),
+            "bluetooth_2_usb.relay.build_profile",
+            return_value=SimpleNamespace(
+                devices=("boot-mouse", "keyboard", "consumer")
+            ),
         ):
             devices = GadgetManager("boot_mouse")._requested_devices()
 
         self.assertEqual(devices, ["boot-mouse", "keyboard", "consumer"])
 
     def test_nonboot_profile_uses_nonboot_devices(self) -> None:
-        fake_device = SimpleNamespace(
-            BOOT_KEYBOARD="boot-keyboard",
-            KEYBOARD="keyboard",
-            BOOT_MOUSE="boot-mouse",
-            MOUSE="mouse",
-            CONSUMER_CONTROL="consumer",
-        )
-
         with patch(
-            "bluetooth_2_usb.relay.import_module",
-            return_value=SimpleNamespace(Device=fake_device),
+            "bluetooth_2_usb.relay.build_profile",
+            return_value=SimpleNamespace(devices=("keyboard", "mouse", "consumer")),
         ):
             devices = GadgetManager("nonboot")._requested_devices()
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
     def test_boot_keyboard_profile_uses_boot_keyboard_then_nonboot_mouse(self) -> None:
-        fake_device = SimpleNamespace(
-            BOOT_KEYBOARD="boot-keyboard",
-            KEYBOARD="keyboard",
-            BOOT_MOUSE="boot-mouse",
-            MOUSE="mouse",
-            CONSUMER_CONTROL="consumer",
-        )
-
         with patch(
-            "bluetooth_2_usb.relay.import_module",
-            return_value=SimpleNamespace(Device=fake_device),
+            "bluetooth_2_usb.relay.build_profile",
+            return_value=SimpleNamespace(
+                devices=("boot-keyboard", "mouse", "consumer")
+            ),
         ):
             devices = GadgetManager("boot_keyboard")._requested_devices()
 
         self.assertEqual(devices, ["boot-keyboard", "mouse", "consumer"])
+
+    def test_cherry_combo_profile_uses_cherry_keyboard_then_existing_mouse_and_consumer(
+        self,
+    ) -> None:
+        profile = build_profile("cherry_combo")
+
+        self.assertEqual(len(profile.devices), 3)
+        self.assertEqual(
+            bytes(profile.devices[0].descriptor), CHERRY_KEYBOARD_DESCRIPTOR
+        )
+        self.assertEqual(
+            bytes(profile.devices[1].descriptor), bytes(usb_hid.Device.MOUSE.descriptor)
+        )
+        self.assertEqual(
+            bytes(profile.devices[2].descriptor),
+            bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor),
+        )
+
+    def test_gadget_hid_device_passes_protocol_and_subclass_when_required(self) -> None:
+        init_calls = []
+
+        def fake_device_init(self, **kwargs) -> None:
+            init_calls.append(kwargs)
+            if "subclass" not in kwargs or "protocol" not in kwargs:
+                raise TypeError(
+                    "Device.__init__() missing 2 required keyword-only arguments: "
+                    "'subclass' and 'protocol'"
+                )
+
+        with patch.object(usb_hid.Device, "__init__", fake_device_init):
+            GadgetHidDevice.from_existing(
+                usb_hid.Device.BOOT_KEYBOARD,
+                function_index=0,
+                protocol=1,
+                subclass=1,
+            )
+
+        self.assertEqual(len(init_calls), 1)
+        self.assertEqual(init_calls[0]["protocol"], 1)
+        self.assertEqual(init_calls[0]["subclass"], 1)
 
     def test_boot_keyboard_profile_sets_distinct_usb_identity(self) -> None:
         identity = GadgetManager("boot_keyboard")._usb_identity_overrides()
@@ -240,6 +317,13 @@ class GadgetManagerProfileTest(unittest.TestCase):
         self.assertEqual(identity["B2U_USB_BCD_DEVICE"], "0x0203")
         self.assertEqual(identity["B2U_USB_SERIALNUMBER"], "213374badcafe-nb")
         self.assertEqual(identity["B2U_USB_PRODUCT"], "USB Combo Device (nonboot)")
+
+    def test_cherry_combo_profile_sets_distinct_usb_identity(self) -> None:
+        identity = GadgetManager("cherry_combo")._usb_identity_overrides()
+
+        self.assertEqual(identity["B2U_USB_BCD_DEVICE"], "0x0204")
+        self.assertEqual(identity["B2U_USB_SERIALNUMBER"], "213374badcafe-cc")
+        self.assertEqual(identity["B2U_USB_PRODUCT"], "USB Combo Device (cherry combo)")
 
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
         manager = GadgetManager("boot_mouse")
@@ -298,6 +382,168 @@ class GadgetManagerProfileTest(unittest.TestCase):
                             invalid_paths = manager._collect_invalid_hidg_nodes()
 
         self.assertEqual(invalid_paths, [f"{path} (No such device)"])
+
+    def test_rebuild_gadget_writes_cherry_combo_power_and_identity(self) -> None:
+        profile = build_profile("cherry_combo")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
+            with patch("bluetooth_2_usb.gadget_config.GADGET_ROOT", gadget_root):
+                with patch(
+                    "bluetooth_2_usb.gadget_config._resolve_udc_name",
+                    return_value="dummy.udc",
+                ):
+                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
+                        rebuild_gadget(profile)
+
+            self.assertEqual(
+                (gadget_root / "strings/0x409/product")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "USB Combo Device (cherry combo)",
+            )
+            self.assertEqual(
+                (gadget_root / "strings/0x409/serialnumber")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "213374badcafe-cc",
+            )
+            self.assertEqual(
+                (gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(),
+                "0x0204",
+            )
+            self.assertEqual(
+                (gadget_root / "configs/c.1/MaxPower")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "100",
+            )
+            self.assertEqual(
+                (gadget_root / "configs/c.1/bmAttributes")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "0xa0",
+            )
+            self.assertEqual(
+                (gadget_root / "configs/c.1/strings/0x409/configuration")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "Config 1: HID relay",
+            )
+
+
+class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
+    async def test_relay_preserves_event_order_under_slow_writer(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        seen: list[tuple[int, int]] = []
+        input_device = _QueueInputDevice(
+            [
+                _QueueTestKeyEvent(183, _QueueTestKeyEvent.key_down),
+                _QueueTestKeyEvent(183, _QueueTestKeyEvent.key_up),
+                _QueueTestKeyEvent(184, _QueueTestKeyEvent.key_down),
+                _QueueTestKeyEvent(184, _QueueTestKeyEvent.key_up),
+            ]
+        )
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        async def _slow_process(event) -> None:
+            seen.append((event.scancode, event.keystate))
+            await asyncio.sleep(0.001)
+
+        with patch("bluetooth_2_usb.relay.KeyEvent", _QueueTestKeyEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                with patch.object(
+                    relay, "_process_event_with_retry", side_effect=_slow_process
+                ):
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        self.assertEqual(seen, [(183, 1), (183, 0), (184, 1), (184, 0)])
+
+    async def test_aexit_ignores_ebadf_from_ungrab_on_disappeared_device(self) -> None:
+        input_device = _FakeGrabInputDevice(ungrab_errno=errno.EBADF)
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            grab_device=True,
+            relaying_active=asyncio.Event(),
+        )
+
+        async with relay:
+            self.assertTrue(relay._currently_grabbed)
+
+        self.assertEqual(input_device.grab_calls, 1)
+        self.assertEqual(input_device.ungrab_calls, 1)
+        self.assertEqual(input_device.close_calls, 1)
+        self.assertFalse(relay._currently_grabbed)
+
+    async def test_input_device_removal_stops_reader_without_failing_task_group(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        seen: list[tuple[int, int]] = []
+        input_device = _QueueInputDevice(
+            [
+                _QueueTestKeyEvent(183, _QueueTestKeyEvent.key_down),
+                _QueueTestKeyEvent(183, _QueueTestKeyEvent.key_up),
+            ],
+            removal_errno=errno.ENODEV,
+        )
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        async def _record_process(event) -> None:
+            seen.append((event.scancode, event.keystate))
+
+        with patch("bluetooth_2_usb.relay.KeyEvent", _QueueTestKeyEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                with patch.object(
+                    relay, "_process_event_with_retry", side_effect=_record_process
+                ):
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        self.assertEqual(seen, [(183, 1), (183, 0)])
+
+    async def test_broken_pipe_clears_relaying_active_without_queue_helpers(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _QueueInputDevice(
+            [_QueueTestKeyEvent(183, _QueueTestKeyEvent.key_down)]
+        )
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        with patch("bluetooth_2_usb.relay.KeyEvent", _QueueTestKeyEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                with patch(
+                    "bluetooth_2_usb.relay.relay_event",
+                    side_effect=BrokenPipeError(),
+                ):
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        self.assertFalse(relaying_active.is_set())
+        self.assertEqual(relay._hid_write_failures, 1)
 
 
 class RelayControllerHotplugTest(unittest.TestCase):
@@ -360,4 +606,4 @@ class RelayControllerHotplugTest(unittest.TestCase):
         self.assertFalse(relaying_active.is_set())
         self.assertEqual(controller._pending_add_paths, [])
         self.assertEqual(task.cancel_calls, 1)
-        self.assertEqual(device.close_calls, 1)
+        self.assertEqual(device.close_calls, 0)

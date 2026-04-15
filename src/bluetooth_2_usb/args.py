@@ -137,7 +137,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
         )
         self.add_argument(
             "--hid-profile",
-            choices=["boot_keyboard", "boot_mouse", "nonboot"],
+            choices=["boot_keyboard", "boot_mouse", "nonboot", "cherry_combo"],
             default="boot_keyboard",
             help="USB HID profile to expose. Default: boot_keyboard",
         )

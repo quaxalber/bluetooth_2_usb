@@ -30,6 +30,7 @@ from bluetooth_2_usb.test_harness_common import (
     EXIT_USAGE,
     MOUSE_REL_STEPS,
     SCENARIOS,
+    TEXT_BURST_STEPS,
     HarnessBusyError,
     HarnessResult,
     get_scenario,
@@ -87,9 +88,18 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, combo, consumer",
+            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, combo, consumer, text_burst",
         ):
             get_scenario("nope")
+
+    def test_text_burst_scenario_is_keyboard_only_and_contains_shifted_steps(
+        self,
+    ) -> None:
+        scenario = SCENARIOS["text_burst"]
+
+        self.assertEqual(scenario.required_nodes, ("keyboard",))
+        self.assertEqual(scenario.keyboard_steps, TEXT_BURST_STEPS)
+        self.assertIn(42, [step.code for step in scenario.keyboard_steps])
 
 
 class GadgetNodeDiscoveryTest(unittest.TestCase):
