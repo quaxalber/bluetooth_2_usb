@@ -147,24 +147,24 @@ Default content:
 
 ```bash
 B2U_AUTO_DISCOVER=1
+B2U_DEVICE_IDS=
 B2U_GRAB_DEVICES=1
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
 B2U_LOG_TO_FILE=0
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=0
-B2U_DEVICE_IDS=
 B2U_UDC_PATH=
 ```
 
 Meaning:
 
 - `B2U_AUTO_DISCOVER=1` relays all suitable readable input devices except known excluded platform devices.
+- `B2U_DEVICE_IDS` is the precise alternative when you want to pin the runtime to specific event paths, Bluetooth MACs, or case-insensitive device-name fragments.
 - `B2U_GRAB_DEVICES=1` grabs the selected input devices so the Pi stops consuming their local events.
 - `B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12` defines a plus-separated key chord that toggles relaying on and off at runtime.
 - `B2U_LOG_TO_FILE=0` disables file logging by default.
 - `B2U_LOG_PATH=...` controls the file path used when file logging is enabled.
 - `B2U_DEBUG=0` keeps normal log verbosity.
-- `B2U_DEVICE_IDS` is the precise alternative when you want to pin the runtime to specific event paths, Bluetooth MACs, or case-insensitive device-name fragments.
 - `B2U_UDC_PATH` is optional and only needed if you must pin UDC detection on a system with multiple gadget-capable controllers.
 
 After editing that file, restart the service:
@@ -182,8 +182,8 @@ Use these runtime flags when running the CLI manually.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Comma-separated identifiers for the devices to relay. Each identifier may be an event path, a Bluetooth MAC address, or a case-insensitive name fragment. The matcher accepts all three kinds in the same comma-separated list. Default: none. Examples: `-i /dev/input/event4`, `-i A1:B2:C3:D4:E5:F6`, `-i logi`, `-i '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`. |
 | `--auto_discover, -a` | Relay all readable suitable input devices automatically, except known excluded platform devices. Good default for appliance-style setups where you do not want to curate a static device list. |
+| `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Comma-separated identifiers for the devices to relay. Each identifier may be an event path, a Bluetooth MAC address, or a case-insensitive name fragment. The matcher accepts all three kinds in the same comma-separated list. Default: none. Examples: `-i /dev/input/event4`, `-i A1:B2:C3:D4:E5:F6`, `-i logi`, `-i '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`. |
 | `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events. |
 | `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Plus-separated key chord that toggles relaying on and off at runtime. Default: none when unset at the CLI. Example: `-s CTRL+SHIFT+F12`. |
 | `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. |
@@ -234,8 +234,6 @@ Update the managed checkout:
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
-
-This is the supported update path for an existing managed deployment.
 
 ## Uninstalling
 
@@ -303,9 +301,10 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 > In principle you can also take the writable space from the same physical
 > device that holds the root filesystem, for example by carving out a separate
 > ext4 partition on that SD card or SSD. That avoids extra physical media, but
-> it increases the risk of partitioning mistakes and gives you less separation
-> between the read-only appliance system and the persistent Bluetooth state
-> during maintenance or recovery.
+> it does not reduce SD-card wear the way moving that writable state to a USB
+> stick or other separate storage can. It also increases the risk of
+> partitioning mistakes and gives you less separation during maintenance or
+> recovery.
 
 ### Preparing the persistent filesystem
 
@@ -384,8 +383,6 @@ If the service looks healthy but the target host still does not react, also chec
 - on Pi Zero boards, prefer separate stable power and use only the data port for the host connection
 - on Pi 4B and Pi 5, try a different USB-C cable or a different host port
 - confirm the service is actually active with `systemctl is-active bluetooth_2_usb.service`
-- inspect logs with `journalctl -u bluetooth_2_usb.service -n 100 --no-pager`
-- after boot-config changes, rerun `sudo /opt/bluetooth_2_usb/scripts/install.sh` and reboot before concluding the relay path is broken
 
 If you need to isolate the relay path from Bluetooth pairing state, run the host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
 
@@ -433,17 +430,11 @@ For stubborn bonding or connect/disconnect flip-flops, use a conservative reset 
 
 1. Run `sudo bluetoothctl`.
 2. Inside `bluetoothctl`, run `power off`.
-3. In another shell, run:
-
-```bash
-sudo rfkill block bluetooth
-sudo rfkill unblock bluetooth
-```
-
-4. Back in `bluetoothctl`, run:
+3. Back in `bluetoothctl`, run:
 
 ```text
 power on
+block A1:B2:C3:D4:E5:F6
 remove A1:B2:C3:D4:E5:F6
 scan on
 trust A1:B2:C3:D4:E5:F6
@@ -460,7 +451,6 @@ This is destructive for saved pairings:
 
 ```bash
 sudo systemctl stop bluetooth
-sudo ls /var/lib/bluetooth
 sudo find /var/lib/bluetooth -maxdepth 2 -type d
 ```
 
@@ -505,14 +495,6 @@ managed deployment.
 
 Remove the managed system integration while deliberately leaving the checkout in place for inspection or later reuse.
 
-### `debug.sh`
-
-Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough. It records service, boot, Bluetooth, mount, and runtime state, then runs a bounded live foreground debug session. The report includes the detected UDC state and shows whether it is currently `configured`.
-
-| Argument | Explanation / Example |
-| --- | --- |
-| `--duration DURATION_SEC` | Limit the live foreground debug run. Default: unbounded until interrupted. Example: `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`. |
-
 ### `smoke_test.sh`
 
 Run the fast health check for the supported managed deployment. This is the first script to use after install, reboot, update, or read-only changes. It fails on broken platform, runtime, or Bluetooth-controller prerequisites, and warns when no paired or relayable devices are currently visible. In that case the final line stays successful but is rendered as `PASSED (with warnings)`. It also checks the detected UDC state and warns when the gadget controller is present but not currently `configured`.
@@ -520,6 +502,14 @@ Run the fast health check for the supported managed deployment. This is the firs
 | Argument | Explanation / Example |
 | --- | --- |
 | `--verbose` | Print the fuller health-check output instead of the compact pass/fail view. Default: disabled. Example: `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose`. |
+
+### `debug.sh`
+
+Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough. It records service, boot, Bluetooth, mount, and runtime state, then runs a bounded live foreground debug session. The report includes the detected UDC state and shows whether it is currently `configured`.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| `--duration DURATION_SEC` | Limit the live foreground debug run. Default: unbounded until interrupted. Example: `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`. |
 
 ### `pi_relay_test_inject.sh`
 

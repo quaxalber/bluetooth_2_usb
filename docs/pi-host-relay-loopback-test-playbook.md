@@ -48,15 +48,21 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 
 ## 1. Confirm host-side enumeration
 
-On Linux or macOS:
+On Linux:
+
+```bash
+./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
+```
+
+Experimental: macOS
 
 ```bash
 ./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
 ```
 
 > [!NOTE]
-> The Linux host flow is exercised regularly. The macOS variant uses the same
-> shell wrapper, but it has not yet been validated on a real macOS host.
+> Experimental - unvalidated on real macOS hosts. The macOS variant uses the
+> same shell wrapper, but it has not yet been validated on real macOS hardware.
 
 On Windows:
 
