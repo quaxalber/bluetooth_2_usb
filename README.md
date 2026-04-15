@@ -266,7 +266,7 @@ Bluetooth-2-USB supports the normal writable mode and one persistent read-only m
 ### What persistent read-only mode does
 
 - enables Raspberry Pi OS OverlayFS for the root filesystem
-- keeps Bluetooth state on a separate writable ext4 filesystem, typically on its own partition or storage area
+- keeps Bluetooth state on a separate writable ext4 filesystem
 - bind-mounts that Bluetooth state to `/var/lib/bluetooth`
 
 ### What it does not do
@@ -428,12 +428,22 @@ Inside `bluetoothctl`, watch for agent prompts and answer them explicitly. Some 
 
 For stubborn bonding or connect/disconnect flip-flops, use a conservative reset flow:
 
-1. Run `sudo bluetoothctl`.
-2. Inside `bluetoothctl`, run `power off`.
-3. Back in `bluetoothctl`, run:
+1. Start an interactive session:
+
+```bash
+sudo bluetoothctl
+```
+
+2. Reset the adapter state:
 
 ```text
+power off
 power on
+```
+
+3. Clear the stale device state and pair again:
+
+```text
 block A1:B2:C3:D4:E5:F6
 remove A1:B2:C3:D4:E5:F6
 scan on
