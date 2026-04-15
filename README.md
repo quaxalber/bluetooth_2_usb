@@ -30,8 +30,7 @@ This is the shortest supported path to a working setup.
 ### 1. Clone the project to the managed install path
 
 ```bash
-sudo apt update
-sudo apt install -y git
+sudo apt update && sudo apt install -y git
 sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb
 ```
 
@@ -53,6 +52,7 @@ Use the desktop UI or `bluetoothctl`.
 
 ```bash
 bluetoothctl
+power on
 scan on
 ```
 
@@ -110,7 +110,7 @@ If possible, power the Pi from a separate stable power supply using the power-on
 - Bluetooth keyboard and mouse input relayed as standard USB HID
 - Auto-discovery and auto-reconnect for supported input devices
 - Optional input grabbing so the Pi does not also consume local keyboard and mouse events
-- A fixed strict-host USB HID layout aimed at pre-OS environments and picky hosts
+- A conservative USB HID gadget setup aimed at broad host compatibility
 - A small, well-supported diagnostics surface built around `--validate-env`, `smoke_test.sh`, and `debug.sh`
 - Optional persistent read-only operation with writable Bluetooth state on a separate ext4 filesystem
 - A single supported managed-install workflow in `/opt/bluetooth_2_usb`
@@ -166,13 +166,6 @@ Meaning:
 - `B2U_DEBUG=0` keeps normal log verbosity.
 - `B2U_DEVICE_IDS` is the precise alternative when you want to pin the runtime to specific event paths, Bluetooth MACs, or case-insensitive device-name fragments.
 - `B2U_UDC_PATH` is optional and only needed if you must pin UDC detection on a system with multiple gadget-capable controllers.
-
-The host-facing USB gadget is fixed to one layout:
-
-- boot-protocol keyboard interface first
-- mouse interface second
-- consumer-control interface third
-- `MaxPower=100`, `bmAttributes=0xa0`, and `max_speed=high-speed`
 
 After editing that file, restart the service:
 
@@ -236,44 +229,37 @@ sudo systemctl restart bluetooth_2_usb.service
 
 ## Updating
 
-Update the managed checkout and re-apply the system integration:
+Update the managed checkout:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/update.sh
 ```
 
-`update.sh` fast-forwards the current checked-out branch, refuses to overwrite a
-dirty managed checkout, and only runs `install.sh` when the checkout actually
-changed. If the current branch is already up to date, it exits successfully
-without rebuilding the virtual environment or restarting the service.
+This is the supported update path for an existing managed deployment.
 
 ## Uninstalling
 
-Remove the managed service, wrapper, env files, and persistent Bluetooth-state mount integration:
+Remove the managed system integration:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
 ```
 
-The checkout at `/opt/bluetooth_2_usb` is intentionally left in place.
-
 ## Diagnostics
 
-Quick health check:
+Start with the quick health check:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 ```
 
-Deeper issue report with a live foreground debug run:
+If that is not enough, collect the fuller debug report:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
-`debug.sh` temporarily stops the service if it is running, launches a foreground Bluetooth-2-USB `--debug` session, and restores the service afterward. Host identifiers such as the hostname, `machine-id`, UUIDs, PARTUUIDs, and Bluetooth MAC addresses are redacted automatically in the saved report.
-
-For most problems, these are the first two commands to run and the first outputs worth attaching to an issue.
+For most problems, these are the first two commands to run.
 
 ## Persistent read-only operation
 
@@ -282,7 +268,7 @@ Bluetooth-2-USB supports the normal writable mode and one persistent read-only m
 ### What persistent read-only mode does
 
 - enables Raspberry Pi OS OverlayFS for the root filesystem
-- keeps Bluetooth state on a separate writable ext4 filesystem
+- keeps Bluetooth state on a separate writable ext4 filesystem, typically on its own partition or storage area
 - bind-mounts that Bluetooth state to `/var/lib/bluetooth`
 
 ### What it does not do
@@ -312,6 +298,14 @@ sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
 > [!IMPORTANT]
 > Replace `/dev/YOUR-PARTITION` with the real ext4 partition you intend to use.
 > Double-check the target with `lsblk -f` before formatting or enabling persistent Bluetooth state.
+
+> [!NOTE]
+> In principle you can also take the writable space from the same physical
+> device that holds the root filesystem, for example by carving out a separate
+> ext4 partition on that SD card or SSD. That avoids extra physical media, but
+> it increases the risk of partitioning mistakes and gives you less separation
+> between the read-only appliance system and the persistent Bluetooth state
+> during maintenance or recovery.
 
 ### Preparing the persistent filesystem
 
@@ -373,13 +367,6 @@ Interpret those checks conservatively:
 - On newer 64-bit Bookworm and aarch64 kernels, `CONFIG_USB_DWC2=y` often means `dwc2` is built into the kernel. In that case, the absence of a separate loadable `dwc2` module is normal and not itself a failure.
 - Treat missing USB gadget support as the problem, not merely the absence of a loadable module: if `CONFIG_USB_DWC2=y` is present, built-in `dwc2` is fine; otherwise make sure `dtoverlay=dwc2` is set and that `dwc2` is loaded on kernels that require it as a module.
 
-Then reboot after fixing the install:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/install.sh
-sudo reboot
-```
-
 ### Specific devices are not being relayed
 
 Check what the runtime can actually see:
@@ -402,11 +389,9 @@ If the service looks healthy but the target host still does not react, also chec
 
 If you need to isolate the relay path from Bluetooth pairing state, run the host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
 
-### Wake from host sleep remains limited
+### Wake from host sleep is not currently supported
 
-The current fixed USB HID layout improves strict pre-OS behavior, including the
-ThinkPad cold-boot path to BitLocker, but wake from host sleep still does not
-work reliably.
+Wake from host sleep is currently not supported.
 
 This appears to require kernel-side support in the Raspberry Pi USB HID gadget
 path rather than a further `bluetooth_2_usb` userspace change. Raspberry Pi
@@ -418,6 +403,15 @@ Treat this as a known platform limitation for now.
 ### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active
 
 Do not treat `systemctl status bluetooth` on its own as a health check. A running `bluetooth.service` can still leave the controller powered off or rfkill-blocked.
+
+Check the real controller state first:
+
+```bash
+sudo bluetoothctl show
+sudo btmgmt info
+rfkill list
+grep -H . /sys/class/rfkill/rfkill*/{soft,hard,state} 2>/dev/null
+```
 
 If `smoke_test.sh` or `debug.sh` already show the adapter as healthy, switch to an interactive `bluetoothctl` session and complete the actual bonding flow there. The common failure mode is not missing BlueZ, but an unanswered pairing prompt or a bonding handshake that never completes.
 
@@ -434,6 +428,52 @@ sudo bluetoothctl
 ```
 
 Inside `bluetoothctl`, watch for agent prompts and answer them explicitly. Some BLE devices connect briefly, then drop again unless the authorization prompt is accepted in time. Repeated short `Connected: yes` / `Connected: no` transitions without a durable bonded state usually mean the pairing handshake is not completing, not that the device is already usable.
+
+For stubborn bonding or connect/disconnect flip-flops, use a conservative reset flow:
+
+1. Run `sudo bluetoothctl`.
+2. Inside `bluetoothctl`, run `power off`.
+3. In another shell, run:
+
+```bash
+sudo rfkill block bluetooth
+sudo rfkill unblock bluetooth
+```
+
+4. Back in `bluetoothctl`, run:
+
+```text
+power on
+remove A1:B2:C3:D4:E5:F6
+scan on
+trust A1:B2:C3:D4:E5:F6
+pair A1:B2:C3:D4:E5:F6
+connect A1:B2:C3:D4:E5:F6
+```
+
+`remove` clears the stored BlueZ device record for that device and is often the
+right next step when you have a half-broken bonding state. This is a recovery
+flow for hard failures, not the normal first pairing attempt.
+
+If the BlueZ device cache itself looks stale, you can clear it more directly.
+This is destructive for saved pairings:
+
+```bash
+sudo systemctl stop bluetooth
+sudo ls /var/lib/bluetooth
+sudo find /var/lib/bluetooth -maxdepth 2 -type d
+```
+
+Remove only the affected device directory under the adapter first, then start
+Bluetooth again:
+
+```bash
+sudo rm -rf /var/lib/bluetooth/AA:BB:CC:DD:EE:FF/A1:B2:C3:D4:E5:F6
+sudo systemctl start bluetooth
+```
+
+Only remove larger parts of `/var/lib/bluetooth` if targeted cleanup does not
+help and you are prepared to pair devices again from scratch.
 
 ### Persistent read-only mode does not keep Bluetooth pairings
 
@@ -457,8 +497,9 @@ Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install. Thi
 
 Fast-forward the managed checkout and call `install.sh` only when the checkout
 changed. If the current branch is already up to date, the script exits
-successfully without reinstalling anything. This is the supported update path
-for an existing managed deployment.
+successfully without reinstalling anything. The script refuses to update a
+dirty managed checkout. This is the supported update path for an existing
+managed deployment.
 
 ### `uninstall.sh`
 
@@ -492,7 +533,11 @@ Create temporary virtual keyboard and mouse devices on the Pi and inject a deter
 
 ### `host_relay_test_capture.sh`
 
-Capture host-side gadget HID reports and verify that the relay emitted the expected sequence. The host Python environment must have `hidapi` installed, for example via `python3 -m pip install -r requirements-host-capture.txt`. On Windows, `hidapi` is used for gadget discovery and candidate enumeration, while strict event capture for `keyboard`, `mouse`, `consumer`, and `combo` runs through Raw Input. On Linux, unprivileged access also needs the host-side USB udev rule. Depending on the host HID stack, opening the gadget interfaces for capture can temporarily claim them while the test is running, so do not assume the local desktop will continue to process the same keyboard, mouse, or consumer inputs during the capture window. The default test sequence therefore uses non-text keyboard keys and tiny mouse-relative movements.
+Capture host-side gadget HID reports and verify that the relay emitted the expected sequence. Use this wrapper on Linux and macOS. The host Python environment must have `hidapi` installed, for example via `python3 -m pip install -r requirements-host-capture.txt`. On Linux, unprivileged access also needs the host-side USB udev rule. Depending on the host HID stack, opening the gadget interfaces for capture can temporarily claim them while the test is running, so do not assume the local desktop will continue to process the same keyboard, mouse, or consumer inputs during the capture window. The default test sequence therefore uses non-text keyboard keys and tiny mouse-relative movements. On Windows, use the PowerShell wrapper below; it uses `hidapi` for gadget discovery and Raw Input for strict event capture.
+
+> [!NOTE]
+> The Linux host flow is actively exercised. The macOS wrapper path is
+> documented for parity, but it has not yet been validated on a real macOS host.
 
 The harness is single-run only and uses a lock file. If a previous run was interrupted, clear stale lock files before retrying:
 
@@ -514,14 +559,6 @@ Before each fresh Windows validation run after changing the gadget descriptor la
 | `--keyboard-node PATH` | Override the detected host keyboard HID device path. |
 | `--mouse-node PATH` | Override the detected host mouse HID device path. |
 | `--consumer-node PATH` | Override the detected host consumer-control HID device path. |
-
-### `host_relay_test_capture.command`
-
-macOS wrapper for the same host-capture flow.
-
-| Argument | Explanation / Example |
-| --- | --- |
-| same as `host_relay_test_capture.sh` | Example: `./scripts/host_relay_test_capture.command --scenario combo`. |
 
 ### `host_relay_test_capture.ps1`
 
