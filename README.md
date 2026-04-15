@@ -386,7 +386,7 @@ If the service looks healthy but the target host still does not react, also chec
 
 If you need to isolate the relay path from Bluetooth pairing state, run the host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
 
-### Wake from host sleep is not currently supported
+### Can't wake sleeping or suspended hosts
 
 Wake from host sleep is currently not supported.
 
@@ -468,7 +468,7 @@ Remove only the affected device directory under the adapter first, then start
 Bluetooth again:
 
 ```bash
-sudo rm -rf /var/lib/bluetooth/AA:BB:CC:DD:EE:FF/A1:B2:C3:D4:E5:F6
+sudo rm -rf '/var/lib/bluetooth/AA:BB:CC:DD:EE:FF/A1:B2:C3:D4:E5:F6'
 sudo systemctl start bluetooth
 ```
 
