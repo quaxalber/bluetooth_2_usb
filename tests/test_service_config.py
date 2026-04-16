@@ -138,10 +138,10 @@ class ServiceConfigTest(unittest.TestCase):
                         "# Managed runtime config",
                         "B2U_AUTO_DISCOVER=1",
                         "",
-                        "B2U_DEVICE_IDS='MX Keys'",
                         "B2U_GRAB_DEVICES=yes",
                         "B2U_LOG_TO_FILE=off",
                         "B2U_DEBUG=0",
+                        "B2U_DEVICE_IDS='MX Keys'",
                     ]
                 )
                 + "\n",
@@ -157,11 +157,13 @@ class ServiceConfigTest(unittest.TestCase):
                     [
                         "# Managed runtime config",
                         "B2U_AUTO_DISCOVER=true",
-                        "",
                         "B2U_DEVICE_IDS='MX Keys'",
                         "B2U_GRAB_DEVICES=true",
+                        "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
                         "B2U_LOG_TO_FILE=false",
+                        "B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
                         "B2U_DEBUG=false",
+                        "B2U_UDC_PATH=",
                     ]
                 )
                 + "\n",
@@ -171,7 +173,19 @@ class ServiceConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
-                "B2U_AUTO_DISCOVER=true\nB2U_GRAB_DEVICES=true\n",
+                "\n".join(
+                    [
+                        "B2U_AUTO_DISCOVER=true",
+                        "B2U_DEVICE_IDS=",
+                        "B2U_GRAB_DEVICES=true",
+                        "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
+                        "B2U_LOG_TO_FILE=false",
+                        "B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
+                        "B2U_DEBUG=false",
+                        "B2U_UDC_PATH=",
+                    ]
+                )
+                + "\n",
                 encoding="utf-8",
             )
 
