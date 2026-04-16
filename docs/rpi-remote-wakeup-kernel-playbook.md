@@ -75,6 +75,12 @@ Not recommended as the default:
 Cross-compilation is faster, easier to repeat, and cleaner across multiple
 target architectures.
 
+Use parallel builds unless you have a reason not to:
+
+```bash
+export JOBS="$(nproc)"
+```
+
 ## Required build dependencies
 
 Install the general build dependencies:
@@ -155,7 +161,7 @@ cd ~/src/rpi-linux-wakeup
 export KERNEL=kernel8
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
+make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
 ```
 
@@ -166,7 +172,7 @@ cd ~/src/rpi-linux-wakeup
 export KERNEL=kernel_2712
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2712_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
+make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
 ```
 
@@ -177,7 +183,7 @@ cd ~/src/rpi-linux-wakeup
 export KERNEL=kernel
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- bcmrpi_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
+make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease
 ```
 
@@ -188,7 +194,7 @@ cd ~/src/rpi-linux-wakeup
 export KERNEL=kernel7
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- bcm2709_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
+make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease
 ```
 
