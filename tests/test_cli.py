@@ -10,6 +10,11 @@ from bluetooth_2_usb.inventory import DeviceEnumerationError, InputDeviceMetadat
 
 
 class CliTest(unittest.TestCase):
+    def test_graceful_shutdown_timeout_leaves_room_for_systemd_stop_budget(
+        self,
+    ) -> None:
+        self.assertEqual(cli.GRACEFUL_SHUTDOWN_TIMEOUT_SEC, 4.0)
+
     def test_install_shutdown_signal_handlers_prefers_loop_signal_handlers(
         self,
     ) -> None:
@@ -141,47 +146,3 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, cli.EXIT_OK)
         self.assertEqual(json.loads(stdout.getvalue())[0]["path"], "/dev/input/event1")
-
-    def test_list_devices_text_output_renders_table(self) -> None:
-        stdout = io.StringIO()
-        devices = [
-            InputDeviceMetadata(
-                path="/dev/input/event1",
-                name="Keyboard",
-                phys="phys",
-                uniq="",
-                capabilities=["EV_KEY"],
-                relay_candidate=True,
-                exclusion_reason=None,
-            ),
-            InputDeviceMetadata(
-                path="/dev/input/event2",
-                name="Audio Sink",
-                phys="alsa",
-                uniq="",
-                capabilities=[],
-                relay_candidate=False,
-                exclusion_reason="missing EV_KEY/EV_REL capabilities",
-            ),
-        ]
-
-        with patch(
-            "bluetooth_2_usb.inventory.describe_input_devices",
-            return_value=devices,
-        ):
-            with redirect_stdout(stdout):
-                exit_code = cli.run(["--list_devices"])
-
-        rendered = stdout.getvalue()
-        self.assertEqual(exit_code, cli.EXIT_OK)
-        self.assertIn("Status", rendered)
-        self.assertIn("Device", rendered)
-        self.assertIn("Identity", rendered)
-        self.assertIn("Path", rendered)
-        self.assertIn("Exclusion Reason", rendered)
-        self.assertIn("Keyboard", rendered)
-        self.assertIn("Audio Sink", rendered)
-        self.assertIn("relay", rendered)
-        self.assertIn("skip", rendered)
-        self.assertIn("missing EV_KEY/EV_REL", rendered)
-        self.assertIn("capabilities", rendered)

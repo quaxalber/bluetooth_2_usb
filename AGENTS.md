@@ -114,8 +114,10 @@ Preserve these unless the task explicitly redesigns them:
   - when the checkout is already current, `update.sh` must exit successfully
     without rebuilding the managed venv or restarting the service
 - Shell scripts should fail loudly on ambiguous or unsafe input.
-- Boot changes should be conservative and leave timestamped backups, but scripts
-  should not attempt automatic rollback restores.
+- Boot changes should be conservative and leave timestamped backups.
+- `scripts/optimize_pi_boot.sh` is the exception that may perform automatic
+  rollback restores, but only for the host state it captured itself in
+  `${B2U_OPTIMIZE_STATE_FILE}`.
 - Read-only operation is either:
   - normal writable mode
   - persistent read-only mode with writable Bluetooth state on ext4 storage
@@ -237,6 +239,13 @@ When validating flaky BLE pairings on the Pi:
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.
 
+If you mutate host state on `pi4b`:
+
+- do not leave `bluetooth_2_usb` non-functional at any point you knowingly walk
+  away from the host
+- restore `/opt/bluetooth_2_usb` on `pi4b` to `main` before ending the turn
+- run a final Pi-side validation after returning to `main`
+
 ## Review and CI
 
 - When addressing PR feedback, verify each comment against current code; do not
@@ -254,18 +263,8 @@ summary.
 ## Git and change scope
 
 - Keep changes focused.
-- Prefer one logical feature, fix, or documentation change per branch and per
-  pull request when the work can be separated cleanly.
-- Use descriptive branch names rooted in the change type, for example:
-  `feat/...`, `fix/...`, `docs/...`, `refactor/...`, `test/...`, or
-  `chore/...`.
-- Do not use `codex/...` branch prefixes for normal project work.
-- Start new commit subjects with a conventional type prefix such as `feat:`,
-  `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`.
 - Update docs when behavior, commands, paths, defaults, or validation guidance
   change.
-- Keep behavior or operator-facing documentation updates in the same change as
-  the code that introduced them.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 

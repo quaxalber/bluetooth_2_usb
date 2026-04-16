@@ -102,6 +102,7 @@ If possible, power the Pi from a separate stable power supply using the power-on
 - [Uninstalling](#uninstalling)
 - [Diagnostics](#diagnostics)
 - [Persistent read-only operation](#persistent-read-only-operation)
+- [Optional boot optimization](#optional-boot-optimization)
 - [Troubleshooting](#troubleshooting)
 - [Script reference](#script-reference)
 - [Managed paths](#managed-paths)
@@ -343,6 +344,39 @@ sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
 sudo reboot
 ```
 
+## Optional boot optimization
+
+If the Pi is already provisioned and no longer needs `cloud-init` on every
+boot, you can trim the boot path and optionally freeze the currently working
+DHCP IPv4 settings as a static NetworkManager profile.
+
+Preview the changes first:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --dry-run --static-ip auto
+```
+
+Apply them and reboot automatically:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --static-ip auto
+```
+
+Use explicit static IPv4 settings instead of freezing the current DHCP lease:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh \
+  --static-ip 192.168.2.215/24 \
+  --gateway 192.168.2.1 \
+  --dns 1.1.1.1,9.9.9.9,192.168.2.1
+```
+
+Rollback is also built in:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --rollback
+```
+
 ## Troubleshooting
 
 Start every troubleshooting pass with the two built-in diagnostics first:
@@ -541,6 +575,24 @@ Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough.
 | Argument | Explanation / Example |
 | --- | --- |
 | `--duration DURATION_SEC` | Limit the live foreground debug run. Default: unbounded until interrupted. Example: `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`. |
+
+### `optimize_pi_boot.sh`
+
+Reduce Pi boot delays that are not required for `bluetooth_2_usb`. The script
+can disable `cloud-init` on already provisioned hosts, disable
+`NetworkManager-wait-online.service`, remove `ds=nocloud...` from
+`cmdline.txt`, and optionally freeze the current DHCP IPv4 settings as a
+static NetworkManager profile. It writes rollback state to
+`/var/lib/bluetooth_2_usb/optimize_pi_boot_state.env` so the managed host can
+be restored later.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| `--dry-run` | Show the planned host changes without mutating the system. Example: `sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --dry-run --static-ip auto`. |
+| `--rollback` | Restore the previously captured host state and, unless `--no-reboot` is also set, reboot immediately afterwards. |
+| `--no-reboot` | Do not reboot automatically after apply or explicit rollback. |
+| `--static-ip auto` | Freeze the currently active DHCP IPv4 address, gateway, and DNS values for `wlan0` as a static profile. |
+| `--static-ip CIDR --gateway IPV4 --dns CSV` | Apply explicit static IPv4 settings instead of auto-detecting them. Example: `sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --static-ip 192.168.2.215/24 --gateway 192.168.2.1 --dns 1.1.1.1,9.9.9.9,192.168.2.1`. |
 
 ### `pi_relay_test_inject.sh`
 
