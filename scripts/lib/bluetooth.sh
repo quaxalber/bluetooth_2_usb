@@ -24,6 +24,10 @@ btmgmt_info() {
   btmgmt info
 }
 
+bluetooth_rfkill_root() {
+  printf '%s\n' "${B2U_RFKILL_ROOT:-/sys/class/rfkill}"
+}
+
 bluetooth_controller_powered() {
   bluetoothctl_show 2>/dev/null | grep -Eq '^[[:space:]]*Powered:[[:space:]]+yes$'
 }
@@ -32,16 +36,16 @@ bluetooth_paired_count() {
   bluetoothctl_paired_devices 2>/dev/null | grep -c '^Device ' || true
 }
 
-bluetooth_rfkill_entries() {
+_bluetooth_rfkill_records() {
   local type_file=""
   local rfkill_dir=""
+  local name=""
   local soft=""
   local hard=""
   local state=""
-  local name=""
   local found=1
 
-  for type_file in /sys/class/rfkill/rfkill*/type; do
+  for type_file in "$(bluetooth_rfkill_root)"/rfkill*/type; do
     [[ -f "$type_file" ]] || continue
     if [[ "$(cat "$type_file" 2>/dev/null || true)" != "bluetooth" ]]; then
       continue
@@ -53,36 +57,90 @@ bluetooth_rfkill_entries() {
     soft="$(cat "${rfkill_dir}/soft" 2>/dev/null || printf '%s' '?')"
     hard="$(cat "${rfkill_dir}/hard" 2>/dev/null || printf '%s' '?')"
     state="$(cat "${rfkill_dir}/state" 2>/dev/null || printf '%s' '?')"
-    printf '%s type=bluetooth soft=%s hard=%s state=%s\n' "$name" "$soft" "$hard" "$state"
+    printf '%s|%s|%s|%s\n' "$name" "$soft" "$hard" "$state"
   done
 
   return "$found"
 }
 
-bluetooth_rfkill_blocked() {
-  local type_file=""
-  local rfkill_dir=""
-  local found=1
+bluetooth_rfkill_entries() {
+  local record=""
+  local name=""
   local soft=""
   local hard=""
   local state=""
+  local found=1
 
-  for type_file in /sys/class/rfkill/rfkill*/type; do
-    [[ -f "$type_file" ]] || continue
-    if [[ "$(cat "$type_file" 2>/dev/null || true)" != "bluetooth" ]]; then
-      continue
-    fi
-
+  while IFS= read -r record; do
+    [[ -n "$record" ]] || continue
     found=0
-    rfkill_dir="$(dirname "$type_file")"
-    soft="$(cat "${rfkill_dir}/soft" 2>/dev/null || printf '%s' '?')"
-    hard="$(cat "${rfkill_dir}/hard" 2>/dev/null || printf '%s' '?')"
-    state="$(cat "${rfkill_dir}/state" 2>/dev/null || printf '%s' '?')"
+    IFS='|' read -r name soft hard state <<<"$record"
+    printf '%s type=bluetooth soft=%s hard=%s state=%s\n' "$name" "$soft" "$hard" "$state"
+  done < <(_bluetooth_rfkill_records)
+
+  return "$found"
+}
+
+bluetooth_rfkill_blocked() {
+  local record=""
+  local name=""
+  local soft=""
+  local hard=""
+  local state=""
+  local found=1
+
+  while IFS= read -r record; do
+    [[ -n "$record" ]] || continue
+    found=0
+    IFS='|' read -r name soft hard state <<<"$record"
     if [[ "$soft" == "1" || "$hard" == "1" || "$state" == "0" ]]; then
       return 0
     fi
-  done
+  done < <(_bluetooth_rfkill_records)
 
   [[ $found -eq 0 ]] || return 1
   return 1
+}
+
+clear_bluetooth_rfkill_soft_blocks() {
+  local record=""
+  local name=""
+  local soft=""
+  local hard=""
+  local state=""
+  local found=1
+
+  while IFS= read -r record; do
+    [[ -n "$record" ]] || continue
+    found=0
+    IFS='|' read -r name soft hard state <<<"$record"
+
+    if [[ "$hard" == "1" ]]; then
+      warn "Bluetooth rfkill ${name} is hard-blocked; leaving it unchanged."
+      continue
+    fi
+
+    if [[ "$soft" != "1" ]]; then
+      info "Bluetooth rfkill ${name} is already unblocked (soft=${soft} state=${state})."
+      continue
+    fi
+
+    if printf '%s\n' 0 >"$(bluetooth_rfkill_root)/${name}/soft" 2>/dev/null; then
+      soft="$(cat "$(bluetooth_rfkill_root)/${name}/soft" 2>/dev/null || printf '%s' '?')"
+      state="$(cat "$(bluetooth_rfkill_root)/${name}/state" 2>/dev/null || printf '%s' '?')"
+      if [[ "$soft" == "0" ]]; then
+        ok "Cleared Bluetooth rfkill soft block for ${name} (state=${state})."
+      else
+        warn "Attempted to clear Bluetooth rfkill ${name}, but soft=${soft} afterwards."
+      fi
+      continue
+    fi
+
+    warn "Failed to clear Bluetooth rfkill soft block for ${name}."
+  done < <(_bluetooth_rfkill_records)
+
+  if [[ $found -eq 1 ]]; then
+    info "No bluetooth rfkill entries found; skipping soft-block cleanup."
+  fi
+  return 0
 }

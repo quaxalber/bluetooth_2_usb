@@ -9,6 +9,8 @@ source "${SCRIPT_DIR}/lib/paths.sh"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=./lib/boot.sh
 source "${SCRIPT_DIR}/lib/boot.sh"
+# shellcheck source=./lib/bluetooth.sh
+source "${SCRIPT_DIR}/lib/bluetooth.sh"
 # shellcheck source=./lib/install.sh
 source "${SCRIPT_DIR}/lib/install.sh"
 
@@ -57,6 +59,7 @@ info "Detected dwc2 mode: ${DWC2_MODE}"
 
 apt-get update -y
 apt-get install -y --no-install-recommends git python3 python3-pip python3-venv python3-dev
+clear_bluetooth_rfkill_soft_blocks
 
 normalize_dwc2_overlay "$CONFIG_TXT" "$OVERLAY_LINE"
 normalize_modules_load "$CMDLINE_TXT" "$MODULES"

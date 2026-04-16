@@ -92,6 +92,11 @@ ssh -4 "$PI_HOST" '
 '
 ```
 
+The installer now clears common Bluetooth `rfkill` soft blocks on Raspberry Pi
+OS Lite before you move on to pairing and validation. Treat a later blocked
+controller as current runtime state to debug, not as proof that install
+skipped the Bluetooth setup.
+
 Reboot and wait for SSH:
 
 ```bash
@@ -111,6 +116,7 @@ ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
+  grep -H . /sys/class/rfkill/rfkill*/{soft,hard,state} 2>/dev/null || true
 '
 ```
 
