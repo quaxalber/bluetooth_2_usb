@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import io
+import shutil
 from dataclasses import asdict, dataclass
 from types import SimpleNamespace
 from typing import Any
+
+from rich import box
+from rich.console import Console
+from rich.table import Table
 
 from .logging import get_logger
 
@@ -138,11 +144,36 @@ def describe_input_devices(
 
 
 def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
-    lines = []
+    table = Table(
+        box=box.MINIMAL_DOUBLE_HEAD,
+        expand=False,
+        header_style="bold",
+        pad_edge=False,
+        show_lines=False,
+    )
+    table.add_column("Status", no_wrap=True, width=7)
+    table.add_column("Device", min_width=18, overflow="fold")
+    table.add_column("Identity", min_width=16, overflow="fold")
+    table.add_column("Path", min_width=18, overflow="fold")
+    table.add_column("Exclusion Reason", min_width=20, overflow="fold")
+
     for device in devices:
         status = "relay" if device.relay_candidate else "skip"
-        line = f"{status}\t{device.name}\t{device.identity}\t{device.path}"
-        if device.exclusion_reason:
-            line = f"{line}\t{device.exclusion_reason}"
-        lines.append(line)
-    return "\n".join(lines)
+        table.add_row(
+            status,
+            device.name or "-",
+            device.identity,
+            device.path,
+            device.exclusion_reason or "",
+        )
+
+    output = io.StringIO()
+    console = Console(
+        file=output,
+        force_terminal=False,
+        no_color=True,
+        color_system=None,
+        width=shutil.get_terminal_size(fallback=(100, 20)).columns,
+    )
+    console.print(table)
+    return output.getvalue().rstrip()

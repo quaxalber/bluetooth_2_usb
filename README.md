@@ -110,6 +110,8 @@ If possible, power the Pi from a separate stable power supply using the power-on
 - Bluetooth keyboard and mouse input relayed as standard USB HID
 - Auto-discovery and auto-reconnect for supported input devices
 - Optional input grabbing so the Pi does not also consume local keyboard and mouse events
+- Broad support for everyday multimedia and consumer-control keys such as
+  volume, mute, play/pause, track controls, and many common shortcut keys
 - A conservative USB HID gadget setup aimed at broad host compatibility
 - A small, well-supported diagnostics surface built around `--validate-env`, `smoke_test.sh`, and `debug.sh`
 - Optional persistent read-only operation with writable Bluetooth state on a separate ext4 filesystem
@@ -186,7 +188,7 @@ Use these runtime flags when running the CLI manually.
 | `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Comma-separated identifiers for the devices to relay. Each identifier may be an event path, a Bluetooth MAC address, or a case-insensitive name fragment. The matcher accepts all three kinds in the same comma-separated list. Default: none. Examples: `-i /dev/input/event4`, `-i A1:B2:C3:D4:E5:F6`, `-i logi`, `-i '/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys'`. |
 | `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events. |
 | `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Plus-separated key chord that toggles relaying on and off at runtime. Default: none when unset at the CLI. Example: `-s CTRL+SHIFT+F12`. |
-| `--list_devices, -l` | List readable input devices and exit without starting the relay. Useful before setting `DEVICE_IDS`. |
+| `--list_devices, -l` | List readable input devices and exit without starting the relay. Text output is shown as a formatted table with headers; `--output json` keeps the machine-readable form. Useful before setting `DEVICE_IDS`. |
 | `--log_to_file, -f` | Add file logging in addition to stdout logging. |
 | `--log_path LOG_PATH, -p LOG_PATH` | Override the path used with `--log_to_file`. Default: `/var/log/bluetooth_2_usb/bluetooth_2_usb.log`. Example: `-p /tmp/bluetooth_2_usb.log`. |
 | `--debug, -d` | Increase log verbosity for manual troubleshooting. |
@@ -202,6 +204,16 @@ List available devices:
 ```bash
 bluetooth_2_usb -l
 ```
+
+Example text output:
+
+```text
+Status  Device                         Identity                      Path                Exclusion Reason
+relay   HID 046d:c548 Consumer Control usb-0000:03:00.0-2.2/input1 /dev/input/event4
+skip    HD-Audio Generic Line          ALSA                          /dev/input/event20  missing EV_KEY/EV_REL capabilities
+```
+
+On narrower terminals, columns such as `Device` and `Exclusion Reason` may wrap onto multiple lines.
 
 Validate the runtime environment:
 
