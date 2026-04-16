@@ -213,6 +213,8 @@ relay   HID 046d:c548 Consumer Control usb-0000:03:00.0-2.2/input1 /dev/input/ev
 skip    HD-Audio Generic Line          ALSA                          /dev/input/event20  missing EV_KEY/EV_REL capabilities
 ```
 
+On narrower terminals, columns such as `Device` and `Exclusion Reason` may wrap onto multiple lines.
+
 Validate the runtime environment:
 
 ```bash

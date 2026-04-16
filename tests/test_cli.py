@@ -181,5 +181,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("Exclusion Reason", rendered)
         self.assertIn("Keyboard", rendered)
         self.assertIn("Audio Sink", rendered)
+        self.assertIn("relay", rendered)
+        self.assertIn("skip", rendered)
         self.assertIn("missing EV_KEY/EV_REL", rendered)
         self.assertIn("capabilities", rendered)
