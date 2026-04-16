@@ -27,6 +27,7 @@ class GadgetHidDevice(usb_hid.Device):
         function_index: int,
         protocol: int,
         subclass: int,
+        wakeup_on_write: bool = False,
     ) -> None:
         init_kwargs = {
             "descriptor": descriptor,
@@ -50,6 +51,7 @@ class GadgetHidDevice(usb_hid.Device):
         self.function_index = function_index
         self.protocol = protocol
         self.subclass = subclass
+        self.wakeup_on_write = wakeup_on_write
 
     @classmethod
     def from_existing(
@@ -61,6 +63,7 @@ class GadgetHidDevice(usb_hid.Device):
         subclass: int,
         descriptor: bytes | None = None,
         name: str | None = None,
+        wakeup_on_write: bool = False,
     ) -> GadgetHidDevice:
         return cls(
             descriptor=(
@@ -75,6 +78,7 @@ class GadgetHidDevice(usb_hid.Device):
             function_index=function_index,
             protocol=protocol,
             subclass=subclass,
+            wakeup_on_write=wakeup_on_write,
         )
 
     def get_device_path(self, report_id=None):
@@ -106,6 +110,7 @@ def build_default_layout() -> GadgetLayout:
                 protocol=1,
                 subclass=1,
                 descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
+                wakeup_on_write=True,
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.MOUSE,

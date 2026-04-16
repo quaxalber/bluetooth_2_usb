@@ -10,6 +10,11 @@ from bluetooth_2_usb.inventory import DeviceEnumerationError, InputDeviceMetadat
 
 
 class CliTest(unittest.TestCase):
+    def test_graceful_shutdown_timeout_leaves_room_for_systemd_stop_budget(
+        self,
+    ) -> None:
+        self.assertEqual(cli.GRACEFUL_SHUTDOWN_TIMEOUT_SEC, 4.0)
+
     def test_install_shutdown_signal_handlers_prefers_loop_signal_handlers(
         self,
     ) -> None:

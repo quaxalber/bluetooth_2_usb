@@ -15,6 +15,5 @@ recursive-include .github/workflows *.yml
 recursive-include assets *
 recursive-include docs *.md
 recursive-include scripts *.sh
-recursive-include scripts *.command
 recursive-include scripts *.ps1
 recursive-include udev *.rules

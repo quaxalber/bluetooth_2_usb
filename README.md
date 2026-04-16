@@ -411,6 +411,9 @@ path rather than a further `bluetooth_2_usb` userspace change. Raspberry Pi
 Linux issue [#3977](https://github.com/raspberrypi/linux/issues/3977) suggests
 this may be possible with a kernel patch or equivalent gadget wakeup support.
 
+For an experimental custom-kernel workflow based on a documented wakeup patch,
+see [rpi-remote-wakeup-kernel-playbook.md](docs/rpi-remote-wakeup-kernel-playbook.md).
+
 Treat this as a known platform limitation for now.
 
 ### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active

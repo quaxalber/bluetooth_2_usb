@@ -388,6 +388,41 @@ class GadgetManagerLayoutTest(unittest.TestCase):
                 "high-speed",
             )
 
+    def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:
+        layout = build_default_layout()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
+            keyboard_wakeup = gadget_root / "functions/hid.usb0/wakeup_on_write"
+            mouse_wakeup = gadget_root / "functions/hid.usb1/wakeup_on_write"
+
+            def fake_exists(path: Path) -> bool:
+                if path in {keyboard_wakeup, mouse_wakeup}:
+                    return True
+                return original_exists(path)
+
+            original_exists = type(keyboard_wakeup).exists
+
+            with patch("bluetooth_2_usb.gadget_config.GADGET_ROOT", gadget_root):
+                with patch(
+                    "bluetooth_2_usb.gadget_config._resolve_udc_name",
+                    return_value="dummy.udc",
+                ):
+                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
+                        with patch.object(type(keyboard_wakeup), "exists", fake_exists):
+                            rebuild_gadget(layout)
+
+            self.assertEqual(
+                keyboard_wakeup.read_text(encoding="utf-8").strip(),
+                "1",
+            )
+            self.assertEqual(
+                mouse_wakeup.read_text(encoding="utf-8").strip(),
+                "0",
+            )
+            self.assertFalse(
+                (gadget_root / "functions/hid.usb2/wakeup_on_write").exists()
+            )
+
 
 class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_relay_preserves_event_order_under_slow_writer(self) -> None:

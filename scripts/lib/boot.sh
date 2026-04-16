@@ -42,8 +42,18 @@ kernel_config_snippet() {
   fi
 }
 
+kernel_modules_builtin_path() {
+  local modules_builtin
+
+  modules_builtin="/lib/modules/$(uname -r)/modules.builtin"
+  if [[ -f "$modules_builtin" ]]; then
+    printf '%s\n' "$modules_builtin"
+  fi
+}
+
 dwc2_mode() {
   local snippet
+  local modules_builtin
 
   snippet="$(kernel_config_snippet)"
   if grep -q '^CONFIG_USB_DWC2=y' <<<"$snippet"; then
@@ -56,6 +66,11 @@ dwc2_mode() {
   fi
   if command -v modinfo >/dev/null 2>&1 && modinfo dwc2 >/dev/null 2>&1; then
     printf '%s\n' "module"
+    return
+  fi
+  modules_builtin="$(kernel_modules_builtin_path)"
+  if [[ -n "$modules_builtin" ]] && grep -q '/dwc2\.ko$' "$modules_builtin"; then
+    printf '%s\n' "builtin"
     return
   fi
   # Last-resort heuristic only: /sys/module/dwc2 can exist for both built-in and
