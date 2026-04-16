@@ -178,7 +178,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("Device", rendered)
         self.assertIn("Identity", rendered)
         self.assertIn("Path", rendered)
-        self.assertIn("Notes", rendered)
+        self.assertIn("Exclusion Reason", rendered)
         self.assertIn("Keyboard", rendered)
         self.assertIn("Audio Sink", rendered)
         self.assertIn("missing EV_KEY/EV_REL", rendered)

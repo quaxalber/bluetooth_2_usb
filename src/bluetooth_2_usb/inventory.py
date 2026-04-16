@@ -155,7 +155,7 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
     table.add_column("Device", min_width=18, overflow="fold")
     table.add_column("Identity", min_width=16, overflow="fold")
     table.add_column("Path", min_width=18, overflow="fold")
-    table.add_column("Notes", min_width=20, overflow="fold")
+    table.add_column("Exclusion Reason", min_width=20, overflow="fold")
 
     for device in devices:
         status = "relay" if device.relay_candidate else "skip"

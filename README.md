@@ -208,7 +208,7 @@ bluetooth_2_usb -l
 Example text output:
 
 ```text
-Status  Device                         Identity                      Path                Notes
+Status  Device                         Identity                      Path                Exclusion Reason
 relay   HID 046d:c548 Consumer Control usb-0000:03:00.0-2.2/input1 /dev/input/event4
 skip    HD-Audio Generic Line          ALSA                          /dev/input/event20  missing EV_KEY/EV_REL capabilities
 ```
