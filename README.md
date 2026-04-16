@@ -152,25 +152,25 @@ The service reads structured runtime settings from:
 Default content:
 
 ```bash
-B2U_AUTO_DISCOVER=1
+B2U_AUTO_DISCOVER=true
 B2U_DEVICE_IDS=
-B2U_GRAB_DEVICES=1
+B2U_GRAB_DEVICES=true
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_LOG_TO_FILE=0
+B2U_LOG_TO_FILE=false
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
-B2U_DEBUG=0
+B2U_DEBUG=false
 B2U_UDC_PATH=
 ```
 
 Meaning:
 
-- `B2U_AUTO_DISCOVER=1` relays all suitable readable input devices except known excluded platform devices.
+- `B2U_AUTO_DISCOVER=true` relays all suitable readable input devices except known excluded platform devices.
 - `B2U_DEVICE_IDS` is the precise alternative when you want to pin the runtime to specific event paths, Bluetooth MACs, or case-insensitive device-name fragments.
-- `B2U_GRAB_DEVICES=1` grabs the selected input devices so the Pi stops consuming their local events.
+- `B2U_GRAB_DEVICES=true` grabs the selected input devices so the Pi stops consuming their local events.
 - `B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12` defines a plus-separated key chord that toggles relaying on and off at runtime.
-- `B2U_LOG_TO_FILE=0` disables file logging by default.
+- `B2U_LOG_TO_FILE=false` disables file logging by default.
 - `B2U_LOG_PATH=...` controls the file path used when file logging is enabled.
-- `B2U_DEBUG=0` keeps normal log verbosity.
+- `B2U_DEBUG=false` keeps normal log verbosity.
 - `B2U_UDC_PATH` is optional and only needed if you must pin UDC detection on a system with multiple gadget-capable controllers.
 
 After editing that file, restart the service:
