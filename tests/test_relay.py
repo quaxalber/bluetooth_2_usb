@@ -255,6 +255,9 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         self.assertEqual(layout.max_power, 100)
         self.assertEqual(layout.bm_attributes, 0xA0)
         self.assertEqual(layout.max_speed, "high-speed")
+        self.assertTrue(layout.devices[0].wakeup_on_write)
+        self.assertFalse(layout.devices[1].wakeup_on_write)
+        self.assertFalse(layout.devices[2].wakeup_on_write)
 
     def test_gadget_hid_device_passes_protocol_and_subclass_when_required(self) -> None:
         init_calls = []
@@ -422,6 +425,25 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             self.assertFalse(
                 (gadget_root / "functions/hid.usb2/wakeup_on_write").exists()
             )
+
+    def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
+        base_device = GadgetHidDevice.from_existing(
+            usb_hid.Device.BOOT_KEYBOARD,
+            function_index=0,
+            protocol=1,
+            subclass=1,
+            descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
+            wakeup_on_write=True,
+        )
+
+        cloned = GadgetHidDevice.from_existing(
+            base_device,
+            function_index=1,
+            protocol=0,
+            subclass=0,
+        )
+
+        self.assertTrue(cloned.wakeup_on_write)
 
 
 class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):

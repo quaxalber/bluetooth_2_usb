@@ -204,11 +204,11 @@ module install path and is part of your validation.
 Keep the built kernel config as well:
 
 ```bash
-cp .config "config-$(make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease)"
+KR="$(make ARCH="${ARCH}" CROSS_COMPILE="${CROSS_COMPILE}" kernelrelease)"
+cp .config "config-${KR}"
 ```
 
-For 32-bit targets, use the matching `ARCH` and `CROSS_COMPILE` values from the
-build command you actually ran.
+Use the same `ARCH` and `CROSS_COMPILE` values as the build command you ran.
 
 ## Deploy to the Pi
 

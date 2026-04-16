@@ -63,7 +63,7 @@ class GadgetHidDevice(usb_hid.Device):
         subclass: int,
         descriptor: bytes | None = None,
         name: str | None = None,
-        wakeup_on_write: bool = False,
+        wakeup_on_write: bool | None = None,
     ) -> GadgetHidDevice:
         return cls(
             descriptor=(
@@ -78,7 +78,11 @@ class GadgetHidDevice(usb_hid.Device):
             function_index=function_index,
             protocol=protocol,
             subclass=subclass,
-            wakeup_on_write=wakeup_on_write,
+            wakeup_on_write=(
+                getattr(base_device, "wakeup_on_write", False)
+                if wakeup_on_write is None
+                else wakeup_on_write
+            ),
         )
 
     def get_device_path(self, report_id=None):
