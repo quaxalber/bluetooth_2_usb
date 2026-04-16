@@ -7,6 +7,7 @@ It is intentionally focused on:
 
 - managed install validation
 - service lifecycle validation
+- boot optimization validation
 - smoke and debug validation
 - persistent read-only validation
 - uninstall validation
@@ -92,11 +93,6 @@ ssh -4 "$PI_HOST" '
 '
 ```
 
-The installer now clears common Bluetooth `rfkill` soft blocks on Raspberry Pi
-OS Lite before you move on to pairing and validation. Treat a later blocked
-controller as current runtime state to debug, not as proof that install
-skipped the Bluetooth setup.
-
 Reboot and wait for SSH:
 
 ```bash
@@ -116,7 +112,6 @@ ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
-  grep -H . /sys/class/rfkill/rfkill*/{soft,hard,state} 2>/dev/null || true
 '
 ```
 
@@ -200,6 +195,97 @@ Inspect the resulting report and verify:
 - the report is redacted
 - the report does not contradict the actual service and mount state
 - the reported UDC state matches the real cable/host situation
+
+## Boot optimization validation
+
+Start by recording the current baseline:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  cd /opt/bluetooth_2_usb &&
+  sudo -n git -c safe.directory=/opt/bluetooth_2_usb rev-parse --abbrev-ref HEAD &&
+  sudo -n git -c safe.directory=/opt/bluetooth_2_usb status --short &&
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose &&
+  systemd-analyze time &&
+  systemd-analyze blame | head -n 20 &&
+  systemd-analyze critical-chain bluetooth_2_usb.service
+'
+```
+
+Preview the boot optimization changes:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  sudo -n /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --dry-run --static-ip auto
+'
+```
+
+Apply the changes and allow the script to reboot the Pi:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  sudo -n /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --static-ip auto
+' || true
+until ssh -4 -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; do sleep 2; done
+```
+
+After reboot, verify:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  systemctl is-active bluetooth.service
+  systemctl is-active bluetooth_2_usb.service
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns connection show "$(nmcli --get-values GENERAL.CONNECTION device show wlan0 | head -n 1)"
+  systemd-analyze time
+  systemd-analyze blame | head -n 20
+  systemd-analyze critical-chain bluetooth_2_usb.service
+'
+```
+
+Explicitly test the shorter service stop timeout:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  sudo -n systemctl restart bluetooth_2_usb.service
+  sudo -n journalctl -u bluetooth_2_usb.service -n 50 --no-pager
+'
+```
+
+If the optimized host state regresses, rollback and reboot:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  sudo -n /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --rollback
+' || true
+until ssh -4 -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; do sleep 2; done
+```
+
+Before ending the session, return the Pi checkout to `main` and validate again:
+
+```bash
+PI_HOST="${PI_HOST:-your-pi-host}"
+
+ssh -4 "$PI_HOST" '
+  cd /opt/bluetooth_2_usb &&
+  sudo -n git -c safe.directory=/opt/bluetooth_2_usb checkout main &&
+  sudo -n git -c safe.directory=/opt/bluetooth_2_usb pull --ff-only origin main &&
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh &&
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+'
+```
 
 ## Relay loopback validation
 
