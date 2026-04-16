@@ -18,7 +18,7 @@ This validates the path:
 
 - the Pi is connected to the host through the OTG-capable data path
 - `bluetooth_2_usb.service` is active on the Pi
-- `B2U_AUTO_DISCOVER=1` is enabled in `/etc/default/bluetooth_2_usb`
+- `B2U_AUTO_DISCOVER=true` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
 - the host Python environment has `hidapi` installed for gadget discovery
 

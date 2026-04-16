@@ -9,6 +9,18 @@ from pathlib import Path
 
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
 DEFAULT_LOG_PATH = "/var/log/bluetooth_2_usb/bluetooth_2_usb.log"
+BOOL_KEYS = {
+    "B2U_AUTO_DISCOVER",
+    "B2U_GRAB_DEVICES",
+    "B2U_LOG_TO_FILE",
+    "B2U_DEBUG",
+}
+ALLOWED_KEYS = BOOL_KEYS | {
+    "B2U_INTERRUPT_SHORTCUT",
+    "B2U_LOG_PATH",
+    "B2U_DEVICE_IDS",
+    "B2U_UDC_PATH",
+}
 
 
 class ServiceConfigError(ValueError):
@@ -60,21 +72,14 @@ def _parse_device_ids(raw_value: str) -> list[str]:
     ]
 
 
+def _canonical_bool(value: bool) -> str:
+    return "true" if value else "false"
+
+
 def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
     config = ServiceConfig()
     if not env_file.exists():
         return config
-
-    allowed_keys = {
-        "B2U_AUTO_DISCOVER",
-        "B2U_GRAB_DEVICES",
-        "B2U_INTERRUPT_SHORTCUT",
-        "B2U_LOG_TO_FILE",
-        "B2U_LOG_PATH",
-        "B2U_DEBUG",
-        "B2U_DEVICE_IDS",
-        "B2U_UDC_PATH",
-    }
 
     for line_number, raw_line in enumerate(
         env_file.read_text(encoding="utf-8").splitlines(), start=1
@@ -90,7 +95,7 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
 
         key, raw_value = raw_line.split("=", 1)
         key = key.strip()
-        if key not in allowed_keys:
+        if key not in ALLOWED_KEYS:
             raise ServiceConfigError(
                 f"{env_file}:{line_number}: unexpected key {key!r} in runtime config"
             )
@@ -114,6 +119,53 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
             config.udc_path = value
 
     return config
+
+
+def canonicalize_service_config_bools(env_file: Path = DEFAULT_ENV_FILE) -> bool:
+    if not env_file.exists():
+        return False
+
+    original_text = env_file.read_text(encoding="utf-8")
+    updated_lines: list[str] = []
+    changed = False
+
+    for line_number, raw_line in enumerate(original_text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            updated_lines.append(raw_line)
+            continue
+
+        if "=" not in raw_line:
+            raise ServiceConfigError(
+                f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}"
+            )
+
+        key, raw_value = raw_line.split("=", 1)
+        key = key.strip()
+        if key not in ALLOWED_KEYS:
+            raise ServiceConfigError(
+                f"{env_file}:{line_number}: unexpected key {key!r} in runtime config"
+            )
+
+        if key not in BOOL_KEYS:
+            updated_lines.append(raw_line)
+            continue
+
+        canonical_line = (
+            f"{key}={_canonical_bool(_parse_bool(_parse_value(raw_value), key))}"
+        )
+        updated_lines.append(canonical_line)
+        if canonical_line != raw_line:
+            changed = True
+
+    if not changed:
+        return False
+
+    updated_text = "\n".join(updated_lines)
+    if original_text.endswith("\n"):
+        updated_text += "\n"
+    env_file.write_text(updated_text, encoding="utf-8")
+    return True
 
 
 def build_cli_argv(config: ServiceConfig, *, append_debug: bool = False) -> list[str]:
@@ -165,6 +217,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the parsed config as JSON.",
     )
+    group.add_argument(
+        "--canonicalize-bools",
+        action="store_true",
+        help="Rewrite boolean values in place using canonical true/false values.",
+    )
     parser.add_argument(
         "--executable",
         default=f"{sys.executable} -m bluetooth_2_usb",
@@ -197,6 +254,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.print_summary_json:
         print(json.dumps(config.to_dict(), sort_keys=True))
+        return 0
+    if args.canonicalize_bools:
+        canonicalize_service_config_bools()
         return 0
 
     return 1

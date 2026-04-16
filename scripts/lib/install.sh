@@ -35,13 +35,13 @@ write_default_env_file() {
   if [[ ! -f "$B2U_ENV_FILE" ]]; then
     cat >"$B2U_ENV_FILE" <<'EOF'
 # Structured runtime configuration for bluetooth_2_usb.service.
-B2U_AUTO_DISCOVER=1
+B2U_AUTO_DISCOVER=true
 B2U_DEVICE_IDS=
-B2U_GRAB_DEVICES=1
+B2U_GRAB_DEVICES=true
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_LOG_TO_FILE=0
+B2U_LOG_TO_FILE=false
 B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
-B2U_DEBUG=0
+B2U_DEBUG=false
 B2U_UDC_PATH=
 EOF
     chmod 0644 "$B2U_ENV_FILE"
