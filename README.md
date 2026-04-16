@@ -40,6 +40,10 @@ sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2
 sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
+On current Raspberry Pi OS 64-bit Lite images, the installer also clears a
+common Bluetooth soft-blocked `rfkill` default so pairing can start from a
+known-good controller state.
+
 ### 3. Reboot
 
 ```bash
@@ -411,6 +415,11 @@ grep -H . /sys/class/rfkill/rfkill*/{soft,hard,state} 2>/dev/null
 ```
 
 If `smoke_test.sh` or `debug.sh` already show the adapter as healthy, switch to an interactive `bluetoothctl` session and complete the actual bonding flow there. The common failure mode is not missing BlueZ, but an unanswered pairing prompt or a bonding handshake that never completes.
+
+The managed installer already clears common Bluetooth `rfkill` soft blocks on
+Raspberry Pi OS Lite during installation. If the controller becomes blocked
+again later, inspect the live `rfkill` state instead of assuming the install
+did not run.
 
 If you already know the adapter is soft-blocked, clear that first:
 
