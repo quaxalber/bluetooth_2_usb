@@ -217,8 +217,8 @@ Example text output:
           ╷                 ╷                   ╷                   ╷
  Status   │ Device          │ Identity          │ Path              │ Exclusion Reason
  ═════════╪═════════════════╪═══════════════════╪═══════════════════╪══════════════════════
- relay    │ Bluetooth Keyboard │ a1:b2:c3:d4:e5:f6 │ /dev/input/event4 │
- skip     │ vc4-hdmi-0         │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
+ relay    │ Kappa Keyboard  │ a1:b2:c3:d4:e5:f6 │ /dev/input/event4 │
+ skip     │ vc4-hdmi-0      │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
           ╵                 ╵                   ╵                   ╵
 ```
 
