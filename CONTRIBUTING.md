@@ -160,10 +160,33 @@ running.
 When you open a pull request:
 
 - keep the scope focused
+- prefer one logical feature, fix, or documentation change per PR when the work
+  can be separated cleanly
 - explain what changed and why
 - describe how you tested it
 - include the target host type used for validation when it matters
 - update docs when behavior, commands, paths, or defaults change
+
+Use branch names that describe the change and start with the change type, for
+example:
+
+- `feat/...`
+- `fix/...`
+- `docs/...`
+- `refactor/...`
+- `test/...`
+- `chore/...`
+
+Do not use `codex/...` branch prefixes for normal project work.
+
+Start commit subjects with the same conventional type prefixes:
+
+- `feat:`
+- `fix:`
+- `docs:`
+- `refactor:`
+- `test:`
+- `chore:`
 
 If you address review feedback, verify each point against the current code.
 Do not assume an old resolved thread is still satisfied after later commits.
