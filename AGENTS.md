@@ -188,13 +188,6 @@ affects runtime or managed deployment behavior.
 
 Use `docs/pi-cli-service-test-playbook.md` for repeatable Pi-side validation.
 
-If a turn changed runtime state or deployed code on `pi4b`, do not end the turn
-until all of the following are true again:
-
-- `bluetooth_2_usb.service` is active
-- AceRK is connected and visible as a relayable device
-- the host/Pi loopback harness passes the `keyboard` scenario
-
 For runtime-affecting changes, validate on real hardware when feasible:
 
 - `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh`
@@ -245,13 +238,6 @@ When validating flaky BLE pairings on the Pi:
 
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.
-
-If you mutate host state on `pi4b`:
-
-- do not leave `bluetooth_2_usb` non-functional at any point you knowingly walk
-  away from the host
-- restore `/opt/bluetooth_2_usb` on `pi4b` to `main` before ending the turn
-- run a final Pi-side validation after returning to `main`
 
 ## Review and CI
 

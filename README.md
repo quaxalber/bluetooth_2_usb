@@ -102,6 +102,7 @@ If possible, power the Pi from a separate stable power supply using the power-on
 - [Uninstalling](#uninstalling)
 - [Diagnostics](#diagnostics)
 - [Persistent read-only operation](#persistent-read-only-operation)
+- [Optional host wake from suspend](#optional-host-wake-from-suspend)
 - [Optional boot optimization](#optional-boot-optimization)
 - [Troubleshooting](#troubleshooting)
 - [Script reference](#script-reference)
@@ -213,9 +214,12 @@ bluetooth_2_usb -l
 Example text output:
 
 ```text
-Status  Device                         Identity                      Path                Exclusion Reason
-relay   HID 046d:c548 Consumer Control usb-0000:03:00.0-2.2/input1 /dev/input/event4
-skip    HD-Audio Generic Line          ALSA                          /dev/input/event20  missing EV_KEY/EV_REL capabilities
+          ╷                 ╷                   ╷                   ╷
+ Status   │ Device          │ Identity          │ Path              │ Exclusion Reason
+ ═════════╪═════════════════╪═══════════════════╪═══════════════════╪══════════════════════
+ relay    │ AceRK Keyboard  │ <ACE_RK_MAC>      │ /dev/input/event4 │
+ skip     │ vc4-hdmi-0      │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
+          ╵                 ╵                   ╵                   ╵
 ```
 
 On narrower terminals, columns such as `Device` and `Exclusion Reason` may wrap onto multiple lines.
@@ -344,6 +348,25 @@ sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
 sudo reboot
 ```
 
+## Optional host wake from suspend
+
+Bluetooth-2-USB can wake a sleeping or suspended host when you use the optional
+custom-kernel workflow in
+[rpi-remote-wakeup-kernel-playbook.md](docs/rpi-remote-wakeup-kernel-playbook.md).
+
+This has been tested on `pi4b` with:
+
+- Raspberry Pi 4 Model B Rev 1.4
+- patched `rpi-6.12.y` kernel `6.12.81-b2u-wake+`
+- installed `/boot/config-$(uname -r)` for built-in gadget-driver detection
+- keyboard-only `wakeup_on_write` enabled:
+  - `hid.usb0=1`
+  - `hid.usb1=0`
+  - `hid.usb2=0`
+
+On that tested setup, wake from host suspend works through normal keyboard
+input relayed by Bluetooth-2-USB.
+
 ## Optional boot optimization
 
 If the Pi is already provisioned and no longer needs `cloud-init` on every
@@ -435,20 +458,6 @@ If the service looks healthy but the target host still does not react, also chec
 - confirm the service is actually active with `systemctl is-active bluetooth_2_usb.service`
 
 If you need to isolate the relay path from Bluetooth pairing state, run the host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
-
-### Can't wake sleeping or suspended hosts
-
-Wake from host sleep is currently not supported.
-
-This appears to require kernel-side support in the Raspberry Pi USB HID gadget
-path rather than a further `bluetooth_2_usb` userspace change. Raspberry Pi
-Linux issue [#3977](https://github.com/raspberrypi/linux/issues/3977) suggests
-this may be possible with a kernel patch or equivalent gadget wakeup support.
-
-For an experimental custom-kernel workflow based on a documented wakeup patch,
-see [rpi-remote-wakeup-kernel-playbook.md](docs/rpi-remote-wakeup-kernel-playbook.md).
-
-Treat this as a known platform limitation for now.
 
 ### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active
 
