@@ -217,8 +217,8 @@ Example text output:
           ╷                 ╷                   ╷                   ╷
  Status   │ Device          │ Identity          │ Path              │ Exclusion Reason
  ═════════╪═════════════════╪═══════════════════╪═══════════════════╪══════════════════════
- relay    │ AceRK Keyboard  │ <ACE_RK_MAC>      │ /dev/input/event4 │
- skip     │ vc4-hdmi-0      │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
+ relay    │ Bluetooth Keyboard │ a1:b2:c3:d4:e5:f6 │ /dev/input/event4 │
+ skip     │ vc4-hdmi-0         │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
           ╵                 ╵                   ╵                   ╵
 ```
 
@@ -354,7 +354,7 @@ Bluetooth-2-USB can wake a sleeping or suspended host when you use the optional
 custom-kernel workflow in
 [rpi-remote-wakeup-kernel-playbook.md](docs/rpi-remote-wakeup-kernel-playbook.md).
 
-This has been tested on `pi4b` with:
+This has been tested on a Pi 4B with:
 
 - Raspberry Pi 4 Model B Rev 1.4
 - patched `rpi-6.12.y` kernel `6.12.81-b2u-wake+`
