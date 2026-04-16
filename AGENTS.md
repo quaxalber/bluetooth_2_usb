@@ -254,8 +254,18 @@ summary.
 ## Git and change scope
 
 - Keep changes focused.
+- Prefer one logical feature, fix, or documentation change per branch and per
+  pull request when the work can be separated cleanly.
+- Use descriptive branch names rooted in the change type, for example:
+  `feat/...`, `fix/...`, `docs/...`, `refactor/...`, `test/...`, or
+  `chore/...`.
+- Do not use `codex/...` branch prefixes for normal project work.
+- Start new commit subjects with a conventional type prefix such as `feat:`,
+  `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`.
 - Update docs when behavior, commands, paths, defaults, or validation guidance
   change.
+- Keep behavior or operator-facing documentation updates in the same change as
+  the code that introduced them.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 
