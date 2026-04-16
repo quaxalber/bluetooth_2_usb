@@ -65,3 +65,12 @@ class BluetoothRfkillLibTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual((entry / "soft").read_text(encoding="utf-8").strip(), "1")
             self.assertIn("hard-blocked", completed.stdout)
+
+    def test_clear_bluetooth_rfkill_soft_blocks_with_no_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rfkill_root = Path(tmpdir)
+
+            completed = self._run_helper(rfkill_root)
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("No bluetooth rfkill entries found", completed.stdout)
