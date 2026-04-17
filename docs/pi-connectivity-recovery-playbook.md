@@ -22,7 +22,8 @@ This playbook is intentionally focused on:
 
 ```bash
 PI_HOST="${PI_HOST:-your-pi-host}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_HOST_BASE="${PI_HOST%.local}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
 PI_USER="${PI_USER:-user}"
 PI_IFACE="${PI_IFACE:-wlp38s0}"
 PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
@@ -36,7 +37,8 @@ Start on the workstation, not on the Pi.
 
 ```bash
 PI_HOST="${PI_HOST:-your-pi-host}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_HOST_BASE="${PI_HOST%.local}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
 PI_IFACE="${PI_IFACE:-wlp38s0}"
 
 getent hosts "$PI_HOST" || true
@@ -60,7 +62,8 @@ Probe the Pi through the paths that matter most:
 
 ```bash
 PI_HOST="${PI_HOST:-your-pi-host}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_HOST_BASE="${PI_HOST%.local}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
 PI_USER="${PI_USER:-user}"
 PI_IFACE="${PI_IFACE:-wlp38s0}"
 PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
@@ -170,7 +173,8 @@ From the workstation:
 
 ```bash
 PI_HOST="${PI_HOST:-pi0w}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_HOST_BASE="${PI_HOST%.local}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
 PI_IFACE="${PI_IFACE:-wlp38s0}"
 PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
 

@@ -91,6 +91,9 @@ require_commands getent ip ping ssh
 if [[ -n "$LINK_LOCAL" && -z "$INTERFACE" ]]; then
   fail "--interface is required when --link-local is set."
 fi
+if [[ -n "$LINK_LOCAL" && "$LINK_LOCAL" == *%* ]]; then
+  fail "--link-local must not include %scope; pass scope via --interface."
+fi
 
 HOST_BASE="${HOST%.local}"
 HOST_LOCAL="${HOST_BASE}.local"
@@ -137,7 +140,7 @@ Host ${HOST_ALIASES}
     HostName ${LINK_LOCAL}%${INTERFACE}
     AddressFamily inet6
     HostKeyAlias ${HOST_BASE}
-    ConnectTimeout 5
+    ConnectTimeout ${TIMEOUT_SEC}
 EOF
   else
     warn "Scoped link-local SSH failed"
