@@ -36,13 +36,14 @@ This workflow has been exercised successfully on these setups:
   fallback build and boot, keyboard-only `wakeup_on_write`
   (`hid.usb0=1`, `hid.usb1=0`, `hid.usb2=0`), and post-reboot
   `bluetooth_2_usb` smoketest passing after clearing persistent
-  `systemd-rfkill` Bluetooth soft-block state
+  `systemd-rfkill` Bluetooth soft-block state, with end-to-end wake from host
+  suspend confirmed through normal keyboard input relayed by Bluetooth-2-USB
 
 From a user perspective:
 
-- Pi 4B is the confirmed end-to-end reference for actual wake-from-suspend use
-- Pi Zero W is the confirmed bring-up path for the custom wake kernel and the
-  required gadget state on 32-bit hardware
+- Pi 4B is a confirmed end-to-end wake-from-suspend setup
+- Pi Zero W is also a confirmed end-to-end wake-from-suspend setup and the
+  validated 32-bit bring-up path for the custom wake kernel
 
 ## Technical background
 

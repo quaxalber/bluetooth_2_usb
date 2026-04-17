@@ -369,10 +369,12 @@ input relayed by Bluetooth-2-USB.
 
 The playbook has also been exercised successfully on a Raspberry Pi Zero W
 with patched kernel `6.12.81-b2u-wake`, the documented ARM32 LLVM fallback,
-keyboard-only `wakeup_on_write`, and a passing post-reboot smoketest after
-clearing persistent `systemd-rfkill` Bluetooth soft-block state. Treat Pi 4B
-as the end-to-end wake reference and Pi Zero W as the confirmed 32-bit bring-up
-path for the custom wake kernel and gadget state.
+keyboard-only `wakeup_on_write`, a passing post-reboot smoketest after
+clearing persistent `systemd-rfkill` Bluetooth soft-block state, and confirmed
+end-to-end wake from host suspend through normal keyboard input relayed by
+Bluetooth-2-USB. Pi 4B and Pi Zero W are both confirmed end-to-end wake
+setups; Pi Zero W is also the validated 32-bit bring-up path for the custom
+wake kernel.
 
 ## Optional boot optimization
 
