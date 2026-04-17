@@ -196,6 +196,12 @@ Do not assume an old resolved thread is still satisfied after later commits.
 Also check grouped nitpicks and summary comments, not just unresolved inline
 threads. If you intentionally decline a review suggestion, explain that
 decision directly on the PR at the relevant thread or comment.
+For CodeRabbit, use the first top-level CodeRabbit comment on the PR as the
+live status indicator because CodeRabbit edits that comment in place. States
+such as review in progress, paused, and rate limit exceeded mean the latest
+review cycle is not finished yet. Only treat the latest CodeRabbit pass as
+complete when that first comment says no actionable comments were generated for
+the recent review.
 
 ## Reporting issues
 
