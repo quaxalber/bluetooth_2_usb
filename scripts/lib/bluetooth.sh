@@ -24,12 +24,23 @@ btmgmt_info() {
   btmgmt info
 }
 
+_bluetooth_controller_powered_from_stream() {
+  grep -Eq '^[[:space:]]*Powered:[[:space:]]+yes$'
+}
+
 bluetooth_rfkill_root() {
   printf '%s\n' "${B2U_RFKILL_ROOT:-/sys/class/rfkill}"
 }
 
 bluetooth_controller_powered() {
-  bluetoothctl_show 2>/dev/null | grep -Eq '^[[:space:]]*Powered:[[:space:]]+yes$'
+  bluetoothctl_show 2>/dev/null | _bluetooth_controller_powered_from_stream
+}
+
+bluetooth_controller_powered_from_file() {
+  local path="$1"
+
+  [[ -f "$path" ]] || return 1
+  _bluetooth_controller_powered_from_stream <"$path"
 }
 
 bluetooth_paired_count() {
