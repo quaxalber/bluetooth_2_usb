@@ -299,7 +299,7 @@ rollback_netplan_generated_nm_profiles() {
       rm -f "$connection_file"
       changed=1
     fi
-  done <<< "${B2U_CREATED_NM_KEYFILES:-}"
+  done <<<"${B2U_CREATED_NM_KEYFILES:-}"
 
   while IFS= read -r yaml_file; do
     [[ -n "$yaml_file" ]] || continue
@@ -308,7 +308,7 @@ rollback_netplan_generated_nm_profiles() {
       mv "$disabled_path" "$yaml_file"
       changed=1
     fi
-  done <<< "${B2U_DISABLED_NETPLAN_YAMLS:-}"
+  done <<<"${B2U_DISABLED_NETPLAN_YAMLS:-}"
 
   if [[ $changed -eq 1 ]]; then
     nmcli connection reload || true

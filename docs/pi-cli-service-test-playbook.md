@@ -246,7 +246,7 @@ ssh -4 "$PI_HOST" '
   sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
   nmcli -g NAME,UUID,TYPE,FILENAME connection show
   nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns connection show "$(nmcli --get-values GENERAL.CONNECTION device show wlan0 | head -n 1)"
-  ls -l /etc/netplan /etc/NetworkManager/system-connections
+  sudo -n ls -l /etc/netplan /etc/NetworkManager/system-connections
   systemd-analyze time
   systemd-analyze blame | head -n 20
   systemd-analyze critical-chain bluetooth_2_usb.service
