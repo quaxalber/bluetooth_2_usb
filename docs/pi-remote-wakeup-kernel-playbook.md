@@ -322,8 +322,8 @@ sudo cp "config-$(make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease
 ```bash
 sudo cp out/pi0w/arch/arm/boot/zImage "/boot/firmware/${KERNEL}-b2u-wake.img"
 sudo cp out/pi0w/arch/arm/boot/dts/broadcom/*.dtb /boot/firmware/
-sudo cp arch/arm/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
-sudo cp arch/arm/boot/dts/overlays/README /boot/firmware/overlays/
+sudo cp out/pi0w/arch/arm/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
+sudo cp out/pi0w/arch/arm/boot/dts/overlays/README /boot/firmware/overlays/
 sudo cp "out/pi0w/config-$(make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= kernelrelease)" "/boot/config-$(make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= kernelrelease)"
 ```
 
