@@ -206,7 +206,7 @@ else
 fi
 
 if bluetoothctl_show >"$BLUETOOTH_SHOW_LOG" 2>&1; then
-  if bluetooth_controller_powered; then
+  if bluetooth_controller_powered_from_file "$BLUETOOTH_SHOW_LOG"; then
     ok "Bluetooth controller is powered"
   else
     warn "Bluetooth controller is visible but not powered"
