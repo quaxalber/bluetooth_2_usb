@@ -29,6 +29,7 @@ Before making changes, read:
 Use these repo-specific playbooks when they match the task:
 
 - `docs/pi-cli-service-test-playbook.md`
+- `docs/pi-connectivity-recovery-playbook.md`
 - `docs/pi-host-relay-loopback-test-playbook.md`
 - `docs/pi-manual-test-plan.md`
 - `docs/doc-consistency-review-playbook.md`
@@ -55,6 +56,8 @@ Important:
 - If a fresh shell cannot find `shfmt` or `shellcheck`, activate the venv first.
 - For one-off commands in automation, prefer `source venv/bin/activate && ...`
   or `venv/bin/<tool>`.
+- For remote Pi work, passwordless sudo is strongly recommended so SSH-driven
+  validation and agentic workflows can use `sudo -n ...` safely.
 
 ## Repository layout
 
@@ -258,6 +261,8 @@ summary.
 - Keep changes focused.
 - Update docs when behavior, commands, paths, defaults, or validation guidance
   change.
+- Do not push directly to `main`; do the work on a branch and merge through a
+  pull request.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 
