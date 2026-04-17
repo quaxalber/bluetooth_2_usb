@@ -367,10 +367,12 @@ This has been tested on a Pi 4B with:
 On that tested setup, wake from host suspend works through normal keyboard
 input relayed by Bluetooth-2-USB.
 
-For Raspberry Pi Zero W, the documented wake-kernel playbook also includes a
-tested ARM32 LLVM fallback and a post-reboot Bluetooth rfkill recovery note for
-cases where `systemd-rfkill` re-applies a saved soft block after the kernel
-switch.
+The playbook has also been exercised successfully on a Raspberry Pi Zero W
+with patched kernel `6.12.81-b2u-wake`, the documented ARM32 LLVM fallback,
+keyboard-only `wakeup_on_write`, and a passing post-reboot smoketest after
+clearing persistent `systemd-rfkill` Bluetooth soft-block state. Treat Pi 4B
+as the end-to-end wake reference and Pi Zero W as the confirmed 32-bit bring-up
+path for the custom wake kernel and gadget state.
 
 ## Optional boot optimization
 

@@ -22,6 +22,28 @@ This playbook covers:
 - Raspberry Pi Zero 2 W
 - Raspberry Pi 5
 
+## Tested setups
+
+This workflow has been exercised successfully on these setups:
+
+- Raspberry Pi 4 Model B Rev 1.4:
+  patched `rpi-6.12.y` kernel `6.12.81-b2u-wake+`, installed
+  `/boot/config-$(uname -r)`, keyboard-only `wakeup_on_write`
+  (`hid.usb0=1`, `hid.usb1=0`, `hid.usb2=0`), and wake from host suspend
+  confirmed through normal keyboard input relayed by Bluetooth-2-USB
+- Raspberry Pi Zero W:
+  patched `rpi-6.12.y` kernel `6.12.81-b2u-wake`, successful ARM32 LLVM
+  fallback build and boot, keyboard-only `wakeup_on_write`
+  (`hid.usb0=1`, `hid.usb1=0`, `hid.usb2=0`), and post-reboot
+  `bluetooth_2_usb` smoketest passing after clearing persistent
+  `systemd-rfkill` Bluetooth soft-block state
+
+From a user perspective:
+
+- Pi 4B is the confirmed end-to-end reference for actual wake-from-suspend use
+- Pi Zero W is the confirmed bring-up path for the custom wake kernel and the
+  required gadget state on 32-bit hardware
+
 ## Technical background
 
 The wake path needs both of the following:
