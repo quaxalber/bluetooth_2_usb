@@ -289,6 +289,12 @@ sudo env PATH="$PATH" make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_i
 sudo env PATH="$PATH" make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install
 ```
 
+- 32-bit LLVM out-of-tree build:
+
+```bash
+sudo env PATH="$PATH" make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= modules_install
+```
+
 Then copy the kernel, DTBs, and overlays into `/boot/firmware`:
 
 - 64-bit:
@@ -309,6 +315,16 @@ sudo cp arch/arm/boot/dts/broadcom/*.dtb /boot/firmware/
 sudo cp arch/arm/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
 sudo cp arch/arm/boot/dts/overlays/README /boot/firmware/overlays/
 sudo cp "config-$(make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease)" "/boot/config-$(make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease)"
+```
+
+- 32-bit LLVM out-of-tree build:
+
+```bash
+sudo cp out/pi0w/arch/arm/boot/zImage "/boot/firmware/${KERNEL}-b2u-wake.img"
+sudo cp out/pi0w/arch/arm/boot/dts/broadcom/*.dtb /boot/firmware/
+sudo cp arch/arm/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
+sudo cp arch/arm/boot/dts/overlays/README /boot/firmware/overlays/
+sudo cp "out/pi0w/config-$(make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= kernelrelease)" "/boot/config-$(make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= kernelrelease)"
 ```
 
 Required boot-side safeguards:
