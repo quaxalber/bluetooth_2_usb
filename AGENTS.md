@@ -29,7 +29,6 @@ Before making changes, read:
 Use these repo-specific playbooks when they match the task:
 
 - `docs/pi-cli-service-test-playbook.md`
-- `docs/pi-connectivity-recovery-playbook.md`
 - `docs/pi-host-relay-loopback-test-playbook.md`
 - `docs/pi-manual-test-plan.md`
 - `docs/doc-consistency-review-playbook.md`
