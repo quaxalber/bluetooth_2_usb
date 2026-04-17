@@ -503,7 +503,7 @@ If you need that fix to survive reboot, also clear the persisted Bluetooth
 state files:
 
 ```bash
-sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do printf "0\n" > "$f"; done'
+sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do [ -e "$f" ] || continue; printf "0\n" > "$f"; done'
 sudo rfkill unblock bluetooth
 sudo systemctl restart bluetooth
 ```

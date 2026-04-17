@@ -520,7 +520,7 @@ If the active Bluetooth state file contains `49 10`, that is the saved value
 Clear the live block and the saved state before re-testing:
 
 ```bash
-sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do printf "0\n" > "$f"; done'
+sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do [ -e "$f" ] || continue; printf "0\n" > "$f"; done'
 sudo rfkill unblock bluetooth
 sudo systemctl restart bluetooth
 ```
