@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 HOST=""
+HOST_BASE=""
+HOST_LOCAL=""
+HOST_ALIASES=""
 PI_USER="${USER:-user}"
 LINK_LOCAL=""
 INTERFACE=""
@@ -65,6 +68,8 @@ while [[ $# -gt 0 ]]; do
       ;;
     --timeout)
       require_value "$1" "${2:-}"
+      [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] \
+        || fail "--timeout must be a positive integer (seconds)."
       TIMEOUT_SEC="$2"
       shift 2
       ;;
@@ -79,20 +84,29 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$HOST" ]] || fail "--host is required."
+[[ "$TIMEOUT_SEC" =~ ^[1-9][0-9]*$ ]] \
+  || fail "--timeout must be a positive integer (seconds)."
 require_commands getent ip ping ssh
 
 if [[ -n "$LINK_LOCAL" && -z "$INTERFACE" ]]; then
   fail "--interface is required when --link-local is set."
 fi
 
-info "Resolver view for ${HOST}"
-getent hosts "$HOST" || true
-getent ahosts "$HOST" || true
+HOST_BASE="${HOST%.local}"
+HOST_LOCAL="${HOST_BASE}.local"
+HOST_ALIASES="$HOST_BASE"
+if [[ "$HOST_LOCAL" != "$HOST_BASE" ]]; then
+  HOST_ALIASES="${HOST_BASE} ${HOST_LOCAL}"
+fi
 
-info "Resolver view for ${HOST}.local"
-getent hosts "${HOST}.local" || true
+info "Resolver view for ${HOST_BASE}"
+getent hosts "$HOST_BASE" || true
+getent ahosts "$HOST_BASE" || true
+
+info "Resolver view for ${HOST_LOCAL}"
+getent hosts "$HOST_LOCAL" || true
 if command -v avahi-resolve >/dev/null 2>&1; then
-  avahi-resolve -n "${HOST}.local" || true
+  avahi-resolve -n "$HOST_LOCAL" || true
 fi
 
 if [[ -n "$INTERFACE" ]]; then
@@ -100,8 +114,8 @@ if [[ -n "$INTERFACE" ]]; then
   ip -6 addr show dev "$INTERFACE" || true
 fi
 
-probe_cmd "Ping ${HOST}" ping -c 1 -W "$TIMEOUT_SEC" "$HOST"
-probe_cmd "Ping ${HOST}.local" ping -c 1 -W "$TIMEOUT_SEC" "${HOST}.local"
+probe_cmd "Ping ${HOST_BASE}" ping -c 1 -W "$TIMEOUT_SEC" "$HOST_BASE"
+probe_cmd "Ping ${HOST_LOCAL}" ping -c 1 -W "$TIMEOUT_SEC" "$HOST_LOCAL"
 
 if [[ -n "$LINK_LOCAL" ]]; then
   SCOPED_LINK_LOCAL="${LINK_LOCAL}%${INTERFACE}"
@@ -111,18 +125,18 @@ if [[ -n "$LINK_LOCAL" ]]; then
   if ssh -6 \
     -o BatchMode=yes \
     -o ConnectTimeout="$TIMEOUT_SEC" \
-    -o HostKeyAlias="$HOST" \
+    -o HostKeyAlias="$HOST_BASE" \
     "${PI_USER}@${SCOPED_LINK_LOCAL}" \
     'hostname && whoami'; then
     ok "Scoped link-local SSH succeeded"
     cat <<EOF
 
 Recommended SSH config:
-Host ${HOST} ${HOST}.local
+Host ${HOST_ALIASES}
     User ${PI_USER}
     HostName ${LINK_LOCAL}%${INTERFACE}
     AddressFamily inet6
-    HostKeyAlias ${HOST}
+    HostKeyAlias ${HOST_BASE}
     ConnectTimeout 5
 EOF
   else
@@ -130,5 +144,5 @@ EOF
   fi
 fi
 
-info "Rendered SSH configuration for ${HOST}"
-ssh -G "$HOST" | sed -n '1,20p' || true
+info "Rendered SSH configuration for ${HOST_BASE}"
+ssh -G "$HOST_BASE" | sed -n '1,20p' || true

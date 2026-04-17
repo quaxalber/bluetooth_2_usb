@@ -22,6 +22,10 @@ This playbook is intentionally focused on:
 
 ```bash
 PI_HOST="${PI_HOST:-your-pi-host}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_USER="${PI_USER:-user}"
+PI_IFACE="${PI_IFACE:-wlp38s0}"
+PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
 
 ssh "$PI_HOST" 'sudo -n true'
 ```
@@ -32,11 +36,13 @@ Start on the workstation, not on the Pi.
 
 ```bash
 PI_HOST="${PI_HOST:-your-pi-host}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_IFACE="${PI_IFACE:-wlp38s0}"
 
 getent hosts "$PI_HOST" || true
 getent ahosts "$PI_HOST" || true
-avahi-resolve -n "${PI_HOST}.local" 2>/dev/null || true
-ip -6 addr show dev wlp38s0
+avahi-resolve -n "${PI_HOST_LOCAL}" 2>/dev/null || true
+ip -6 addr show dev "$PI_IFACE"
 ```
 
 Interpretation:
@@ -53,9 +59,15 @@ Interpretation:
 Probe the Pi through the paths that matter most:
 
 ```bash
-ping -c 1 "${PI_HOST}.local" || true
-ping -6 -c 1 "fe80::YOUR-PI-LINK-LOCAL%wlp38s0" || true
-ssh -6 "user@fe80::YOUR-PI-LINK-LOCAL%wlp38s0" 'hostname && whoami'
+PI_HOST="${PI_HOST:-your-pi-host}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_USER="${PI_USER:-user}"
+PI_IFACE="${PI_IFACE:-wlp38s0}"
+PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
+
+ping -c 1 "${PI_HOST_LOCAL}" || true
+ping -6 -c 1 "${PI_LINK_LOCAL}%${PI_IFACE}" || true
+ssh -6 "${PI_USER}@${PI_LINK_LOCAL}%${PI_IFACE}" 'hostname && whoami'
 ```
 
 Interpretation:
@@ -74,8 +86,8 @@ interface scope.
 
 ```sshconfig
 Host pi0w pi0w.local
-    User user
-    HostName fe80::YOUR-PI-LINK-LOCAL%wlp38s0
+    User YOUR-PI-USER
+    HostName fe80::YOUR-PI-LINK-LOCAL%YOUR-WORKSTATION-IFACE
     AddressFamily inet6
     HostKeyAlias pi0w
     ConnectTimeout 5
@@ -157,14 +169,19 @@ Notes:
 From the workstation:
 
 ```bash
-ssh pi0w '
+PI_HOST="${PI_HOST:-pi0w}"
+PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST}.local}"
+PI_IFACE="${PI_IFACE:-wlp38s0}"
+PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
+
+ssh "$PI_HOST" '
   conn="$(nmcli --get-values GENERAL.CONNECTION device show wlan0 | head -n 1)"
   nmcli -g 802-11-wireless.powersave,ipv4.dns,ipv4.ignore-auto-dns connection show "$conn"
   cat /etc/resolv.conf
   systemctl is-active bluetooth_2_usb.service
 '
-ping -6 -c 1 "fe80::YOUR-PI-LINK-LOCAL%wlp38s0"
-ping -c 1 pi0w.local || true
+ping -6 -c 1 "${PI_LINK_LOCAL}%${PI_IFACE}"
+ping -c 1 "${PI_HOST_LOCAL}" || true
 ```
 
 On the Pi:
@@ -183,7 +200,16 @@ underlying LAN naming behavior changes.
 For a quick workstation-side diagnosis pass, use:
 
 ```bash
-./scripts/check_pi_connectivity.sh --host pi0w --user user --link-local fe80::YOUR-PI-LINK-LOCAL --interface wlp38s0
+PI_HOST="${PI_HOST:-pi0w}"
+PI_USER="${PI_USER:-user}"
+PI_IFACE="${PI_IFACE:-wlp38s0}"
+PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
+
+./scripts/check_pi_connectivity.sh \
+  --host "$PI_HOST" \
+  --user "$PI_USER" \
+  --link-local "$PI_LINK_LOCAL" \
+  --interface "$PI_IFACE"
 ```
 
 That helper prints resolver results, ping/SSH probe output, and a ready-to-paste
