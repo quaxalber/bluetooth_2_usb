@@ -1,4 +1,4 @@
-# Raspberry Pi Remote-Wakeup Kernel Playbook
+# Pi Remote-Wakeup Kernel Playbook
 
 Use this playbook when you need a Raspberry Pi USB HID gadget that can wake a
 sleeping or suspended host by sending keyboard input.
@@ -103,6 +103,17 @@ sudo apt install crossbuild-essential-arm64
 sudo apt install crossbuild-essential-armhf
 ```
 
+If you do not have an `arm-linux-gnueabihf-` toolchain but do have a complete
+LLVM toolchain, the 32-bit Raspberry Pi Zero W path can also be built with:
+
+```bash
+make LLVM=1 ARCH=arm ...
+```
+
+That fallback is workable, but it is not the default documented path because
+the Raspberry Pi ARM32 tree is usually exercised more heavily with GCC-style
+toolchains.
+
 ## Prepare a separate kernel checkout
 
 Do not build the kernel inside the `bluetooth_2_usb` repository.
@@ -186,6 +197,39 @@ scripts/config --set-str LOCALVERSION "-b2u-wake"
 make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease
 ```
+
+### Raspberry Pi Zero W, 32-bit, LLVM fallback
+
+Use this only when you intentionally want the LLVM path or do not have the
+`arm-linux-gnueabihf-` toolchain available.
+
+```bash
+cd ~/src/rpi-linux-wakeup
+export KERNEL=kernel
+make O=out/pi0w LLVM=1 ARCH=arm bcmrpi_defconfig
+scripts/config --file out/pi0w/.config --set-str LOCALVERSION "-b2u-wake"
+scripts/config --file out/pi0w/.config --disable BCM2835_FAST_MEMCPY
+make O=out/pi0w LLVM=1 ARCH=arm syncconfig
+make -j"${JOBS}" O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= zImage modules dtbs
+make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= kernelrelease
+cp out/pi0w/.config "out/pi0w/config-$(make O=out/pi0w LLVM=1 ARCH=arm LOCALVERSION= kernelrelease)"
+```
+
+Why disable `CONFIG_BCM2835_FAST_MEMCPY` here:
+
+- on the Zero W ARM32 path, Clang's integrated assembler can choke on the
+  Raspberry Pi specific `memcmp_rpi.S` implementation
+- disabling `CONFIG_BCM2835_FAST_MEMCPY` switches back to the generic memcpy
+  and memcmp implementations, which allowed the build to complete cleanly in
+  a tested LLVM build
+
+Important details for this LLVM path:
+
+- keep using the `-b2u-wake` local version in `.config`
+- pass `LOCALVERSION=` on the `make ... kernelrelease` and build commands so
+  the final kernel release is `...-b2u-wake` instead of `...-b2u-wake+`
+- if you use an out-of-tree build directory, copy `config-<kernelrelease>`
+  from that build directory, not from the source tree
 
 ### Raspberry Pi Zero 2 W, optional 32-bit
 
@@ -293,6 +337,19 @@ Example kernel names and matching `kernel=` values:
 
 Adjust the filename to match your target before rebooting.
 
+Before rebooting, confirm that `config.txt` contains only the intended custom
+kernel line for this workflow:
+
+```bash
+grep -n '^kernel=' /boot/firmware/config.txt
+```
+
+For a Zero W test run, the expected line is:
+
+```text
+kernel=kernel-b2u-wake.img
+```
+
 ## Rollback
 
 Rollback must be possible before the first reboot.
@@ -390,6 +447,47 @@ Also verify:
 - normal typing while the host is already awake still works
 - mouse input does not unintentionally wake the host in the default setup
 - consumer-control input does not unintentionally wake the host in the default setup
+
+### 7. If the first post-reboot smoke test fails on Bluetooth power
+
+Do not immediately treat that as a wake-kernel regression.
+
+On at least one tested Zero W boot after switching to the custom kernel, the
+first failing smoke test was caused by a persisted Bluetooth rfkill soft block,
+not by the wake patch:
+
+- `bluetoothctl show` reported `Powered: no`
+- `PowerState: off-blocked`
+- `rfkill` showed `soft=1`
+
+Check that state explicitly:
+
+```bash
+sudo rfkill list bluetooth
+sudo bluetoothctl show
+```
+
+If Bluetooth is soft-blocked again after reboot, inspect the persisted
+`systemd-rfkill` state:
+
+```bash
+sudo ls -l /var/lib/systemd/rfkill
+sudo od -An -t u1 /var/lib/systemd/rfkill/*:bluetooth 2>/dev/null
+```
+
+If the active Bluetooth state file contains `49 10`, that is the saved value
+`1\n`, which will be re-applied as a soft block on later boots.
+
+Clear the live block and the saved state before re-testing:
+
+```bash
+sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do printf "0\n" > "$f"; done'
+sudo rfkill unblock bluetooth
+sudo systemctl restart bluetooth
+```
+
+Then repeat the smoke test and one more reboot to verify that the controller
+stays unblocked across boot.
 
 ## Known limitations
 
