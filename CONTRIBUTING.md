@@ -41,7 +41,7 @@ The files most contributors will touch are:
 - `bluetooth_2_usb.service`
   systemd unit template used by the installer
 - `.github/workflows/ci.yml`
-  Baseline CI checks run on pull requests
+  Baseline CI checks run on pull requests and on pushes to `staging` and `main`
 
 ## Managed deployment model
 
@@ -157,6 +157,8 @@ running.
 
 ## Pull request guidelines
 
+This repository uses `staging` as its integration branch.
+
 When you open a pull request:
 
 - keep the scope focused
@@ -166,6 +168,18 @@ When you open a pull request:
 - describe how you tested it
 - include the target host type used for validation when it matters
 - update docs when behavior, commands, paths, or defaults change
+- target `staging` for normal feature, fix, refactor, test, and documentation
+  PRs
+- do not target `main` directly for normal project work
+
+Merge policy:
+
+- merge normal PRs into `staging` with squash merge
+- validate the integrated `staging` result before promoting it
+- merge `staging` into `main` with a normal merge commit so the tested batch is
+  preserved as one promotion step
+- use direct `main` PRs only for explicit exceptions such as user-requested
+  release or hotfix flows
 
 Use branch names that describe the change and start with the change type, for
 example:
@@ -176,6 +190,9 @@ example:
 - `refactor/...`
 - `test/...`
 - `chore/...`
+
+Do not push directly to `main`. Create a branch for the change and merge it
+through a pull request.
 
 Do not use `codex/...` branch prefixes for normal project work.
 
@@ -193,6 +210,28 @@ Do not assume an old resolved thread is still satisfied after later commits.
 Also check grouped nitpicks and summary comments, not just unresolved inline
 threads. If you intentionally decline a review suggestion, explain that
 decision directly on the PR at the relevant thread or comment.
+For CodeRabbit, use the first top-level CodeRabbit comment on the PR as the
+live status indicator because CodeRabbit edits that comment in place. States
+such as review in progress, paused, and rate limit exceeded mean the latest
+review cycle is not finished yet. Only treat the latest CodeRabbit pass as
+complete when that first comment says no actionable comments were generated for
+the recent review.
+
+CodeRabbit workflow:
+
+- `.coderabbit.yaml` enables automatic review on new pushes and explicitly
+  includes `staging` in `reviews.auto_review.base_branches`
+- before manually triggering CodeRabbit, check the first top-level CodeRabbit
+  comment on the PR and the `CodeRabbit` GitHub check on the PR head commit
+- treat the first top-level CodeRabbit comment as the authoritative live status
+  for `review in progress`, `paused`, `rate limited`, and `no actionable
+  comments`
+- do not treat a green `CodeRabbit` check by itself as proof that review is
+  complete; the first CodeRabbit comment must explicitly show `no actionable
+  comments` after the latest commit
+- if the first CodeRabbit comment shows `review in progress`, `paused`, or
+  `rate limited`, do not spam `@coderabbitai review`; wait, resume, or
+  re-trigger only once the state justifies it
 
 ## Reporting issues
 

@@ -389,6 +389,13 @@ For a Zero W test run, the expected line is:
 kernel=kernel-b2u-wake.img
 ```
 
+Optional strict check (Zero W example):
+
+```bash
+test "$(grep -c '^kernel=' /boot/firmware/config.txt)" -eq 1 \
+  && grep -qx 'kernel=kernel-b2u-wake.img' /boot/firmware/config.txt
+```
+
 ## Rollback
 
 Rollback must be possible before the first reboot.

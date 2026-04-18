@@ -55,6 +55,8 @@ Important:
 - If a fresh shell cannot find `shfmt` or `shellcheck`, activate the venv first.
 - For one-off commands in automation, prefer `source venv/bin/activate && ...`
   or `venv/bin/<tool>`.
+- For remote Pi work, passwordless sudo is strongly recommended so SSH-driven
+  validation and agentic workflows can use `sudo -n ...` safely.
 
 ## Repository layout
 
@@ -247,17 +249,50 @@ summary.
   notes against the current code before deciding they are irrelevant.
 - If you intentionally disagree with review feedback, document the technical
   reason directly on the PR at the relevant thread or comment location.
+- For CodeRabbit specifically, treat the first top-level CodeRabbit comment on
+  the PR as the live review-status source of truth. That comment is updated in
+  place and may show states such as review in progress, paused, or rate limit
+  exceeded.
+- Do not treat a CodeRabbit review as complete after the latest commit until
+  that first top-level CodeRabbit comment explicitly says no actionable comments
+  were generated for the recent review.
+- If that first CodeRabbit comment shows a rate-limit state, wait for the
+  window to expire before retriggering review, and avoid claiming the PR is
+  fully reviewed in the meantime.
 - Findings should focus on behavioral regressions, release risk, shell/runtime
   contract drift, and maintainability with operational impact.
 - If CI fails, inspect the actual failing GitHub Actions step and log before
   guessing.
 - CodeRabbit comments are useful hints, not ground truth.
+- `.coderabbit.yaml` has automatic review enabled for new pushes and includes
+  `staging` in the allowed auto-review base branches.
+- Before manually pinging CodeRabbit, inspect both the first top-level
+  CodeRabbit PR comment and the `CodeRabbit` GitHub check on the PR head
+  commit.
+- Treat the first top-level CodeRabbit comment as the authoritative live state
+  for `review in progress`, `paused`, `rate limited`, and `no actionable
+  comments`.
+- Do not consider CodeRabbit complete until that first top-level comment shows
+  `no actionable comments` after the latest commit on the PR branch.
+- Do not treat a successful `CodeRabbit` GitHub check alone as proof that a PR
+  has no remaining actionable feedback.
+- If the first CodeRabbit comment shows `review in progress`, `paused`, or
+  `rate limited`, do not blindly post `@coderabbitai review`; wait, resume, or
+  re-trigger only when that state makes sense.
 
 ## Git and change scope
 
 - Keep changes focused.
 - Update docs when behavior, commands, paths, defaults, or validation guidance
   change.
+- Do not push directly to `main`; do the work on a branch and merge through a
+  pull request.
+- Use `staging` as the integration branch for normal repository work.
+- Open normal feature, fix, docs, refactor, test, and chore PRs against
+  `staging`, not `main`.
+- Squash-merge individual PRs into `staging`.
+- Promote validated batches from `staging` to `main` with a normal merge commit
+  so the integrated test point remains explicit.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 

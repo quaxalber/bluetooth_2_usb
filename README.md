@@ -422,6 +422,10 @@ Use `smoke_test.sh` as the quick health gate and `debug.sh` as the fuller redact
 
 For a real end-to-end relay check without depending on a paired Bluetooth device, use the host/Pi loopback harness in `docs/pi-host-relay-loopback-test-playbook.md`.
 
+If the problem is workstation-to-Pi reachability itself rather than the relay
+service, start with `docs/pi-connectivity-troubleshooting.md` and then use
+`docs/pi-connectivity-recovery-playbook.md` for the full recovery flow.
+
 ### The service does not start
 
 ```bash
@@ -575,10 +579,24 @@ findmnt /mnt/b2u-persist
 grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
 ```
 
+### SSH, ping, or DNS access to the Pi is flaky
+
+If `ssh pi-host` times out, `ping pi-host` is misleading, or the Pi only works
+through an IPv6 link-local address with `%interface`, do not keep debugging the
+service blindly.
+
+This has repeatedly turned out to be a workstation-to-Pi connectivity problem
+rather than a `bluetooth_2_usb` runtime bug.
+
+Start with the short classification guide in
+`docs/pi-connectivity-troubleshooting.md`, then run the full recovery flow in
+`docs/pi-connectivity-recovery-playbook.md`.
+
 ## Script reference
 
 Managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
-installation.
+installation. The host-side helper `scripts/check_pi_connectivity.sh` is meant
+to be run from a workstation checkout instead.
 
 ### `install.sh`
 
@@ -685,6 +703,22 @@ Install the Linux host-side udev rule that grants `hidapi` write access to the U
 | --- | --- |
 | none | Linux only. Run once on the receiving host. Example: `sudo ./scripts/install_host_hidapi_udev_rule.sh`. |
 
+### `check_pi_connectivity.sh`
+
+Workstation-side probe for Raspberry Pi SSH, mDNS, and IPv6 link-local
+reachability. It is intended for recurring cases where the Pi is reachable but
+plain hostname SSH or IPv4 behaves inconsistently. The script does not mutate
+SSH configuration; it prints a recommended `~/.ssh/config` block when a scoped
+link-local probe succeeds.
+
+| Argument | Explanation / Example |
+| --- | --- |
+| `--host HOST` | Required Pi hostname or SSH alias to probe. Example: `./scripts/check_pi_connectivity.sh --host pi0w`. |
+| `--user USER` | SSH user. Default: current local user. |
+| `--link-local IPV6` | Known Pi link-local IPv6 address without `%scope`. |
+| `--interface IFACE` | Workstation network interface used with `--link-local`. Example: `wlp38s0`. |
+| `--timeout SEC` | Connect timeout for ping and SSH probes. Default: `5`. |
+
 ### `setup_persistent_bluetooth_state.sh`
 
 Prepare the writable ext4-backed storage for `/var/lib/bluetooth` before enabling OverlayFS.
@@ -723,6 +757,8 @@ Release tagging and versioning rules are documented in [docs/release-versioning-
 For practical validation and debugging workflows, also see:
 
 - [docs/pi-cli-service-test-playbook.md](docs/pi-cli-service-test-playbook.md)
+- [docs/pi-connectivity-troubleshooting.md](docs/pi-connectivity-troubleshooting.md)
+- [docs/pi-connectivity-recovery-playbook.md](docs/pi-connectivity-recovery-playbook.md)
 - [docs/pi-host-relay-loopback-test-playbook.md](docs/pi-host-relay-loopback-test-playbook.md)
 - [docs/pi-manual-test-plan.md](docs/pi-manual-test-plan.md)
 - [docs/doc-consistency-review-playbook.md](docs/doc-consistency-review-playbook.md)
