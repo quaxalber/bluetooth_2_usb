@@ -252,12 +252,33 @@ summary.
 - If CI fails, inspect the actual failing GitHub Actions step and log before
   guessing.
 - CodeRabbit comments are useful hints, not ground truth.
+- `.coderabbit.yaml` has automatic review enabled for new pushes and includes
+  `staging` in the allowed auto-review base branches.
+- Before manually pinging CodeRabbit, inspect both the first top-level
+  CodeRabbit PR comment and the `CodeRabbit` GitHub check on the PR head
+  commit.
+- Treat the first top-level CodeRabbit comment as the authoritative live state
+  for `review in progress`, `paused`, `rate limited`, and `no actionable
+  comments`.
+- Do not consider CodeRabbit complete until that first top-level comment shows
+  `no actionable comments` after the latest commit on the PR branch.
+- Do not treat a successful `CodeRabbit` GitHub check alone as proof that a PR
+  has no remaining actionable feedback.
+- If the first CodeRabbit comment shows `review in progress`, `paused`, or
+  `rate limited`, do not blindly post `@coderabbitai review`; wait, resume, or
+  re-trigger only when that state makes sense.
 
 ## Git and change scope
 
 - Keep changes focused.
 - Update docs when behavior, commands, paths, defaults, or validation guidance
   change.
+- Use `staging` as the integration branch for normal repository work.
+- Open normal feature, fix, docs, refactor, test, and chore PRs against
+  `staging`, not `main`.
+- Squash-merge individual PRs into `staging`.
+- Promote validated batches from `staging` to `main` with a normal merge commit
+  so the integrated test point remains explicit.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 
