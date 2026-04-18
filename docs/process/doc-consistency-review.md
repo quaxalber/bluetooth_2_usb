@@ -1,7 +1,6 @@
 # Documentation Consistency Review
 
-Use this checklist when you want to verify that `README.md`,
-`CONTRIBUTING.md`, `TROUBLESHOOTING.md`, and the Markdown guides under `docs/`
+Use this checklist when you want to verify that the remaining repo-owned docs
 still match the current repository state.
 
 The goal is to catch drift between:
@@ -9,7 +8,7 @@ The goal is to catch drift between:
 - documented commands
 - actual script and CLI interfaces
 - current managed paths and defaults
-- current packaging and development workflow
+- the supported development workflow
 
 ## Scope
 
@@ -18,9 +17,8 @@ Review at least:
 - `README.md`
 - `CONTRIBUTING.md`
 - `TROUBLESHOOTING.md`
-- every `docs/**/*.md` file
-- `scripts/*.sh`
-- `scripts/lib/*.sh`
+- every remaining `docs/**/*.md` file
+- supported public shell entrypoints under `scripts/`
 - `src/bluetooth_2_usb/args.py`
 - `pyproject.toml`
 
@@ -35,21 +33,18 @@ sed -n '1,240p' CONTRIBUTING.md
 sed -n '1,240p' TROUBLESHOOTING.md
 ```
 
-For each Markdown file under `docs/`, verify that:
+For each Markdown file, verify that:
 
 - commands still exist
 - argument names still exist
 - path examples still match the current managed deployment
-- placeholders are still clearly marked as placeholders
-- examples favor readability and simple placeholders over shell-heavy
-  parameterization unless the indirection is genuinely useful
-- Pi-specific examples still match the current workflow
+- placeholders are clearly marked as placeholders
+- examples favor readability over unnecessary shell indirection
 
 ### 2. Script interfaces
 
-Compare the docs against the current `--help` output of all managed scripts and
-wrapper entrypoints, plus any workstation-side helpers documented in
-`README.md`:
+Compare the docs against the current `--help` output of the supported public
+scripts:
 
 ```bash
 mapfile -d '' shell_scripts < <(
@@ -76,8 +71,6 @@ python -m bluetooth_2_usb --version
 sed -n '1,220p' src/bluetooth_2_usb/args.py
 ```
 
-Confirm that the docs match the current option names, defaults, and behavior.
-
 ### 4. Managed paths and service assumptions
 
 ```bash
@@ -96,8 +89,6 @@ Pay attention to:
 - log directory
 - persistent Bluetooth-state paths
 - service unit name
-- whether generic helpers, path constants, and workflow-specific shell logic are
-  still separated cleanly across the shell libs
 
 ### 5. Development workflow
 
@@ -116,35 +107,30 @@ rm -rf "$tmpdir"
 
 ### 6. Drift search for commands, flags, and paths
 
-Search the docs for the public surface they describe:
-
 ```bash
-rg -n '(scripts/[a-z_]+\.sh|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
+rg -n '(scripts/[a-z0-9_./-]+\.sh|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
 ```
 
-Use the matches as an inventory, then compare each script path and option
-against the current `--help` output and the runtime code. Flag anything that is
-documented but no longer present, or anything that exists in code but is not
-explained where an operator would reasonably expect it.
+Flag anything that is documented but no longer present, or anything that exists
+in code but is not explained where an operator would reasonably expect it.
 
 ### 7. Syntax and basic code health
 
 ```bash
 python -m compileall src tests
 python -m unittest discover -s tests -v
-bash -n scripts/*.sh scripts/lib/*.sh
+mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+bash -n "${shell_scripts[@]}"
 ```
 
 ## Expected outcome
 
 At the end of the review, answer these questions explicitly:
 
-1. Do `README.md`, `CONTRIBUTING.md`, `TROUBLESHOOTING.md`, and all relevant
-   `docs/**/*.md` files match the current script interfaces?
+1. Do the remaining repo docs match the current script interfaces?
 2. Do they match the current Python CLI surface?
 3. Do the documented managed paths and defaults still match
-   `scripts/lib/paths.sh` and the service unit? `scripts/lib/paths.sh` is the
-   authoritative source for managed path constants.
+   `scripts/lib/paths.sh` and the service unit?
 4. Are there any stale commands, removed flags, outdated entrypoints, or
-   hard-coded environment values left?
+   unnecessary lab-specific assumptions left?
 5. Did you make doc fixes, or is the current documentation already consistent?

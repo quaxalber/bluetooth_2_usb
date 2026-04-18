@@ -1,25 +1,24 @@
 # Pi CLI and Service Test
 
-Use this guide for repeatable Raspberry Pi validation against the current
-codebase without rebuilding the process from scratch.
+Use this guide for repeatable Raspberry Pi validation of the current codebase.
 
-It is intentionally focused on:
+It is the authoritative Pi-side validation guide for:
 
 - managed install validation
 - service lifecycle validation
 - smoke and debug validation
+- real device relay validation
+- loopback validation
 - persistent read-only validation
+- pairing persistence validation
 - uninstall validation
-
-For boot tuning, use
-[`boot-optimization.md`](boot-optimization.md).
 
 ## Assumptions
 
 - the workstation has `git` and SSH access to the Pi
-- if plain hostname access is flaky, resolve that first with
-  [`connectivity-recovery.md`](connectivity-recovery.md)
 - the Pi user has passwordless sudo
+- workstation-specific SSH and network recovery is handled separately from this
+  repo
 
 Quick check:
 
@@ -34,8 +33,7 @@ Replace `pi-host` with the real SSH host or alias.
 The supported deployment model is a normal Git checkout at
 `/opt/bluetooth_2_usb`.
 
-If the Pi image does not include `git`, which is common on Raspberry Pi OS
-Lite, install it first:
+If the Pi image does not include `git`, install it first:
 
 ```bash
 ssh pi-host 'sudo -n apt update && sudo -n apt install -y git'
@@ -50,8 +48,6 @@ ssh pi-host '
   sudo -n git -C /opt/bluetooth_2_usb checkout feature-branch
 '
 ```
-
-Replace `feature-branch` with the branch you want to validate.
 
 ## Baseline status snapshot
 
@@ -85,19 +81,12 @@ ssh pi-host '
 ## Install validation
 
 ```bash
-ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/install.sh
-'
-```
-
-Reboot and wait for SSH:
-
-```bash
+ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/install.sh'
 ssh pi-host 'sudo -n reboot' || true
 until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
 ```
 
-After reboot, verify:
+After reboot:
 
 ```bash
 ssh pi-host '
@@ -108,78 +97,64 @@ ssh pi-host '
 '
 ```
 
-Interpret the smoke result conservatively:
-
-- `PASSED` is ideal
-- `PASSED (with warnings)` is still acceptable if no paired or relayable
-  devices are present yet, or if the OTG cable is not attached and the UDC
-  state is therefore not `configured`
+`PASSED (with warnings)` is acceptable when no paired or relayable devices are
+present yet, or when the OTG cable is not attached and the UDC state is not
+`configured`.
 
 ## Update validation
 
-The supported update model is the managed update wrapper:
-
 ```bash
-ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/update.sh
-'
+ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/update.sh'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
 without rebuilding the managed virtual environment or restarting the service.
 
-Reboot and wait for SSH so the update path is validated against the next boot:
-
-```bash
-ssh pi-host 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
-```
-
-After reboot, verify:
-
-```bash
-ssh pi-host '
-  systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
-  sudo -n bluetoothctl show
-  sudo -n btmgmt info
-'
-```
+Reboot and repeat the post-boot smoke checks if the updated change touched boot
+configuration or other reboot-sensitive behavior.
 
 ## Debug validation
 
 Bounded run:
 
 ```bash
-ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 5
-'
+ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 5'
 ```
 
 Manual interrupt path:
 
 ```bash
-ssh -t pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh
-'
+ssh -t pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh'
 ```
 
-Inspect the resulting report and verify:
+Verify:
 
-- the service was restored afterwards
-- the live debug section contains real runtime output
+- the service is restored afterwards
+- the live debug block contains real runtime output
 - the report is redacted
-- the report does not contradict the actual service and mount state
-- the reported UDC state matches the real cable/host situation
+- the report does not contradict actual service and mount state
+
+## Real relay validation with a paired device
+
+Use this when you want to prove the real user path, not just the harness path.
+
+Steps:
+
+1. pair the target Bluetooth keyboard or mouse
+2. connect the Pi to the target host over the OTG-capable port
+3. verify normal typing or pointer movement
+4. verify the interrupt shortcut if configured
+
+Pass criteria:
+
+- input reaches the target host reliably
+- no unexpected local input leakage when devices are grabbed
 
 ## Relay loopback validation
 
-If the Pi is physically attached to a Linux host through the gadget data path,
-run the end-to-end relay loopback flow from
-[`host-relay-loopback.md`](host-relay-loopback.md).
-
-This is the most direct way to verify that relayed input events actually arrive
-at the host without depending on a paired Bluetooth device.
+If the Pi is physically attached to a host through the gadget data path, run the
+end-to-end relay harness from
+[host-relay-loopback.md](host-relay-loopback.md).
 
 ## Persistent read-only validation
 
@@ -190,13 +165,6 @@ ssh pi-host '
   sudo -n /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
   sudo -n /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh
 '
-```
-
-Replace `/dev/mmcblk0p3` with the real writable ext4 partition.
-
-Reboot and wait for SSH after `enable_readonly_overlayfs.sh`:
-
-```bash
 ssh pi-host 'sudo -n reboot' || true
 until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
 ```
@@ -208,20 +176,80 @@ ssh pi-host '
   sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
+  grep "^B2U_" /etc/default/bluetooth_2_usb_readonly
 '
 ```
 
-Disable read-only mode again:
+## Pairing persistence across reboot
+
+Before reboot:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh
+  bluetoothctl devices Paired
+  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
 '
 ```
 
-Reboot and wait for SSH after `disable_readonly_overlayfs.sh`:
+Then:
+
+1. pair the target Bluetooth keyboard or mouse
+2. confirm it works on the target host
+3. reboot the Pi
+
+After reboot:
 
 ```bash
+ssh pi-host '
+  bluetoothctl devices Paired
+  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+  sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
+'
+```
+
+Pass criteria:
+
+- the paired device remains known after reboot
+- reconnect works without re-pairing
+- input still reaches the target host
+
+## Hard power-loss follow-up
+
+Before cutting power:
+
+```bash
+ssh pi-host '
+  bluetoothctl devices Paired
+  systemctl is-active bluetooth_2_usb.service
+'
+```
+
+Then:
+
+1. cut power to the Pi
+2. restore power
+3. wait for full boot
+
+After boot:
+
+```bash
+ssh pi-host '
+  systemctl is-active bluetooth_2_usb.service
+  bluetoothctl devices Paired
+  sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
+'
+```
+
+Pass criteria:
+
+- no re-pairing required
+- no broken persistent mount
+- no service crash on startup
+
+## Disable read-only mode again
+
+```bash
+ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh'
 ssh pi-host 'sudo -n reboot' || true
 until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
 ```
@@ -234,7 +262,6 @@ ssh pi-host '
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
   systemctl is-enabled var-lib-bluetooth.mount >/dev/null 2>&1 && echo mount-enabled || echo mount-disabled
-  systemctl is-active var-lib-bluetooth.mount >/dev/null 2>&1 && echo mount-active || echo mount-inactive
   test -d /opt/bluetooth_2_usb && echo checkout-present || echo checkout-missing
 '
 ```
@@ -248,7 +275,7 @@ Expected outcome:
 
 ## What to record
 
-For each run, record:
+For each run:
 
 ```bash
 ssh pi-host '

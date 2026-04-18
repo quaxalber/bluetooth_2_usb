@@ -1,12 +1,8 @@
 # Bluetooth-2-USB Agent Guide
 
-This file is the fast-start contract for work in this repository. A fresh
-thread should be able to start from here without guessing project standards.
-
-Treat this file as living project documentation, not as a one-off setup note.
-When workflows, validation commands, managed paths, service behavior,
-release rules, hardware expectations, or project conventions change, update this
-file in the same change to prevent drift.
+This file contains agent-specific deltas for this repository. Treat
+[CONTRIBUTING.md](CONTRIBUTING.md) as the main contributor contract for setup,
+checks, hardware validation, and PR workflow.
 
 ## Scope
 
@@ -15,304 +11,83 @@ file in the same change to prevent drift.
   keyboards and mice
 - Main risk areas: USB gadget setup, boot config mutation, managed install
   re-apply behavior, systemd service behavior, persistent read-only mode, and
-  Pi-specific runtime validation
+  Pi-side runtime validation
 
-## First steps
+## Read first
 
 Before making changes, read:
 
 1. `README.md`
 2. `CONTRIBUTING.md`
-3. relevant files under `docs/`
-4. the code or scripts you plan to modify
+3. the relevant code or scripts
+4. the focused guide that matches the task, if any
 
-Use these repo-specific guides when they match the task:
+Repo-owned focused guides:
 
 - `TROUBLESHOOTING.md`
 - `docs/pi/cli-service-test.md`
-- `docs/pi/boot-optimization.md`
-- `docs/pi/connectivity-troubleshooting.md`
-- `docs/pi/connectivity-recovery.md`
 - `docs/pi/host-relay-loopback.md`
-- `docs/pi/manual-test-plan.md`
 - `docs/pi/persistent-readonly.md`
 - `docs/pi/remote-wakeup-kernel.md`
 - `docs/process/doc-consistency-review.md`
 - `docs/process/release-versioning-policy.md`
 
-## Environment
+## Agent deltas
 
-Use the repository virtual environment for repo-local checks. Do not silently
-fall back to system Python for validation when the venv workflow applies.
+- Prefer the repo venv for checks. Do not silently fall back to system Python
+  when the venv workflow applies.
+- For remote Pi work, passwordless sudo is strongly recommended so `sudo -n`
+  validation paths do not fail early.
+- Keep changes focused. Update docs when behavior, commands, paths, defaults, or
+  validation guidance change.
+- Do not push directly to `main`. Use `staging` as the integration branch for
+  normal work.
+- Open normal PRs against `staging`, squash-merge them there, and promote
+  validated batches from `staging` to `main` with a normal merge commit.
+- Do not amend commits unless explicitly asked.
+- Do not revert user changes you did not make.
 
-Setup:
+## Validation expectations
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -U pip setuptools wheel
-pip install -e . black ruff yamllint shfmt-py shellcheck-py build
-```
+Use the baseline checks from [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Important:
+If you change installer, diagnostics, or read-only logic, recursive shell
+validation is mandatory.
 
-- `black`, `ruff`, `yamllint`, `shfmt`, and `shellcheck` are expected to be run
-  from this venv.
-- If a fresh shell cannot find `shfmt` or `shellcheck`, activate the venv first.
-- For one-off commands in automation, prefer `source venv/bin/activate && ...`
-  or `venv/bin/<tool>`.
-- For remote Pi work, passwordless sudo is strongly recommended so SSH-driven
-  validation and agentic workflows can use `sudo -n ...` safely.
+For runtime-affecting changes, validate on real Pi hardware when feasible.
+Minimum Pi-side checks:
 
-## Repository layout
-
-Files and directories that matter most:
-
-- `src/bluetooth_2_usb/`
-  Python package for CLI, runtime, HID layout, relay logic, logging, and
-  version handling
-- `scripts/`
-  Managed install, uninstall, and grouped operational helpers
-- `scripts/diagnostics/`
-  Smoke and deep-diagnostics entrypoints
-- `scripts/host/`
-  Workstation-side connectivity, capture, and host-setup helpers
-- `scripts/maintenance/`
-  Pi maintenance and boot-optimization entrypoints
-- `scripts/readonly/`
-  Persistent Bluetooth-state and OverlayFS helpers
-- `scripts/testing/`
-  Pi-side relay harness injectors
-- `scripts/lib/paths.sh`
-  Shared managed-path and service constants
-- `scripts/lib/common.sh`
-  Generic shell helpers only
-- `scripts/lib/boot.sh`
-  Raspberry Pi boot and `dwc2` helpers
-- `scripts/lib/install.sh`
-  Managed install, service, and virtualenv helpers
-- `scripts/lib/readonly.sh`
-  Persistent read-only and Bluetooth-state mount helpers
-- `scripts/lib/report.sh`
-  Markdown/report-only shell helpers
-- `bluetooth_2_usb.service`
-  Installed systemd unit template
-- `pyproject.toml`
-  Packaging, entrypoints, versioning, formatter/linter config
-- `README.md`
-  User-facing operational documentation
-- `CONTRIBUTING.md`
-  Contributor workflow and baseline checks
-
-Managed deployment paths:
-
-- install root: `/opt/bluetooth_2_usb`
-- managed venv: `/opt/bluetooth_2_usb/venv`
-- service unit: `bluetooth_2_usb.service`
-- runtime env file: `/etc/default/bluetooth_2_usb`
-- read-only env file: `/etc/default/bluetooth_2_usb_readonly`
-- log dir: `/var/log/bluetooth_2_usb`
-- persistent mount: `/mnt/b2u-persist`
-
-## Current contracts
-
-Preserve these unless the task explicitly redesigns them:
-
-- Managed installs are rooted in `/opt/bluetooth_2_usb`.
-- The service launches the module with the managed venv Python.
-- The service loads `/etc/default/bluetooth_2_usb` as structured `B2U_*`
-  configuration and starts `python -m bluetooth_2_usb.service_runner`.
-- Supported install flow:
-  - on minimal Raspberry Pi OS Lite images, install `git` first if needed:
-    `sudo apt update && sudo apt install -y git`
-  - clone to `/opt/bluetooth_2_usb`
-  - run `sudo /opt/bluetooth_2_usb/scripts/install.sh`
-- Supported update flow:
-  - `sudo /opt/bluetooth_2_usb/scripts/update.sh`
-  - when the checkout is already current, `update.sh` must exit successfully
-    without rebuilding the managed venv or restarting the service
-- Shell scripts should fail loudly on ambiguous or unsafe input.
-- Boot changes should be conservative and leave timestamped backups.
-- `scripts/maintenance/optimize_pi_boot.sh` is the exception that may perform automatic
-  rollback restores, but only for the host state it captured itself in
-  `${B2U_OPTIMIZE_STATE_FILE}`.
-- Read-only operation is either:
-  - normal writable mode
-  - persistent read-only mode with writable Bluetooth state on ext4 storage
-
-## Editing standards
-
-### Python
-
-- Python 3.11+
-- Format with Black, line length 88
-- Lint with Ruff
-- Prefer clear, direct control flow over cleverness
-- Keep CLI/help text and exit-code behavior stable unless intentionally changed
-
-### Shell
-
-- Target `bash`
-- Quote variables consistently
-- Use shared helpers from `scripts/lib/common.sh` only when they are genuinely
-  generic and reused
-- Keep managed paths and service constants out of `common.sh`; they belong in a
-  dedicated path/config layer
-- Move boot/install/read-only workflow logic into dedicated shell libs rather
-  than growing `common.sh`
-- Put report-only helpers in `scripts/lib/report.sh`, not in `common.sh`
-- Avoid masking failures with `|| true` unless they are truly non-fatal
-- Treat install/uninstall/read-only flows as production code
-
-### Documentation
-
-- Prefer operational accuracy over marketing language
-- Prefer simple example values or clearly marked placeholders over shell-heavy
-  indirection when that makes docs easier to read
-- Parameterize examples unless a fixed value is intentionally required
-- Keep docs aligned with real script interfaces, defaults, and managed paths
-
-## Validation
-
-Run the baseline checks from the repo venv:
-
-```bash
-black --check src tests
-ruff check src tests
-python -m compileall src tests
-python -m unittest discover -s tests -v
-python -m bluetooth_2_usb --help
-python -m bluetooth_2_usb --version
-python -m bluetooth_2_usb --validate-env || test $? -eq 3
-mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
-shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
-shellcheck -x "${shell_scripts[@]}"
-bash -n "${shell_scripts[@]}"
-yamllint .github/workflows/ci.yml
-python -m build
-```
-
-Interpretation note:
-
-- Outside a real Pi gadget environment, `--validate-env` may exit with status
-  `3`. That is expected on a normal workstation and should not be treated as a
-  failure by itself.
-
-If you change installer/uninstaller/read-only logic, shell validation is
-mandatory.
-
-## Hardware validation
-
-For Pi-side validation, use a reachable Raspberry Pi over SSH when the task
-affects runtime or managed deployment behavior.
-
-Use `docs/pi/cli-service-test.md` for repeatable Pi-side validation.
-
-For runtime-affecting changes, validate on real hardware when feasible:
-
-- `sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh`
+- `sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose`
 - `sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10`
-- `python -m bluetooth_2_usb --list_devices --output json`
-- the host/Pi loopback harness from
-  `docs/pi/host-relay-loopback.md` when the relay path itself
-  changed
-- for host-side loopback capture, the host Python environment needs `hidapi`
-  for gadget discovery; on Windows the strict event-capture backend is Raw
-  Input for keyboard, mouse, consumer, and combo scenarios
-- do not assume the full repo venv is available or desirable on macOS/Windows
-- on Linux hosts, the `hidapi` path also needs the USB-device udev rule from
-  `scripts/host/install_host_hidapi_udev_rule.sh`
-- host capture can temporarily claim the gadget HID interfaces while the test
-  runs; do not assume normal local desktop handling remains active during the
-  capture window
-- before each new Windows validation run for a changed gadget descriptor
-  layout or USB identity:
-  1. set the Pi to the intended software revision
-  2. reboot the Pi
-  3. ask the user for a Windows PnP admin reset
-  4. wait for explicit confirmation before starting host capture
-- the loopback harness uses a single lock file and does not support parallel
-  inject/capture runs
-- if a harness run looks wedged, check stale lock files on both sides:
-  `%TEMP%/bluetooth_2_usb_test_harness.lock` on the host and
-  `/tmp/bluetooth_2_usb_test_harness.lock` on the Pi
-
-For Bluetooth-adapter or pairing issues, do not stop at
-`systemctl status bluetooth`. Also check the real controller and rfkill state:
-
 - `sudo bluetoothctl show`
 - `sudo btmgmt info`
-- `/sys/class/rfkill/rfkill*/soft`, `hard`, and `state`
 
-Treat `bluetooth.service active` as necessary but not sufficient. A live BlueZ
-service can still leave the controller `Powered: no`, `PowerState:
-off-blocked`, or `DOWN` because of a persisted software rfkill block.
-
-When validating flaky BLE pairings on the Pi:
-
-- prefer a live `bluetoothctl` session over one-shot commands
-- watch for `[agent] Accept pairing (yes/no):` and answer it explicitly
-- distinguish short transient connects from a real bonded state; repeated
-  `Connected: yes` / `Connected: no` cycles with `Paired: no` mean the bonding
-  handshake is still failing
+For relay-path changes, also use the host/Pi loopback harness from
+`docs/pi/host-relay-loopback.md`.
 
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.
 
 ## Review and CI
 
-- When addressing PR feedback, verify each comment against current code; do not
-  assume a resolved thread is still satisfied after later commits.
-- Also verify grouped nitpicks, summary comments, and other non-threaded review
-  notes against the current code before deciding they are irrelevant.
-- If you intentionally disagree with review feedback, document the technical
-  reason directly on the PR at the relevant thread or comment location.
-- For CodeRabbit specifically, treat the first top-level CodeRabbit comment on
-  the PR as the live review-status source of truth. That comment is updated in
-  place and may show states such as review in progress, paused, or rate limit
-  exceeded.
-- Do not treat a CodeRabbit review as complete after the latest commit until
-  that first top-level CodeRabbit comment explicitly says no actionable comments
-  were generated for the recent review.
-- If that first CodeRabbit comment shows a rate-limit state, wait for the
-  window to expire before retriggering review, and avoid claiming the PR is
-  fully reviewed in the meantime.
-- Findings should focus on behavioral regressions, release risk, shell/runtime
-  contract drift, and maintainability with operational impact.
+- Verify each review point against the current code; do not trust old thread
+  state blindly.
+- Also verify grouped nitpicks, summary comments, and non-threaded feedback.
+- If you intentionally disagree with review feedback, document the reason on the
+  PR.
 - If CI fails, inspect the actual failing GitHub Actions step and log before
   guessing.
-- CodeRabbit comments are useful hints, not ground truth.
-- `.coderabbit.yaml` has automatic review enabled for new pushes and includes
-  `staging` in the allowed auto-review base branches.
-- Before manually pinging CodeRabbit, inspect both the first top-level
-  CodeRabbit PR comment and the `CodeRabbit` GitHub check on the PR head
-  commit.
-- Treat the first top-level CodeRabbit comment as the authoritative live state
-  for `review in progress`, `paused`, `rate limited`, and `no actionable
-  comments`.
-- Do not consider CodeRabbit complete until that first top-level comment shows
-  `no actionable comments` after the latest commit on the PR branch.
-- Do not treat a successful `CodeRabbit` GitHub check alone as proof that a PR
-  has no remaining actionable feedback.
-- If the first CodeRabbit comment shows `review in progress`, `paused`, or
-  `rate limited`, do not blindly post `@coderabbitai review`; wait, resume, or
-  re-trigger only when that state makes sense.
 
-## Git and change scope
+CodeRabbit:
 
-- Keep changes focused.
-- Update docs when behavior, commands, paths, defaults, or validation guidance
-  change.
-- Do not push directly to `main`; do the work on a branch and merge through a
-  pull request.
-- Use `staging` as the integration branch for normal repository work.
-- Open normal feature, fix, docs, refactor, test, and chore PRs against
-  `staging`, not `main`.
-- Squash-merge individual PRs into `staging`.
-- Promote validated batches from `staging` to `main` with a normal merge commit
-  so the integrated test point remains explicit.
-- Do not amend commits unless explicitly asked.
-- Do not revert user changes you did not make.
+- Treat the first top-level CodeRabbit PR comment as the authoritative live
+  state.
+- Do not consider CodeRabbit complete until that comment says
+  `no actionable comments` after the latest commit.
+- Before manually pinging CodeRabbit, inspect both that first comment and the
+  `CodeRabbit` GitHub check on the PR head commit.
+- If the first comment shows `review in progress`, `paused`, or `rate limited`,
+  wait, resume, or re-trigger only when that state justifies it.
 
 ## Final response expectations
 
@@ -321,4 +96,5 @@ When reporting work:
 - say which checks were actually run
 - say which checks could not be run and why
 - distinguish workstation validation from real Pi validation
-- call out any residual risk, especially for install/read-only/release behavior
+- call out residual risk, especially for install, diagnostics, read-only mode,
+  and release behavior
