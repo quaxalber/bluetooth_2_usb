@@ -511,7 +511,7 @@ If Bluetooth is soft-blocked again after reboot, inspect the persisted
 
 ```bash
 sudo ls -l /var/lib/systemd/rfkill
-sudo od -An -t u1 /var/lib/systemd/rfkill/*:bluetooth 2>/dev/null
+sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do [ -e "$f" ] || continue; od -An -t u1 "$f"; done'
 ```
 
 If the active Bluetooth state file contains `49 10`, that is the saved value
