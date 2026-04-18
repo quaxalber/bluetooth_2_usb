@@ -44,7 +44,8 @@ For each file under `docs/`, verify that:
 ### 2. Script interfaces
 
 Compare the docs against the current `--help` output of all managed scripts and
-wrapper entrypoints:
+wrapper entrypoints, plus any workstation-side helpers documented in
+`README.md`:
 
 ```bash
 for s in \
@@ -55,6 +56,7 @@ for s in \
   scripts/smoke_test.sh \
   scripts/pi_relay_test_inject.sh \
   scripts/host_relay_test_capture.sh \
+  scripts/check_pi_connectivity.sh \
   scripts/install_host_hidapi_udev_rule.sh \
   scripts/enable_readonly_overlayfs.sh \
   scripts/disable_readonly_overlayfs.sh \
