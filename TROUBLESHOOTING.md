@@ -3,8 +3,8 @@
 Start every troubleshooting pass with the two built-in diagnostics first:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
 ```
 
 Use `smoke_test.sh` as the quick health gate and `debug.sh` as the fuller

@@ -64,15 +64,18 @@ jobs:
 
       - name: Shell formatting checks
         run: |
-          shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
+          mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+          shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
 
       - name: Shell lint checks
         run: |
-          shellcheck -x scripts/*.sh scripts/lib/*.sh
+          mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+          shellcheck -x "${shell_scripts[@]}"
 
       - name: Shell syntax checks
         run: |
-          bash -n scripts/*.sh scripts/lib/*.sh
+          mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+          bash -n "${shell_scripts[@]}"
 
       - name: YAML lint checks
         run: |

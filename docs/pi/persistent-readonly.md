@@ -59,21 +59,21 @@ recovery.
 Run:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
-sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
+sudo /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
+sudo /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh
 sudo reboot
 ```
 
 After reboot:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
 ```
 
 ## Disable read-only mode
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
+sudo /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh
 sudo reboot
 ```
 

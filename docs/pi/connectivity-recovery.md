@@ -165,8 +165,8 @@ ping -c 1 pi0w.local || true
 On the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
 ```
 
 If the Pi is still reachable only through the literal link-local address, keep
@@ -178,7 +178,7 @@ underlying LAN naming behavior changes.
 For a quick workstation-side diagnosis pass, use:
 
 ```bash
-./scripts/check_pi_connectivity.sh \
+./scripts/host/check_pi_connectivity.sh \
   --host pi0w \
   --user user \
   --link-local fe80::1234:5678:9abc:def0 \

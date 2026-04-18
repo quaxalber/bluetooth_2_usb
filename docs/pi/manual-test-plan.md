@@ -23,8 +23,8 @@ After reboot:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
 ```
 
 Pass criteria:
@@ -72,7 +72,7 @@ After reboot if boot settings changed:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
 ```
 
 Pass criteria:
@@ -103,16 +103,16 @@ sudo mkfs.ext4 -L B2U_PERSIST /dev/mmcblk0p3
 Prepare and enable persistent read-only mode:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
-sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
+sudo /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
+sudo /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh
 sudo reboot
 ```
 
 After reboot:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
 findmnt /var/lib/bluetooth
 findmnt /mnt/b2u-persist
 cat /etc/default/bluetooth_2_usb_readonly

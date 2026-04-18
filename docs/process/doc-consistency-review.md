@@ -52,29 +52,20 @@ wrapper entrypoints, plus any workstation-side helpers documented in
 `README.md`:
 
 ```bash
-for s in \
-  scripts/install.sh \
-  scripts/update.sh \
-  scripts/uninstall.sh \
-  scripts/debug.sh \
-  scripts/smoke_test.sh \
-  scripts/pi_relay_test_inject.sh \
-  scripts/host_relay_test_capture.sh \
-  scripts/check_pi_connectivity.sh \
-  scripts/optimize_pi_boot.sh \
-  scripts/install_host_hidapi_udev_rule.sh \
-  scripts/enable_readonly_overlayfs.sh \
-  scripts/disable_readonly_overlayfs.sh \
-  scripts/setup_persistent_bluetooth_state.sh
-do
+mapfile -d '' shell_scripts < <(
+  find scripts -maxdepth 2 -type f -name '*.sh' ! -path 'scripts/lib/*' -print0 | sort -z
+)
+for s in "${shell_scripts[@]}"; do
   echo "==== $s"
   bash "$s" --help
   echo
 done
 
-echo "==== scripts/host_relay_test_capture.ps1"
-powershell -ExecutionPolicy Bypass -File .\\scripts\\host_relay_test_capture.ps1 --help
-echo
+if [[ -f scripts/host/host_relay_test_capture.ps1 ]]; then
+  echo "==== scripts/host/host_relay_test_capture.ps1"
+  powershell -ExecutionPolicy Bypass -File .\\scripts\\host\\host_relay_test_capture.ps1 --help
+  echo
+fi
 ```
 
 ### 3. Python CLI interface

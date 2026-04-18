@@ -113,9 +113,10 @@ python -m unittest discover -s tests -v
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
-shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
-shellcheck -x scripts/*.sh scripts/lib/*.sh
-bash -n scripts/*.sh scripts/lib/*.sh
+mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
+shellcheck -x "${shell_scripts[@]}"
+bash -n "${shell_scripts[@]}"
 yamllint .github/workflows/ci.yml
 python -m build
 ```
@@ -133,8 +134,8 @@ gadget setup, or persistent read-only operation, validate it on a real Pi.
 From an installed deployment:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
 sudo bluetoothctl show
 sudo btmgmt info
 ```

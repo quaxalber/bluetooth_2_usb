@@ -73,12 +73,12 @@ ssh pi-host '
   bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/update.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/smoke_test.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/testing/pi_relay_test_inject.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --help >/dev/null
 '
 ```
 
@@ -102,7 +102,7 @@ After reboot, verify:
 ```bash
 ssh pi-host '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
 '
@@ -140,7 +140,7 @@ After reboot, verify:
 ```bash
 ssh pi-host '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
 '
@@ -152,7 +152,7 @@ Bounded run:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
+  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 5
 '
 ```
 
@@ -160,7 +160,7 @@ Manual interrupt path:
 
 ```bash
 ssh -t pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/debug.sh
+  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh
 '
 ```
 
@@ -187,8 +187,8 @@ Prepare the writable ext4 partition:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
-  sudo -n /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh
 '
 ```
 
@@ -205,7 +205,7 @@ After reboot:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
 '
@@ -215,7 +215,7 @@ Disable read-only mode again:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh
 '
 ```
 

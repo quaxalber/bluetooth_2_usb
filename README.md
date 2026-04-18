@@ -72,7 +72,7 @@ exit
 ### 5. Verify the installation
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh
 ```
 
 ### 6. Connect the Pi to the target host
@@ -203,13 +203,13 @@ sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
 Start with the quick health check:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
 ```
 
 If that is not enough, collect the fuller debug report:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
 ```
 
 For most problems, these are the first two commands to run.
@@ -300,8 +300,11 @@ Use these runtime flags when running the CLI manually.
 ## Script reference
 
 Managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
-installation. The host-side helper `scripts/check_pi_connectivity.sh` is meant
-to be run from a workstation checkout instead.
+installation. `install.sh`, `update.sh`, and `uninstall.sh` stay at the top
+level; the other helpers are grouped under `diagnostics/`, `host/`,
+`maintenance/`, `readonly/`, and `testing/`. The workstation-side helper
+`scripts/host/check_pi_connectivity.sh` is meant to be run from a workstation
+checkout instead.
 
 ### `install.sh`
 
@@ -319,23 +322,23 @@ managed deployment.
 
 Remove the managed system integration while deliberately leaving the checkout in place for inspection or later reuse.
 
-### `smoke_test.sh`
+### `diagnostics/smoke_test.sh`
 
 Run the fast health check for the supported managed deployment. This is the first script to use after install, reboot, update, or read-only changes. It fails on broken platform, runtime, or Bluetooth-controller prerequisites, and warns when no paired or relayable devices are currently visible. In that case the final line stays successful but is rendered as `PASSED (with warnings)`. It also checks the detected UDC state and warns when the gadget controller is present but not currently `configured`.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--verbose` | Print the fuller health-check output instead of the compact pass/fail view. Default: disabled. Example: `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose`. |
+| `--verbose` | Print the fuller health-check output instead of the compact pass/fail view. Default: disabled. Example: `sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose`. |
 
-### `debug.sh`
+### `diagnostics/debug.sh`
 
 Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough. It records service, boot, Bluetooth, mount, and runtime state, then runs a bounded live foreground debug session. The report includes the detected UDC state and shows whether it is currently `configured`.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--duration DURATION_SEC` | Limit the live foreground debug run. Default: unbounded until interrupted. Example: `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`. |
+| `--duration DURATION_SEC` | Limit the live foreground debug run. Default: unbounded until interrupted. Example: `sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10`. |
 
-### `optimize_pi_boot.sh`
+### `maintenance/optimize_pi_boot.sh`
 
 Reduce Pi boot delays that are not required for `bluetooth_2_usb`. The script
 can disable `cloud-init` on already provisioned hosts, disable
@@ -349,23 +352,23 @@ be restored later.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--dry-run` | Show the planned host changes without mutating the system. Example: `sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --dry-run --static-ip auto`. |
+| `--dry-run` | Show the planned host changes without mutating the system. Example: `sudo /opt/bluetooth_2_usb/scripts/maintenance/optimize_pi_boot.sh --dry-run --static-ip auto`. |
 | `--rollback` | Restore the previously captured host state and, unless `--no-reboot` is also set, reboot immediately afterwards. |
 | `--no-reboot` | Do not reboot automatically after apply or explicit rollback. |
 | `--static-ip auto` | Freeze the currently active DHCP IPv4 address, gateway, and DNS values for `wlan0` as a static profile. |
-| `--static-ip CIDR --gateway IPV4 --dns CSV` | Apply explicit static IPv4 settings instead of auto-detecting them. Example: `sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --static-ip 192.168.2.215/24 --gateway 192.168.2.1 --dns 1.1.1.1,9.9.9.9,192.168.2.1`. |
+| `--static-ip CIDR --gateway IPV4 --dns CSV` | Apply explicit static IPv4 settings instead of auto-detecting them. Example: `sudo /opt/bluetooth_2_usb/scripts/maintenance/optimize_pi_boot.sh --static-ip 192.168.2.215/24 --gateway 192.168.2.1 --dns 1.1.1.1,9.9.9.9,192.168.2.1`. |
 
-### `pi_relay_test_inject.sh`
+### `testing/pi_relay_test_inject.sh`
 
 Create temporary virtual keyboard and mouse devices on the Pi and inject a deterministic test sequence into the running relay service.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--scenario {keyboard,mouse,combo,consumer,text_burst}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo`. |
+| `--scenario {keyboard,mouse,combo,consumer,text_burst}` | Select which deterministic test sequence to inject. Default: `combo`. Example: `sudo /opt/bluetooth_2_usb/scripts/testing/pi_relay_test_inject.sh --scenario combo`. |
 | `--pre-delay-ms PRE_DELAY_MS` | Wait after creating the virtual devices before sending events. Default: `1000`. |
 | `--event-gap-ms EVENT_GAP_MS` | Delay between injected events. Default: `40`. |
 
-### `host_relay_test_capture.sh`
+### `host/host_relay_test_capture.sh`
 
 Capture host-side gadget HID reports and verify that the relay emitted the expected sequence. Use this wrapper on Linux and macOS. The host Python environment must have `hidapi` installed, for example via `python3 -m pip install -r requirements-host-capture.txt`. On Linux, unprivileged access also needs the host-side USB udev rule. Depending on the host HID stack, opening the gadget interfaces for capture can temporarily claim them while the test is running, so do not assume the local desktop will continue to process the same keyboard, mouse, or consumer inputs during the capture window. The default test sequence therefore uses non-text keyboard keys and tiny mouse-relative movements. On Windows, use the PowerShell wrapper below; it uses `hidapi` for gadget discovery and Raw Input for strict event capture.
 
@@ -388,29 +391,29 @@ Before each fresh Windows validation run after changing the gadget descriptor la
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--scenario {keyboard,mouse,combo,consumer,text_burst}` | Expected test sequence. Default: `combo`. Example: `./scripts/host_relay_test_capture.sh --scenario combo`. |
+| `--scenario {keyboard,mouse,combo,consumer,text_burst}` | Expected test sequence. Default: `combo`. Example: `./scripts/host/host_relay_test_capture.sh --scenario combo`. |
 | `--timeout-sec TIMEOUT_SEC` | Time to wait for the full sequence. Default: `5`. |
 | `--keyboard-node PATH` | Override the detected host keyboard HID device path. |
 | `--mouse-node PATH` | Override the detected host mouse HID device path. |
 | `--consumer-node PATH` | Override the detected host consumer-control HID device path. |
 
-### `host_relay_test_capture.ps1`
+### `host/host_relay_test_capture.ps1`
 
 Windows PowerShell wrapper for the same host-capture flow.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| same as `host_relay_test_capture.sh` | Example: `powershell -ExecutionPolicy Bypass -File .\\scripts\\host_relay_test_capture.ps1 --scenario combo`. |
+| same as `host/host_relay_test_capture.sh` | Example: `powershell -ExecutionPolicy Bypass -File .\\scripts\\host\\host_relay_test_capture.ps1 --scenario combo`. |
 
-### `install_host_hidapi_udev_rule.sh`
+### `host/install_host_hidapi_udev_rule.sh`
 
 Install the Linux host-side udev rule that grants `hidapi` write access to the USB gadget device nodes.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| none | Linux only. Run once on the receiving host. Example: `sudo ./scripts/install_host_hidapi_udev_rule.sh`. |
+| none | Linux only. Run once on the receiving host. Example: `sudo ./scripts/host/install_host_hidapi_udev_rule.sh`. |
 
-### `check_pi_connectivity.sh`
+### `host/check_pi_connectivity.sh`
 
 Workstation-side probe for Raspberry Pi SSH, mDNS, and IPv6 link-local
 reachability. It is intended for recurring cases where the Pi is reachable but
@@ -420,25 +423,25 @@ link-local probe succeeds.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--host HOST` | Required Pi hostname or SSH alias to probe. Example: `./scripts/check_pi_connectivity.sh --host pi0w`. |
+| `--host HOST` | Required Pi hostname or SSH alias to probe. Example: `./scripts/host/check_pi_connectivity.sh --host pi0w`. |
 | `--user USER` | SSH user. Default: current local user. |
 | `--link-local IPV6` | Known Pi link-local IPv6 address without `%scope`. |
 | `--interface IFACE` | Workstation network interface used with `--link-local`. Example: `wlp38s0`. |
 | `--timeout SEC` | Connect timeout for ping and SSH probes. Default: `5`. |
 
-### `setup_persistent_bluetooth_state.sh`
+### `readonly/setup_persistent_bluetooth_state.sh`
 
 Prepare the writable ext4-backed storage for `/var/lib/bluetooth` before enabling OverlayFS.
 
 | Argument | Explanation / Example |
 | --- | --- |
-| `--device DEVICE_PATH` | Required writable ext4 device or partition to mount at the persistent state path. No default. Example: `sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3`. |
+| `--device DEVICE_PATH` | Required writable ext4 device or partition to mount at the persistent state path. No default. Example: `sudo /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3`. |
 
-### `enable_readonly_overlayfs.sh`
+### `readonly/enable_readonly_overlayfs.sh`
 
 Switch Raspberry Pi OS into persistent read-only operation after the writable Bluetooth-state mount has already been prepared.
 
-### `disable_readonly_overlayfs.sh`
+### `readonly/disable_readonly_overlayfs.sh`
 
 Return the system to normal writable mode while keeping the persistent Bluetooth-state configuration available.
 

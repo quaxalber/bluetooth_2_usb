@@ -72,7 +72,17 @@ Files and directories that matter most:
   Python package for CLI, runtime, HID layout, relay logic, logging, and
   version handling
 - `scripts/`
-  Managed install, uninstall, smoke/debug, and persistent read-only helpers
+  Managed install, uninstall, and grouped operational helpers
+- `scripts/diagnostics/`
+  Smoke and deep-diagnostics entrypoints
+- `scripts/host/`
+  Workstation-side connectivity, capture, and host-setup helpers
+- `scripts/maintenance/`
+  Pi maintenance and boot-optimization entrypoints
+- `scripts/readonly/`
+  Persistent Bluetooth-state and OverlayFS helpers
+- `scripts/testing/`
+  Pi-side relay harness injectors
 - `scripts/lib/paths.sh`
   Shared managed-path and service constants
 - `scripts/lib/common.sh`
@@ -123,7 +133,7 @@ Preserve these unless the task explicitly redesigns them:
     without rebuilding the managed venv or restarting the service
 - Shell scripts should fail loudly on ambiguous or unsafe input.
 - Boot changes should be conservative and leave timestamped backups.
-- `scripts/optimize_pi_boot.sh` is the exception that may perform automatic
+- `scripts/maintenance/optimize_pi_boot.sh` is the exception that may perform automatic
   rollback restores, but only for the host state it captured itself in
   `${B2U_OPTIMIZE_STATE_FILE}`.
 - Read-only operation is either:
@@ -174,9 +184,10 @@ python -m unittest discover -s tests -v
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
-shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
-shellcheck -x scripts/*.sh scripts/lib/*.sh
-bash -n scripts/*.sh scripts/lib/*.sh
+mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
+shellcheck -x "${shell_scripts[@]}"
+bash -n "${shell_scripts[@]}"
 yamllint .github/workflows/ci.yml
 python -m build
 ```
@@ -199,8 +210,8 @@ Use `docs/pi/cli-service-test.md` for repeatable Pi-side validation.
 
 For runtime-affecting changes, validate on real hardware when feasible:
 
-- `sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh`
-- `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
+- `sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh`
+- `sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10`
 - `python -m bluetooth_2_usb --list_devices --output json`
 - the host/Pi loopback harness from
   `docs/pi/host-relay-loopback.md` when the relay path itself
@@ -210,7 +221,7 @@ For runtime-affecting changes, validate on real hardware when feasible:
   Input for keyboard, mouse, consumer, and combo scenarios
 - do not assume the full repo venv is available or desirable on macOS/Windows
 - on Linux hosts, the `hidapi` path also needs the USB-device udev rule from
-  `scripts/install_host_hidapi_udev_rule.sh`
+  `scripts/host/install_host_hidapi_udev_rule.sh`
 - host capture can temporarily claim the gadget HID interfaces while the test
   runs; do not assume normal local desktop handling remains active during the
   capture window
