@@ -32,6 +32,8 @@ Reduce Pi boot delays that are not required for bluetooth_2_usb:
 - disable NetworkManager-wait-online.service
 - remove ds=nocloud... from cmdline.txt
 - optionally freeze the current DHCP IPv4 settings as a static NetworkManager configuration
+- when netplan generated transient NetworkManager profiles, persist them as native
+  NetworkManager keyfiles and disable the generated /etc/netplan/90-NM-*.yaml overrides
 
 Options:
   --dry-run                   Print the planned changes without mutating the host.
@@ -198,6 +200,8 @@ run_or_echo "Disable cloud-init for normal boots" disable_cloud_init
 MUTATED=1
 run_or_echo "Disable NetworkManager-wait-online.service" set_wait_online_enabled_state disabled
 run_or_echo "Remove ds=nocloud... from ${CMDLINE_TXT}" remove_nocloud_cmdline_tokens "$CMDLINE_TXT"
+run_or_echo "Persist generated NetworkManager profiles and disable netplan 90-NM overrides" \
+  persist_netplan_generated_nm_profiles
 
 if [[ "$STATIC_IP_MODE" == "auto" ]]; then
   ACTIVE_CONNECTION="$(active_nm_connection_for_interface "$INTERFACE_NAME")"

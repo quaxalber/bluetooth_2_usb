@@ -21,6 +21,7 @@ readonly B2U_CLOUD_INIT_UNITS=(
   cloud-config.service
   cloud-final.service
 )
+readonly B2U_OPTIMIZE_NETPLAN_DISABLED_DIR="${B2U_STATE_DIR}/optimize_pi_boot_netplan_disabled"
 
 managed_git() {
   git -c safe.directory="${B2U_INSTALL_DIR}" -C "${B2U_INSTALL_DIR}" "$@"
@@ -112,6 +113,47 @@ current_ipv4_dns_for_interface() {
   printf '%s\n' "${dns_csv%,}"
 }
 
+list_netplan_runtime_yaml_files() {
+  [[ -d /etc/netplan ]] || return 0
+  find /etc/netplan -maxdepth 1 -type f -name '90-NM-*.yaml' -print | sort
+}
+
+list_netplan_runtime_nm_keyfiles() {
+  [[ -d /run/NetworkManager/system-connections ]] || return 0
+  find /run/NetworkManager/system-connections -maxdepth 1 -type f -name 'netplan-*.nmconnection' -print | sort
+}
+
+capture_netplan_nm_profile_state() {
+  local source_path
+  local destination_path
+  local runtime_keyfiles=()
+  local created_keyfiles=()
+  local moved_yaml_files=()
+
+  while IFS= read -r source_path; do
+    [[ -n "$source_path" ]] || continue
+    runtime_keyfiles+=("$source_path")
+    destination_path="/etc/NetworkManager/system-connections/${source_path##*/}"
+    if [[ ! -e "$destination_path" ]]; then
+      created_keyfiles+=("$destination_path")
+    fi
+  done < <(list_netplan_runtime_nm_keyfiles)
+
+  if [[ ${#runtime_keyfiles[@]} -eq 0 ]]; then
+    printf '%s\n' "B2U_CREATED_NM_KEYFILES=''"
+    printf '%s\n' "B2U_DISABLED_NETPLAN_YAMLS=''"
+    return 0
+  fi
+
+  while IFS= read -r source_path; do
+    [[ -n "$source_path" ]] || continue
+    moved_yaml_files+=("$source_path")
+  done < <(list_netplan_runtime_yaml_files)
+
+  printf '%s\n' "B2U_CREATED_NM_KEYFILES=$(printf '%q' "$(printf '%s\n' "${created_keyfiles[@]}")")"
+  printf '%s\n' "B2U_DISABLED_NETPLAN_YAMLS=$(printf '%q' "$(printf '%s\n' "${moved_yaml_files[@]}")")"
+}
+
 capture_nm_connection_state() {
   local connection="$1"
 
@@ -146,6 +188,7 @@ write_boot_optimize_state() {
     printf '%s\n' "B2U_CMDLINE_BACKUP_PATH=$(printf '%q' "$cmdline_backup_path")"
     printf '%s\n' "B2U_STATIC_IP_MODE=$(printf '%q' "$static_ip_mode")"
     printf '%s\n' "B2U_STATIC_IP_INTERFACE=$(printf '%q' "$interface_name")"
+    capture_netplan_nm_profile_state
     for unit in "${B2U_CLOUD_INIT_UNITS[@]}"; do
       printf '%s\n' "${unit//[^A-Za-z0-9]/_}=$(printf '%q' "$(systemd_unit_enabled_state "$unit")")"
     done
@@ -181,6 +224,44 @@ disable_cloud_init() {
   done
 }
 
+persist_netplan_generated_nm_profiles() {
+  local source_path
+  local destination_path
+  local runtime_keyfiles=()
+  local migrated=0
+
+  while IFS= read -r source_path; do
+    [[ -n "$source_path" ]] || continue
+    runtime_keyfiles+=("$source_path")
+  done < <(list_netplan_runtime_nm_keyfiles)
+
+  [[ ${#runtime_keyfiles[@]} -gt 0 ]] || return 0
+
+  install -d -m 700 /etc/NetworkManager/system-connections
+
+  for source_path in "${runtime_keyfiles[@]}"; do
+    destination_path="/etc/NetworkManager/system-connections/${source_path##*/}"
+    if [[ -e "$destination_path" ]]; then
+      continue
+    fi
+    cp -a "$source_path" "$destination_path"
+    chmod 600 "$destination_path"
+    migrated=1
+  done
+
+  install -d -m 700 "$B2U_OPTIMIZE_NETPLAN_DISABLED_DIR"
+  while IFS= read -r source_path; do
+    [[ -n "$source_path" ]] || continue
+    mv "$source_path" "${B2U_OPTIMIZE_NETPLAN_DISABLED_DIR}/${source_path##*/}"
+    migrated=1
+  done < <(list_netplan_runtime_yaml_files)
+
+  if [[ $migrated -eq 1 ]]; then
+    nmcli connection reload
+    systemctl reload NetworkManager
+  fi
+}
+
 restore_cloud_init_state() {
   local marker_state="$1"
   local unit
@@ -204,6 +285,37 @@ restore_cloud_init_state() {
       systemctl disable "$unit" >/dev/null 2>&1 || true
     fi
   done
+}
+
+rollback_netplan_generated_nm_profiles() {
+  local connection_file
+  local yaml_file
+  local disabled_path
+  local changed=0
+
+  while IFS= read -r connection_file; do
+    [[ -n "$connection_file" ]] || continue
+    if [[ -e "$connection_file" ]]; then
+      rm -f "$connection_file"
+      changed=1
+    fi
+  done <<<"${B2U_CREATED_NM_KEYFILES:-}"
+
+  while IFS= read -r yaml_file; do
+    [[ -n "$yaml_file" ]] || continue
+    disabled_path="${B2U_OPTIMIZE_NETPLAN_DISABLED_DIR}/${yaml_file##*/}"
+    if [[ -e "$disabled_path" ]]; then
+      mv "$disabled_path" "$yaml_file"
+      changed=1
+    fi
+  done <<<"${B2U_DISABLED_NETPLAN_YAMLS:-}"
+
+  if [[ $changed -eq 1 ]]; then
+    nmcli connection reload || true
+    systemctl reload NetworkManager || true
+  fi
+
+  rmdir "$B2U_OPTIMIZE_NETPLAN_DISABLED_DIR" 2>/dev/null || true
 }
 
 set_wait_online_enabled_state() {
@@ -312,6 +424,7 @@ rollback_boot_optimization_state() {
     "${B2U_ORIG_IPV4_GATEWAY:-}" \
     "${B2U_ORIG_IPV4_DNS:-}" \
     "${B2U_ORIG_IPV4_IGNORE_AUTO_DNS:-no}"
+  rollback_netplan_generated_nm_profiles
 
   if [[ -n "${B2U_CMDLINE_BACKUP_PATH:-}" ]]; then
     restore_cmdline_backup "$B2U_CMDLINE_BACKUP_PATH"

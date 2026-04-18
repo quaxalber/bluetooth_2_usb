@@ -382,6 +382,13 @@ If the Pi is already provisioned and no longer needs `cloud-init` on every
 boot, you can trim the boot path and optionally freeze the currently working
 DHCP IPv4 settings as a static NetworkManager profile.
 
+On systems where `NetworkManager` is being fed by generated
+`/etc/netplan/90-NM-*.yaml` files, the optimization flow also persists the
+current `netplan-*.nmconnection` profiles into
+`/etc/NetworkManager/system-connections/` and disables those generated netplan
+overrides. On a tested Pi Zero W that removed repeated `NetworkManager`
+reloads during boot and cut userspace boot time by roughly 35 seconds.
+
 Preview the changes first:
 
 ```bash
@@ -635,8 +642,10 @@ Collect a deeper redacted diagnostics bundle when `smoke_test.sh` is not enough.
 Reduce Pi boot delays that are not required for `bluetooth_2_usb`. The script
 can disable `cloud-init` on already provisioned hosts, disable
 `NetworkManager-wait-online.service`, remove `ds=nocloud...` from
-`cmdline.txt`, and optionally freeze the current DHCP IPv4 settings as a
-static NetworkManager profile. It writes rollback state to
+`cmdline.txt`, persist transient netplan-generated `NetworkManager` profiles as
+native keyfiles while disabling the generated `/etc/netplan/90-NM-*.yaml`
+overrides, and optionally freeze the current DHCP IPv4 settings as a static
+NetworkManager profile. It writes rollback state to
 `/var/lib/bluetooth_2_usb/optimize_pi_boot_state.env` so the managed host can
 be restored later.
 
