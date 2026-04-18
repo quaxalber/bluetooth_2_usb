@@ -210,7 +210,8 @@ decision directly on the PR at the relevant thread or comment.
 
 CodeRabbit workflow:
 
-- `.coderabbit.yaml` already enables automatic review on new pushes
+- `.coderabbit.yaml` enables automatic review on new pushes and explicitly
+  includes `staging` in `reviews.auto_review.base_branches`
 - before manually triggering CodeRabbit, check the first top-level CodeRabbit
   comment on the PR and the `CodeRabbit` GitHub check on the PR head commit
 - treat the first top-level CodeRabbit comment as the authoritative live status
