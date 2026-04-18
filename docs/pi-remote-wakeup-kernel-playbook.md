@@ -130,7 +130,7 @@ If you do not have an `arm-linux-gnueabihf-` toolchain but do have a complete
 LLVM toolchain, the 32-bit Raspberry Pi Zero W path can also be built with:
 
 ```bash
-make LLVM=1 ARCH=arm ...
+make O=out/pi0w LLVM=1 ARCH=arm bcmrpi_defconfig
 ```
 
 That fallback is workable, but it is not the default documented path because
