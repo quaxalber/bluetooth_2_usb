@@ -352,7 +352,7 @@ sudo reboot
 
 Bluetooth-2-USB can wake a sleeping or suspended host when you use the optional
 custom-kernel workflow in
-[rpi-remote-wakeup-kernel-playbook.md](docs/rpi-remote-wakeup-kernel-playbook.md).
+[pi-remote-wakeup-kernel-playbook.md](docs/pi-remote-wakeup-kernel-playbook.md).
 
 This has been tested on a Pi 4B with:
 
@@ -366,6 +366,15 @@ This has been tested on a Pi 4B with:
 
 On that tested setup, wake from host suspend works through normal keyboard
 input relayed by Bluetooth-2-USB.
+
+The playbook has also been exercised successfully on a Raspberry Pi Zero W
+with patched kernel `6.12.81-b2u-wake`, the documented ARM32 LLVM fallback,
+keyboard-only `wakeup_on_write`, a passing post-reboot smoketest after
+clearing persistent `systemd-rfkill` Bluetooth soft-block state, and confirmed
+end-to-end wake from host suspend through normal keyboard input relayed by
+Bluetooth-2-USB. Pi 4B and Pi Zero W are both confirmed end-to-end wake
+setups; Pi Zero W is also the validated 32-bit bring-up path for the custom
+wake kernel.
 
 ## Optional boot optimization
 
@@ -483,10 +492,24 @@ Raspberry Pi OS Lite during installation. If the controller becomes blocked
 again later, inspect the live `rfkill` state instead of assuming the install
 did not run.
 
+If the block comes back specifically after a reboot, also inspect the persisted
+`systemd-rfkill` state under `/var/lib/systemd/rfkill`. A saved Bluetooth
+state of `1` there can re-apply the soft block on later boots even when the
+runtime and BlueZ are otherwise healthy.
+
 If you already know the adapter is soft-blocked, clear that first:
 
 ```bash
 sudo sh -c 'echo 0 > /sys/class/rfkill/rfkill0/soft'
+```
+
+If you need that fix to survive reboot, also clear the persisted Bluetooth
+state files:
+
+```bash
+sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do [ -e "$f" ] || continue; printf "0\n" > "$f"; done'
+sudo rfkill unblock bluetooth
+sudo systemctl restart bluetooth
 ```
 
 Then work interactively:
