@@ -463,12 +463,15 @@ Release tagging and versioning rules are documented in [docs/process/release-ver
 
 For practical validation and debugging workflows, also see:
 
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - [docs/pi/cli-service-test.md](docs/pi/cli-service-test.md)
 - [docs/pi/boot-optimization.md](docs/pi/boot-optimization.md)
 - [docs/pi/connectivity-troubleshooting.md](docs/pi/connectivity-troubleshooting.md)
 - [docs/pi/connectivity-recovery.md](docs/pi/connectivity-recovery.md)
 - [docs/pi/host-relay-loopback.md](docs/pi/host-relay-loopback.md)
 - [docs/pi/manual-test-plan.md](docs/pi/manual-test-plan.md)
+- [docs/pi/persistent-readonly.md](docs/pi/persistent-readonly.md)
+- [docs/pi/remote-wakeup-kernel.md](docs/pi/remote-wakeup-kernel.md)
 - [docs/process/doc-consistency-review.md](docs/process/doc-consistency-review.md)
 
 ## License

@@ -143,10 +143,15 @@ For Pi-side validation, use a reachable Raspberry Pi over SSH when feasible.
 
 Use these repo-specific guides when they match the task:
 
+- `TROUBLESHOOTING.md`
 - `docs/pi/cli-service-test.md`
 - `docs/pi/boot-optimization.md`
+- `docs/pi/connectivity-troubleshooting.md`
+- `docs/pi/connectivity-recovery.md`
 - `docs/pi/host-relay-loopback.md`
 - `docs/pi/manual-test-plan.md`
+- `docs/pi/persistent-readonly.md`
+- `docs/pi/remote-wakeup-kernel.md`
 - `docs/process/doc-consistency-review.md`
 - `docs/process/release-versioning-policy.md`
 

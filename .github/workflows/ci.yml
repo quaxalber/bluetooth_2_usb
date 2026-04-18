@@ -25,8 +25,20 @@ jobs:
 
       - name: Install build and quality tooling
         run: |
+          retry() {
+            local attempts="$1"
+            shift
+            local n=1
+            until "$@"; do
+              if [ "$n" -ge "$attempts" ]; then
+                return 1
+              fi
+              n=$((n + 1))
+              sleep 5
+            done
+          }
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -e . black ruff yamllint shfmt-py shellcheck-py build
+          retry 3 python -m pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 
       - name: Python formatting checks
         run: |

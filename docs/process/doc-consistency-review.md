@@ -1,8 +1,8 @@
 # Documentation Consistency Review
 
 Use this checklist when you want to verify that `README.md`,
-`CONTRIBUTING.md`, and the Markdown guides under `docs/` still match the
-current repository state.
+`CONTRIBUTING.md`, `TROUBLESHOOTING.md`, and the Markdown guides under `docs/`
+still match the current repository state.
 
 The goal is to catch drift between:
 
@@ -17,6 +17,7 @@ Review at least:
 
 - `README.md`
 - `CONTRIBUTING.md`
+- `TROUBLESHOOTING.md`
 - every `docs/**/*.md` file
 - `scripts/*.sh`
 - `scripts/lib/*.sh`
@@ -31,6 +32,7 @@ Review at least:
 find docs -type f -name '*.md' -print | sort
 sed -n '1,240p' README.md
 sed -n '1,240p' CONTRIBUTING.md
+sed -n '1,240p' TROUBLESHOOTING.md
 ```
 
 For each Markdown file under `docs/`, verify that:
@@ -59,6 +61,7 @@ for s in \
   scripts/pi_relay_test_inject.sh \
   scripts/host_relay_test_capture.sh \
   scripts/check_pi_connectivity.sh \
+  scripts/optimize_pi_boot.sh \
   scripts/install_host_hidapi_udev_rule.sh \
   scripts/enable_readonly_overlayfs.sh \
   scripts/disable_readonly_overlayfs.sh \
@@ -114,7 +117,7 @@ tmpdir="$(mktemp -d)"
 python3 -m venv "$tmpdir/venv"
 source "$tmpdir/venv/bin/activate"
 pip install -U pip setuptools wheel
-pip install -e .
+pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 python -m bluetooth_2_usb --help
 deactivate
 rm -rf "$tmpdir"
@@ -125,7 +128,7 @@ rm -rf "$tmpdir"
 Search the docs for the public surface they describe:
 
 ```bash
-rg -n '(scripts/[a-z_]+\.sh|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md docs
+rg -n '(scripts/[a-z_]+\.sh|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
 ```
 
 Use the matches as an inventory, then compare each script path and option
@@ -145,8 +148,8 @@ bash -n scripts/*.sh scripts/lib/*.sh
 
 At the end of the review, answer these questions explicitly:
 
-1. Do `README.md`, `CONTRIBUTING.md`, and all relevant `docs/**/*.md` files match
-   the current script interfaces?
+1. Do `README.md`, `CONTRIBUTING.md`, `TROUBLESHOOTING.md`, and all relevant
+   `docs/**/*.md` files match the current script interfaces?
 2. Do they match the current Python CLI surface?
 3. Do the documented managed paths and defaults still match
    `scripts/lib/paths.sh` and the service unit? `scripts/lib/paths.sh` is the
