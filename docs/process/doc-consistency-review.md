@@ -1,7 +1,7 @@
-# Documentation Consistency Review Playbook
+# Documentation Consistency Review
 
 Use this checklist when you want to verify that `README.md`,
-`CONTRIBUTING.md`, and the Markdown playbooks under `docs/` still match the
+`CONTRIBUTING.md`, and the Markdown guides under `docs/` still match the
 current repository state.
 
 The goal is to catch drift between:
@@ -17,7 +17,7 @@ Review at least:
 
 - `README.md`
 - `CONTRIBUTING.md`
-- every `docs/*.md` file
+- every `docs/**/*.md` file
 - `scripts/*.sh`
 - `scripts/lib/*.sh`
 - `src/bluetooth_2_usb/args.py`
@@ -28,17 +28,19 @@ Review at least:
 ### 1. Full Markdown doc set
 
 ```bash
-find docs -maxdepth 1 -name '*.md' -print | sort
+find docs -type f -name '*.md' -print | sort
 sed -n '1,240p' README.md
 sed -n '1,240p' CONTRIBUTING.md
 ```
 
-For each file under `docs/`, verify that:
+For each Markdown file under `docs/`, verify that:
 
 - commands still exist
 - argument names still exist
 - path examples still match the current managed deployment
 - placeholders are still clearly marked as placeholders
+- examples favor readability and simple placeholders over shell-heavy
+  parameterization unless the indirection is genuinely useful
 - Pi-specific examples still match the current workflow
 
 ### 2. Script interfaces
@@ -143,7 +145,7 @@ bash -n scripts/*.sh scripts/lib/*.sh
 
 At the end of the review, answer these questions explicitly:
 
-1. Do `README.md`, `CONTRIBUTING.md`, and all relevant `docs/*.md` files match
+1. Do `README.md`, `CONTRIBUTING.md`, and all relevant `docs/**/*.md` files match
    the current script interfaces?
 2. Do they match the current Python CLI surface?
 3. Do the documented managed paths and defaults still match

@@ -4,7 +4,7 @@ This note is the short version of recurring Raspberry Pi connectivity failures
 seen during `bluetooth_2_usb` development and validation.
 
 Use it to classify the problem quickly. For the concrete commands and recovery
-sequence, go to [pi-connectivity-recovery-playbook.md](pi-connectivity-recovery-playbook.md).
+sequence, go to [connectivity-recovery.md](connectivity-recovery.md).
 
 ## Typical symptoms
 
@@ -34,9 +34,9 @@ sequence, go to [pi-connectivity-recovery-playbook.md](pi-connectivity-recovery-
 - if DNS starts failing, inspect `nmcli device show wlan0` and
   `/etc/resolv.conf` before blaming Python packaging or the repo
 - for repeatable remote work, make sure the Pi user has passwordless sudo so
-  `sudo -n`-based playbooks and smoke checks do not fail early
+  `sudo -n`-based guides and smoke checks do not fail early
 
 ## Next step
 
 Run the full recovery flow in
-[pi-connectivity-recovery-playbook.md](pi-connectivity-recovery-playbook.md).
+[connectivity-recovery.md](connectivity-recovery.md).

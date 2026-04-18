@@ -1,6 +1,6 @@
-# Pi-to-Host Relay Loopback Test Playbook
+# Pi-to-Host Relay Loopback Test
 
-Use this playbook when you need to prove that the relay path works end to end
+Use this guide when you need to prove that the relay path works end to end
 without depending on a paired Bluetooth keyboard or mouse.
 
 The flow is:

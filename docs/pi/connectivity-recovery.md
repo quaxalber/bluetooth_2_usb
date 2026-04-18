@@ -1,10 +1,10 @@
-# Pi Connectivity Recovery Playbook
+# Pi Connectivity Recovery
 
-Use this playbook when a Raspberry Pi used for `bluetooth_2_usb` is flaky or
+Use this guide when a Raspberry Pi used for `bluetooth_2_usb` is flaky or
 unreachable over SSH, especially when plain hostnames or IPv4 look broken but
 the Pi is likely still on the local network.
 
-This playbook is intentionally focused on:
+This guide is intentionally focused on:
 
 - SSH reachability from the workstation to the Pi
 - hostname, mDNS, and IPv6 link-local diagnosis
@@ -17,18 +17,12 @@ This playbook is intentionally focused on:
 - the workstation knows which network interface reaches the Pi, for example
   `wlp38s0`
 - the Pi user can authenticate over SSH
-- passwordless sudo is strongly recommended for repeatable agentic work and
-  remote validation:
+- passwordless sudo is strongly recommended for repeatable remote validation
+
+Quick check:
 
 ```bash
-PI_HOST="${PI_HOST:-your-pi-host}"
-PI_HOST_BASE="${PI_HOST%.local}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
-PI_USER="${PI_USER:-user}"
-PI_IFACE="${PI_IFACE:-wlp38s0}"
-PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
-
-ssh "$PI_HOST" 'sudo -n true'
+ssh pi-host 'sudo -n true'
 ```
 
 ## 1. Check the workstation view first
@@ -36,22 +30,17 @@ ssh "$PI_HOST" 'sudo -n true'
 Start on the workstation, not on the Pi.
 
 ```bash
-PI_HOST="${PI_HOST:-your-pi-host}"
-PI_HOST_BASE="${PI_HOST%.local}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
-PI_IFACE="${PI_IFACE:-wlp38s0}"
-
-getent hosts "$PI_HOST" || true
-getent ahosts "$PI_HOST" || true
-avahi-resolve -n "${PI_HOST_LOCAL}" 2>/dev/null || true
-ip -6 addr show dev "$PI_IFACE"
+getent hosts pi-host || true
+getent ahosts pi-host || true
+avahi-resolve -n pi-host.local 2>/dev/null || true
+ip -6 addr show dev wlp38s0
 ```
 
 Interpretation:
 
 - if `getent` only shows a bare `fe80::...` address, SSH still needs an
   interface scope such as `%wlp38s0`
-- if `PI_HOST.local` resolves but `PI_HOST` does not, mDNS is healthier than
+- if `pi-host.local` resolves but `pi-host` does not, mDNS is healthier than
   the local DNS search path
 - if the workstation interface does not have its own link-local IPv6 address,
   direct link-local reachability will not work until that interface is up
@@ -61,17 +50,12 @@ Interpretation:
 Probe the Pi through the paths that matter most:
 
 ```bash
-PI_HOST="${PI_HOST:-your-pi-host}"
-PI_HOST_BASE="${PI_HOST%.local}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
-PI_USER="${PI_USER:-user}"
-PI_IFACE="${PI_IFACE:-wlp38s0}"
-PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
-
-ping -c 1 "${PI_HOST_LOCAL}" || true
-ping -6 -c 1 "${PI_LINK_LOCAL}%${PI_IFACE}" || true
-ssh -6 "${PI_USER}@${PI_LINK_LOCAL}%${PI_IFACE}" 'hostname && whoami'
+ping -c 1 pi-host.local || true
+ping -6 -c 1 'fe80::1234:5678:9abc:def0%wlp38s0' || true
+ssh -6 'user@fe80::1234:5678:9abc:def0%wlp38s0' 'hostname && whoami'
 ```
+
+Replace the link-local IPv6 example with the real Pi address.
 
 Interpretation:
 
@@ -89,8 +73,8 @@ interface scope.
 
 ```sshconfig
 Host pi0w pi0w.local
-    User YOUR-PI-USER
-    HostName fe80::YOUR-PI-LINK-LOCAL%YOUR-WORKSTATION-IFACE
+    User user
+    HostName fe80::1234:5678:9abc:def0%wlp38s0
     AddressFamily inet6
     HostKeyAlias pi0w
     ConnectTimeout 5
@@ -111,9 +95,7 @@ under `pi0w`, `pi0w.local`, or a literal address.
 After reconnecting, inspect the live NetworkManager state:
 
 ```bash
-PI_HOST="${PI_HOST:-pi0w}"
-
-ssh "$PI_HOST" '
+ssh pi0w '
   conn="$(nmcli --get-values GENERAL.CONNECTION device show wlan0 | head -n 1)"
   echo "CONNECTION=${conn}"
   nmcli device show wlan0
@@ -135,7 +117,7 @@ Look for these recurring failure patterns:
 If `iw` is installed, you can also inspect the live Wi-Fi powersave state:
 
 ```bash
-ssh "$PI_HOST" 'iw dev wlan0 get power_save'
+ssh pi0w 'iw dev wlan0 get power_save'
 ```
 
 ## 5. Apply the stable NetworkManager profile pattern
@@ -149,9 +131,7 @@ The most stable setup in this workspace has been:
 Apply that pattern to the active connection:
 
 ```bash
-PI_HOST="${PI_HOST:-pi0w}"
-
-ssh "$PI_HOST" '
+ssh pi0w '
   conn="$(nmcli --get-values GENERAL.CONNECTION device show wlan0 | head -n 1)"
   sudo -n nmcli connection modify "$conn" \
     802-11-wireless.powersave 2 \
@@ -172,20 +152,14 @@ Notes:
 From the workstation:
 
 ```bash
-PI_HOST="${PI_HOST:-pi0w}"
-PI_HOST_BASE="${PI_HOST%.local}"
-PI_HOST_LOCAL="${PI_HOST_LOCAL:-${PI_HOST_BASE}.local}"
-PI_IFACE="${PI_IFACE:-wlp38s0}"
-PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
-
-ssh "$PI_HOST" '
+ssh pi0w '
   conn="$(nmcli --get-values GENERAL.CONNECTION device show wlan0 | head -n 1)"
   nmcli -g 802-11-wireless.powersave,ipv4.dns,ipv4.ignore-auto-dns connection show "$conn"
   cat /etc/resolv.conf
   systemctl is-active bluetooth_2_usb.service
 '
-ping -6 -c 1 "${PI_LINK_LOCAL}%${PI_IFACE}"
-ping -c 1 "${PI_HOST_LOCAL}" || true
+ping -6 -c 1 'fe80::1234:5678:9abc:def0%wlp38s0'
+ping -c 1 pi0w.local || true
 ```
 
 On the Pi:
@@ -204,16 +178,11 @@ underlying LAN naming behavior changes.
 For a quick workstation-side diagnosis pass, use:
 
 ```bash
-PI_HOST="${PI_HOST:-pi0w}"
-PI_USER="${PI_USER:-user}"
-PI_IFACE="${PI_IFACE:-wlp38s0}"
-PI_LINK_LOCAL="${PI_LINK_LOCAL:-fe80::YOUR-PI-LINK-LOCAL}"
-
 ./scripts/check_pi_connectivity.sh \
-  --host "$PI_HOST" \
-  --user "$PI_USER" \
-  --link-local "$PI_LINK_LOCAL" \
-  --interface "$PI_IFACE"
+  --host pi0w \
+  --user user \
+  --link-local fe80::1234:5678:9abc:def0 \
+  --interface wlp38s0
 ```
 
 That helper prints resolver results, ping/SSH probe output, and a ready-to-paste

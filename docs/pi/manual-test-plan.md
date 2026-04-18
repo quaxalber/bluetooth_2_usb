@@ -97,13 +97,13 @@ If needed, create ext4 on the real spare partition. Double-check the target
 before formatting it:
 
 ```bash
-sudo mkfs.ext4 -L B2U_PERSIST /dev/YOUR-PARTITION
+sudo mkfs.ext4 -L B2U_PERSIST /dev/mmcblk0p3
 ```
 
 Prepare and enable persistent read-only mode:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
+sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
 sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
 sudo reboot
 ```

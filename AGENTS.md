@@ -26,13 +26,15 @@ Before making changes, read:
 3. relevant files under `docs/`
 4. the code or scripts you plan to modify
 
-Use these repo-specific playbooks when they match the task:
+Use these repo-specific guides when they match the task:
 
-- `docs/pi-cli-service-test-playbook.md`
-- `docs/pi-host-relay-loopback-test-playbook.md`
-- `docs/pi-manual-test-plan.md`
-- `docs/doc-consistency-review-playbook.md`
-- `docs/release-versioning-policy.md`
+- `docs/pi/cli-service-test.md`
+- `docs/pi/boot-optimization.md`
+- `docs/pi/host-relay-loopback.md`
+- `docs/pi/manual-test-plan.md`
+- `docs/pi/persistent-readonly.md`
+- `docs/process/doc-consistency-review.md`
+- `docs/process/release-versioning-policy.md`
 
 ## Environment
 
@@ -151,7 +153,8 @@ Preserve these unless the task explicitly redesigns them:
 ### Documentation
 
 - Prefer operational accuracy over marketing language
-- Keep commands copy-pasteable
+- Prefer simple example values or clearly marked placeholders over shell-heavy
+  indirection when that makes docs easier to read
 - Parameterize examples unless a fixed value is intentionally required
 - Keep docs aligned with real script interfaces, defaults, and managed paths
 
@@ -188,7 +191,7 @@ mandatory.
 For Pi-side validation, use a reachable Raspberry Pi over SSH when the task
 affects runtime or managed deployment behavior.
 
-Use `docs/pi-cli-service-test-playbook.md` for repeatable Pi-side validation.
+Use `docs/pi/cli-service-test.md` for repeatable Pi-side validation.
 
 For runtime-affecting changes, validate on real hardware when feasible:
 
@@ -196,7 +199,7 @@ For runtime-affecting changes, validate on real hardware when feasible:
 - `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
 - `python -m bluetooth_2_usb --list_devices --output json`
 - the host/Pi loopback harness from
-  `docs/pi-host-relay-loopback-test-playbook.md` when the relay path itself
+  `docs/pi/host-relay-loopback.md` when the relay path itself
   changed
 - for host-side loopback capture, the host Python environment needs `hidapi`
   for gadget discovery; on Windows the strict event-capture backend is Raw

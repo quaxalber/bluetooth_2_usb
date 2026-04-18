@@ -96,7 +96,8 @@ Keep code and docs aligned with that model.
 ### Documentation
 
 - Prefer operational accuracy over marketing language
-- Keep commands copy-pasteable
+- Prefer simple example values or clearly marked placeholders over shell-heavy
+  indirection when that makes docs easier to read
 - Parameterize examples unless a fixed value is intentionally required
 - Keep docs aligned with current script interfaces and managed paths
 
@@ -140,13 +141,14 @@ sudo btmgmt info
 
 For Pi-side validation, use a reachable Raspberry Pi over SSH when feasible.
 
-Use these repo-specific playbooks when they match the task:
+Use these repo-specific guides when they match the task:
 
-- `docs/pi-cli-service-test-playbook.md`
-- `docs/pi-host-relay-loopback-test-playbook.md`
-- `docs/pi-manual-test-plan.md`
-- `docs/doc-consistency-review-playbook.md`
-- `docs/release-versioning-policy.md`
+- `docs/pi/cli-service-test.md`
+- `docs/pi/boot-optimization.md`
+- `docs/pi/host-relay-loopback.md`
+- `docs/pi/manual-test-plan.md`
+- `docs/process/doc-consistency-review.md`
+- `docs/process/release-versioning-policy.md`
 
 For relay-path changes, prefer running the host/Pi loopback harness in addition
 to the standard smoke/debug checks. It validates that the host-visible gadget

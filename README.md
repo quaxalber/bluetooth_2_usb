@@ -40,10 +40,6 @@ sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2
 sudo /opt/bluetooth_2_usb/scripts/install.sh
 ```
 
-On current Raspberry Pi OS 64-bit Lite images, the installer also clears a
-common Bluetooth soft-blocked `rfkill` default so pairing can start from a
-known-good controller state.
-
 ### 3. Reboot
 
 ```bash
@@ -95,16 +91,16 @@ If possible, power the Pi from a separate stable power supply using the power-on
 
 - [Highlights](#highlights)
 - [Requirements](#requirements)
-- [Configuration](#configuration)
-- [CLI reference](#cli-reference)
 - [Day-to-day usage](#day-to-day-usage)
 - [Updating](#updating)
 - [Uninstalling](#uninstalling)
 - [Diagnostics](#diagnostics)
 - [Persistent read-only operation](#persistent-read-only-operation)
-- [Optional host wake from suspend](#optional-host-wake-from-suspend)
-- [Optional boot optimization](#optional-boot-optimization)
+- [Host wake from suspend](#host-wake-from-suspend)
+- [Boot optimization](#boot-optimization)
 - [Troubleshooting](#troubleshooting)
+- [Configuration](#configuration)
+- [CLI reference](#cli-reference)
 - [Script reference](#script-reference)
 - [Managed paths](#managed-paths)
 - [Development and release](#development-and-release)
@@ -119,7 +115,7 @@ If possible, power the Pi from a separate stable power supply using the power-on
 - Broad support for everyday multimedia and consumer-control keys such as
   volume, mute, play/pause, track controls, and many common shortcut keys
 - A conservative USB HID gadget setup aimed at broad host compatibility
-- A small, well-supported diagnostics surface built around `--validate-env`, `smoke_test.sh`, and `debug.sh`
+- A well-supported diagnostics surface built around `--validate-env`, `smoke_test.sh`, and `debug.sh`
 - Optional persistent read-only operation with writable Bluetooth state on a separate ext4 filesystem
 - A single supported managed-install workflow in `/opt/bluetooth_2_usb`
 
@@ -142,6 +138,104 @@ If possible, power the Pi from a separate stable power supply using the power-on
 > - Raspberry Pi 3 models include Bluetooth, but they do not expose a suitable USB device-mode port for this project.
 > - On Pi 4B and Pi 5, the OTG-capable port is the USB-C power port.
 > - On Pi Zero boards, the OTG-capable port is the USB data port, not the power-only port.
+
+## Day-to-day usage
+
+List available devices:
+
+```bash
+bluetooth_2_usb -l
+```
+
+Example text output:
+
+```text
+          ╷                 ╷                   ╷                   ╷
+ Status   │ Device          │ Identity          │ Path              │ Exclusion Reason
+ ═════════╪═════════════════╪═══════════════════╪═══════════════════╪══════════════════════
+ relay    │ Kappa Keyboard  │ a1:b2:c3:d4:e5:f6 │ /dev/input/event4 │
+ skip     │ vc4-hdmi-0      │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
+          ╵                 ╵                   ╵                   ╵
+```
+
+Validate the runtime environment:
+
+```bash
+bluetooth_2_usb --validate-env
+```
+
+Inspect recent service logs:
+
+```bash
+journalctl -u bluetooth_2_usb.service -n 100 --no-pager
+```
+
+Follow logs live:
+
+```bash
+journalctl -u bluetooth_2_usb.service -f
+```
+
+Restart the service after changing runtime config:
+
+```bash
+sudo systemctl restart bluetooth_2_usb.service
+```
+
+## Updating
+
+Update the managed checkout:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/update.sh
+```
+
+## Uninstalling
+
+Remove the managed system integration:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
+```
+
+## Diagnostics
+
+Start with the quick health check:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+```
+
+If that is not enough, collect the fuller debug report:
+
+```bash
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+```
+
+For most problems, these are the first two commands to run.
+
+## Persistent read-only operation
+
+For the persistent read-only workflow, writable Bluetooth-state setup, and
+rollback path, use
+[docs/pi/persistent-readonly.md](docs/pi/persistent-readonly.md).
+
+## Host wake from suspend
+
+Bluetooth-2-USB can wake a sleeping or suspended host when you use the
+custom-kernel workflow in
+[docs/pi/remote-wakeup-kernel.md](docs/pi/remote-wakeup-kernel.md).
+
+## Boot optimization
+
+For the boot-optimization workflow, validation, rollback, and the tested
+`NetworkManager`/netplan migration path, use
+[docs/pi/boot-optimization.md](docs/pi/boot-optimization.md).
+
+## Troubleshooting
+
+For troubleshooting flows and follow-up checks, use
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Configuration
 
@@ -203,402 +297,6 @@ Use these runtime flags when running the CLI manually.
 | `--output {text,json}` | Output format for `--list_devices` and `--validate-env`. Default: `text`. |
 | `--help, -h` | Show the built-in CLI help and exit. |
 
-## Day-to-day usage
-
-List available devices:
-
-```bash
-bluetooth_2_usb -l
-```
-
-Example text output:
-
-```text
-          ╷                 ╷                   ╷                   ╷
- Status   │ Device          │ Identity          │ Path              │ Exclusion Reason
- ═════════╪═════════════════╪═══════════════════╪═══════════════════╪══════════════════════
- relay    │ Kappa Keyboard  │ a1:b2:c3:d4:e5:f6 │ /dev/input/event4 │
- skip     │ vc4-hdmi-0      │ vc4-hdmi-0/input0 │ /dev/input/event0 │ name prefix vc4-hdmi
-          ╵                 ╵                   ╵                   ╵
-```
-
-On narrower terminals, columns such as `Device` and `Exclusion Reason` may wrap onto multiple lines.
-
-Validate the runtime environment:
-
-```bash
-bluetooth_2_usb --validate-env
-```
-
-Inspect recent service logs:
-
-```bash
-journalctl -u bluetooth_2_usb.service -n 100 --no-pager
-```
-
-Follow logs live:
-
-```bash
-journalctl -u bluetooth_2_usb.service -f
-```
-
-Restart the service after changing runtime config:
-
-```bash
-sudo systemctl restart bluetooth_2_usb.service
-```
-
-## Updating
-
-Update the managed checkout:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/update.sh
-```
-
-## Uninstalling
-
-Remove the managed system integration:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
-```
-
-## Diagnostics
-
-Start with the quick health check:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-```
-
-If that is not enough, collect the fuller debug report:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
-```
-
-For most problems, these are the first two commands to run.
-
-## Persistent read-only operation
-
-Bluetooth-2-USB supports the normal writable mode and one persistent read-only mode for appliance-like deployments.
-
-### What persistent read-only mode does
-
-- enables Raspberry Pi OS OverlayFS for the root filesystem
-- keeps Bluetooth state on a separate writable ext4 filesystem
-- bind-mounts that Bluetooth state to `/var/lib/bluetooth`
-
-### What it does not do
-
-- create the ext4 filesystem for you
-- repartition your SD card automatically
-- make Bluetooth state persistent without separate writable storage
-
-### Persistent read-only flow
-
-1. Install Bluetooth-2-USB and confirm normal operation first.
-2. Prepare an ext4 filesystem for Bluetooth state.
-3. Run:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
-sudo /opt/bluetooth_2_usb/scripts/enable_readonly_overlayfs.sh
-sudo reboot
-```
-
-After reboot:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-```
-
-> [!IMPORTANT]
-> Replace `/dev/YOUR-PARTITION` with the real ext4 partition you intend to use.
-> Double-check the target with `lsblk -f` before formatting or enabling persistent Bluetooth state.
-
-> [!NOTE]
-> In principle you can also take the writable space from the same physical
-> device that holds the root filesystem, for example by carving out a separate
-> ext4 partition on that SD card or SSD. That avoids extra physical media, but
-> it does not reduce SD-card wear the way moving that writable state to a USB
-> stick or other separate storage can. It also increases the risk of
-> partitioning mistakes and gives you less separation during maintenance or
-> recovery.
-
-### Preparing the persistent filesystem
-
-Identify the target device:
-
-```bash
-lsblk -f
-```
-
-If needed, create ext4 on the real spare partition:
-
-```bash
-sudo mkfs.ext4 -L B2U_PERSIST /dev/YOUR-PARTITION
-```
-
-### Disabling read-only mode
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/disable_readonly_overlayfs.sh
-sudo reboot
-```
-
-## Optional host wake from suspend
-
-Bluetooth-2-USB can wake a sleeping or suspended host when you use the optional
-custom-kernel workflow in
-[pi-remote-wakeup-kernel-playbook.md](docs/pi-remote-wakeup-kernel-playbook.md).
-
-This has been tested on a Pi 4B with:
-
-- Raspberry Pi 4 Model B Rev 1.4
-- patched `rpi-6.12.y` kernel `6.12.81-b2u-wake+`
-- installed `/boot/config-$(uname -r)` for built-in gadget-driver detection
-- keyboard-only `wakeup_on_write` enabled:
-  - `hid.usb0=1`
-  - `hid.usb1=0`
-  - `hid.usb2=0`
-
-On that tested setup, wake from host suspend works through normal keyboard
-input relayed by Bluetooth-2-USB.
-
-The playbook has also been exercised successfully on a Raspberry Pi Zero W
-with patched kernel `6.12.81-b2u-wake`, the documented ARM32 LLVM fallback,
-keyboard-only `wakeup_on_write`, a passing post-reboot smoketest after
-clearing persistent `systemd-rfkill` Bluetooth soft-block state, and confirmed
-end-to-end wake from host suspend through normal keyboard input relayed by
-Bluetooth-2-USB. Pi 4B and Pi Zero W are both confirmed end-to-end wake
-setups; Pi Zero W is also the validated 32-bit bring-up path for the custom
-wake kernel.
-
-## Optional boot optimization
-
-If the Pi is already provisioned and no longer needs `cloud-init` on every
-boot, you can trim the boot path and optionally freeze the currently working
-DHCP IPv4 settings as a static NetworkManager profile.
-
-On systems where `NetworkManager` is being fed by generated
-`/etc/netplan/90-NM-*.yaml` files, the optimization flow also persists the
-current `netplan-*.nmconnection` profiles into
-`/etc/NetworkManager/system-connections/` and disables those generated netplan
-overrides. On a tested Pi Zero W that removed repeated `NetworkManager`
-reloads during boot and cut userspace boot time by roughly 35 seconds.
-
-Preview the changes first:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --dry-run --static-ip auto
-```
-
-Apply them and reboot automatically:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --static-ip auto
-```
-
-Use explicit static IPv4 settings instead of freezing the current DHCP lease:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh \
-  --static-ip 192.168.2.215/24 \
-  --gateway 192.168.2.1 \
-  --dns 1.1.1.1,9.9.9.9,192.168.2.1
-```
-
-Rollback is also built in:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/optimize_pi_boot.sh --rollback
-```
-
-## Troubleshooting
-
-Start every troubleshooting pass with the two built-in diagnostics first:
-
-```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
-```
-
-Use `smoke_test.sh` as the quick health gate and `debug.sh` as the fuller redacted state snapshot. The subsections below are for follow-up checks that go beyond what those two tools already collect.
-
-For a real end-to-end relay check without depending on a paired Bluetooth device, use the host/Pi loopback harness in `docs/pi-host-relay-loopback-test-playbook.md`.
-
-If the problem is workstation-to-Pi reachability itself rather than the relay
-service, start with `docs/pi-connectivity-troubleshooting.md` and then use
-`docs/pi-connectivity-recovery-playbook.md` for the full recovery flow.
-
-### The service does not start
-
-```bash
-bluetooth_2_usb --validate-env
-journalctl -u bluetooth_2_usb.service -n 100 --no-pager
-```
-
-If `--validate-env` reports `configfs: missing` or `udc: missing`, that usually means you are either not on a Pi gadget-capable system or the Pi has not yet booted with the expected gadget configuration.
-
-### The Pi does not appear as a USB gadget
-
-Check the boot overlay and modules:
-
-```bash
-grep -nE '^\[all\]|dtoverlay=dwc2.*' /boot/firmware/config.txt 2>/dev/null || \
-grep -nE '^\[all\]|dtoverlay=dwc2.*' /boot/config.txt
-cat /boot/firmware/cmdline.txt 2>/dev/null || cat /boot/cmdline.txt
-```
-
-Interpret those checks conservatively:
-
-- `dtoverlay=dwc2` in `config.txt` should be present.
-- `modules-load=` in `cmdline.txt` should still load `libcomposite`, and may also include `dwc2` on kernels where `dwc2` is built as a module.
-- On newer 64-bit Bookworm and aarch64 kernels, `CONFIG_USB_DWC2=y` often means `dwc2` is built into the kernel. In that case, the absence of a separate loadable `dwc2` module is normal and not itself a failure.
-- Treat missing USB gadget support as the problem, not merely the absence of a loadable module: if `CONFIG_USB_DWC2=y` is present, built-in `dwc2` is fine; otherwise make sure `dtoverlay=dwc2` is set and that `dwc2` is loaded on kernels that require it as a module.
-
-### Specific devices are not being relayed
-
-Check what the runtime can actually see:
-
-```bash
-bluetooth_2_usb -l
-```
-
-Then verify that `DEVICE_IDS` really matches what the runtime reports. Matching is based on event path, Bluetooth MAC address, or case-insensitive device-name fragment, so stale event numbers or slightly wrong name fragments are common operator mistakes.
-
-If the service looks healthy but the target host still does not react, also check the physical path:
-
-- make sure the Pi is connected through the OTG-capable port, not a normal host-only USB port
-- make sure the USB cable carries data, not only power
-- on Pi Zero boards, prefer separate stable power and use only the data port for the host connection
-- on Pi 4B and Pi 5, try a different USB-C cable or a different host port
-- confirm the service is actually active with `systemctl is-active bluetooth_2_usb.service`
-
-If you need to isolate the relay path from Bluetooth pairing state, run the host/Pi loopback harness from `docs/pi-host-relay-loopback-test-playbook.md`.
-
-### Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active
-
-Do not treat `systemctl status bluetooth` on its own as a health check. A running `bluetooth.service` can still leave the controller powered off or rfkill-blocked.
-
-Check the real controller state first:
-
-```bash
-sudo bluetoothctl show
-sudo btmgmt info
-rfkill list
-grep -H . /sys/class/rfkill/rfkill*/{soft,hard,state} 2>/dev/null
-```
-
-If `smoke_test.sh` or `debug.sh` already show the adapter as healthy, switch to an interactive `bluetoothctl` session and complete the actual bonding flow there. The common failure mode is not missing BlueZ, but an unanswered pairing prompt or a bonding handshake that never completes.
-
-The managed installer already clears common Bluetooth `rfkill` soft blocks on
-Raspberry Pi OS Lite during installation. If the controller becomes blocked
-again later, inspect the live `rfkill` state instead of assuming the install
-did not run.
-
-If the block comes back specifically after a reboot, also inspect the persisted
-`systemd-rfkill` state under `/var/lib/systemd/rfkill`. A saved Bluetooth
-state of `1` there can re-apply the soft block on later boots even when the
-runtime and BlueZ are otherwise healthy.
-
-If you already know the adapter is soft-blocked, clear that first:
-
-```bash
-sudo sh -c 'echo 0 > /sys/class/rfkill/rfkill0/soft'
-```
-
-If you need that fix to survive reboot, also clear the persisted Bluetooth
-state files:
-
-```bash
-sudo sh -c 'for f in /var/lib/systemd/rfkill/*:bluetooth; do [ -e "$f" ] || continue; printf "0\n" > "$f"; done'
-sudo rfkill unblock bluetooth
-sudo systemctl restart bluetooth
-```
-
-Then work interactively:
-
-```bash
-sudo bluetoothctl
-```
-
-Inside `bluetoothctl`, watch for agent prompts and answer them explicitly. Some BLE devices connect briefly, then drop again unless the authorization prompt is accepted in time. Repeated short `Connected: yes` / `Connected: no` transitions without a durable bonded state usually mean the pairing handshake is not completing, not that the device is already usable.
-
-For stubborn bonding or connect/disconnect flip-flops, use a conservative reset flow:
-
-1. Start an interactive session:
-
-```bash
-sudo bluetoothctl
-```
-
-2. Reset the adapter state:
-
-```text
-power off
-power on
-```
-
-3. Clear the stale device state and pair again:
-
-```text
-block A1:B2:C3:D4:E5:F6
-remove A1:B2:C3:D4:E5:F6
-scan on
-trust A1:B2:C3:D4:E5:F6
-pair A1:B2:C3:D4:E5:F6
-connect A1:B2:C3:D4:E5:F6
-```
-
-`remove` clears the stored BlueZ device record for that device and is often the
-right next step when you have a half-broken bonding state. This is a recovery
-flow for hard failures, not the normal first pairing attempt.
-
-If the BlueZ device cache itself looks stale, you can clear it more directly.
-This is destructive for saved pairings:
-
-```bash
-sudo systemctl stop bluetooth
-sudo find /var/lib/bluetooth -maxdepth 2 -type d
-```
-
-Remove only the affected device directory under the adapter first, then start
-Bluetooth again:
-
-```bash
-sudo rm -rf '/var/lib/bluetooth/AA:BB:CC:DD:EE:FF/A1:B2:C3:D4:E5:F6'
-sudo systemctl start bluetooth
-```
-
-Only remove larger parts of `/var/lib/bluetooth` if targeted cleanup does not
-help and you are prepared to pair devices again from scratch.
-
-### Persistent read-only mode does not keep Bluetooth pairings
-
-Verify that the writable state is actually mounted where expected:
-
-```bash
-findmnt /var/lib/bluetooth
-findmnt /mnt/b2u-persist
-grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
-```
-
-### SSH, ping, or DNS access to the Pi is flaky
-
-If `ssh pi-host` times out, `ping pi-host` is misleading, or the Pi only works
-through an IPv6 link-local address with `%interface`, do not keep debugging the
-service blindly.
-
-This has repeatedly turned out to be a workstation-to-Pi connectivity problem
-rather than a `bluetooth_2_usb` runtime bug.
-
-Start with the short classification guide in
-`docs/pi-connectivity-troubleshooting.md`, then run the full recovery flow in
-`docs/pi-connectivity-recovery-playbook.md`.
-
 ## Script reference
 
 Managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
@@ -607,7 +305,7 @@ to be run from a workstation checkout instead.
 
 ### `install.sh`
 
-Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install. This is the main deployment entrypoint for first install and for explicit re-application of the current checkout.
+Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install. This is the main deployment entrypoint for first install and for explicit re-application of the current checkout. On current Raspberry Pi OS Lite images, the install flow also clears common Bluetooth soft-blocked `rfkill` defaults so pairing can start from a known-good controller state.
 
 ### `update.sh`
 
@@ -761,16 +459,17 @@ Return the system to normal writable mode while keeping the persistent Bluetooth
 
 Contributor workflow details live in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Release tagging and versioning rules are documented in [docs/release-versioning-policy.md](docs/release-versioning-policy.md).
+Release tagging and versioning rules are documented in [docs/process/release-versioning-policy.md](docs/process/release-versioning-policy.md).
 
 For practical validation and debugging workflows, also see:
 
-- [docs/pi-cli-service-test-playbook.md](docs/pi-cli-service-test-playbook.md)
-- [docs/pi-connectivity-troubleshooting.md](docs/pi-connectivity-troubleshooting.md)
-- [docs/pi-connectivity-recovery-playbook.md](docs/pi-connectivity-recovery-playbook.md)
-- [docs/pi-host-relay-loopback-test-playbook.md](docs/pi-host-relay-loopback-test-playbook.md)
-- [docs/pi-manual-test-plan.md](docs/pi-manual-test-plan.md)
-- [docs/doc-consistency-review-playbook.md](docs/doc-consistency-review-playbook.md)
+- [docs/pi/cli-service-test.md](docs/pi/cli-service-test.md)
+- [docs/pi/boot-optimization.md](docs/pi/boot-optimization.md)
+- [docs/pi/connectivity-troubleshooting.md](docs/pi/connectivity-troubleshooting.md)
+- [docs/pi/connectivity-recovery.md](docs/pi/connectivity-recovery.md)
+- [docs/pi/host-relay-loopback.md](docs/pi/host-relay-loopback.md)
+- [docs/pi/manual-test-plan.md](docs/pi/manual-test-plan.md)
+- [docs/process/doc-consistency-review.md](docs/process/doc-consistency-review.md)
 
 ## License
 

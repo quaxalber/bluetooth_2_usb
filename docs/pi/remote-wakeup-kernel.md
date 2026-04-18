@@ -1,6 +1,6 @@
-# Pi Remote-Wakeup Kernel Playbook
+# Pi Remote-Wakeup Kernel
 
-Use this playbook when you need a Raspberry Pi USB HID gadget that can wake a
+Use this guide when you need a Raspberry Pi USB HID gadget that can wake a
 sleeping or suspended host by sending keyboard input.
 
 This is not supported by the stock Raspberry Pi kernel used by Bluetooth-2-USB.
@@ -15,7 +15,7 @@ gadget runtime.
 - rollback must be prepared before the first reboot
 - host suspend and remote wake behavior remain platform-specific even with the patch
 
-This playbook covers:
+This guide covers:
 
 - Raspberry Pi 4B
 - Raspberry Pi Zero W
@@ -281,7 +281,7 @@ Use the same `ARCH` and `CROSS_COMPILE` values as the build command you ran.
 
 Use a separate custom kernel filename instead of overwriting the stock image.
 
-This playbook recommends an online deploy directly to the running Pi over SSH.
+This guide recommends an online deploy directly to the running Pi over SSH.
 The general flow is:
 
 1. copy the kernel source tree or build tree to the Pi
