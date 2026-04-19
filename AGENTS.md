@@ -93,7 +93,8 @@ CodeRabbit:
 
 When reporting work:
 
-- say which checks were actually run
+- summarize the relevant checks that were actually run; do not feel obligated to
+  list every single command when a shorter summary is clearer
 - say which checks could not be run and why
 - distinguish workstation validation from real Pi validation
 - call out residual risk, especially for install, diagnostics, read-only mode,
