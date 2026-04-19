@@ -3,8 +3,8 @@
 Use this guide when you need a Raspberry Pi USB HID gadget that can wake a
 sleeping or suspended host by sending keyboard input.
 
-This is an advanced workflow. It is not supported by the stock Raspberry Pi
-kernel used by Bluetooth-2-USB.
+This is an advanced workflow. It relies on a custom Raspberry Pi kernel and is
+not part of the stock Bluetooth-2-USB install path.
 
 ## Scope and warnings
 
@@ -179,8 +179,8 @@ find /sys/kernel/config/usb_gadget -path '*/functions/hid.*/*wakeup_on_write' -p
 4. the normal Bluetooth-2-USB checks still pass
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
 5. a real host suspend and wake test succeeds through normal keyboard input

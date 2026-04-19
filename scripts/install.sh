@@ -117,8 +117,8 @@ cat <<EOF
 ${BOLD}Next steps${NC}
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo ${B2U_INSTALL_DIR}/scripts/diagnostics/smoke_test.sh
+   sudo ${B2U_INSTALL_DIR}/scripts/smoke.sh
 3. If you want persistent read-only operation afterwards, run:
-   sudo ${B2U_INSTALL_DIR}/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
-   sudo ${B2U_INSTALL_DIR}/scripts/readonly/enable_readonly_overlayfs.sh
+   sudo ${B2U_INSTALL_DIR}/scripts/readonly-setup.sh --device /dev/YOUR-PARTITION
+   sudo ${B2U_INSTALL_DIR}/scripts/readonly-enable.sh
 EOF

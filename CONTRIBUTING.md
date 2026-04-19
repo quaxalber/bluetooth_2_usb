@@ -1,6 +1,6 @@
 # Contributing to Bluetooth-2-USB
 
-This document is the single contributor contract for this repository.
+This document is the main contributor contract for this repository.
 
 ## Development environment
 
@@ -27,20 +27,24 @@ Use this venv for repo-local validation.
 
 ## Repository shape
 
-The public product surface is intentionally narrow:
+The supported product surface is intentionally small:
 
-- `install.sh`, `update.sh`, `uninstall.sh`
-- `scripts/diagnostics/`
-- `scripts/readonly/`
-- `scripts/testing/pi_relay_test_inject.sh`
-- `scripts/host/host_relay_test_capture.{sh,ps1}`
-- `scripts/host/install_host_hidapi_udev_rule.sh`
+- `scripts/install.sh`, `scripts/update.sh`, `scripts/uninstall.sh`
+- `scripts/smoke.sh`, `scripts/debug.sh`
+- `scripts/inject.sh`
+- `scripts/capture.{sh,ps1}`
+- `scripts/install-hid-udev-rule.sh`
+- `scripts/readonly-setup.sh`
+- `scripts/readonly-enable.sh`
+- `scripts/readonly-disable.sh`
 - `README.md`
 - `TROUBLESHOOTING.md`
-- `docs/pi/cli-service-test.md`
-- `docs/pi/host-relay-loopback.md`
-- `docs/pi/persistent-readonly.md`
-- `docs/pi/remote-wakeup-kernel.md`
+- `docs/cli-service-test.md`
+- `docs/host-relay-loopback.md`
+- `docs/persistent-readonly.md`
+- `docs/remote-wakeup-kernel.md`
+- `docs/doc-consistency-review.md`
+- `docs/release-versioning-policy.md`
 
 Keep code and docs aligned with the supported deployment model:
 
@@ -100,22 +104,22 @@ Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
 ## Hardware validation
 
 If your change affects runtime behavior, installation, service startup, USB
-gadget setup, diagnostics, or persistent read-only operation, validate it on a
-real Pi.
+gadget setup, diagnostics, relay behavior, or persistent read-only operation,
+validate it on a real Pi.
 
 Use these repo-owned guides when they match the task:
 
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- [docs/pi/cli-service-test.md](docs/pi/cli-service-test.md)
-- [docs/pi/host-relay-loopback.md](docs/pi/host-relay-loopback.md)
-- [docs/pi/persistent-readonly.md](docs/pi/persistent-readonly.md)
-- [docs/pi/remote-wakeup-kernel.md](docs/pi/remote-wakeup-kernel.md)
+- [docs/cli-service-test.md](docs/cli-service-test.md)
+- [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
+- [docs/persistent-readonly.md](docs/persistent-readonly.md)
+- [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md)
 
 Minimum Pi-side validation after runtime-affecting changes:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 sudo bluetoothctl show
 sudo btmgmt info
 ```
@@ -127,8 +131,7 @@ For relay-path changes, also use the host/Pi loopback harness.
 This repository uses `staging` as its integration branch.
 
 - keep scope focused
-- prefer one logical feature, fix, or documentation change per PR when the work
-  can be separated cleanly
+- prefer one logical feature, fix, refactor, or documentation change per PR
 - explain what changed and why
 - describe how you tested it
 - update docs when behavior, commands, paths, or defaults change
@@ -177,7 +180,7 @@ Please include:
 - target host type
 - whether persistent read-only mode is enabled
 - exact commands or scripts used
-- output from `smoke_test.sh --verbose`
+- output from `smoke.sh --verbose`
 - output from `debug.sh --duration 10`
 - clear reproduction steps
 

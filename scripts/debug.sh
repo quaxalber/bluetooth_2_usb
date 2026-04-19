@@ -3,16 +3,16 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-# shellcheck source=../lib/paths.sh
+SCRIPTS_DIR="${SCRIPT_DIR}"
+# shellcheck source=./lib/paths.sh
 source "${SCRIPTS_DIR}/lib/paths.sh"
-# shellcheck source=../lib/common.sh
+# shellcheck source=./lib/common.sh
 source "${SCRIPTS_DIR}/lib/common.sh"
-# shellcheck source=../lib/bluetooth.sh
+# shellcheck source=./lib/bluetooth.sh
 source "${SCRIPTS_DIR}/lib/bluetooth.sh"
-# shellcheck source=../lib/boot.sh
+# shellcheck source=./lib/boot.sh
 source "${SCRIPTS_DIR}/lib/boot.sh"
-# shellcheck source=../lib/readonly.sh
+# shellcheck source=./lib/readonly.sh
 source "${SCRIPTS_DIR}/lib/readonly.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
@@ -27,7 +27,7 @@ PARSE_ERROR=0
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/diagnostics/debug.sh [--duration <sec>]
+Usage: sudo ./scripts/debug.sh [--duration <sec>]
   --duration <sec>    Limit the live Bluetooth-2-USB debug run to <sec>
                       If omitted, the live debug run continues until interrupted
 EOF

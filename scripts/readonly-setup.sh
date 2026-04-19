@@ -3,14 +3,14 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-# shellcheck source=../lib/paths.sh
+SCRIPTS_DIR="${SCRIPT_DIR}"
+# shellcheck source=./lib/paths.sh
 source "${SCRIPTS_DIR}/lib/paths.sh"
-# shellcheck source=../lib/common.sh
+# shellcheck source=./lib/common.sh
 source "${SCRIPTS_DIR}/lib/common.sh"
-# shellcheck source=../lib/install.sh
+# shellcheck source=./lib/install.sh
 source "${SCRIPTS_DIR}/lib/install.sh"
-# shellcheck source=../lib/readonly.sh
+# shellcheck source=./lib/readonly.sh
 source "${SCRIPTS_DIR}/lib/readonly.sh"
 
 load_readonly_config
@@ -21,7 +21,7 @@ BLUETOOTH_SUBDIR="$B2U_PERSIST_BLUETOOTH_SUBDIR"
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/readonly/setup_persistent_bluetooth_state.sh --device <path>
+Usage: sudo ./scripts/readonly-setup.sh --device <path>
 
 Prepare and activate persistent Bluetooth state on a writable ext4 filesystem.
 EOF

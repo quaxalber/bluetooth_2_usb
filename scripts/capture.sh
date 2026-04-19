@@ -3,20 +3,20 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+SCRIPTS_DIR="${SCRIPT_DIR}"
 REPO_ROOT="$(cd -- "${SCRIPTS_DIR}/.." && pwd)"
 PYTHON_BIN=""
-# shellcheck source=../lib/common.sh
+# shellcheck source=./lib/common.sh
 source "${SCRIPTS_DIR}/lib/common.sh"
 
 usage() {
   cat <<EOF
-Usage: ./scripts/host/host_relay_test_capture.sh [test_harness capture options]
+Usage: ./scripts/capture.sh [test_harness capture options]
 
 Capture relay reports from the host-side gadget HID devices.
 On Linux, install the host hidapi udev rule first if unprivileged access fails.
 Example:
-  ./scripts/host/host_relay_test_capture.sh --scenario combo
+  ./scripts/capture.sh --scenario combo
 EOF
 }
 

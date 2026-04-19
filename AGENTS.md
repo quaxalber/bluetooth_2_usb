@@ -25,12 +25,12 @@ Before making changes, read:
 Repo-owned focused guides:
 
 - `TROUBLESHOOTING.md`
-- `docs/pi/cli-service-test.md`
-- `docs/pi/host-relay-loopback.md`
-- `docs/pi/persistent-readonly.md`
-- `docs/pi/remote-wakeup-kernel.md`
-- `docs/process/doc-consistency-review.md`
-- `docs/process/release-versioning-policy.md`
+- `docs/cli-service-test.md`
+- `docs/host-relay-loopback.md`
+- `docs/persistent-readonly.md`
+- `docs/remote-wakeup-kernel.md`
+- `docs/doc-consistency-review.md`
+- `docs/release-versioning-policy.md`
 
 ## Agent deltas
 
@@ -57,13 +57,13 @@ validation is mandatory.
 For runtime-affecting changes, validate on real Pi hardware when feasible.
 Minimum Pi-side checks:
 
-- `sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose`
-- `sudo /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 10`
+- `sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose`
+- `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
 - `sudo bluetoothctl show`
 - `sudo btmgmt info`
 
 For relay-path changes, also use the host/Pi loopback harness from
-`docs/pi/host-relay-loopback.md`.
+`docs/host-relay-loopback.md`.
 
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.

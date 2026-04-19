@@ -3,16 +3,16 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-# shellcheck source=../lib/paths.sh
+SCRIPTS_DIR="${SCRIPT_DIR}"
+# shellcheck source=./lib/paths.sh
 source "${SCRIPTS_DIR}/lib/paths.sh"
-# shellcheck source=../lib/common.sh
+# shellcheck source=./lib/common.sh
 source "${SCRIPTS_DIR}/lib/common.sh"
-# shellcheck source=../lib/bluetooth.sh
+# shellcheck source=./lib/bluetooth.sh
 source "${SCRIPTS_DIR}/lib/bluetooth.sh"
-# shellcheck source=../lib/boot.sh
+# shellcheck source=./lib/boot.sh
 source "${SCRIPTS_DIR}/lib/boot.sh"
-# shellcheck source=../lib/readonly.sh
+# shellcheck source=./lib/readonly.sh
 source "${SCRIPTS_DIR}/lib/readonly.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
@@ -22,7 +22,7 @@ SOFT_WARNINGS=0
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/diagnostics/smoke_test.sh [options]
+Usage: sudo ./scripts/smoke.sh [options]
   --verbose           Print detailed diagnostics, including journalctl
 EOF
 }

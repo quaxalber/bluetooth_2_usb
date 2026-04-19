@@ -1,8 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ScriptsDir = Split-Path -Parent $ScriptDir
-$RepoRoot = Split-Path -Parent $ScriptsDir
+$RepoRoot = Split-Path -Parent $ScriptDir
 $PythonBin = $null
 
 function Test-PythonHasHid([string]$Candidate) {

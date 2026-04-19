@@ -1,8 +1,8 @@
 # Pi Persistent Read-Only
 
 Use this guide when you want an appliance-style Raspberry Pi setup with a
-read-only root filesystem while keeping Bluetooth pairings and other BlueZ
-state on separate writable ext4 storage.
+read-only root filesystem while still keeping Bluetooth pairings and other
+BlueZ state on separate writable ext4 storage.
 
 ## Scope
 
@@ -59,21 +59,21 @@ recovery.
 Run:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
-sudo /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh
+sudo /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device /dev/mmcblk0p3
+sudo /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 sudo reboot
 ```
 
 After reboot:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
 ```
 
 ## Disable read-only mode
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh
+sudo /opt/bluetooth_2_usb/scripts/readonly-disable.sh
 sudo reboot
 ```
 

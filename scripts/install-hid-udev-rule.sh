@@ -3,18 +3,18 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+SCRIPTS_DIR="${SCRIPT_DIR}"
 REPO_ROOT="$(cd -- "${SCRIPTS_DIR}/.." && pwd)"
 RULE_SRC="${REPO_ROOT}/udev/70-bluetooth_2_usb_hidapi.rules"
 RULE_DST="/etc/udev/rules.d/70-bluetooth_2_usb_hidapi.rules"
 VENDOR_ID="1d6b"
 PRODUCT_ID="0104"
-# shellcheck source=../lib/common.sh
+# shellcheck source=./lib/common.sh
 source "${SCRIPTS_DIR}/lib/common.sh"
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/host/install_host_hidapi_udev_rule.sh
+Usage: sudo ./scripts/install-hid-udev-rule.sh
 
 Install the Linux host-side udev rule that grants hidapi write access to the
 Bluetooth-2-USB gadget USB device nodes.

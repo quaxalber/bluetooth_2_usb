@@ -91,7 +91,7 @@ Release notes should describe the current supported product surface only:
 
 - clone-based installation into `/opt/bluetooth_2_usb`
 - updates via `/opt/bluetooth_2_usb/scripts/update.sh`
-- diagnostics via `--validate-env`, `smoke_test.sh`, and `debug.sh`
+- diagnostics via `--validate-env`, `smoke.sh`, and `debug.sh`
 - persistent read-only operation only when a separate writable ext4 filesystem
   is configured for Bluetooth state
 

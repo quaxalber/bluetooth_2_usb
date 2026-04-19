@@ -1,8 +1,9 @@
 # Pi CLI and Service Test
 
-Use this guide for repeatable Raspberry Pi validation of the current codebase.
+Use this guide when you want the full, repeatable Raspberry Pi validation flow
+for the current codebase.
 
-It is the authoritative Pi-side validation guide for:
+This is the authoritative Pi-side validation guide for:
 
 - managed install validation
 - service lifecycle validation
@@ -69,12 +70,12 @@ ssh pi-host '
   bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/update.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/testing/pi_relay_test_inject.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/smoke.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/inject.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/readonly-enable.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/readonly-disable.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/readonly-setup.sh --help >/dev/null
 '
 ```
 
@@ -91,7 +92,7 @@ After reboot:
 ```bash
 ssh pi-host '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
 '
@@ -118,13 +119,13 @@ configuration or other reboot-sensitive behavior.
 Bounded run:
 
 ```bash
-ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh --duration 5'
+ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5'
 ```
 
 Manual interrupt path:
 
 ```bash
-ssh -t pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/debug.sh'
+ssh -t pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh'
 ```
 
 Verify:
@@ -162,8 +163,8 @@ Prepare the writable ext4 partition:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly/setup_persistent_bluetooth_state.sh --device /dev/mmcblk0p3
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly/enable_readonly_overlayfs.sh
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device /dev/mmcblk0p3
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 '
 ssh pi-host 'sudo -n reboot' || true
 until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
@@ -173,7 +174,7 @@ After reboot:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/diagnostics/smoke_test.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
   grep "^B2U_" /etc/default/bluetooth_2_usb_readonly
@@ -249,7 +250,7 @@ Pass criteria:
 ## Disable read-only mode again
 
 ```bash
-ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/readonly/disable_readonly_overlayfs.sh'
+ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/readonly-disable.sh'
 ssh pi-host 'sudo -n reboot' || true
 until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
 ```

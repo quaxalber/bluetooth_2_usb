@@ -17,7 +17,7 @@ Review at least:
 - `README.md`
 - `CONTRIBUTING.md`
 - `TROUBLESHOOTING.md`
-- every remaining `docs/**/*.md` file
+- every remaining `docs/*.md` file
 - supported public shell entrypoints under `scripts/`
 - `src/bluetooth_2_usb/args.py`
 - `pyproject.toml`
@@ -27,7 +27,7 @@ Review at least:
 ### 1. Full Markdown doc set
 
 ```bash
-find docs -type f -name '*.md' -print | sort
+find docs -maxdepth 1 -type f -name '*.md' -print | sort
 sed -n '1,240p' README.md
 sed -n '1,240p' CONTRIBUTING.md
 sed -n '1,240p' TROUBLESHOOTING.md
@@ -56,9 +56,9 @@ for s in "${shell_scripts[@]}"; do
   echo
 done
 
-if [[ -f scripts/host/host_relay_test_capture.ps1 ]]; then
-  echo "==== scripts/host/host_relay_test_capture.ps1"
-  powershell -ExecutionPolicy Bypass -File .\\scripts\\host\\host_relay_test_capture.ps1 --help
+if [[ -f scripts/capture.ps1 ]]; then
+  echo "==== scripts/capture.ps1"
+  powershell -ExecutionPolicy Bypass -File .\\scripts\\capture.ps1 --help
   echo
 fi
 ```
