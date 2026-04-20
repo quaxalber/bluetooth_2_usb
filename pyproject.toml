@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bluetooth_2_usb"
 dynamic = ["dependencies", "version"]
-description = "Convert a Raspberry Pi into a HID relay translating Bluetooth keyboard and mouse input to USB."
+description = "Bluetooth-to-USB HID bridge for Raspberry Pi. Relay Bluetooth keyboard and mouse input to USB via Linux USB gadget mode."
 authors = [
     { name = "quaxalber", email = "pypi@quaxalber.de" },
 ]
@@ -13,22 +13,22 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = [
-    "adapter",
-    "proxy",
-    "relay", 
     "bluetooth",
     "usb",
+    "usb-gadget",
+    "usb-hid",
     "hid",
-    "human",
-    "interface",
-    "device",
+    "raspberry-pi",
+    "otg",
     "keyboard",
     "mouse",
-    "consumer",
-    "keycode",
-    "keypadhardware",
-    "raspberry", 
+    "bluez",
     "evdev",
+    "bridge",
+    "relay",
+    "bios",
+    "kvm",
+    "kiosk",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
