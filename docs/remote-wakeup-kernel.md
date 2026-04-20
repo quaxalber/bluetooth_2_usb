@@ -117,8 +117,8 @@ export JOBS="$(nproc)"
 export KERNEL=kernel
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- bcmrpi_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- kernelrelease
+make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- LOCALVERSION= zImage modules dtbs
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- LOCALVERSION= kernelrelease
 ```
 
 Validated LLVM fallback:
@@ -141,8 +141,8 @@ Notes for the LLVM fallback:
 - disabling `CONFIG_BCM2835_FAST_MEMCPY` avoids the tested ARM32 LLVM build
   failure on Raspberry Pi specific assembly
 - keep `-b2u-wake` in `.config`
-- pass `LOCALVERSION=` on the LLVM build and `kernelrelease` commands so the
-  final release string stays `...-b2u-wake` instead of `...-b2u-wake+`
+- pass `LOCALVERSION=` on the build and `kernelrelease` commands so the final
+  release string stays `...-b2u-wake` instead of `...-b2u-wake+`
 
 ## Deploy to the Pi
 

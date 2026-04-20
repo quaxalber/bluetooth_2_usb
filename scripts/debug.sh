@@ -213,7 +213,7 @@ cleanup() {
     ok "Wrote: $REPORT_FILE"
   fi
 
-  rm -f "${REPORT_BODY:-}"
+  [[ -n "${REPORT_BODY:-}" ]] && rm -f -- "$REPORT_BODY"
 
   if [[ -n "$STOP_SIGNAL" ]]; then
     case "$STOP_SIGNAL" in

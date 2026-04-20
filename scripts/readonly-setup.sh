@@ -3,15 +3,14 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="${SCRIPT_DIR}"
 # shellcheck source=./lib/paths.sh
-source "${SCRIPTS_DIR}/lib/paths.sh"
+source "${SCRIPT_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
-source "${SCRIPTS_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=./lib/install.sh
-source "${SCRIPTS_DIR}/lib/install.sh"
+source "${SCRIPT_DIR}/lib/install.sh"
 # shellcheck source=./lib/readonly.sh
-source "${SCRIPTS_DIR}/lib/readonly.sh"
+source "${SCRIPT_DIR}/lib/readonly.sh"
 
 load_readonly_config
 

@@ -527,7 +527,7 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
-                "On Linux, install ./scripts/install-hid-udev-rule.sh "
+                "On Linux, run sudo ./scripts/install-hid-udev-rule.sh "
                 "and ensure the user is in the input group."
             ) from exc
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc

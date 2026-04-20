@@ -3,17 +3,16 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-SCRIPTS_DIR="${SCRIPT_DIR}"
 # shellcheck source=./lib/paths.sh
-source "${SCRIPTS_DIR}/lib/paths.sh"
+source "${SCRIPT_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
-source "${SCRIPTS_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=./lib/bluetooth.sh
-source "${SCRIPTS_DIR}/lib/bluetooth.sh"
+source "${SCRIPT_DIR}/lib/bluetooth.sh"
 # shellcheck source=./lib/boot.sh
-source "${SCRIPTS_DIR}/lib/boot.sh"
+source "${SCRIPT_DIR}/lib/boot.sh"
 # shellcheck source=./lib/readonly.sh
-source "${SCRIPTS_DIR}/lib/readonly.sh"
+source "${SCRIPT_DIR}/lib/readonly.sh"
 
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0

@@ -46,6 +46,10 @@ For each Markdown file, verify that:
 Compare the docs against the current `--help` output of the supported public
 scripts:
 
+This is only safe because the current entrypoint scripts parse `--help` before
+side effects; audit any new script for early side effects before adding it to
+`scripts/` or this checklist.
+
 ```bash
 mapfile -d '' shell_scripts < <(
   find scripts -maxdepth 2 -type f -name '*.sh' ! -path 'scripts/lib/*' -print0 | sort -z
@@ -58,7 +62,7 @@ done
 
 if [[ -f scripts/loopback-capture.ps1 ]]; then
   echo "==== scripts/loopback-capture.ps1"
-  powershell -ExecutionPolicy Bypass -File .\\scripts\\loopback-capture.ps1 --help
+  powershell -ExecutionPolicy Bypass -File ./scripts/loopback-capture.ps1 --help
   echo
 fi
 ```
