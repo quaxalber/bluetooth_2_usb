@@ -3,15 +3,16 @@
 Most troubleshooting sessions should start with the two built-in diagnostics:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
-`smoke.sh` is the quick health gate. `debug.sh` gives you the fuller redacted
+The `smoketest` is the quick health gate. `debug.sh` gives you the fuller redacted
 snapshot when you need to understand what the runtime actually sees.
 
 If you want an end-to-end relay check without depending on a paired Bluetooth
-device, use [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
+device, use the loopback inject/capture harness in
+[docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ## The service does not start
 
@@ -74,7 +75,7 @@ Interpretation:
 - if the service looks healthy but the host still does not react, confirm the
   physical OTG/data-cable path before assuming the problem is device matching
 
-For a pure relay-path check, use
+For a pure relay-path check, use the loopback inject/capture harness in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ## Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active

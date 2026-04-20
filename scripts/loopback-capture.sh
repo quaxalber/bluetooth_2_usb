@@ -11,12 +11,12 @@ source "${SCRIPTS_DIR}/lib/common.sh"
 
 usage() {
   cat <<EOF
-Usage: ./scripts/capture.sh [test_harness capture options]
+Usage: ./scripts/loopback-capture.sh [test_harness capture options]
 
 Capture relay reports from the host-side gadget HID devices.
 On Linux, install the host hidapi udev rule first if unprivileged access fails.
 Example:
-  ./scripts/capture.sh --scenario combo
+  ./scripts/loopback-capture.sh --scenario combo
 EOF
 }
 

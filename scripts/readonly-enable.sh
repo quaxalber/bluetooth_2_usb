@@ -58,4 +58,4 @@ else
 fi
 
 warn "Boot partition read-only mode is intentionally not changed by this script."
-warn "Persistent read-only mode is configured. Reboot, then run ./scripts/smoke.sh --verbose and verify reconnect behavior."
+warn "Persistent read-only mode is configured. Reboot, then run ./scripts/smoketest.sh --verbose and verify reconnect behavior."

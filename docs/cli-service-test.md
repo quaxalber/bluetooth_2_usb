@@ -7,9 +7,9 @@ This is the authoritative Pi-side validation guide for:
 
 - managed install validation
 - service lifecycle validation
-- smoke and debug validation
+- smoketest and debug validation
 - real device relay validation
-- loopback validation
+- loopback inject/capture validation
 - persistent read-only validation
 - pairing persistence validation
 - uninstall validation
@@ -70,9 +70,9 @@ ssh pi-host '
   bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/update.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/smoke.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/smoketest.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/inject.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/loopback-inject.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/readonly-enable.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/readonly-disable.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/readonly-setup.sh --help >/dev/null
@@ -92,7 +92,7 @@ After reboot:
 ```bash
 ssh pi-host '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
 '
@@ -111,7 +111,7 @@ ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/update.sh'
 If no new commit is available on the checked-out branch, this should exit `0`
 without rebuilding the managed virtual environment or restarting the service.
 
-Reboot and repeat the post-boot smoke checks if the updated change touched boot
+Reboot and repeat the post-boot smoketest checks if the updated change touched boot
 configuration or other reboot-sensitive behavior.
 
 ## Debug validation
@@ -151,10 +151,10 @@ Pass criteria:
 - input reaches the target host reliably
 - no unexpected local input leakage when devices are grabbed
 
-## Relay loopback validation
+## Relay loopback inject/capture validation
 
 If the Pi is physically attached to a host through the gadget data path, run the
-end-to-end relay harness from
+end-to-end loopback inject/capture harness from
 [host-relay-loopback.md](host-relay-loopback.md).
 
 ## Persistent read-only validation
@@ -174,7 +174,7 @@ After reboot:
 
 ```bash
 ssh pi-host '
-  sudo -n /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+  sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
   grep "^B2U_" /etc/default/bluetooth_2_usb_readonly

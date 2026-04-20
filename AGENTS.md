@@ -57,12 +57,12 @@ validation is mandatory.
 For runtime-affecting changes, validate on real Pi hardware when feasible.
 Minimum Pi-side checks:
 
-- `sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose`
+- `sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose`
 - `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
 - `sudo bluetoothctl show`
 - `sudo btmgmt info`
 
-For relay-path changes, also use the host/Pi loopback harness from
+For relay-path changes, also use the host/Pi loopback inject/capture harness from
 `docs/host-relay-loopback.md`.
 
 If destructive Pi flows were not executed, say so explicitly in the final

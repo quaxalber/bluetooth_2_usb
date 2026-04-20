@@ -22,7 +22,7 @@ SOFT_WARNINGS=0
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/smoke.sh [options]
+Usage: sudo ./scripts/smoketest.sh [options]
   --verbose           Print detailed diagnostics, including journalctl
 EOF
 }
@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 ensure_root
-prepare_log "smoke"
+prepare_log "smoketest"
 load_readonly_config
 
 soft_warn() {

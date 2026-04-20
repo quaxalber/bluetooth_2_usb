@@ -57,7 +57,7 @@ exit
 ### 5. Run the smoketest
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke.sh
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh
 ```
 
 ### 6. Connect the Pi to the target host
@@ -67,8 +67,8 @@ sudo /opt/bluetooth_2_usb/scripts/smoke.sh
 
 ## Requirements
 
-- Raspberry Pi Zero W, Zero 2 W, 4B, or 5 with Bluetooth support and a USB
-  OTG-capable device-mode port
+- Raspberry Pi Zero W, Zero 2 W, 4B, or 5
+- Bluetooth support and a USB OTG-capable device-mode port
 - Raspberry Pi OS Bookworm or newer
 - Internet access during installation
 - Bluetooth keyboard, mouse, or both
@@ -98,7 +98,7 @@ sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
 For most issues, start with the two built-in diagnostics:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
@@ -206,9 +206,7 @@ actually changed. This is the normal update path for an installed system.
 Remove the managed system integration while leaving the checkout in place. Use
 this when you want to remove the service and wrapper without deleting the clone.
 
-### `smoketest`
-
-Implemented by `smoke.sh`.
+### `smoketest.sh`
 
 Fast health check for the supported managed deployment. Use this first when you
 want to confirm that the service, gadget path, and Bluetooth basics are
@@ -228,25 +226,19 @@ you need a report to share.
 | --- | --- |
 | `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
 
-### `loopback-inject`
-
-Implemented by `inject.sh`.
+### `loopback-inject.sh`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
 loopback inject/capture harness.
 
-### `loopback-capture`
-
-Implemented by `capture.sh`.
+### `loopback-capture.sh`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
 harness.
 
 ### `loopback-capture.ps1`
-
-Implemented by `capture.ps1`.
 
 Windows PowerShell wrapper for the same host-capture flow.
 

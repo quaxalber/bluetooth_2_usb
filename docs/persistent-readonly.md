@@ -67,7 +67,7 @@ sudo reboot
 After reboot:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 ```
 
 ## Disable read-only mode

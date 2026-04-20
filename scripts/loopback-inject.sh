@@ -13,11 +13,11 @@ PYTHON_BIN="${B2U_INSTALL_DIR}/venv/bin/python"
 
 usage() {
   cat <<EOF
-Usage: sudo ${B2U_INSTALL_DIR}/scripts/inject.sh [test_harness inject options]
+Usage: sudo ${B2U_INSTALL_DIR}/scripts/loopback-inject.sh [test_harness inject options]
 
 Run the Pi-side loopback injector using the managed virtual environment.
 Example:
-  sudo ${B2U_INSTALL_DIR}/scripts/inject.sh --scenario combo
+  sudo ${B2U_INSTALL_DIR}/scripts/loopback-inject.sh --scenario combo
 EOF
 }
 

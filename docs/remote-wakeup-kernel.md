@@ -179,13 +179,13 @@ find /sys/kernel/config/usb_gadget -path '*/functions/hid.*/*wakeup_on_write' -p
 4. the normal Bluetooth-2-USB checks still pass
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 ```
 
 5. a real host suspend and wake test succeeds through normal keyboard input
 
-If the first post-reboot smoke test fails on Bluetooth power, also inspect
+If the first post-reboot smoketest fails on Bluetooth power, also inspect
 persisted `systemd-rfkill` Bluetooth soft-block state under
 `/var/lib/systemd/rfkill`.
 

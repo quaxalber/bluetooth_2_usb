@@ -102,13 +102,14 @@ Use these repo-owned guides when they match the task:
 Minimum Pi-side validation after runtime-affecting changes:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
 sudo bluetoothctl show
 sudo btmgmt info
 ```
 
-For relay-path changes, also use the host/Pi loopback inject/capture harness.
+For relay-path changes, also use the host/Pi loopback inject/capture harness in
+[docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ## Pull request guidelines
 
@@ -135,7 +136,6 @@ Branch and commit naming:
 - use matching conventional commit prefixes such as `feat:`, `fix:`, `docs:`,
   `refactor:`, `test:`, `chore:`
 - do not push directly to `main`
-- do not use `codex/...` branch prefixes for normal project work
 
 ## Review and CI
 
@@ -164,7 +164,7 @@ Thanks for taking the time to report a problem. If you can, please include:
 - target host type
 - whether persistent read-only mode is enabled
 - exact commands or scripts used
-- output from `smoke.sh --verbose`
+- output from `smoketest.sh --verbose`
 - output from `debug.sh --duration 10`
 - clear reproduction steps
 
