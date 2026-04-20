@@ -1,6 +1,9 @@
 # Contributing to Bluetooth-2-USB
 
-This document is the main contributor contract for this repository.
+Thanks for your interest in contributing.
+
+This guide covers the repo-specific workflow that keeps changes easy to review,
+validate, and maintain.
 
 ## Development environment
 
@@ -25,28 +28,9 @@ pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 
 Use this venv for repo-local validation.
 
-## Repository shape
+## Supported deployment model
 
-The supported product surface is intentionally small:
-
-- `scripts/install.sh`, `scripts/update.sh`, `scripts/uninstall.sh`
-- `scripts/smoke.sh`, `scripts/debug.sh`
-- `scripts/inject.sh`
-- `scripts/capture.{sh,ps1}`
-- `scripts/install-hid-udev-rule.sh`
-- `scripts/readonly-setup.sh`
-- `scripts/readonly-enable.sh`
-- `scripts/readonly-disable.sh`
-- `README.md`
-- `TROUBLESHOOTING.md`
-- `docs/cli-service-test.md`
-- `docs/host-relay-loopback.md`
-- `docs/persistent-readonly.md`
-- `docs/remote-wakeup-kernel.md`
-- `docs/doc-consistency-review.md`
-- `docs/release-versioning-policy.md`
-
-Keep code and docs aligned with the supported deployment model:
+Please keep code and docs aligned with the supported deployment model:
 
 - install root: `/opt/bluetooth_2_usb`
 - service unit: `bluetooth_2_usb.service`
@@ -124,7 +108,7 @@ sudo bluetoothctl show
 sudo btmgmt info
 ```
 
-For relay-path changes, also use the host/Pi loopback harness.
+For relay-path changes, also use the host/Pi loopback inject/capture harness.
 
 ## Pull request guidelines
 
@@ -175,7 +159,7 @@ CodeRabbit policy:
 
 ## Reporting issues
 
-Please include:
+Thanks for taking the time to report a problem. If you can, please include:
 
 - target host type
 - whether persistent read-only mode is enabled
@@ -186,4 +170,5 @@ Please include:
 
 ## Community expectations
 
-Be respectful, constructive, and patient in project interactions.
+Thanks for helping keep the project respectful, constructive, and patient for
+everyone involved.
