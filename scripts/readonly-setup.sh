@@ -20,7 +20,7 @@ BLUETOOTH_SUBDIR="$B2U_PERSIST_BLUETOOTH_SUBDIR"
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/setup_persistent_bluetooth_state.sh --device <path>
+Usage: sudo ./scripts/readonly-setup.sh --device <path>
 
 Prepare and activate persistent Bluetooth state on a writable ext4 filesystem.
 EOF

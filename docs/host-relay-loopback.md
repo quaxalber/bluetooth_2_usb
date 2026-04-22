@@ -1,6 +1,6 @@
-# Pi-to-Host Relay Loopback Test Playbook
+# Pi-to-Host Relay Loopback Test
 
-Use this playbook when you need to prove that the relay path works end to end
+Use this guide when you need to prove that the relay path works end to end
 without depending on a paired Bluetooth keyboard or mouse.
 
 The flow is:
@@ -36,13 +36,13 @@ python3 -m pip install -r requirements-host-capture.txt
 On Linux, install the udev rule once:
 
 ```bash
-sudo ./scripts/install_host_hidapi_udev_rule.sh
+sudo ./scripts/install-hid-udev-rule.sh
 ```
 
 Recommended baseline checks on the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoke_test.sh --verbose
+sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 ```
 
@@ -51,13 +51,13 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 On Linux:
 
 ```bash
-./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
+./scripts/loopback-capture.sh --scenario keyboard --timeout-sec 1 --output json
 ```
 
 Experimental: macOS
 
 ```bash
-./scripts/host_relay_test_capture.sh --scenario keyboard --timeout-sec 1 --output json
+./scripts/loopback-capture.sh --scenario keyboard --timeout-sec 1 --output json
 ```
 
 > [!NOTE]
@@ -67,7 +67,7 @@ Experimental: macOS
 On Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\host_relay_test_capture.ps1 --scenario keyboard --timeout-sec 1 --output json
+powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --timeout-sec 1 --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
@@ -80,7 +80,7 @@ discovery step, not the primary event backend.
 From the repository checkout on the host:
 
 ```bash
-./scripts/host_relay_test_capture.sh --scenario combo
+./scripts/loopback-capture.sh --scenario combo
 ```
 
 Default behavior:
@@ -95,7 +95,7 @@ Default behavior:
 If automatic detection is ambiguous, pin the nodes explicitly:
 
 ```bash
-./scripts/host_relay_test_capture.sh \
+./scripts/loopback-capture.sh \
   --scenario combo \
   --keyboard-node '<candidate keyboard path>' \
   --mouse-node '<candidate mouse path>'
@@ -116,7 +116,7 @@ layout or USB identity:
 On the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario combo
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario combo
 ```
 
 The injector creates temporary virtual devices named:
@@ -142,22 +142,22 @@ sequence through `/dev/uinput`.
 Keyboard-only:
 
 ```bash
-./scripts/host_relay_test_capture.sh --scenario keyboard
-sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario keyboard
+./scripts/loopback-capture.sh --scenario keyboard
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-./scripts/host_relay_test_capture.sh --scenario mouse
-sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario mouse
+./scripts/loopback-capture.sh --scenario mouse
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
-./scripts/host_relay_test_capture.sh --scenario consumer
-sudo /opt/bluetooth_2_usb/scripts/pi_relay_test_inject.sh --scenario consumer
+./scripts/loopback-capture.sh --scenario consumer
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario consumer
 ```
 
 ## 6. Failure interpretation
@@ -187,7 +187,7 @@ ls -l /dev/bus/usb/*/*
 If needed:
 
 ```bash
-sudo ./scripts/install_host_hidapi_udev_rule.sh
+sudo ./scripts/install-hid-udev-rule.sh
 ```
 
 ### Host capture times out

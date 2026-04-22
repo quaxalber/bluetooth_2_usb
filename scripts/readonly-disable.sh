@@ -3,16 +3,17 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+SCRIPTS_DIR="${SCRIPT_DIR}"
 # shellcheck source=./lib/paths.sh
-source "${SCRIPT_DIR}/lib/paths.sh"
+source "${SCRIPTS_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
-source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPTS_DIR}/lib/common.sh"
 # shellcheck source=./lib/readonly.sh
-source "${SCRIPT_DIR}/lib/readonly.sh"
+source "${SCRIPTS_DIR}/lib/readonly.sh"
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/disable_readonly_overlayfs.sh
+Usage: sudo ./scripts/readonly-disable.sh
 
 Disables the Raspberry Pi OS OverlayFS root filesystem mode.
 Any configured persistent Bluetooth mount remains in place.
