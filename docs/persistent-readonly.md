@@ -70,6 +70,19 @@ After reboot:
 sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 ```
 
+If `readonly-enable.sh` fails while `overlayroot` is being installed and the
+log shows `mkinitramfs: failed to determine device for /`, repair the package
+state before rebooting:
+
+```bash
+sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
+sudo dpkg --configure -a
+sudo /opt/bluetooth_2_usb/scripts/readonly-enable.sh
+```
+
+That failure mode has been observed on current Raspberry Pi OS releases when
+`initramfs-tools` cannot infer the root device during `overlayroot` setup.
+
 ## Disable read-only mode
 
 ```bash

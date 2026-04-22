@@ -17,7 +17,7 @@ Basic setup:
 sudo apt update
 sudo apt install -y git python3 python3-venv
 
-git clone https://github.com/YOUR-ACCOUNT/bluetooth_2_usb.git
+git clone https://github.com/quaxalber/bluetooth_2_usb.git
 cd bluetooth_2_usb
 
 python3 -m venv venv
@@ -25,6 +25,8 @@ source venv/bin/activate
 pip install -U pip setuptools wheel
 pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 ```
+
+If you prefer to work from a fork, replace the clone URL with your fork.
 
 Use this venv for repo-local validation.
 

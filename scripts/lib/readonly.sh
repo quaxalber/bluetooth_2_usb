@@ -28,6 +28,25 @@ overlay_status() {
   esac
 }
 
+readonly_stack_packages_healthy() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ "$status" == "install ok installed" ]] || return 1
+  done
+}
+
+readonly_stack_package_report() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ -n "$status" ]] || status="not installed"
+    printf '%s: %s\n' "$pkg" "$status"
+  done
+}
+
 machine_id_valid() {
   [[ -f /etc/machine-id ]] || return 1
   grep -Eq '^[0-9a-f]{32}$' /etc/machine-id

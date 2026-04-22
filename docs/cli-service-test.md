@@ -46,7 +46,7 @@ For a test branch:
 ssh <pi-host> '
   sudo -n rm -rf /opt/bluetooth_2_usb &&
   sudo -n git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
-  sudo -n git -C /opt/bluetooth_2_usb checkout feature-branch
+  sudo -n git -C /opt/bluetooth_2_usb checkout <branch-name>
 '
 ```
 
@@ -84,7 +84,14 @@ ssh <pi-host> '
 ```bash
 ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/install.sh'
 ssh <pi-host> 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do sleep 2; done
+deadline=$((SECONDS + 180))
+until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
+  if (( SECONDS >= deadline )); then
+    echo "Pi did not come back after reboot within 180s" >&2
+    exit 1
+  fi
+  sleep 2
+done
 ```
 
 After reboot:
@@ -167,7 +174,25 @@ ssh <pi-host> '
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 '
 ssh <pi-host> 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do sleep 2; done
+deadline=$((SECONDS + 180))
+until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
+  if (( SECONDS >= deadline )); then
+    echo "Pi did not come back after reboot within 180s" >&2
+    exit 1
+  fi
+  sleep 2
+done
+```
+
+If the enable step fails with `mkinitramfs: failed to determine device for /`,
+repair `initramfs-tools` before rebooting and rerun the enable step:
+
+```bash
+ssh <pi-host> '
+  sudo sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
+  sudo -n dpkg --configure -a
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
+'
 ```
 
 After reboot:
@@ -252,7 +277,14 @@ Pass criteria:
 ```bash
 ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/readonly-disable.sh'
 ssh <pi-host> 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do sleep 2; done
+deadline=$((SECONDS + 180))
+until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
+  if (( SECONDS >= deadline )); then
+    echo "Pi did not come back after reboot within 180s" >&2
+    exit 1
+  fi
+  sleep 2
+done
 ```
 
 ## Uninstall validation

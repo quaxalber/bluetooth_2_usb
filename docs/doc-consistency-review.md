@@ -60,7 +60,7 @@ for s in "${shell_scripts[@]}"; do
   echo
 done
 
-if [[ -f scripts/loopback-capture.ps1 ]]; then
+if [[ -f scripts/loopback-capture.ps1 ]] && command -v powershell >/dev/null 2>&1; then
   echo "==== scripts/loopback-capture.ps1"
   powershell -ExecutionPolicy Bypass -File ./scripts/loopback-capture.ps1 --help
   echo

@@ -42,7 +42,7 @@ Without the kernel patch, the runtime cannot wake suspended hosts.
 - Raspberry Pi Linux issue `#3977`:
   https://github.com/raspberrypi/linux/issues/3977
 - PiKVM reference patch:
-  https://github.com/pikvm/packages/blob/master/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch
+  https://github.com/pikvm/packages/blob/6d1fe298d7ad13a82cf9c6d3645866a443cde8f0/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch
 
 ## Build dependencies
 
@@ -82,7 +82,7 @@ Apply the patch:
 
 ```bash
 curl -L \
-  https://raw.githubusercontent.com/pikvm/packages/master/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch \
+  https://raw.githubusercontent.com/pikvm/packages/6d1fe298d7ad13a82cf9c6d3645866a443cde8f0/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch \
   -o 1001-pikvm-hid-remote-wakeup-support.patch
 patch -p1 < 1001-pikvm-hid-remote-wakeup-support.patch
 ```
