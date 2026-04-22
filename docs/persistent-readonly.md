@@ -38,11 +38,11 @@ lsblk -f
 If needed, create ext4 on the real spare partition:
 
 ```bash
-sudo mkfs.ext4 -L B2U_PERSIST /dev/mmcblk0p3
+sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 ```
 
 > [!IMPORTANT]
-> Replace `/dev/mmcblk0p3` with the real ext4 partition you intend to use.
+> Replace `<persist-partition>` with the real ext4 partition you intend to use.
 > Double-check the target with `lsblk -f` before formatting or enabling
 > persistent Bluetooth state.
 
@@ -59,7 +59,7 @@ recovery.
 Run:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device /dev/mmcblk0p3
+sudo /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device <persist-partition>
 sudo /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 sudo reboot
 ```

@@ -128,8 +128,8 @@ Symptom: the Pi looks online enough to suspect it is reachable, but `ssh`,
 `ping`, or package downloads behave inconsistently.
 
 Typical examples:
-- `ssh pi-host` times out even though the Pi is probably still running
-- `ping pi-host` fails while `ping pi-host.local` or a direct IPv6 link-local
+- `ssh <pi-host>` times out even though the Pi is probably still running
+- `ping <pi-host>` fails while `ping <pi-host>.local` or a direct IPv6 link-local
   address works
 - package downloads fail with DNS errors even though the Pi is otherwise online
 

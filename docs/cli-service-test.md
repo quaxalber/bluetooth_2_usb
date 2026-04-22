@@ -24,10 +24,10 @@ This is the authoritative Pi-side validation guide for:
 Quick check:
 
 ```bash
-ssh pi-host 'sudo -n true'
+ssh <pi-host> 'sudo -n true'
 ```
 
-Replace `pi-host` with the real SSH host or alias.
+Replace `<pi-host>` with the real SSH host or alias.
 
 ## Prepare the checkout on the Pi
 
@@ -37,13 +37,13 @@ The supported deployment model is a normal Git checkout at
 If the Pi image does not include `git`, install it first:
 
 ```bash
-ssh pi-host 'sudo -n apt update && sudo -n apt install -y git'
+ssh <pi-host> 'sudo -n apt update && sudo -n apt install -y git'
 ```
 
 For a test branch:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   sudo -n rm -rf /opt/bluetooth_2_usb &&
   sudo -n git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
   sudo -n git -C /opt/bluetooth_2_usb checkout feature-branch
@@ -55,7 +55,7 @@ ssh pi-host '
 Run this before mutating the system:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
   echo OVERLAY=$(sudo -n raspi-config nonint get_overlay_now 2>/dev/null || echo unknown)
   echo ROOT=$(findmnt -no FSTYPE,OPTIONS /)
@@ -66,7 +66,7 @@ ssh pi-host '
 ## Script help surface
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/update.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
@@ -82,15 +82,15 @@ ssh pi-host '
 ## Install validation
 
 ```bash
-ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/install.sh'
-ssh pi-host 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
+ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/install.sh'
+ssh <pi-host> 'sudo -n reboot' || true
+until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do sleep 2; done
 ```
 
 After reboot:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   systemctl is-active bluetooth_2_usb.service
   sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
   sudo -n bluetoothctl show
@@ -105,7 +105,7 @@ present yet, or when the OTG cable is not attached and the UDC state is not
 ## Update validation
 
 ```bash
-ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/update.sh'
+ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/update.sh'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
@@ -119,13 +119,13 @@ configuration or other reboot-sensitive behavior.
 Bounded run:
 
 ```bash
-ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5'
+ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5'
 ```
 
 Manual interrupt path:
 
 ```bash
-ssh -t pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh'
+ssh -t <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh'
 ```
 
 Verify:
@@ -162,18 +162,18 @@ end-to-end loopback inject/capture harness from
 Prepare the writable ext4 partition:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device /dev/mmcblk0p3
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 '
-ssh pi-host 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
+ssh <pi-host> 'sudo -n reboot' || true
+until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do sleep 2; done
 ```
 
 After reboot:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
@@ -186,7 +186,7 @@ ssh pi-host '
 Before reboot:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   bluetoothctl devices Paired
   sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
 '
@@ -201,7 +201,7 @@ Then:
 After reboot:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   bluetoothctl devices Paired
   sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
@@ -219,7 +219,7 @@ Pass criteria:
 Before cutting power:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   bluetoothctl devices Paired
   systemctl is-active bluetooth_2_usb.service
 '
@@ -234,7 +234,7 @@ Then:
 After boot:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   systemctl is-active bluetooth_2_usb.service
   bluetoothctl devices Paired
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
@@ -250,15 +250,15 @@ Pass criteria:
 ## Disable read-only mode again
 
 ```bash
-ssh pi-host 'sudo -n /opt/bluetooth_2_usb/scripts/readonly-disable.sh'
-ssh pi-host 'sudo -n reboot' || true
-until ssh -o ConnectTimeout=5 pi-host 'true' 2>/dev/null; do sleep 2; done
+ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/readonly-disable.sh'
+ssh <pi-host> 'sudo -n reboot' || true
+until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do sleep 2; done
 ```
 
 ## Uninstall validation
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   sudo -n /opt/bluetooth_2_usb/scripts/uninstall.sh
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
@@ -279,7 +279,7 @@ Expected outcome:
 For each run:
 
 ```bash
-ssh pi-host '
+ssh <pi-host> '
   uname -a
   cat /etc/os-release
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)

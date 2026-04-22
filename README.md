@@ -68,7 +68,6 @@ sudo /opt/bluetooth_2_usb/scripts/smoketest.sh
 ## Requirements
 
 - Raspberry Pi Zero W, Zero 2 W, 4B, or 5
-- Bluetooth support and a USB OTG-capable device-mode port
 - Raspberry Pi OS Bookworm or newer
 - Internet access during installation
 - Bluetooth keyboard, mouse, or both
