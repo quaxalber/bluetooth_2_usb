@@ -68,6 +68,8 @@ After reboot:
 
 ```bash
 sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+findmnt -no FSTYPE,SOURCE /
+sudo bash -lc '. /opt/bluetooth_2_usb/scripts/lib/boot.sh; test -s "$(boot_initramfs_target_path)" && printf "boot initramfs: %s\n" "$(boot_initramfs_target_path)"'
 ```
 
 If `readonly-enable.sh` fails while `overlayroot` is being installed and the
@@ -82,6 +84,12 @@ sudo /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 
 That failure mode has been observed on current Raspberry Pi OS releases when
 `initramfs-tools` cannot infer the root device during `overlayroot` setup.
+
+When a custom kernel image is selected in `config.txt`, `readonly-enable.sh`
+refreshes the initramfs for the running kernel and installs it under the boot
+filename expected by the firmware. Keep the running kernel fully installed,
+including `/lib/modules/$(uname -r)` and `config-$(uname -r)`, so that
+`update-initramfs` can rebuild the image cleanly.
 
 ## Disable read-only mode
 

@@ -28,6 +28,14 @@ overlay_status() {
   esac
 }
 
+root_overlay_active() {
+  [[ "$(findmnt -n -o FSTYPE --target / 2>/dev/null || true)" == "overlay" ]]
+}
+
+root_overlay_report() {
+  findmnt -n -o TARGET,SOURCE,FSTYPE,OPTIONS --target / 2>/dev/null || true
+}
+
 readonly_stack_packages_healthy() {
   local pkg status
 
@@ -121,7 +129,7 @@ bluetooth_state_persistent() {
 }
 
 readonly_mode() {
-  if [[ "$(overlay_status)" == "enabled" ]] && bluetooth_state_persistent; then
+  if root_overlay_active && bluetooth_state_persistent; then
     printf '%s\n' "persistent"
   else
     printf '%s\n' "disabled"

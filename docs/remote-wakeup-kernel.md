@@ -155,6 +155,17 @@ Typical image names:
 - Pi 4B: `kernel8-b2u-wake.img`
 - Pi Zero W: `kernel-b2u-wake.img`
 
+With `auto_initramfs=1`, Raspberry Pi firmware derives the boot initramfs name
+from the kernel image name. That means these image names map to these boot
+initramfs targets:
+
+- Pi 4B: `kernel8-b2u-wake.img` -> `initramfs8-b2u-wake`
+- Pi Zero W: `kernel-b2u-wake.img` -> `initramfs-b2u-wake`
+
+When you later enable persistent read-only mode, `readonly-enable.sh` rebuilds
+the initramfs for the running kernel and installs the matching boot initramfs
+file automatically.
+
 Keep the stock kernel entry available so rollback is trivial.
 
 ## Verification

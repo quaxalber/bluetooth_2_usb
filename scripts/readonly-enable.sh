@@ -8,6 +8,8 @@ SCRIPTS_DIR="${SCRIPT_DIR}"
 source "${SCRIPTS_DIR}/lib/paths.sh"
 # shellcheck source=./lib/common.sh
 source "${SCRIPTS_DIR}/lib/common.sh"
+# shellcheck source=./lib/boot.sh
+source "${SCRIPTS_DIR}/lib/boot.sh"
 # shellcheck source=./lib/readonly.sh
 source "${SCRIPTS_DIR}/lib/readonly.sh"
 
@@ -59,6 +61,22 @@ if ! readonly_stack_packages_healthy; then
   readonly_stack_package_report
   fail "OverlayFS may be toggled on, but package setup did not complete cleanly. Repair the package state before rebooting. On current Raspberry Pi OS releases this can require setting MODULES=most in /etc/initramfs-tools/initramfs.conf, then rerunning sudo dpkg --configure -a."
 fi
+
+KERNEL_RELEASE="$(current_kernel_release)"
+CONFIGURED_KERNEL_IMAGE="$(configured_kernel_image)"
+CONFIGURED_INITRAMFS_FILE="$(configured_initramfs_file)"
+EXPECTED_BOOT_INITRAMFS_FILE="$(expected_boot_initramfs_file || true)"
+VERSIONED_INITRDS="$(versioned_initrd_candidates "$KERNEL_RELEASE" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+
+if ! BOOT_INITRAMFS_TARGET_PATH="$(ensure_bootable_initramfs_for_current_kernel)"; then
+  warn "Kernel release: ${KERNEL_RELEASE}"
+  warn "Configured kernel image: ${CONFIGURED_KERNEL_IMAGE}"
+  warn "Explicit initramfs entry: ${CONFIGURED_INITRAMFS_FILE:-<none>}"
+  warn "Expected boot initramfs file: ${EXPECTED_BOOT_INITRAMFS_FILE:-<none>}"
+  warn "Versioned initramfs candidates: ${VERSIONED_INITRDS:-<none>}"
+  fail "Failed to prepare the boot initramfs for read-only mode. Fix the kernel or initramfs setup above, then rerun ./scripts/readonly-enable.sh."
+fi
+ok "Boot initramfs is ready at ${BOOT_INITRAMFS_TARGET_PATH}"
 
 write_readonly_config "persistent" "$B2U_PERSIST_MOUNT" "$B2U_PERSIST_BLUETOOTH_DIR" "$B2U_PERSIST_SPEC" "$B2U_PERSIST_DEVICE"
 ok "OverlayFS has been enabled"

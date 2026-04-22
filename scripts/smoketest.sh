@@ -69,6 +69,24 @@ UDC_STATE_VALUE=""
 DWC2_MODE="$(dwc2_mode)"
 IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
 EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line)"
+OVERLAY_STATUS="$(overlay_status)"
+ROOT_OVERLAY_ACTIVE="no"
+BLUETOOTH_STATE_PERSISTENT="no"
+CONFIGURED_INITRAMFS_FILE="$(configured_initramfs_file)"
+EXPECTED_BOOT_INITRAMFS_FILE="$(expected_boot_initramfs_file || true)"
+EXPECTED_BOOT_INITRAMFS_PATH=""
+
+if root_overlay_active; then
+  ROOT_OVERLAY_ACTIVE="yes"
+fi
+
+if bluetooth_state_persistent; then
+  BLUETOOTH_STATE_PERSISTENT="yes"
+fi
+
+if [[ -n "$EXPECTED_BOOT_INITRAMFS_FILE" ]]; then
+  EXPECTED_BOOT_INITRAMFS_PATH="$(boot_initramfs_target_path "$EXPECTED_BOOT_INITRAMFS_FILE" 2>/dev/null || true)"
+fi
 
 modules_load_has_required_modules() {
   local module
@@ -107,6 +125,14 @@ required_modules_list() {
 
   joined="$(printf '%s,' "${REQUIRED_MODULES[@]}")"
   printf '%s\n' "${joined%,}"
+}
+
+print_verbose_section_header() {
+  if [[ ${VERBOSE_SECTION_COUNT:-0} -gt 0 ]]; then
+    echo
+  fi
+  VERBOSE_SECTION_COUNT=$((VERBOSE_SECTION_COUNT + 1))
+  echo "## $1"
 }
 
 if grep -qxF "$EXPECTED_OVERLAY_LINE" "$CONFIG_TXT"; then
@@ -281,15 +307,80 @@ else
   EXIT_CODE=1
 fi
 
+case "$OVERLAY_STATUS" in
+  enabled)
+    ok "OverlayFS boot configuration is enabled"
+    ;;
+  disabled)
+    ok "OverlayFS boot configuration is disabled"
+    ;;
+  *)
+    warn "OverlayFS boot configuration status is unknown"
+    EXIT_CODE=1
+    ;;
+esac
+
+if [[ "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
+  ok "Root overlay is active"
+elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
+  warn "Root overlay is not active"
+  ROOT_MOUNT_REPORT="$(root_overlay_report)"
+  if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
+    printf '%s\n' "$ROOT_MOUNT_REPORT"
+  fi
+  EXIT_CODE=1
+else
+  ok "Root overlay is inactive"
+fi
+
+if [[ -n "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+  if [[ -s "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+    ok "Boot initramfs is present (${EXPECTED_BOOT_INITRAMFS_PATH})"
+  else
+    warn "Boot initramfs is missing or empty (${EXPECTED_BOOT_INITRAMFS_PATH})"
+    EXIT_CODE=1
+  fi
+elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
+  warn "Boot initramfs target could not be determined"
+  EXIT_CODE=1
+fi
+
+if machine_id_valid; then
+  ok "machine-id is stable"
+elif [[ "$OVERLAY_STATUS" == "enabled" || "$READONLY_MODE" == "persistent" ]]; then
+  warn "machine-id is missing or invalid"
+  EXIT_CODE=1
+fi
+
+if [[ "$BLUETOOTH_STATE_PERSISTENT" == "yes" ]]; then
+  ok "Bluetooth state persistence is active"
+elif [[ "$OVERLAY_STATUS" == "enabled" || "$READONLY_MODE" == "persistent" ]]; then
+  warn "Bluetooth state persistence is not active"
+  EXIT_CODE=1
+else
+  ok "Bluetooth state persistence is not configured"
+fi
+
+if [[ "$READONLY_MODE" == "persistent" ]]; then
+  ok "Read-only mode is persistent"
+else
+  if [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then
+    ok "Read-only mode is disabled"
+  else
+    warn "Read-only mode is not persistent"
+    EXIT_CODE=1
+  fi
+fi
+
 if [[ "$READONLY_MODE" == "persistent" ]]; then
   if machine_id_valid; then
-    ok "machine-id is stable for persistent read-only mode"
+    ok "machine-id is ready for persistent read-only mode"
   else
     warn "machine-id is missing or invalid for persistent read-only mode"
     EXIT_CODE=1
   fi
 
-  if bluetooth_state_persistent; then
+  if [[ "$BLUETOOTH_STATE_PERSISTENT" == "yes" ]]; then
     ok "Bluetooth state is mounted persistently"
   else
     warn "Bluetooth state is not mounted persistently"
@@ -297,50 +388,49 @@ if [[ "$READONLY_MODE" == "persistent" ]]; then
   fi
 fi
 
-if [[ "$(overlay_status)" == "enabled" && "$READONLY_MODE" != "persistent" ]]; then
-  warn "OverlayFS is enabled without persistent Bluetooth state; this setup is unsupported."
-  EXIT_CODE=1
-fi
-
-info "OverlayFS status: $(overlay_status)"
-info "Read-only mode: ${READONLY_MODE}"
-info "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
-
 if [[ $VERBOSE -eq 1 ]]; then
-  echo "## Summary"
+  VERBOSE_SECTION_COUNT=0
+  print_verbose_section_header "Summary"
   echo "Boot config: ${CONFIG_TXT}"
   echo "Cmdline: ${CMDLINE_TXT}"
   echo "modules-load token: ${MODULES_LOAD_VALUE:-<missing>}"
   echo "required modules: $(required_modules_list)"
   echo "required modules status: $(required_modules_status)"
   echo "expected overlay line: ${EXPECTED_OVERLAY_LINE}"
+  echo "configured kernel image: $(configured_kernel_image)"
+  echo "configured initramfs file: ${CONFIGURED_INITRAMFS_FILE:-<none>}"
+  echo "expected boot initramfs file: ${EXPECTED_BOOT_INITRAMFS_FILE:-<none>}"
+  echo "expected boot initramfs path: ${EXPECTED_BOOT_INITRAMFS_PATH:-<none>}"
   echo "UDC controllers: ${UDC_LIST:-<none>}"
   echo "UDC state path: ${UDC_STATE_PATH:-<unknown>}"
   echo "UDC state: ${UDC_STATE_VALUE:-<unknown>}"
   echo "Readonly mode: ${READONLY_MODE}"
-  echo "OverlayFS: $(overlay_status)"
-  echo "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
+  echo "OverlayFS configured: ${OVERLAY_STATUS}"
+  echo "Root overlay active: ${ROOT_OVERLAY_ACTIVE}"
+  echo "Root mount: $(root_overlay_report)"
+  echo "Bluetooth state persistent: ${BLUETOOTH_STATE_PERSISTENT}"
   echo "Relayable device count: ${RELAYABLE_COUNT:-unknown}"
   echo "Paired Bluetooth device count: ${PAIRED_COUNT:-unknown}"
   echo "Non-fatal warning count: ${SOFT_WARNINGS}"
-  echo "## CLI validate-env output"
+  print_verbose_section_header "CLI validate-env output"
   cat "$VALIDATE_LOG"
-  echo "## Service config check"
+  print_verbose_section_header "Service config check"
   cat "$SERVICE_CONFIG_LOG"
-  echo "## bluetoothctl show"
+  print_verbose_section_header "bluetoothctl show"
   cat "$BLUETOOTH_SHOW_LOG"
-  echo "## btmgmt info"
+  print_verbose_section_header "btmgmt info"
   cat "$BTMGMT_INFO_LOG"
-  echo "## rfkill bluetooth"
+  print_verbose_section_header "rfkill bluetooth"
   cat "$RFKILL_LOG"
-  echo "## Device inventory"
+  print_verbose_section_header "Device inventory"
   cat "$LIST_DEVICES_JSON"
-  echo "## Mount details"
+  print_verbose_section_header "Mount details"
+  findmnt -n -T / 2>/dev/null || true
   findmnt -n -T /var/lib/bluetooth 2>/dev/null || true
   findmnt -n "$B2U_PERSIST_MOUNT" 2>/dev/null || true
-  echo "## Service status"
+  print_verbose_section_header "Service status"
   systemctl --no-pager --full status "${B2U_SERVICE_UNIT}" || true
-  echo "## Journal"
+  print_verbose_section_header "Journal"
   journalctl -b -u "${B2U_SERVICE_UNIT}" -n 100 --no-pager || true
 fi
 

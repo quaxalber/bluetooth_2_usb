@@ -200,8 +200,10 @@ After reboot:
 ```bash
 ssh <pi-host> '
   sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+  findmnt -no FSTYPE,SOURCE /
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
+  sudo bash -lc '"'"'. /opt/bluetooth_2_usb/scripts/lib/boot.sh; test -s "$(boot_initramfs_target_path)" && printf "boot-initramfs %s\n" "$(boot_initramfs_target_path)"'"'"'
   grep "^B2U_" /etc/default/bluetooth_2_usb_readonly
 '
 ```
@@ -305,6 +307,9 @@ Expected outcome:
 - checkout remains present
 - persistent mount units are disabled
 - runtime env files and wrapper are removed
+
+Only run destructive read-only rollback checks after `findmnt -no FSTYPE,SOURCE /`
+shows `overlay` for the live root filesystem.
 
 ## What to record
 

@@ -185,6 +185,9 @@ run_live_debug_block() {
       TERM) return 143 ;;
     esac
   fi
+  if [[ -n "$DURATION" && $status -eq 124 ]]; then
+    return 0
+  fi
   return "$status"
 }
 

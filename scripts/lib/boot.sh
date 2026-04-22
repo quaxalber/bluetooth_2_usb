@@ -20,12 +20,239 @@ detect_boot_dir() {
   fi
 }
 
+default_kernel_image() {
+  if [[ "$(uname -m)" == "aarch64" ]]; then
+    printf '%s\n' "kernel8.img"
+  else
+    printf '%s\n' "kernel.img"
+  fi
+}
+
 boot_config_path() {
   printf '%s/config.txt\n' "$(detect_boot_dir)"
 }
 
 boot_cmdline_path() {
   printf '%s/cmdline.txt\n' "$(detect_boot_dir)"
+}
+
+boot_config_assignment_value() {
+  local key="$1"
+  local config_file="${2:-$(boot_config_path)}"
+
+  [[ -f "$config_file" ]] || return 0
+  python3 - "$config_file" "$key" <<'PY'
+from pathlib import Path
+import sys
+
+config_path = Path(sys.argv[1])
+target_key = sys.argv[2]
+value = ""
+
+for raw_line in config_path.read_text(encoding="utf-8").splitlines():
+    line = raw_line.split("#", 1)[0].strip()
+    if not line or line.startswith("[") or "=" not in line:
+        continue
+    key, current_value = line.split("=", 1)
+    if key.strip() == target_key:
+        value = current_value.strip()
+
+if value:
+    print(value)
+PY
+}
+
+configured_kernel_image() {
+  local value
+
+  value="$(boot_config_assignment_value "kernel")"
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+  else
+    default_kernel_image
+  fi
+}
+
+configured_initramfs_file() {
+  local config_file="${1:-$(boot_config_path)}"
+
+  [[ -f "$config_file" ]] || return 0
+  python3 - "$config_file" <<'PY'
+from pathlib import Path
+import sys
+
+config_path = Path(sys.argv[1])
+value = ""
+
+for raw_line in config_path.read_text(encoding="utf-8").splitlines():
+    line = raw_line.split("#", 1)[0].strip()
+    if not line or line.startswith("["):
+        continue
+    if not line.startswith("initramfs "):
+        continue
+    parts = line.split()
+    if len(parts) >= 2:
+        value = parts[1]
+
+if value:
+    print(value)
+PY
+}
+
+auto_initramfs_enabled() {
+  [[ "$(boot_config_assignment_value "auto_initramfs")" == "1" ]]
+}
+
+expected_auto_initramfs_name() {
+  local kernel_image="${1:-$(configured_kernel_image)}"
+  local base_name
+
+  base_name="${kernel_image##*/}"
+  base_name="${base_name%.*}"
+  if [[ "$base_name" == kernel* ]]; then
+    printf '%s\n' "initramfs${base_name#kernel}"
+  fi
+}
+
+expected_boot_initramfs_file() {
+  local explicit_initramfs
+
+  explicit_initramfs="$(configured_initramfs_file)"
+  if [[ -n "$explicit_initramfs" ]]; then
+    printf '%s\n' "$explicit_initramfs"
+    return
+  fi
+
+  if auto_initramfs_enabled; then
+    expected_auto_initramfs_name
+  fi
+}
+
+boot_initramfs_target_path() {
+  local target_file="${1:-$(expected_boot_initramfs_file)}"
+
+  [[ -n "$target_file" ]] || return 1
+  printf '%s/%s\n' "$(detect_boot_dir)" "$target_file"
+}
+
+current_kernel_release() {
+  uname -r
+}
+
+live_root_overlay_active() {
+  [[ "$(findmnt -n -o FSTYPE --target / 2>/dev/null || true)" == "overlay" ]]
+}
+
+versioned_initrd_candidates() {
+  local kernel_release="${1:-$(current_kernel_release)}"
+  local boot_dir
+
+  boot_dir="$(detect_boot_dir)"
+  printf '%s\n' "/boot/initrd.img-${kernel_release}"
+  if [[ "$boot_dir" != "/boot" ]]; then
+    printf '%s\n' "${boot_dir}/initrd.img-${kernel_release}"
+  fi
+}
+
+find_versioned_initramfs_image() {
+  local kernel_release="${1:-$(current_kernel_release)}"
+  local candidate
+
+  while IFS= read -r candidate; do
+    if [[ -s "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done < <(versioned_initrd_candidates "$kernel_release")
+
+  return 1
+}
+
+ensure_initramfs_tools_ready() {
+  require_commands install python3 update-initramfs
+  command -v mkinitramfs >/dev/null 2>&1 || fail "mkinitramfs is missing. Install initramfs-tools before enabling read-only mode."
+}
+
+ensure_kernel_artifacts_present_for_initramfs() {
+  local kernel_release="${1:-$(current_kernel_release)}"
+
+  [[ -d "/lib/modules/${kernel_release}" ]] || fail "Kernel modules for ${kernel_release} are missing at /lib/modules/${kernel_release}."
+  if [[ ! -f "/boot/config-${kernel_release}" && ! -f /proc/config.gz ]]; then
+    fail "Kernel configuration for ${kernel_release} is unavailable. Expected /boot/config-${kernel_release} or /proc/config.gz."
+  fi
+}
+
+run_update_initramfs() {
+  local action="$1"
+  local kernel_release="$2"
+  local output=""
+  local status=0
+  local filtered_output=""
+
+  output="$(update-initramfs "$action" -k "$kernel_release" 2>&1)" || status=$?
+  filtered_output="$(
+    printf '%s\n' "$output" | sed \
+      -e '/^WARNING: Unsupported initramfs version (.*) - skipping setup$/d' \
+      -e '/^NOTE: Manual boot configuration may be required$/d'
+  )"
+
+  if [[ -n "$filtered_output" ]]; then
+    printf '%s\n' "$filtered_output" >&2
+  fi
+
+  return "$status"
+}
+
+build_or_refresh_initramfs_for_running_kernel() {
+  local kernel_release="${1:-$(current_kernel_release)}"
+  local action
+  local image_path
+
+  if find_versioned_initramfs_image "$kernel_release" >/dev/null 2>&1; then
+    action="-u"
+  else
+    action="-c"
+  fi
+
+  run_update_initramfs "$action" "$kernel_release" || fail "update-initramfs failed for kernel ${kernel_release}."
+  image_path="$(find_versioned_initramfs_image "$kernel_release" || true)"
+  [[ -n "$image_path" ]] || fail "update-initramfs completed, but no initramfs image was found for kernel ${kernel_release}."
+  printf '%s\n' "$image_path"
+}
+
+install_expected_boot_initramfs() {
+  local source_image="$1"
+  local target_path="$2"
+
+  [[ -s "$source_image" ]] || fail "Initramfs source image is missing or empty: ${source_image}"
+  [[ -n "$target_path" ]] || fail "Boot initramfs target path must not be empty."
+  mkdir -p "$(dirname "$target_path")"
+  if [[ "$source_image" != "$target_path" ]]; then
+    if [[ -f "$target_path" ]]; then
+      backup_file "$target_path" || fail "Failed to back up ${target_path}"
+    fi
+    install -m 0644 "$source_image" "$target_path" || fail "Failed to install ${target_path}"
+  fi
+  [[ -s "$target_path" ]] || fail "Boot initramfs target is missing or empty after install: ${target_path}"
+  printf '%s\n' "$target_path"
+}
+
+ensure_bootable_initramfs_for_current_kernel() {
+  local target_path
+  local image_path
+
+  ensure_initramfs_tools_ready
+  ensure_kernel_artifacts_present_for_initramfs
+  target_path="$(boot_initramfs_target_path || true)"
+  [[ -n "$target_path" ]] || fail "Boot initramfs target is not configured. Set auto_initramfs=1 or add an initramfs entry to $(boot_config_path)."
+  if live_root_overlay_active; then
+    [[ -s "$target_path" ]] || fail "Boot initramfs target ${target_path} is missing while the live root overlay is active. Disable read-only mode before rebuilding initramfs."
+    printf '%s\n' "$target_path"
+    return 0
+  fi
+  image_path="$(build_or_refresh_initramfs_for_running_kernel)"
+  install_expected_boot_initramfs "$image_path" "$target_path" >/dev/null
+  printf '%s\n' "$target_path"
 }
 
 kernel_config_snippet() {
