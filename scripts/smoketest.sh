@@ -346,16 +346,32 @@ elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
 fi
 
 if machine_id_valid; then
-  ok "machine-id is stable"
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    ok "machine-id is ready for persistent read-only mode"
+  else
+    ok "machine-id is stable"
+  fi
 elif [[ "$OVERLAY_STATUS" == "enabled" || "$READONLY_MODE" == "persistent" ]]; then
-  warn "machine-id is missing or invalid"
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    warn "machine-id is missing or invalid for persistent read-only mode"
+  else
+    warn "machine-id is missing or invalid"
+  fi
   EXIT_CODE=1
 fi
 
 if [[ "$BLUETOOTH_STATE_PERSISTENT" == "yes" ]]; then
-  ok "Bluetooth state persistence is active"
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    ok "Bluetooth state is mounted persistently"
+  else
+    ok "Bluetooth state persistence is active"
+  fi
 elif [[ "$OVERLAY_STATUS" == "enabled" || "$READONLY_MODE" == "persistent" ]]; then
-  warn "Bluetooth state persistence is not active"
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    warn "Bluetooth state is not mounted persistently"
+  else
+    warn "Bluetooth state persistence is not active"
+  fi
   EXIT_CODE=1
 else
   ok "Bluetooth state persistence is not configured"
@@ -368,22 +384,6 @@ else
     ok "Read-only mode is disabled"
   else
     warn "Read-only mode is not persistent"
-    EXIT_CODE=1
-  fi
-fi
-
-if [[ "$READONLY_MODE" == "persistent" ]]; then
-  if machine_id_valid; then
-    ok "machine-id is ready for persistent read-only mode"
-  else
-    warn "machine-id is missing or invalid for persistent read-only mode"
-    EXIT_CODE=1
-  fi
-
-  if [[ "$BLUETOOTH_STATE_PERSISTENT" == "yes" ]]; then
-    ok "Bluetooth state is mounted persistently"
-  else
-    warn "Bluetooth state is not mounted persistently"
     EXIT_CODE=1
   fi
 fi

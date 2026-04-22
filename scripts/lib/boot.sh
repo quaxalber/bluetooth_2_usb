@@ -21,11 +21,47 @@ detect_boot_dir() {
 }
 
 default_kernel_image() {
-  if [[ "$(uname -m)" == "aarch64" ]]; then
-    printf '%s\n' "kernel8.img"
-  else
-    printf '%s\n' "kernel.img"
-  fi
+  local model arm_64bit
+
+  model="$(current_pi_model)"
+  arm_64bit="$(effective_arm_64bit)"
+
+  case "$model" in
+    *"Raspberry Pi 500"* | *"Raspberry Pi 5"* | *"Compute Module 5"*)
+      printf '%s\n' "kernel_2712.img"
+      ;;
+    *"Raspberry Pi 400"* | *"Raspberry Pi 4"* | *"Compute Module 4"*)
+      if [[ "$arm_64bit" == "1" ]]; then
+        printf '%s\n' "kernel8.img"
+      else
+        printf '%s\n' "kernel7l.img"
+      fi
+      ;;
+    *"Raspberry Pi 2"* | *"Raspberry Pi 3"* | *"Raspberry Pi Zero 2"* | *"Compute Module 3"*)
+      if [[ "$arm_64bit" == "1" ]]; then
+        printf '%s\n' "kernel8.img"
+      else
+        printf '%s\n' "kernel7.img"
+      fi
+      ;;
+    *)
+      case "$(uname -m)" in
+        aarch64)
+          printf '%s\n' "kernel8.img"
+          ;;
+        armv7l)
+          if grep -q '^Features.*\blpae\b' /proc/cpuinfo 2>/dev/null; then
+            printf '%s\n' "kernel7l.img"
+          else
+            printf '%s\n' "kernel7.img"
+          fi
+          ;;
+        *)
+          printf '%s\n' "kernel.img"
+          ;;
+      esac
+      ;;
+  esac
 }
 
 boot_config_path() {
@@ -48,10 +84,16 @@ import sys
 config_path = Path(sys.argv[1])
 target_key = sys.argv[2]
 value = ""
+current_section = ""
 
 for raw_line in config_path.read_text(encoding="utf-8").splitlines():
     line = raw_line.split("#", 1)[0].strip()
-    if not line or line.startswith("[") or "=" not in line:
+    if not line:
+        continue
+    if line.startswith("[") and line.endswith("]"):
+        current_section = line[1:-1].strip().lower()
+        continue
+    if "=" not in line or current_section not in ("", "all"):
         continue
     key, current_value = line.split("=", 1)
     if key.strip() == target_key:
@@ -83,10 +125,16 @@ import sys
 
 config_path = Path(sys.argv[1])
 value = ""
+current_section = ""
 
 for raw_line in config_path.read_text(encoding="utf-8").splitlines():
     line = raw_line.split("#", 1)[0].strip()
-    if not line or line.startswith("["):
+    if not line:
+        continue
+    if line.startswith("[") and line.endswith("]"):
+        current_section = line[1:-1].strip().lower()
+        continue
+    if current_section not in ("", "all"):
         continue
     if not line.startswith("initramfs "):
         continue
@@ -101,6 +149,21 @@ PY
 
 auto_initramfs_enabled() {
   [[ "$(boot_config_assignment_value "auto_initramfs")" == "1" ]]
+}
+
+effective_arm_64bit() {
+  local configured_value
+
+  configured_value="$(boot_config_assignment_value "arm_64bit")"
+  if [[ "$configured_value" == "1" ]]; then
+    printf '%s\n' "1"
+  elif [[ "$configured_value" == "0" ]]; then
+    printf '%s\n' "0"
+  elif [[ "$(uname -m)" == "aarch64" ]]; then
+    printf '%s\n' "1"
+  else
+    printf '%s\n' "0"
+  fi
 }
 
 expected_auto_initramfs_name() {
@@ -139,7 +202,7 @@ current_kernel_release() {
   uname -r
 }
 
-live_root_overlay_active() {
+root_overlay_active() {
   [[ "$(findmnt -n -o FSTYPE --target / 2>/dev/null || true)" == "overlay" ]]
 }
 
@@ -245,7 +308,7 @@ ensure_bootable_initramfs_for_current_kernel() {
   ensure_kernel_artifacts_present_for_initramfs
   target_path="$(boot_initramfs_target_path || true)"
   [[ -n "$target_path" ]] || fail "Boot initramfs target is not configured. Set auto_initramfs=1 or add an initramfs entry to $(boot_config_path)."
-  if live_root_overlay_active; then
+  if root_overlay_active; then
     [[ -s "$target_path" ]] || fail "Boot initramfs target ${target_path} is missing while the live root overlay is active. Disable read-only mode before rebuilding initramfs."
     printf '%s\n' "$target_path"
     return 0

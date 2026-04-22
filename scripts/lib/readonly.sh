@@ -10,6 +10,8 @@ _b2u_readonly_lib_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_b2u_readonly_lib_dir}/paths.sh"
 # shellcheck source=./common.sh
 source "${_b2u_readonly_lib_dir}/common.sh"
+# shellcheck source=./boot.sh
+source "${_b2u_readonly_lib_dir}/boot.sh"
 unset _b2u_readonly_lib_dir
 
 overlay_status() {
@@ -26,10 +28,6 @@ overlay_status() {
     1) printf '%s\n' "disabled" ;;
     *) printf '%s\n' "unknown" ;;
   esac
-}
-
-root_overlay_active() {
-  [[ "$(findmnt -n -o FSTYPE --target / 2>/dev/null || true)" == "overlay" ]]
 }
 
 root_overlay_report() {
