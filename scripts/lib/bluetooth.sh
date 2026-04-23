@@ -50,7 +50,7 @@ bluetooth_paired_count() {
   local output
 
   output="$(bluetoothctl_paired_devices 2>/dev/null)" || return 1
-  grep -c '^Device ' <<<"$output"
+  awk 'BEGIN { count = 0 } /^Device / { count++ } END { print count }' <<<"$output"
 }
 
 _bluetooth_rfkill_records() {

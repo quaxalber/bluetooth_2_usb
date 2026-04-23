@@ -75,7 +75,7 @@ UDC_STATE_PATH=""
 UDC_STATE_VALUE=""
 DWC2_MODE="$(dwc2_mode)"
 IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
-EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line)"
+EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line 2>/dev/null || true)"
 OVERLAY_STATUS="$(overlay_status)"
 ROOT_OVERLAY_ACTIVE="unknown"
 ROOT_FILESYSTEM_TYPE="unknown"
@@ -91,8 +91,14 @@ if ROOT_FILESYSTEM_TYPE="$(current_root_filesystem_type)"; then
     ROOT_OVERLAY_ACTIVE="no"
   fi
 else
-  warn "Could not determine the live root filesystem type"
-  EXIT_CODE=1
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Could not determine the live root filesystem type"
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$SMOKETEST_POST_REBOOT" != "1" ]]; then
+    soft_warn "Could not determine the live root filesystem type before reboot"
+  else
+    warn "Could not determine the live root filesystem type"
+    EXIT_CODE=1
+  fi
 fi
 
 if bluetooth_state_persistent; then
@@ -150,7 +156,14 @@ print_verbose_section_header() {
   echo "## $1"
 }
 
-if grep -qxF "$EXPECTED_OVERLAY_LINE" "$CONFIG_TXT"; then
+if [[ -z "$EXPECTED_OVERLAY_LINE" ]]; then
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Could not determine expected Raspberry Pi overlay line"
+  else
+    warn "Could not determine expected Raspberry Pi overlay line"
+    EXIT_CODE=1
+  fi
+elif grep -qxF "$EXPECTED_OVERLAY_LINE" "$CONFIG_TXT"; then
   ok "config.txt contains expected overlay (${EXPECTED_OVERLAY_LINE})"
 else
   warn "config.txt is missing expected overlay (${EXPECTED_OVERLAY_LINE})"
@@ -345,19 +358,29 @@ esac
 if [[ "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
   ok "Root overlay is active"
 elif [[ "$ROOT_OVERLAY_ACTIVE" == "unknown" ]]; then
-  warn "Could not determine whether the root overlay is active"
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Could not determine whether the root overlay is active"
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$SMOKETEST_POST_REBOOT" != "1" ]]; then
+    soft_warn "Could not determine whether the root overlay is active before reboot"
+  else
+    warn "Could not determine whether the root overlay is active"
+    EXIT_CODE=1
+  fi
   ROOT_MOUNT_REPORT="$(root_overlay_report)"
   if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
     printf '%s\n' "$ROOT_MOUNT_REPORT"
   fi
-  EXIT_CODE=1
 elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
-  warn "Root overlay is not active"
+  if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
+    warn "Root overlay is not active"
+    EXIT_CODE=1
+  else
+    soft_warn "Root overlay is not active; reboot may still be pending"
+  fi
   ROOT_MOUNT_REPORT="$(root_overlay_report)"
   if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
     printf '%s\n' "$ROOT_MOUNT_REPORT"
   fi
-  EXIT_CODE=1
 else
   ok "Root overlay is inactive"
 fi
@@ -426,6 +449,13 @@ else
     warn "Read-only mode is not persistent"
     if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
       EXIT_CODE=1
+    fi
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$ROOT_OVERLAY_ACTIVE" == "unknown" ]]; then
+    if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
+      warn "Read-only mode could not be confirmed after reboot"
+      EXIT_CODE=1
+    else
+      soft_warn "Read-only mode could not be confirmed yet; reboot may still be pending"
     fi
   elif [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
     warn "Read-only mode config drift: overlay active but not configured to persist"
