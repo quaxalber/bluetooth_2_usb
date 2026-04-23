@@ -488,7 +488,12 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "Allow non-Pi overlay bypass: ${ALLOW_NON_PI}"
   echo "Root filesystem type: ${ROOT_FILESYSTEM_TYPE}"
   echo "Root overlay active: ${ROOT_OVERLAY_ACTIVE}"
-  echo "Root mount: $(root_overlay_report)"
+  ROOT_MOUNT_REPORT="$(root_overlay_report)"
+  if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
+    printf 'Root mount:\n%s\n' "$ROOT_MOUNT_REPORT"
+  else
+    echo "Root mount: <unknown>"
+  fi
   echo "Bluetooth state persistent: ${BLUETOOTH_STATE_PERSISTENT}"
   echo "Smoketest post-reboot mode: ${SMOKETEST_POST_REBOOT}"
   echo "Relayable device count: ${RELAYABLE_COUNT:-unknown}"

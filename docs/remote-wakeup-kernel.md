@@ -107,7 +107,7 @@ when `auto_initramfs=1` is enabled.
 | Raspberry Pi Zero W | validated | `ARCH=arm`, `bcmrpi_defconfig`, `KERNEL=kernel`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel-b2u-wake.img` | `initramfs-b2u-wake` | GCC path validated; LLVM fallback also validated |
 | Raspberry Pi 5 | unvalidated | `ARCH=arm64`, `bcm2712_defconfig`, `KERNEL=kernel_2712`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel_2712-b2u-wake.img` | `initramfs_2712-b2u-wake` | USB-C gadget path shares the board's USB-C connectivity |
 | Raspberry Pi 4B 32-bit | unvalidated | `ARCH=arm`, `bcm2711_defconfig`, `KERNEL=kernel7l`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel7l-b2u-wake.img` | `initramfs7l-b2u-wake` | Use only for 32-bit Pi OS on Pi 4 |
-| Raspberry Pi Zero 2 W 64-bit | unvalidated | `ARCH=arm64`, `bcm2711_defconfig`, `KERNEL=kernel8`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel8-b2u-wake.img` | `initramfs8-b2u-wake` | Shares the Pi 4B 64-bit image/initramfs naming |
+| Raspberry Pi Zero 2 W 64-bit | unvalidated | `ARCH=arm64`, `bcm2709_defconfig`, `KERNEL=kernel8`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel8-b2u-wake.img` | `initramfs8-b2u-wake` | Shares the Pi 4B 64-bit image/initramfs naming |
 | Raspberry Pi Zero 2 W 32-bit | unvalidated | `ARCH=arm`, `bcm2709_defconfig`, `KERNEL=kernel7`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel7-b2u-wake.img` | `initramfs7-b2u-wake` | 32-bit only |
 
 ## Validated build paths

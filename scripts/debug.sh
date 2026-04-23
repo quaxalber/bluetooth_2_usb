@@ -205,12 +205,22 @@ run_live_debug_block() {
 
   if [[ -n "$DURATION" ]]; then
     info "Live debug duration: ${DURATION}s"
+    trap 'interrupted="INT"; STOP_SIGNAL="INT"' INT
+    trap 'interrupted="TERM"; STOP_SIGNAL="TERM"' TERM
     if run_command_with_timeout_tracking "$DURATION" "$command" "$fifo"; then
       status=0
     else
       status=$?
     fi
     timed_out=$TIMEOUT_EXPIRED
+    trap 'STOP_SIGNAL="INT"' INT
+    trap 'STOP_SIGNAL="TERM"' TERM
+    if [[ -n "$interrupted" ]]; then
+      case "$interrupted" in
+        INT) status=130 ;;
+        TERM) status=143 ;;
+      esac
+    fi
   else
     info "Live debug duration: until interrupted"
     trap 'interrupted="INT"; STOP_SIGNAL="INT"; [[ -n "$child_pid" ]] && kill -INT -- "-$child_pid" 2>/dev/null || true' INT

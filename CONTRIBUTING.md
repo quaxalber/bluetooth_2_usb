@@ -161,8 +161,10 @@ CodeRabbit policy:
 - treat that prompt section as the source of truth for actionable review
   findings, including nitpicks, outside-diff-range comments, summary comments,
   and other grouped review items
-- if the first CodeRabbit comment says `review in progress`, `paused`, or
-  `rate limited`, wait or resume before posting `@coderabbitai full review`
+- if the first CodeRabbit comment says `review in progress`, wait for completion
+- if it says `paused`, resume the review first (for example, click Resume or
+  post `@coderabbitai resume`) before posting `@coderabbitai full review`
+- if it says `rate limited`, wait and retry `@coderabbitai full review`
 
 ## Reporting issues
 

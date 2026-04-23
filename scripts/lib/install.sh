@@ -152,7 +152,9 @@ service_installed() {
   local unit_files
   local unit_name_regex
 
-  unit_files="$(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null)" || return 1
+  if ! unit_files="$(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null)"; then
+    return 2
+  fi
   unit_name_regex="$(printf '%s\n' "$B2U_SERVICE_UNIT" | sed 's/[][(){}.^$*+?|\\/]/\\&/g')"
-  grep -Eq "^${unit_name_regex}[[:space:]]" <<<"$unit_files"
+  grep -Eq "^${unit_name_regex}[[:space:]]" <<<"$unit_files" || return 1
 }
