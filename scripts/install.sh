@@ -47,7 +47,7 @@ require_commands apt-get awk grep git install python3 sed systemctl
 BOOT_DIR="$(detect_boot_dir)"
 CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
-MODEL="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
+MODEL="$(current_pi_model)" || fail "Could not determine Raspberry Pi model from /proc/device-tree/model."
 DWC2_MODE="$(dwc2_mode)"
 OVERLAY_LINE="$(board_overlay_line "$MODEL")"
 MODULES="$(required_boot_modules_csv)"

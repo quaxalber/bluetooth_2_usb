@@ -289,6 +289,9 @@ until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
 done
 ```
 
+Only run destructive read-only rollback checks after `findmnt -no FSTYPE,SOURCE /`
+shows `overlay` for the live root filesystem.
+
 ## Uninstall validation
 
 ```bash
@@ -307,9 +310,6 @@ Expected outcome:
 - checkout remains present
 - persistent mount units are disabled
 - runtime env files and wrapper are removed
-
-Only run destructive read-only rollback checks after `findmnt -no FSTYPE,SOURCE /`
-shows `overlay` for the live root filesystem.
 
 ## What to record
 

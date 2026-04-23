@@ -23,7 +23,9 @@ detect_boot_dir() {
 default_kernel_image() {
   local model arm_64bit
 
-  model="$(current_pi_model)"
+  if ! model="$(current_pi_model)"; then
+    model=""
+  fi
   arm_64bit="$(effective_arm_64bit)"
 
   case "$model" in
@@ -203,7 +205,10 @@ current_kernel_release() {
 }
 
 root_overlay_active() {
-  [[ "$(findmnt -n -o FSTYPE --target / 2>/dev/null || true)" == "overlay" ]]
+  local root_fstype
+
+  root_fstype="$(current_root_filesystem_type)" || return 1
+  [[ "$root_fstype" == "overlay" ]]
 }
 
 versioned_initrd_candidates() {
@@ -254,9 +259,9 @@ run_update_initramfs() {
 
   output="$(update-initramfs "$action" -k "$kernel_release" 2>&1)" || status=$?
   filtered_output="$(
-    printf '%s\n' "$output" | sed \
-      -e '/^WARNING: Unsupported initramfs version (.*) - skipping setup$/d' \
-      -e '/^NOTE: Manual boot configuration may be required$/d'
+    printf '%s\n' "$output" | sed -E \
+      -e '/^WARNING:.*Unsupported initramfs version/d' \
+      -e '/^NOTE:.*Manual boot configuration/d'
   )"
 
   if [[ -n "$filtered_output" ]]; then
@@ -268,16 +273,14 @@ run_update_initramfs() {
 
 build_or_refresh_initramfs_for_running_kernel() {
   local kernel_release="${1:-$(current_kernel_release)}"
-  local action
   local image_path
 
   if find_versioned_initramfs_image "$kernel_release" >/dev/null 2>&1; then
-    action="-u"
+    run_update_initramfs "-u" "$kernel_release" || run_update_initramfs "-c" "$kernel_release" || fail "update-initramfs failed for kernel ${kernel_release}."
   else
-    action="-c"
+    run_update_initramfs "-c" "$kernel_release" || fail "update-initramfs failed for kernel ${kernel_release}."
   fi
 
-  run_update_initramfs "$action" "$kernel_release" || fail "update-initramfs failed for kernel ${kernel_release}."
   image_path="$(find_versioned_initramfs_image "$kernel_release" || true)"
   [[ -n "$image_path" ]] || fail "update-initramfs completed, but no initramfs image was found for kernel ${kernel_release}."
   printf '%s\n' "$image_path"
@@ -380,11 +383,25 @@ board_overlay_line() {
 }
 
 current_pi_model() {
-  tr -d '\0' </proc/device-tree/model 2>/dev/null || true
+  local model_file="/proc/device-tree/model"
+
+  [[ -r "$model_file" ]] || return 1
+  tr -d '\0' <"$model_file"
+}
+
+current_root_filesystem_type() {
+  local root_fstype
+
+  root_fstype="$(findmnt -n -o FSTYPE --target / 2>/dev/null)" || return 1
+  [[ -n "$root_fstype" ]] || return 1
+  printf '%s\n' "$root_fstype"
 }
 
 expected_dwc2_overlay_line() {
-  board_overlay_line "$(current_pi_model)"
+  local model
+
+  model="$(current_pi_model)" || fail "Could not determine Raspberry Pi model from /proc/device-tree/model."
+  board_overlay_line "$model"
 }
 
 normalize_dwc2_overlay() {

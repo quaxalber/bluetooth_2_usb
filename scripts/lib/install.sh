@@ -149,5 +149,8 @@ rebuild_venv_atomically() {
 }
 
 service_installed() {
-  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${B2U_SERVICE_UNIT}"
+  local unit_files
+
+  unit_files="$(systemctl list-unit-files --type=service 2>/dev/null)" || return 1
+  grep -Fq "${B2U_SERVICE_UNIT}" <<<"$unit_files"
 }

@@ -22,10 +22,12 @@ overlay_status() {
     return
   fi
 
-  if state="$(raspi-config nonint get_overlay_conf 2>/dev/null | tr -d '[:space:]')"; then
-    :
+  if state="$(raspi-config nonint get_overlay_conf 2>/dev/null)"; then
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+  elif state="$(raspi-config nonint get_overlay_now 2>/dev/null)"; then
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
   else
-    state="$(raspi-config nonint get_overlay_now 2>/dev/null | tr -d '[:space:]')"
+    state=""
   fi
   case "$state" in
     0) printf '%s\n' "enabled" ;;
@@ -131,7 +133,14 @@ bluetooth_state_persistent() {
 }
 
 readonly_mode() {
-  if root_overlay_active && bluetooth_state_persistent; then
+  local root_fstype
+
+  if ! root_fstype="$(current_root_filesystem_type)"; then
+    printf '%s\n' "unknown"
+    return 0
+  fi
+
+  if [[ "$root_fstype" == "overlay" ]] && bluetooth_state_persistent; then
     printf '%s\n' "persistent"
   else
     printf '%s\n' "disabled"

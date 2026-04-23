@@ -18,6 +18,7 @@ VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
 EXIT_CODE=0
 SOFT_WARNINGS=0
+SMOKETEST_POST_REBOOT="${SMOKETEST_POST_REBOOT:-0}"
 
 usage() {
   cat <<EOF
@@ -70,14 +71,22 @@ DWC2_MODE="$(dwc2_mode)"
 IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
 EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line)"
 OVERLAY_STATUS="$(overlay_status)"
-ROOT_OVERLAY_ACTIVE="no"
+ROOT_OVERLAY_ACTIVE="unknown"
+ROOT_FILESYSTEM_TYPE="unknown"
 BLUETOOTH_STATE_PERSISTENT="no"
 CONFIGURED_INITRAMFS_FILE="$(configured_initramfs_file)"
 EXPECTED_BOOT_INITRAMFS_FILE="$(expected_boot_initramfs_file || true)"
 EXPECTED_BOOT_INITRAMFS_PATH=""
 
-if root_overlay_active; then
-  ROOT_OVERLAY_ACTIVE="yes"
+if ROOT_FILESYSTEM_TYPE="$(current_root_filesystem_type)"; then
+  if [[ "$ROOT_FILESYSTEM_TYPE" == "overlay" ]]; then
+    ROOT_OVERLAY_ACTIVE="yes"
+  else
+    ROOT_OVERLAY_ACTIVE="no"
+  fi
+else
+  warn "Could not determine the live root filesystem type"
+  EXIT_CODE=1
 fi
 
 if bluetooth_state_persistent; then
@@ -322,6 +331,13 @@ esac
 
 if [[ "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
   ok "Root overlay is active"
+elif [[ "$ROOT_OVERLAY_ACTIVE" == "unknown" ]]; then
+  warn "Could not determine whether the root overlay is active"
+  ROOT_MOUNT_REPORT="$(root_overlay_report)"
+  if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
+    printf '%s\n' "$ROOT_MOUNT_REPORT"
+  fi
+  EXIT_CODE=1
 elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
   warn "Root overlay is not active"
   ROOT_MOUNT_REPORT="$(root_overlay_report)"
@@ -387,9 +403,17 @@ fi
 
 if [[ "$READONLY_MODE" == "persistent" ]]; then
   ok "Read-only mode is persistent"
+elif [[ "$READONLY_MODE" == "unknown" ]]; then
+  warn "Read-only mode could not be determined"
+  EXIT_CODE=1
 else
   if [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then
     ok "Read-only mode is disabled"
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then
+    warn "Read-only mode is not persistent"
+    if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
+      EXIT_CODE=1
+    fi
   else
     warn "Read-only mode is not persistent"
     EXIT_CODE=1
@@ -414,6 +438,7 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "UDC state: ${UDC_STATE_VALUE:-<unknown>}"
   echo "Readonly mode: ${READONLY_MODE}"
   echo "OverlayFS configured: ${OVERLAY_STATUS}"
+  echo "Root filesystem type: ${ROOT_FILESYSTEM_TYPE}"
   echo "Root overlay active: ${ROOT_OVERLAY_ACTIVE}"
   echo "Root mount: $(root_overlay_report)"
   echo "Bluetooth state persistent: ${BLUETOOTH_STATE_PERSISTENT}"
