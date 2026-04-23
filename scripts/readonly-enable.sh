@@ -62,12 +62,12 @@ CONFIGURED_INITRAMFS_FILE="$(configured_initramfs_file)"
 EXPECTED_BOOT_INITRAMFS_FILE="$(expected_boot_initramfs_file || true)"
 VERSIONED_INITRDS="$(versioned_initrd_candidates "$KERNEL_RELEASE" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
 
+warn "Kernel release: ${KERNEL_RELEASE}"
+warn "Configured kernel image: ${CONFIGURED_KERNEL_IMAGE}"
+warn "Explicit initramfs entry: ${CONFIGURED_INITRAMFS_FILE:-<none>}"
+warn "Expected boot initramfs file: ${EXPECTED_BOOT_INITRAMFS_FILE:-<none>}"
+warn "Versioned initramfs candidates: ${VERSIONED_INITRDS:-<none>}"
 if ! BOOT_INITRAMFS_TARGET_PATH="$(ensure_bootable_initramfs_for_current_kernel)"; then
-  warn "Kernel release: ${KERNEL_RELEASE}"
-  warn "Configured kernel image: ${CONFIGURED_KERNEL_IMAGE}"
-  warn "Explicit initramfs entry: ${CONFIGURED_INITRAMFS_FILE:-<none>}"
-  warn "Expected boot initramfs file: ${EXPECTED_BOOT_INITRAMFS_FILE:-<none>}"
-  warn "Versioned initramfs candidates: ${VERSIONED_INITRDS:-<none>}"
   fail "Failed to prepare the boot initramfs for read-only mode. Fix the kernel or initramfs setup above, then rerun ./scripts/readonly-enable.sh."
 fi
 ok "Boot initramfs is ready at ${BOOT_INITRAMFS_TARGET_PATH}"

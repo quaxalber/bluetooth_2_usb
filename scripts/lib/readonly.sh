@@ -132,6 +132,11 @@ bluetooth_state_persistent() {
   [[ "$mount_source" == "${persist_mount_source}[${relative_subdir}]" ]]
 }
 
+# Returns "persistent" only when the live root filesystem is overlay-backed and
+# Bluetooth state persistence is active. Otherwise it returns "disabled", with
+# "unknown" reserved for root-filesystem detection failures. Callers that need
+# finer-grained state should check current_root_filesystem_type() and
+# bluetooth_state_persistent() separately; scripts/smoketest.sh does that.
 readonly_mode() {
   local root_fstype
 

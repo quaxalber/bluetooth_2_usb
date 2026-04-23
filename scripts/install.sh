@@ -53,7 +53,7 @@ OVERLAY_LINE="$(board_overlay_line "$MODEL")"
 MODULES="$(required_boot_modules_csv)"
 PRE_REBOOT_EXIT=3
 
-info "Detected model: ${MODEL:-unknown}"
+info "Detected model: ${MODEL}"
 info "Using boot directory: ${BOOT_DIR}"
 info "Detected dwc2 mode: ${DWC2_MODE}"
 

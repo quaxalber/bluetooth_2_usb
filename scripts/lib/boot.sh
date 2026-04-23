@@ -197,6 +197,10 @@ boot_initramfs_target_path() {
   local target_file="${1:-$(expected_boot_initramfs_file)}"
 
   [[ -n "$target_file" ]] || return 1
+  if [[ "$target_file" == /* || "$target_file" == *"/"* || "$target_file" == *".."* ]]; then
+    printf '%s\n' "Unsafe initramfs target file in $(boot_config_path): ${target_file}" >&2
+    return 1
+  fi
   printf '%s/%s\n' "$(detect_boot_dir)" "$target_file"
 }
 
@@ -207,8 +211,16 @@ current_kernel_release() {
 root_overlay_active() {
   local root_fstype
 
-  root_fstype="$(current_root_filesystem_type)" || return 1
-  [[ "$root_fstype" == "overlay" ]]
+  if ! root_fstype="$(current_root_filesystem_type)"; then
+    printf '%s\n' "unknown"
+    return 1
+  fi
+
+  if [[ "$root_fstype" == "overlay" ]]; then
+    printf '%s\n' "yes"
+  else
+    printf '%s\n' "no"
+  fi
 }
 
 versioned_initrd_candidates() {
@@ -273,9 +285,15 @@ run_update_initramfs() {
 
 build_or_refresh_initramfs_for_running_kernel() {
   local kernel_release="${1:-$(current_kernel_release)}"
+  local target_path="${2:-}"
+  local existing_image_path=""
   local image_path
 
-  if find_versioned_initramfs_image "$kernel_release" >/dev/null 2>&1; then
+  existing_image_path="$(find_versioned_initramfs_image "$kernel_release" || true)"
+  if [[ -n "$existing_image_path" ]]; then
+    if [[ -n "$target_path" && "$existing_image_path" == "$target_path" && -f "$target_path" ]]; then
+      backup_file "$target_path" || fail "Failed to back up ${target_path}"
+    fi
     run_update_initramfs "-u" "$kernel_release" || run_update_initramfs "-c" "$kernel_release" || fail "update-initramfs failed for kernel ${kernel_release}."
   else
     run_update_initramfs "-c" "$kernel_release" || fail "update-initramfs failed for kernel ${kernel_release}."
@@ -304,19 +322,28 @@ install_expected_boot_initramfs() {
 }
 
 ensure_bootable_initramfs_for_current_kernel() {
+  local kernel_release
   local target_path
   local image_path
+  local overlay_state
 
+  kernel_release="$(current_kernel_release)"
   target_path="$(boot_initramfs_target_path || true)"
   [[ -n "$target_path" ]] || fail "Boot initramfs target is not configured. Set auto_initramfs=1 or add an initramfs entry to $(boot_config_path)."
-  if root_overlay_active; then
+  if ! overlay_state="$(root_overlay_active)"; then
+    fail "Unable to determine live root overlay state; aborting initramfs operations."
+  fi
+  if [[ "$overlay_state" == "unknown" ]]; then
+    fail "Unable to determine live root overlay state; aborting initramfs operations."
+  fi
+  if [[ "$overlay_state" == "yes" ]]; then
     [[ -s "$target_path" ]] || fail "Boot initramfs target ${target_path} is missing while the live root overlay is active. Disable read-only mode before rebuilding initramfs."
     printf '%s\n' "$target_path"
     return 0
   fi
   ensure_initramfs_tools_ready
-  ensure_kernel_artifacts_present_for_initramfs
-  image_path="$(build_or_refresh_initramfs_for_running_kernel)"
+  ensure_kernel_artifacts_present_for_initramfs "$kernel_release"
+  image_path="$(build_or_refresh_initramfs_for_running_kernel "$kernel_release" "$target_path")"
   install_expected_boot_initramfs "$image_path" "$target_path" >/dev/null
   printf '%s\n' "$target_path"
 }

@@ -18,12 +18,14 @@ VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
 EXIT_CODE=0
 SOFT_WARNINGS=0
+ALLOW_NON_PI="${ALLOW_NON_PI:-0}"
 SMOKETEST_POST_REBOOT="${SMOKETEST_POST_REBOOT:-0}"
 
 usage() {
   cat <<EOF
 Usage: sudo ./scripts/smoketest.sh [options]
   --verbose           Print detailed diagnostics, including journalctl
+  --allow-non-pi      Do not fail when OverlayFS detection is unavailable
 EOF
 }
 
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --verbose)
       VERBOSE=1
+      shift
+      ;;
+    --allow-non-pi)
+      ALLOW_NON_PI=1
       shift
       ;;
     -h | --help)
@@ -302,11 +308,16 @@ else
   EXIT_CODE=1
 fi
 
-PAIRED_COUNT="$(bluetooth_paired_count)"
-if [[ "${PAIRED_COUNT:-0}" -gt 0 ]]; then
-  ok "Paired Bluetooth devices detected (${PAIRED_COUNT})"
+PAIRED_COUNT=0
+if PAIRED_COUNT="$(bluetooth_paired_count)"; then
+  if [[ "${PAIRED_COUNT:-0}" -gt 0 ]]; then
+    ok "Paired Bluetooth devices detected (${PAIRED_COUNT})"
+  else
+    soft_warn "No paired Bluetooth devices detected"
+  fi
 else
-  soft_warn "No paired Bluetooth devices detected"
+  warn "bluetoothctl failed while listing paired devices"
+  EXIT_CODE=1
 fi
 
 if [[ -d /var/lib/bluetooth ]]; then
@@ -325,7 +336,9 @@ case "$OVERLAY_STATUS" in
     ;;
   *)
     warn "OverlayFS boot configuration status is unknown"
-    EXIT_CODE=1
+    if [[ "$ALLOW_NON_PI" != "1" ]]; then
+      EXIT_CODE=1
+    fi
     ;;
 esac
 
@@ -414,6 +427,9 @@ else
     if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
       EXIT_CODE=1
     fi
+  elif [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
+    warn "Read-only mode config drift: overlay active but not configured to persist"
+    EXIT_CODE=1
   else
     warn "Read-only mode is not persistent"
     EXIT_CODE=1
@@ -438,10 +454,12 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "UDC state: ${UDC_STATE_VALUE:-<unknown>}"
   echo "Readonly mode: ${READONLY_MODE}"
   echo "OverlayFS configured: ${OVERLAY_STATUS}"
+  echo "Allow non-Pi overlay bypass: ${ALLOW_NON_PI}"
   echo "Root filesystem type: ${ROOT_FILESYSTEM_TYPE}"
   echo "Root overlay active: ${ROOT_OVERLAY_ACTIVE}"
   echo "Root mount: $(root_overlay_report)"
   echo "Bluetooth state persistent: ${BLUETOOTH_STATE_PERSISTENT}"
+  echo "Smoketest post-reboot mode: ${SMOKETEST_POST_REBOOT}"
   echo "Relayable device count: ${RELAYABLE_COUNT:-unknown}"
   echo "Paired Bluetooth device count: ${PAIRED_COUNT:-unknown}"
   echo "Non-fatal warning count: ${SOFT_WARNINGS}"

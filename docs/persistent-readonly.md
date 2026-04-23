@@ -67,7 +67,7 @@ sudo reboot
 After reboot:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+sudo env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 findmnt -no FSTYPE,SOURCE /
 sudo bash -lc '. /opt/bluetooth_2_usb/scripts/lib/boot.sh; p="$(boot_initramfs_target_path || true)"; [ -s "$p" ] && printf "boot initramfs: %s\n" "$p"'
 ```

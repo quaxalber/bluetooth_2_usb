@@ -93,9 +93,15 @@ write_command_block() {
   local command="$3"
   local tmp
   local status=0
+  local timed_out=0
 
   tmp="$(mktemp)"
-  timeout "$timeout_secs" bash --noprofile --norc -c "$command" >"$tmp" 2>&1 || status=$?
+  if run_command_with_timeout_tracking "$timeout_secs" "$command" "$tmp"; then
+    status=0
+  else
+    status=$?
+  fi
+  timed_out=$TIMEOUT_EXPIRED
 
   write_heading "$title"
   printf '```console\n' >>"$REPORT_BODY"
@@ -105,14 +111,54 @@ write_command_block() {
   else
     printf '<no output>\n' >>"$REPORT_BODY"
   fi
-  case "$status" in
-    0) ;;
-    124) printf '[timed out after %ss]\n' "$timeout_secs" >>"$REPORT_BODY" ;;
-    *) printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY" ;;
-  esac
+  if [[ $timed_out -eq 1 ]]; then
+    printf '[timed out after %ss]\n' "$timeout_secs" >>"$REPORT_BODY"
+  elif [[ $status -ne 0 ]]; then
+    printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY"
+  fi
   printf '```\n\n' >>"$REPORT_BODY"
 
   rm -f "$tmp"
+}
+
+TIMEOUT_EXPIRED=0
+
+run_command_with_timeout_tracking() {
+  local timeout_secs="$1"
+  local command="$2"
+  local output_path="$3"
+  local status=0
+  local timed_out_marker=""
+  local child_pid=""
+  local watcher_pid=""
+
+  TIMEOUT_EXPIRED=0
+  timed_out_marker="$(mktemp)"
+  rm -f "$timed_out_marker"
+
+  setsid bash --noprofile --norc -c "$command" >"$output_path" 2>&1 &
+  child_pid=$!
+  (
+    sleep "$timeout_secs"
+    if kill -0 -- "-$child_pid" 2>/dev/null || kill -0 "$child_pid" 2>/dev/null; then
+      : >"$timed_out_marker"
+      kill -TERM -- "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
+      sleep 2
+      kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
+    fi
+  ) &
+  watcher_pid=$!
+
+  wait "$child_pid" || status=$?
+  kill "$watcher_pid" 2>/dev/null || true
+  wait "$watcher_pid" 2>/dev/null || true
+
+  if [[ -f "$timed_out_marker" ]]; then
+    TIMEOUT_EXPIRED=1
+  fi
+  rm -f "$timed_out_marker"
+
+  return "$status"
 }
 
 stop_service_for_debug() {
@@ -130,6 +176,7 @@ run_live_debug_block() {
   local tee_pid=""
   local child_pid=""
   local interrupted=""
+  local timed_out=0
 
   tmp="$(mktemp)"
   fifo="$(mktemp -u)"
@@ -145,7 +192,12 @@ run_live_debug_block() {
 
   if [[ -n "$DURATION" ]]; then
     info "Live debug duration: ${DURATION}s"
-    timeout "$DURATION" bash --noprofile --norc -c "$command" >"$fifo" 2>&1 || status=$?
+    if run_command_with_timeout_tracking "$DURATION" "$command" "$fifo"; then
+      status=0
+    else
+      status=$?
+    fi
+    timed_out=$TIMEOUT_EXPIRED
   else
     info "Live debug duration: until interrupted"
     trap 'interrupted="INT"; STOP_SIGNAL="INT"; [[ -n "$child_pid" ]] && kill -INT -- "-$child_pid" 2>/dev/null || true' INT
@@ -167,11 +219,11 @@ run_live_debug_block() {
     printf '<no output>\n' >>"$REPORT_BODY"
   fi
 
-  case "$status" in
-    0) ;;
-    124) printf '[timed out after %ss]\n' "$DURATION" >>"$REPORT_BODY" ;;
-    *) [[ -n "$interrupted" ]] || printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY" ;;
-  esac
+  if [[ $timed_out -eq 1 ]]; then
+    printf '[timed out after %ss]\n' "$DURATION" >>"$REPORT_BODY"
+  elif [[ $status -ne 0 ]]; then
+    [[ -n "$interrupted" ]] || printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY"
+  fi
   if [[ -n "$interrupted" ]]; then
     printf '[interrupted by %s]\n' "$interrupted" >>"$REPORT_BODY"
   fi
@@ -185,7 +237,7 @@ run_live_debug_block() {
       TERM) return 143 ;;
     esac
   fi
-  if [[ -n "$DURATION" && $status -eq 124 ]]; then
+  if [[ $timed_out -eq 1 ]]; then
     return 0
   fi
   return "$status"

@@ -80,14 +80,8 @@ summary.
 
 CodeRabbit:
 
-- Treat the first top-level CodeRabbit PR comment as the authoritative live
-  state.
-- Do not consider CodeRabbit complete until that comment says
-  `no actionable comments` after the latest commit.
-- Before manually pinging CodeRabbit, inspect both that first comment and the
-  `CodeRabbit` GitHub check on the PR head commit.
-- If the first comment shows `review in progress`, `paused`, or `rate limited`,
-  wait, resume, or re-trigger only when that state justifies it.
+- Follow the canonical CodeRabbit review policy in `CONTRIBUTING.md`.
+- Do not duplicate or override that policy here.
 
 ## Final response expectations
 
