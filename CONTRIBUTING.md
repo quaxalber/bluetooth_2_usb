@@ -149,15 +149,22 @@ Branch and commit naming:
 
 CodeRabbit policy:
 
-- `.coderabbit.yaml` enables automatic review on new pushes and includes
-  `staging`
+- `.coderabbit.yaml` disables automatic review; request CodeRabbit manually when
+  needed, using `@coderabbitai full review` by default
 - treat the first top-level CodeRabbit PR comment as the live status source of
   truth
 - do not consider review complete until that comment says
   `no actionable comments` after the latest commit
 - do not use a green `CodeRabbit` check alone as proof that review is finished
-- if the first CodeRabbit comment says `review in progress`, `paused`, or
-  `rate limited`, wait or resume before posting `@coderabbitai review`
+- for the actual findings, inspect the newest review comments and read the
+  section `Prompt for all review comments with AI agents`
+- treat that prompt section as the source of truth for actionable review
+  findings, including nitpicks, outside-diff-range comments, summary comments,
+  and other grouped review items
+- if the first CodeRabbit comment says `review in progress`, wait for completion
+- if it says `paused`, resume the review first (for example, click Resume or
+  post `@coderabbitai resume`) before posting `@coderabbitai full review`
+- if it says `rate limited`, wait and retry `@coderabbitai full review`
 
 ## Reporting issues
 

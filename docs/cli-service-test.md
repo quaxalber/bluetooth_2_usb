@@ -199,9 +199,11 @@ After reboot:
 
 ```bash
 ssh <pi-host> '
-  sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+  sudo -n env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+  findmnt -no FSTYPE,SOURCE /
   findmnt /var/lib/bluetooth
   findmnt /mnt/b2u-persist
+  sudo bash -lc '"'"'. /opt/bluetooth_2_usb/scripts/lib/boot.sh; p="$(boot_initramfs_target_path || true)"; [ -s "$p" ] && printf "boot-initramfs %s\n" "$p"'"'"'
   grep "^B2U_" /etc/default/bluetooth_2_usb_readonly
 '
 ```
@@ -286,6 +288,9 @@ until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
   sleep 2
 done
 ```
+
+Only run destructive read-only rollback checks after `findmnt -no FSTYPE,SOURCE /`
+shows `overlay` for the live root filesystem.
 
 ## Uninstall validation
 
