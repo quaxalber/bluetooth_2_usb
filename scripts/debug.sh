@@ -123,6 +123,17 @@ write_command_block() {
 
 TIMEOUT_EXPIRED=0
 
+terminate_process_group() {
+  local child_pid="$1"
+
+  [[ -n "$child_pid" ]] || return 0
+  if kill -0 -- "-$child_pid" 2>/dev/null || kill -0 "$child_pid" 2>/dev/null; then
+    kill -TERM -- "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
+    sleep 2
+    kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
+  fi
+}
+
 run_command_with_timeout_tracking() {
   local timeout_secs="$1"
   local command="$2"
@@ -142,14 +153,16 @@ run_command_with_timeout_tracking() {
     sleep "$timeout_secs"
     if kill -0 -- "-$child_pid" 2>/dev/null || kill -0 "$child_pid" 2>/dev/null; then
       : >"$timed_out_marker"
-      kill -TERM -- "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
-      sleep 2
-      kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
+      terminate_process_group "$child_pid"
     fi
   ) &
   watcher_pid=$!
 
   wait "$child_pid" || status=$?
+  if [[ -n "${STOP_SIGNAL:-}" && $status -ne 0 ]]; then
+    terminate_process_group "$child_pid"
+    wait "$child_pid" 2>/dev/null || true
+  fi
   kill "$watcher_pid" 2>/dev/null || true
   wait "$watcher_pid" 2>/dev/null || true
 

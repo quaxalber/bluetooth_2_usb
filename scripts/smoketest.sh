@@ -91,6 +91,7 @@ if ROOT_FILESYSTEM_TYPE="$(current_root_filesystem_type)"; then
     ROOT_OVERLAY_ACTIVE="no"
   fi
 else
+  ROOT_FILESYSTEM_TYPE="unknown"
   if [[ "$ALLOW_NON_PI" == "1" ]]; then
     soft_warn "Could not determine the live root filesystem type"
   elif [[ "$OVERLAY_STATUS" == "enabled" && "$SMOKETEST_POST_REBOOT" != "1" ]]; then

@@ -36,6 +36,26 @@ overlay_status() {
   esac
 }
 
+overlay_configured_status() {
+  local state
+
+  if ! command -v raspi-config >/dev/null 2>&1; then
+    printf '%s\n' "unknown"
+    return
+  fi
+
+  if state="$(raspi-config nonint get_overlay_conf 2>/dev/null)"; then
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+  else
+    state=""
+  fi
+  case "$state" in
+    0) printf '%s\n' "enabled" ;;
+    1) printf '%s\n' "disabled" ;;
+    *) printf '%s\n' "unknown" ;;
+  esac
+}
+
 root_overlay_report() {
   findmnt -n -o TARGET,SOURCE,FSTYPE,OPTIONS --target / 2>/dev/null || true
 }

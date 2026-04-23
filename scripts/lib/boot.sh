@@ -208,7 +208,9 @@ current_kernel_release() {
   uname -r
 }
 
-root_overlay_active() {
+# The exit status reflects whether detection succeeded; the emitted value is the
+# overlay state ("yes", "no", or "unknown"), not a boolean predicate.
+root_overlay_state() {
   local root_fstype
 
   if ! root_fstype="$(current_root_filesystem_type)"; then
@@ -330,7 +332,7 @@ ensure_bootable_initramfs_for_current_kernel() {
   kernel_release="$(current_kernel_release)"
   target_path="$(boot_initramfs_target_path || true)"
   [[ -n "$target_path" ]] || fail "Boot initramfs target is not configured. Set auto_initramfs=1 or add an initramfs entry to $(boot_config_path)."
-  if ! overlay_state="$(root_overlay_active)"; then
+  if ! overlay_state="$(root_overlay_state)"; then
     fail "Unable to determine live root overlay state; aborting initramfs operations."
   fi
   if [[ "$overlay_state" == "unknown" ]]; then

@@ -72,13 +72,21 @@ if ! BOOT_INITRAMFS_TARGET_PATH="$(ensure_bootable_initramfs_for_current_kernel)
 fi
 ok "Boot initramfs is ready at ${BOOT_INITRAMFS_TARGET_PATH}"
 
-if [[ "$(overlay_status)" != "enabled" ]]; then
+OVERLAY_STATUS_NOW="$(overlay_status)"
+if [[ "$OVERLAY_STATUS_NOW" != "enabled" ]]; then
   if ! raspi-config nonint enable_overlayfs; then
     fail "Failed to enable OverlayFS through raspi-config."
   fi
 fi
-if [[ "$(overlay_status)" != "enabled" ]]; then
-  fail "OverlayFS is still not enabled after raspi-config completed."
+OVERLAY_STATUS_NOW="$(overlay_status)"
+if [[ "$OVERLAY_STATUS_NOW" != "enabled" ]]; then
+  if [[ "$(overlay_configured_status)" == "enabled" ]]; then
+    warn "OverlayFS is configured for the next boot, but the live root is still writable until reboot."
+  elif grep -Eq '(^| )overlayroot=tmpfs($| )' "$(boot_cmdline_path)" 2>/dev/null; then
+    warn "OverlayFS enablement is pending reboot; $(boot_cmdline_path) contains overlayroot=tmpfs even though the live status still reports disabled."
+  else
+    fail "OverlayFS is still not configured after raspi-config completed."
+  fi
 fi
 
 write_readonly_config "persistent" "$B2U_PERSIST_MOUNT" "$B2U_PERSIST_BLUETOOTH_DIR" "$B2U_PERSIST_SPEC" "$B2U_PERSIST_DEVICE"
