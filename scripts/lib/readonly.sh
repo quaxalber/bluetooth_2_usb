@@ -22,7 +22,11 @@ overlay_status() {
     return
   fi
 
-  state="$(raspi-config nonint get_overlay_now 2>/dev/null | tr -d '[:space:]')"
+  if state="$(raspi-config nonint get_overlay_conf 2>/dev/null | tr -d '[:space:]')"; then
+    :
+  else
+    state="$(raspi-config nonint get_overlay_now 2>/dev/null | tr -d '[:space:]')"
+  fi
   case "$state" in
     0) printf '%s\n' "enabled" ;;
     1) printf '%s\n' "disabled" ;;

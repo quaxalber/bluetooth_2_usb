@@ -50,16 +50,10 @@ if ! bluetooth_state_persistent; then
   fail "Persistent Bluetooth state is not active. Run ./scripts/readonly-setup.sh --device /dev/... first."
 fi
 
-if [[ "$(overlay_status)" != "enabled" ]]; then
-  if ! raspi-config nonint enable_overlayfs; then
-    fail "Failed to enable OverlayFS through raspi-config."
-  fi
-fi
-
 if ! readonly_stack_packages_healthy; then
   warn "OverlayFS package state is incomplete:"
   readonly_stack_package_report
-  fail "OverlayFS may be toggled on, but package setup did not complete cleanly. Repair the package state before rebooting. On current Raspberry Pi OS releases this can require setting MODULES=most in /etc/initramfs-tools/initramfs.conf, then rerunning sudo dpkg --configure -a."
+  fail "OverlayFS package setup did not complete cleanly. Repair the package state before enabling read-only mode. On current Raspberry Pi OS releases this can require setting MODULES=most in /etc/initramfs-tools/initramfs.conf, then rerunning sudo dpkg --configure -a."
 fi
 
 KERNEL_RELEASE="$(current_kernel_release)"
@@ -77,6 +71,15 @@ if ! BOOT_INITRAMFS_TARGET_PATH="$(ensure_bootable_initramfs_for_current_kernel)
   fail "Failed to prepare the boot initramfs for read-only mode. Fix the kernel or initramfs setup above, then rerun ./scripts/readonly-enable.sh."
 fi
 ok "Boot initramfs is ready at ${BOOT_INITRAMFS_TARGET_PATH}"
+
+if [[ "$(overlay_status)" != "enabled" ]]; then
+  if ! raspi-config nonint enable_overlayfs; then
+    fail "Failed to enable OverlayFS through raspi-config."
+  fi
+fi
+if [[ "$(overlay_status)" != "enabled" ]]; then
+  fail "OverlayFS is still not enabled after raspi-config completed."
+fi
 
 write_readonly_config "persistent" "$B2U_PERSIST_MOUNT" "$B2U_PERSIST_BLUETOOTH_DIR" "$B2U_PERSIST_SPEC" "$B2U_PERSIST_DEVICE"
 ok "OverlayFS has been enabled"

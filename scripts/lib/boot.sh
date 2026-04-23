@@ -304,8 +304,6 @@ ensure_bootable_initramfs_for_current_kernel() {
   local target_path
   local image_path
 
-  ensure_initramfs_tools_ready
-  ensure_kernel_artifacts_present_for_initramfs
   target_path="$(boot_initramfs_target_path || true)"
   [[ -n "$target_path" ]] || fail "Boot initramfs target is not configured. Set auto_initramfs=1 or add an initramfs entry to $(boot_config_path)."
   if root_overlay_active; then
@@ -313,6 +311,8 @@ ensure_bootable_initramfs_for_current_kernel() {
     printf '%s\n' "$target_path"
     return 0
   fi
+  ensure_initramfs_tools_ready
+  ensure_kernel_artifacts_present_for_initramfs
   image_path="$(build_or_refresh_initramfs_for_running_kernel)"
   install_expected_boot_initramfs "$image_path" "$target_path" >/dev/null
   printf '%s\n' "$target_path"

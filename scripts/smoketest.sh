@@ -333,16 +333,24 @@ else
   ok "Root overlay is inactive"
 fi
 
-if [[ -n "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+if [[ "$OVERLAY_STATUS" == "enabled" || "$ROOT_OVERLAY_ACTIVE" == "yes" || "$READONLY_MODE" == "persistent" ]]; then
+  if [[ -n "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+    if [[ -s "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+      ok "Boot initramfs is present (${EXPECTED_BOOT_INITRAMFS_PATH})"
+    else
+      warn "Boot initramfs is missing or empty (${EXPECTED_BOOT_INITRAMFS_PATH})"
+      EXIT_CODE=1
+    fi
+  else
+    warn "Boot initramfs target could not be determined"
+    EXIT_CODE=1
+  fi
+elif [[ -n "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
   if [[ -s "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
     ok "Boot initramfs is present (${EXPECTED_BOOT_INITRAMFS_PATH})"
   else
-    warn "Boot initramfs is missing or empty (${EXPECTED_BOOT_INITRAMFS_PATH})"
-    EXIT_CODE=1
+    soft_warn "Boot initramfs is not present yet (${EXPECTED_BOOT_INITRAMFS_PATH})"
   fi
-elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
-  warn "Boot initramfs target could not be determined"
-  EXIT_CODE=1
 fi
 
 if machine_id_valid; then

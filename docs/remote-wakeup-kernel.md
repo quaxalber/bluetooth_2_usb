@@ -95,6 +95,21 @@ Use a fixed local version suffix:
 -b2u-wake
 ```
 
+## Target matrix
+
+Use this matrix as the source of truth for board-specific build targets, custom
+kernel image names, and the boot initramfs name Raspberry Pi firmware expects
+when `auto_initramfs=1` is enabled.
+
+| Target | Status | Build target | Expected image | Boot initramfs target | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Raspberry Pi 4B | validated | `ARCH=arm64`, `bcm2711_defconfig`, `KERNEL=kernel8`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel8-b2u-wake.img` | `initramfs8-b2u-wake` | Tested on Raspberry Pi 4 Model B Rev 1.4 |
+| Raspberry Pi Zero W | validated | `ARCH=arm`, `bcmrpi_defconfig`, `KERNEL=kernel`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel-b2u-wake.img` | `initramfs-b2u-wake` | GCC path validated; LLVM fallback also validated |
+| Raspberry Pi 5 | unvalidated | `ARCH=arm64`, `bcm2712_defconfig`, `KERNEL=kernel_2712`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel_2712-b2u-wake.img` | `initramfs_2712-b2u-wake` | USB-C gadget path shares the board's USB-C connectivity |
+| Raspberry Pi 4B 32-bit | unvalidated | `ARCH=arm`, `bcm2711_defconfig`, `KERNEL=kernel7l`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel7l-b2u-wake.img` | `initramfs7l-b2u-wake` | Use only for 32-bit Pi OS on Pi 4 |
+| Raspberry Pi Zero 2 W 64-bit | unvalidated | `ARCH=arm64`, `bcm2711_defconfig`, `KERNEL=kernel8`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel8-b2u-wake.img` | `initramfs8-b2u-wake` | Shares the Pi 4B 64-bit image/initramfs naming |
+| Raspberry Pi Zero 2 W 32-bit | unvalidated | `ARCH=arm`, `bcm2709_defconfig`, `KERNEL=kernel7`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel7-b2u-wake.img` | `initramfs7-b2u-wake` | 32-bit only |
+
 ## Validated build paths
 
 ### Raspberry Pi 4B
@@ -151,7 +166,8 @@ Notes for the LLVM fallback:
 These build paths are unvalidated for this project. They are included so you
 can build and deploy the matching custom kernel and let `readonly-enable.sh`
 install the corresponding boot initramfs automatically when you later enable
-persistent read-only mode.
+persistent read-only mode. Use the target matrix above for the expected image
+and initramfs filenames.
 
 ### Raspberry Pi 5
 
@@ -165,17 +181,6 @@ make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
 ```
 
-Custom image name:
-
-- `kernel_2712-b2u-wake.img`
-
-Boot initramfs mapping:
-
-- `kernel_2712-b2u-wake.img` -> `initramfs_2712-b2u-wake`
-
-The USB-C gadget path shares the board's USB-C connectivity, so plan power and
-data cabling accordingly before validating host wake or USB gadget behavior.
-
 ### Raspberry Pi 4B 32-bit
 
 ```bash
@@ -187,14 +192,6 @@ scripts/config --set-str LOCALVERSION "-b2u-wake"
 make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- LOCALVERSION= zImage modules dtbs
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- LOCALVERSION= kernelrelease
 ```
-
-Custom image name:
-
-- `kernel7l-b2u-wake.img`
-
-Boot initramfs mapping:
-
-- `kernel7l-b2u-wake.img` -> `initramfs7l-b2u-wake`
 
 ### Raspberry Pi Zero 2 W 64-bit
 
@@ -208,14 +205,6 @@ make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
 ```
 
-Custom image name:
-
-- `kernel8-b2u-wake.img`
-
-Boot initramfs mapping:
-
-- `kernel8-b2u-wake.img` -> `initramfs8-b2u-wake`
-
 ### Raspberry Pi Zero 2 W 32-bit
 
 ```bash
@@ -228,39 +217,15 @@ make -j"${JOBS}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- LOCALVERSION= zImag
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- LOCALVERSION= kernelrelease
 ```
 
-Custom image name:
-
-- `kernel7-b2u-wake.img`
-
-Boot initramfs mapping:
-
-- `kernel7-b2u-wake.img` -> `initramfs7-b2u-wake`
-
 ## Deploy to the Pi
 
 Copy the built kernel image, modules, DTBs, overlays, and matching
 `config-<kernelrelease>` to the Pi. Then set the custom kernel image in
-`config.txt`.
-
-Typical image names:
-
-- Pi 4B: `kernel8-b2u-wake.img`
-- Pi Zero W: `kernel-b2u-wake.img`
-- Pi 5: `kernel_2712-b2u-wake.img`
-- Pi 4B 32-bit: `kernel7l-b2u-wake.img`
-- Pi Zero 2 W 64-bit: `kernel8-b2u-wake.img`
-- Pi Zero 2 W 32-bit: `kernel7-b2u-wake.img`
+`config.txt` using the image name from the target matrix above.
 
 With `auto_initramfs=1`, Raspberry Pi firmware derives the boot initramfs name
-from the kernel image name. That means these image names map to these boot
-initramfs targets:
-
-- Pi 4B: `kernel8-b2u-wake.img` -> `initramfs8-b2u-wake`
-- Pi Zero W: `kernel-b2u-wake.img` -> `initramfs-b2u-wake`
-- Pi 5: `kernel_2712-b2u-wake.img` -> `initramfs_2712-b2u-wake`
-- Pi 4B 32-bit: `kernel7l-b2u-wake.img` -> `initramfs7l-b2u-wake`
-- Pi Zero 2 W 64-bit: `kernel8-b2u-wake.img` -> `initramfs8-b2u-wake`
-- Pi Zero 2 W 32-bit: `kernel7-b2u-wake.img` -> `initramfs7-b2u-wake`
+from the kernel image name. Use the matching boot initramfs target from the
+same matrix when checking or troubleshooting boot artifacts.
 
 When you later enable persistent read-only mode, `readonly-enable.sh` rebuilds
 the initramfs for the running kernel and installs the matching boot initramfs
