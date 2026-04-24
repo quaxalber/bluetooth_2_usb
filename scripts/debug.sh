@@ -18,7 +18,7 @@ source "${SCRIPTS_DIR}/lib/readonly.sh"
 VENV_DIR="${B2U_INSTALL_DIR}/venv"
 DURATION=""
 REPORT_FILE=""
-REPORT_BODY=""
+REPORT_BODY_FILE=""
 SERVICE_WAS_STOPPED=0
 STOP_SIGNAL=""
 LIVE_DEBUG_STATUS=0
@@ -70,7 +70,7 @@ redact_stream() {
 }
 
 write_heading() {
-  printf '## %s\n\n' "$1" >>"$REPORT_BODY"
+  printf '## %s\n\n' "$1" >>"$REPORT_BODY_FILE"
 }
 
 write_text_block() {
@@ -78,13 +78,13 @@ write_text_block() {
   shift
 
   write_heading "$title"
-  printf '```text\n' >>"$REPORT_BODY"
+  printf '```text\n' >>"$REPORT_BODY_FILE"
   if [[ $# -eq 0 ]]; then
-    printf '<no output>\n' >>"$REPORT_BODY"
+    printf '<no output>\n' >>"$REPORT_BODY_FILE"
   else
-    printf '%s\n' "$@" >>"$REPORT_BODY"
+    printf '%s\n' "$@" >>"$REPORT_BODY_FILE"
   fi
-  printf '```\n\n' >>"$REPORT_BODY"
+  printf '```\n\n' >>"$REPORT_BODY_FILE"
 }
 
 write_command_block() {
@@ -104,19 +104,19 @@ write_command_block() {
   timed_out=$TIMEOUT_EXPIRED
 
   write_heading "$title"
-  printf '```console\n' >>"$REPORT_BODY"
+  printf '```console\n' >>"$REPORT_BODY_FILE"
   if [[ -s "$tmp" ]]; then
-    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" >>"$REPORT_BODY"
-    [[ "$(tail -c 1 "$tmp" 2>/dev/null || true)" == "" ]] || printf '\n' >>"$REPORT_BODY"
+    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" >>"$REPORT_BODY_FILE"
+    [[ "$(tail -c 1 "$tmp" 2>/dev/null || true)" == "" ]] || printf '\n' >>"$REPORT_BODY_FILE"
   else
-    printf '<no output>\n' >>"$REPORT_BODY"
+    printf '<no output>\n' >>"$REPORT_BODY_FILE"
   fi
   if [[ $timed_out -eq 1 ]]; then
-    printf '[timed out after %ss]\n' "$timeout_secs" >>"$REPORT_BODY"
+    printf '[timed out after %ss]\n' "$timeout_secs" >>"$REPORT_BODY_FILE"
   elif [[ $status -ne 0 ]]; then
-    printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY"
+    printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY_FILE"
   fi
-  printf '```\n\n' >>"$REPORT_BODY"
+  printf '```\n\n' >>"$REPORT_BODY_FILE"
 
   rm -f "$tmp"
 }
@@ -196,7 +196,7 @@ run_live_debug_block() {
   mkfifo "$fifo"
 
   write_heading "Live Bluetooth-2-USB debug output"
-  printf '```console\n' >>"$REPORT_BODY"
+  printf '```console\n' >>"$REPORT_BODY_FILE"
 
   tee "$tmp" <"$fifo" &
   tee_pid=$!
@@ -236,21 +236,21 @@ run_live_debug_block() {
   rm -f "$fifo"
 
   if [[ -s "$tmp" ]]; then
-    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" >>"$REPORT_BODY"
-    [[ "$(tail -c 1 "$tmp" 2>/dev/null || true)" == "" ]] || printf '\n' >>"$REPORT_BODY"
+    B2U_REDACT_HOSTNAME="$REDACT_HOSTNAME" redact_stream <"$tmp" >>"$REPORT_BODY_FILE"
+    [[ "$(tail -c 1 "$tmp" 2>/dev/null || true)" == "" ]] || printf '\n' >>"$REPORT_BODY_FILE"
   else
-    printf '<no output>\n' >>"$REPORT_BODY"
+    printf '<no output>\n' >>"$REPORT_BODY_FILE"
   fi
 
   if [[ $timed_out -eq 1 ]]; then
-    printf '[timed out after %ss]\n' "$DURATION" >>"$REPORT_BODY"
+    printf '[timed out after %ss]\n' "$DURATION" >>"$REPORT_BODY_FILE"
   elif [[ $status -ne 0 ]]; then
-    [[ -n "$interrupted" ]] || printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY"
+    [[ -n "$interrupted" ]] || printf '[command exited with status %s]\n' "$status" >>"$REPORT_BODY_FILE"
   fi
   if [[ -n "$interrupted" ]]; then
-    printf '[interrupted by %s]\n' "$interrupted" >>"$REPORT_BODY"
+    printf '[interrupted by %s]\n' "$interrupted" >>"$REPORT_BODY_FILE"
   fi
-  printf '```\n\n' >>"$REPORT_BODY"
+  printf '```\n\n' >>"$REPORT_BODY_FILE"
 
   rm -f "$tmp"
 
@@ -282,16 +282,16 @@ cleanup() {
     exit_code=$LIVE_DEBUG_STATUS
   fi
 
-  if [[ -n "$REPORT_BODY" && -f "$REPORT_BODY" ]] && [[ -n "$REPORT_FILE" ]]; then
+  if [[ -n "$REPORT_BODY_FILE" && -f "$REPORT_BODY_FILE" ]] && [[ -n "$REPORT_FILE" ]]; then
     {
       printf '# bluetooth_2_usb debug report\n\n'
       printf '_Generated: %s_\n\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-      cat "$REPORT_BODY"
+      cat "$REPORT_BODY_FILE"
     } >"$REPORT_FILE"
     ok "Wrote: $REPORT_FILE"
   fi
 
-  [[ -n "${REPORT_BODY:-}" ]] && rm -f -- "$REPORT_BODY"
+  [[ -n "${REPORT_BODY_FILE:-}" ]] && rm -f -- "$REPORT_BODY_FILE"
 
   if [[ -n "$STOP_SIGNAL" ]]; then
     case "$STOP_SIGNAL" in
@@ -310,7 +310,7 @@ trap 'STOP_SIGNAL="TERM"' TERM
 ensure_root
 mkdir -p "$B2U_LOG_DIR"
 REPORT_FILE="${B2U_LOG_DIR}/debug_$(timestamp).md"
-REPORT_BODY="$(mktemp)"
+REPORT_BODY_FILE="$(mktemp -p "$B2U_LOG_DIR" debug_body.XXXXXX)"
 REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
 
 BOOT_DIR="$(detect_boot_dir)"

@@ -37,7 +37,7 @@ jobs:
               sleep 5
             done
           }
-          python -m pip install --upgrade pip setuptools wheel
+          retry 3 python -m pip install --upgrade pip setuptools wheel
           retry 3 python -m pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 
       - name: Python formatting checks

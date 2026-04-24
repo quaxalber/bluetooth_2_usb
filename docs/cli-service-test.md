@@ -168,9 +168,12 @@ end-to-end loopback inject/capture harness from
 
 Prepare the writable ext4 partition:
 
+Replace `<persist-partition>` with the actual writable ext4 partition after
+verifying it with `lsblk -f`.
+
 ```bash
 ssh <pi-host> '
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device /dev/mmcblk0p3
+  sudo -n /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device <persist-partition>
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 '
 ssh <pi-host> 'sudo -n reboot' || true
@@ -189,7 +192,7 @@ repair `initramfs-tools` before rebooting and rerun the enable step:
 
 ```bash
 ssh <pi-host> '
-  sudo sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
+  sudo -n sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
   sudo -n dpkg --configure -a
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 '

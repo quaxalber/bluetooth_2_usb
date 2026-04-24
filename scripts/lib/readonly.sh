@@ -69,6 +69,35 @@ readonly_stack_packages_healthy() {
   done
 }
 
+# Tri-state package model: fresh host (missing), half-configured, or fully ready.
+# Succeeds only when every package is absent or exactly "install ok installed".
+readonly_stack_packages_bootstrap_safe() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    case "$status" in
+      "" | "install ok installed") ;;
+      *)
+        return 1
+        ;;
+    esac
+  done
+}
+
+# Tri-state package model: fresh host (missing), half-configured, or fully ready.
+# Treats any non-"install ok installed" state, including half-configured, as missing.
+readonly_stack_packages_missing() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ "$status" == "install ok installed" ]] || return 0
+  done
+
+  return 1
+}
+
 readonly_stack_package_report() {
   local pkg status
 

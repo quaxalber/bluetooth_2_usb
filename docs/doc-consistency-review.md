@@ -70,8 +70,8 @@ fi
 ### 3. Python CLI interface
 
 ```bash
-python -m bluetooth_2_usb --help
-python -m bluetooth_2_usb --version
+./venv/bin/python -m bluetooth_2_usb --help
+./venv/bin/python -m bluetooth_2_usb --version
 sed -n '1,220p' src/bluetooth_2_usb/args.py
 ```
 
@@ -121,8 +121,8 @@ in code but is not explained where an operator would reasonably expect it.
 ### 7. Syntax and basic code health
 
 ```bash
-python -m compileall src tests
-python -m unittest discover -s tests -v
+./venv/bin/python -m compileall src tests
+./venv/bin/python -m unittest discover -s tests -v
 mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
 bash -n "${shell_scripts[@]}"
 ```
