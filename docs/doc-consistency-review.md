@@ -122,7 +122,7 @@ in code but is not explained where an operator would reasonably expect it.
 
 ```bash
 ./venv/bin/python -m compileall src tests
-python -m unittest discover -s tests -v
+./venv/bin/python -m unittest discover -s tests -v
 mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
 bash -n "${shell_scripts[@]}"
 ```

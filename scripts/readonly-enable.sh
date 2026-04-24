@@ -69,10 +69,10 @@ info "Expected boot initramfs file: ${EXPECTED_BOOT_INITRAMFS_FILE:-<none>}"
 info "Versioned initramfs candidates: ${VERSIONED_INITRDS:-<none>}"
 
 OVERLAY_STATUS_NOW="$(overlay_status)"
-if readonly_stack_packages_missing; then
-  info "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
-fi
 if [[ "$OVERLAY_STATUS_NOW" != "enabled" ]]; then
+  if readonly_stack_packages_missing; then
+    info "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
+  fi
   if ! raspi-config nonint enable_overlayfs; then
     fail "Failed to enable OverlayFS through raspi-config."
   fi

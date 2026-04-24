@@ -43,8 +43,8 @@ prepare_log "uninstall"
 load_readonly_config
 
 manage_b2u_service=0
-service_installed
-service_installed_rc=$?
+service_installed_rc=0
+service_installed || service_installed_rc=$?
 case "$service_installed_rc" in
   0)
     manage_b2u_service=1

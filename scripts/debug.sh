@@ -310,7 +310,7 @@ trap 'STOP_SIGNAL="TERM"' TERM
 ensure_root
 mkdir -p "$B2U_LOG_DIR"
 REPORT_FILE="${B2U_LOG_DIR}/debug_$(timestamp).md"
-REPORT_BODY_FILE="$(mktemp)"
+REPORT_BODY_FILE="$(mktemp -p "$B2U_LOG_DIR" debug_body.XXXXXX)"
 REDACT_HOSTNAME="${HOSTNAME:-$(hostname)}"
 
 BOOT_DIR="$(detect_boot_dir)"

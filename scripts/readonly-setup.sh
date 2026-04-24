@@ -66,8 +66,8 @@ write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR"
 install_bluetooth_persist_dropin
 write_readonly_config "disabled" "$PERSIST_MOUNT" "$PERSIST_BLUETOOTH_DIR" "$PERSIST_SPEC" "$DEVICE"
 
-service_installed
-service_installed_rc=$?
+service_installed_rc=0
+service_installed || service_installed_rc=$?
 case "$service_installed_rc" in
   0)
     systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT} before migrating Bluetooth state"
@@ -120,8 +120,8 @@ mkdir -p /var/lib/bluetooth
 systemctl enable --now var-lib-bluetooth.mount
 systemctl start bluetooth.service || fail "Failed to start bluetooth.service after enabling the persistent bind mount"
 systemctl is-active --quiet bluetooth.service || fail "bluetooth.service did not come back up after enabling the persistent bind mount"
-service_installed
-service_installed_rc=$?
+service_installed_rc=0
+service_installed || service_installed_rc=$?
 case "$service_installed_rc" in
   0)
     systemctl restart "${B2U_SERVICE_UNIT}" || fail "Failed to restart ${B2U_SERVICE_UNIT} after enabling the persistent bind mount"
