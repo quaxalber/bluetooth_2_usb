@@ -69,6 +69,8 @@ readonly_stack_packages_healthy() {
   done
 }
 
+# Tri-state package model: fresh host (missing), half-configured, or fully ready.
+# Succeeds only when every package is absent or exactly "install ok installed".
 readonly_stack_packages_bootstrap_safe() {
   local pkg status
 
@@ -83,6 +85,8 @@ readonly_stack_packages_bootstrap_safe() {
   done
 }
 
+# Tri-state package model: fresh host (missing), half-configured, or fully ready.
+# Treats any non-"install ok installed" state, including half-configured, as missing.
 readonly_stack_packages_missing() {
   local pkg status
 

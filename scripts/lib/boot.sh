@@ -189,12 +189,16 @@ configured_kernel_image() {
   fi
 }
 
+# shellcheck disable=SC2120  # Library helper accepts optional config path and model filters.
 configured_initramfs_file() {
-  local config_file
+  local config_file="${1:-$(boot_config_path)}"
   local -a model_filters=()
 
-  config_file="$(boot_config_path)"
-  mapfile -t model_filters < <(boot_config_model_filters)
+  if (($# > 1)); then
+    model_filters=("${@:2}")
+  else
+    mapfile -t model_filters < <(boot_config_model_filters)
+  fi
 
   [[ -f "$config_file" ]] || return 0
   python3 - "$config_file" "${model_filters[@]}" <<'PY'
@@ -246,6 +250,7 @@ effective_arm_64bit() {
   fi
 }
 
+# shellcheck disable=SC2120  # Library helper forwards optional model filters.
 expected_auto_initramfs_name() {
   local kernel_image="${1:-$(configured_kernel_image)}"
   local base_name
@@ -257,10 +262,11 @@ expected_auto_initramfs_name() {
   fi
 }
 
+# shellcheck disable=SC2120  # Library helper forwards optional config path and model filters.
 expected_boot_initramfs_file() {
   local explicit_initramfs
 
-  explicit_initramfs="$(configured_initramfs_file)"
+  explicit_initramfs="$(configured_initramfs_file "$@")"
   if [[ -n "$explicit_initramfs" ]]; then
     printf '%s\n' "$explicit_initramfs"
     return
@@ -271,8 +277,16 @@ expected_boot_initramfs_file() {
   fi
 }
 
+# shellcheck disable=SC2120  # Library helper accepts an explicit target file or forwards optional initramfs lookup args.
 boot_initramfs_target_path() {
-  local target_file="${1:-$(expected_boot_initramfs_file)}"
+  local target_file="${1:-}"
+
+  if [[ -n "$target_file" ]]; then
+    shift
+  fi
+  if [[ -z "$target_file" ]]; then
+    target_file="$(expected_boot_initramfs_file "$@")"
+  fi
 
   [[ -n "$target_file" ]] || return 1
   if [[ "$target_file" == /* || "$target_file" == *"/"* || "$target_file" == *".."* ]]; then
