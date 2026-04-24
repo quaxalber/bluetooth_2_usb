@@ -292,8 +292,9 @@ until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
 done
 ```
 
-Only run destructive read-only rollback checks after `findmnt -no FSTYPE,SOURCE /`
-shows `overlay` for the live root filesystem.
+Only run destructive read-only rollback checks after disabling read-only mode
+and rebooting, once `findmnt -no FSTYPE,SOURCE /` no longer shows `overlay` for
+the live root filesystem.
 
 ## Uninstall validation
 
