@@ -42,7 +42,24 @@ ensure_root
 prepare_log "uninstall"
 load_readonly_config
 
-if service_installed || [[ "$(systemctl show -P LoadState "${B2U_SERVICE_UNIT}" 2>/dev/null || true)" != "not-found" ]]; then
+manage_b2u_service=0
+service_installed
+service_installed_rc=$?
+case "$service_installed_rc" in
+  0)
+    manage_b2u_service=1
+    ;;
+  1)
+    if [[ "$(systemctl show -P LoadState "${B2U_SERVICE_UNIT}" 2>/dev/null || true)" != "not-found" ]]; then
+      manage_b2u_service=1
+    fi
+    ;;
+  2)
+    fail "Unable to query systemd for ${B2U_SERVICE_UNIT}"
+    ;;
+esac
+
+if ((manage_b2u_service)); then
   systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT}"
   if systemctl is-active --quiet "${B2U_SERVICE_UNIT}"; then
     systemctl kill --kill-who=all "${B2U_SERVICE_UNIT}" || fail "Failed to kill ${B2U_SERVICE_UNIT}"

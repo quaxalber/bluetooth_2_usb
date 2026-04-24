@@ -25,7 +25,11 @@ usage() {
   cat <<EOF
 Usage: sudo ./scripts/smoketest.sh [options]
   --verbose           Print detailed diagnostics, including journalctl
-  --allow-non-pi      Do not fail when OverlayFS detection is unavailable
+  --allow-non-pi      Suppress hard failures for non-Pi OverlayFS/rootfs
+                      detection uncertainty, including missing expected
+                      overlay lines, undetermined root filesystem type,
+                      unknown overlay configuration status, and unknown
+                      root overlay state
 EOF
 }
 

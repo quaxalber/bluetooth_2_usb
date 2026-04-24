@@ -66,9 +66,17 @@ write_bluetooth_bind_mount_unit "$PERSIST_BLUETOOTH_DIR"
 install_bluetooth_persist_dropin
 write_readonly_config "disabled" "$PERSIST_MOUNT" "$PERSIST_BLUETOOTH_DIR" "$PERSIST_SPEC" "$DEVICE"
 
-if service_installed; then
-  systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT} before migrating Bluetooth state"
-fi
+service_installed
+service_installed_rc=$?
+case "$service_installed_rc" in
+  0)
+    systemctl stop "${B2U_SERVICE_UNIT}" || fail "Failed to stop ${B2U_SERVICE_UNIT} before migrating Bluetooth state"
+    ;;
+  1) ;;
+  2)
+    fail "Unable to query systemd for ${B2U_SERVICE_UNIT} before migrating Bluetooth state"
+    ;;
+esac
 systemctl stop bluetooth.service || fail "Failed to stop bluetooth.service before migrating Bluetooth state"
 
 systemctl daemon-reload
@@ -112,9 +120,17 @@ mkdir -p /var/lib/bluetooth
 systemctl enable --now var-lib-bluetooth.mount
 systemctl start bluetooth.service || fail "Failed to start bluetooth.service after enabling the persistent bind mount"
 systemctl is-active --quiet bluetooth.service || fail "bluetooth.service did not come back up after enabling the persistent bind mount"
-if service_installed; then
-  systemctl restart "${B2U_SERVICE_UNIT}" || fail "Failed to restart ${B2U_SERVICE_UNIT} after enabling the persistent bind mount"
-  systemctl is-active --quiet "${B2U_SERVICE_UNIT}" || fail "${B2U_SERVICE_UNIT} did not come back up after enabling the persistent bind mount"
-fi
+service_installed
+service_installed_rc=$?
+case "$service_installed_rc" in
+  0)
+    systemctl restart "${B2U_SERVICE_UNIT}" || fail "Failed to restart ${B2U_SERVICE_UNIT} after enabling the persistent bind mount"
+    systemctl is-active --quiet "${B2U_SERVICE_UNIT}" || fail "${B2U_SERVICE_UNIT} did not come back up after enabling the persistent bind mount"
+    ;;
+  1) ;;
+  2)
+    fail "Unable to query systemd for ${B2U_SERVICE_UNIT} after enabling the persistent bind mount"
+    ;;
+esac
 
 ok "Persistent Bluetooth state is active at ${PERSIST_BLUETOOTH_DIR}"

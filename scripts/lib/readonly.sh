@@ -69,6 +69,31 @@ readonly_stack_packages_healthy() {
   done
 }
 
+readonly_stack_packages_bootstrap_safe() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    case "$status" in
+      "" | "install ok installed") ;;
+      *)
+        return 1
+        ;;
+    esac
+  done
+}
+
+readonly_stack_packages_missing() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ "$status" == "install ok installed" ]] || return 0
+  done
+
+  return 1
+}
+
 readonly_stack_package_report() {
   local pkg status
 

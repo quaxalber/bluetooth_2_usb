@@ -74,17 +74,89 @@ boot_cmdline_path() {
   printf '%s/cmdline.txt\n' "$(detect_boot_dir)"
 }
 
+boot_config_model_filters() {
+  local model=""
+
+  model="$(current_pi_model 2>/dev/null || true)"
+
+  case "$model" in
+    *"Raspberry Pi 500+"* | *"Raspberry Pi 500"*)
+      printf '%s\n' "pi5" "pi500"
+      ;;
+    *"Raspberry Pi 5"*)
+      printf '%s\n' "pi5"
+      ;;
+    *"Compute Module 5"*)
+      printf '%s\n' "pi5" "cm5"
+      ;;
+    *"Raspberry Pi 400"*)
+      printf '%s\n' "pi4" "pi400"
+      ;;
+    *"Compute Module 4S"*)
+      printf '%s\n' "pi4" "cm4s"
+      ;;
+    *"Compute Module 4"*)
+      printf '%s\n' "pi4" "cm4"
+      ;;
+    *"Raspberry Pi 4"*)
+      printf '%s\n' "pi4"
+      ;;
+    *"Compute Module 3 Plus"* | *"Compute Module 3+"*)
+      printf '%s\n' "pi3" "pi3+" "cm3+"
+      ;;
+    *"Compute Module 3"*)
+      printf '%s\n' "pi3" "cm3"
+      ;;
+    *"Raspberry Pi 3 Model A Plus"* | *"Raspberry Pi 3 Model B Plus"*)
+      printf '%s\n' "pi3" "pi3+"
+      ;;
+    *"Raspberry Pi 3"*)
+      printf '%s\n' "pi3"
+      ;;
+    *"Raspberry Pi Zero 2"*)
+      printf '%s\n' "pi0" "pi0w" "pi02"
+      ;;
+    *"Raspberry Pi Zero W"*)
+      printf '%s\n' "pi0" "pi0w"
+      ;;
+    *"Raspberry Pi Zero"*)
+      printf '%s\n' "pi0"
+      ;;
+    *"Raspberry Pi 2"*)
+      printf '%s\n' "pi2"
+      ;;
+    *"Compute Module 1"*)
+      printf '%s\n' "pi1" "cm1"
+      ;;
+    *"Compute Module 0"*)
+      printf '%s\n' "pi0" "cm0"
+      ;;
+    *"Raspberry Pi 1"*)
+      printf '%s\n' "pi1"
+      ;;
+  esac
+}
+
 boot_config_assignment_value() {
   local key="$1"
   local config_file="${2:-$(boot_config_path)}"
+  local -a model_filters=()
+
+  if (($# > 2)); then
+    model_filters=("${@:3}")
+  else
+    mapfile -t model_filters < <(boot_config_model_filters)
+  fi
 
   [[ -f "$config_file" ]] || return 0
-  python3 - "$config_file" "$key" <<'PY'
+  python3 - "$config_file" "$key" "${model_filters[@]}" <<'PY'
 from pathlib import Path
 import sys
 
 config_path = Path(sys.argv[1])
 target_key = sys.argv[2]
+allowed_sections = {"", "all"}
+allowed_sections.update(section.lower() for section in sys.argv[3:] if section.strip())
 value = ""
 current_section = ""
 
@@ -95,7 +167,7 @@ for raw_line in config_path.read_text(encoding="utf-8").splitlines():
     if line.startswith("[") and line.endswith("]"):
         current_section = line[1:-1].strip().lower()
         continue
-    if "=" not in line or current_section not in ("", "all"):
+    if "=" not in line or current_section not in allowed_sections:
         continue
     key, current_value = line.split("=", 1)
     if key.strip() == target_key:
@@ -118,14 +190,20 @@ configured_kernel_image() {
 }
 
 configured_initramfs_file() {
-  local config_file="${1:-$(boot_config_path)}"
+  local config_file
+  local -a model_filters=()
+
+  config_file="$(boot_config_path)"
+  mapfile -t model_filters < <(boot_config_model_filters)
 
   [[ -f "$config_file" ]] || return 0
-  python3 - "$config_file" <<'PY'
+  python3 - "$config_file" "${model_filters[@]}" <<'PY'
 from pathlib import Path
 import sys
 
 config_path = Path(sys.argv[1])
+allowed_sections = {"", "all"}
+allowed_sections.update(section.lower() for section in sys.argv[2:] if section.strip())
 value = ""
 current_section = ""
 
@@ -136,7 +214,7 @@ for raw_line in config_path.read_text(encoding="utf-8").splitlines():
     if line.startswith("[") and line.endswith("]"):
         current_section = line[1:-1].strip().lower()
         continue
-    if current_section not in ("", "all"):
+    if current_section not in allowed_sections:
         continue
     if not line.startswith("initramfs "):
         continue

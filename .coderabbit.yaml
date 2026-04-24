@@ -17,8 +17,6 @@ reviews:
   auto_review:
     enabled: false
     drafts: false
-    base_branches:
-      - "staging"
 
 chat:
   auto_reply: true
