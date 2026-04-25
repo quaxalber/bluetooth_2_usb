@@ -888,7 +888,7 @@ class DeviceRelay:
                 _logger.warning(
                     "BrokenPipeError: USB cable likely disconnected or power-only. "
                     "Pausing relay.\nSee: "
-                    "https://github.com/quaxalber/bluetooth_2_usb?tab=readme-ov-file#7-troubleshooting"
+                    "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
                 )
                 if self._relaying_active:
                     self._relaying_active.clear()

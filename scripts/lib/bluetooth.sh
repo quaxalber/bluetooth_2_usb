@@ -33,7 +33,10 @@ bluetooth_rfkill_root() {
 }
 
 bluetooth_controller_powered() {
-  bluetoothctl_show 2>/dev/null | _bluetooth_controller_powered_from_stream
+  local output
+
+  output="$(bluetoothctl_show 2>/dev/null)" || return 1
+  _bluetooth_controller_powered_from_stream <<<"$output"
 }
 
 bluetooth_controller_powered_from_file() {
@@ -44,7 +47,10 @@ bluetooth_controller_powered_from_file() {
 }
 
 bluetooth_paired_count() {
-  bluetoothctl_paired_devices 2>/dev/null | grep -c '^Device ' || true
+  local output
+
+  output="$(bluetoothctl_paired_devices 2>/dev/null)" || return 1
+  awk 'BEGIN { count = 0 } /^Device / { count++ } END { print count }' <<<"$output"
 }
 
 _bluetooth_rfkill_records() {

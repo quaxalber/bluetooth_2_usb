@@ -149,5 +149,15 @@ rebuild_venv_atomically() {
 }
 
 service_installed() {
-  systemctl list-unit-files --type=service 2>/dev/null | grep -Fq "${B2U_SERVICE_UNIT}"
+  local unit_files
+  local unit_name_regex
+  local rc=0
+
+  unit_files="$(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null)" || rc=$?
+  if ((rc != 0)); then
+    warn "systemctl list-unit-files failed (rc=${rc}); cannot determine state of ${B2U_SERVICE_UNIT}"
+    return 2
+  fi
+  unit_name_regex="$(printf '%s\n' "$B2U_SERVICE_UNIT" | sed 's/[][(){}.^$*+?|\\/]/\\&/g')"
+  grep -Eq "^${unit_name_regex}[[:space:]]" <<<"$unit_files" || return 1
 }

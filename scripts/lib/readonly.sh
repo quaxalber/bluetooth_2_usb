@@ -10,6 +10,8 @@ _b2u_readonly_lib_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_b2u_readonly_lib_dir}/paths.sh"
 # shellcheck source=./common.sh
 source "${_b2u_readonly_lib_dir}/common.sh"
+# shellcheck source=./boot.sh
+source "${_b2u_readonly_lib_dir}/boot.sh"
 unset _b2u_readonly_lib_dir
 
 overlay_status() {
@@ -20,12 +22,90 @@ overlay_status() {
     return
   fi
 
-  state="$(raspi-config nonint get_overlay_now 2>/dev/null | tr -d '[:space:]')"
+  if state="$(raspi-config nonint get_overlay_conf 2>/dev/null)"; then
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+  elif state="$(raspi-config nonint get_overlay_now 2>/dev/null)"; then
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+  else
+    state=""
+  fi
   case "$state" in
     0) printf '%s\n' "enabled" ;;
     1) printf '%s\n' "disabled" ;;
     *) printf '%s\n' "unknown" ;;
   esac
+}
+
+overlay_configured_status() {
+  local state
+
+  if ! command -v raspi-config >/dev/null 2>&1; then
+    printf '%s\n' "unknown"
+    return
+  fi
+
+  if state="$(raspi-config nonint get_overlay_conf 2>/dev/null)"; then
+    state="$(printf '%s' "$state" | tr -d '[:space:]')"
+  else
+    state=""
+  fi
+  case "$state" in
+    0) printf '%s\n' "enabled" ;;
+    1) printf '%s\n' "disabled" ;;
+    *) printf '%s\n' "unknown" ;;
+  esac
+}
+
+root_overlay_report() {
+  findmnt -n -o TARGET,SOURCE,FSTYPE,OPTIONS --target / 2>/dev/null || true
+}
+
+readonly_stack_packages_healthy() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ "$status" == "install ok installed" ]] || return 1
+  done
+}
+
+# Tri-state package model: fresh host (missing), half-configured, or fully ready.
+# Succeeds only when every package is absent or exactly "install ok installed".
+readonly_stack_packages_bootstrap_safe() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    case "$status" in
+      "" | "install ok installed") ;;
+      *)
+        return 1
+        ;;
+    esac
+  done
+}
+
+# Tri-state package model: fresh host (missing), half-configured, or fully ready.
+# Treats any non-"install ok installed" state, including half-configured, as missing.
+readonly_stack_packages_missing() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ "$status" == "install ok installed" ]] || return 0
+  done
+
+  return 1
+}
+
+readonly_stack_package_report() {
+  local pkg status
+
+  for pkg in overlayroot cryptsetup cryptsetup-bin initramfs-tools; do
+    status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+    [[ -n "$status" ]] || status="not installed"
+    printf '%s: %s\n' "$pkg" "$status"
+  done
 }
 
 machine_id_valid() {
@@ -101,8 +181,20 @@ bluetooth_state_persistent() {
   [[ "$mount_source" == "${persist_mount_source}[${relative_subdir}]" ]]
 }
 
+# Returns "persistent" only when the live root filesystem is overlay-backed and
+# Bluetooth state persistence is active. Otherwise it returns "disabled", with
+# "unknown" reserved for root-filesystem detection failures. Callers that need
+# finer-grained state should check current_root_filesystem_type() and
+# bluetooth_state_persistent() separately; scripts/smoketest.sh does that.
 readonly_mode() {
-  if [[ "$(overlay_status)" == "enabled" ]] && bluetooth_state_persistent; then
+  local root_fstype
+
+  if ! root_fstype="$(current_root_filesystem_type)"; then
+    printf '%s\n' "unknown"
+    return 0
+  fi
+
+  if [[ "$root_fstype" == "overlay" ]] && bluetooth_state_persistent; then
     printf '%s\n' "persistent"
   else
     printf '%s\n' "disabled"

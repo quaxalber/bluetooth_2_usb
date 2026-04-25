@@ -47,13 +47,13 @@ require_commands apt-get awk grep git install python3 sed systemctl
 BOOT_DIR="$(detect_boot_dir)"
 CONFIG_TXT="$(boot_config_path)"
 CMDLINE_TXT="$(boot_cmdline_path)"
-MODEL="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
+MODEL="$(current_pi_model)" || fail "Could not determine Raspberry Pi model from /proc/device-tree/model."
 DWC2_MODE="$(dwc2_mode)"
 OVERLAY_LINE="$(board_overlay_line "$MODEL")"
 MODULES="$(required_boot_modules_csv)"
 PRE_REBOOT_EXIT=3
 
-info "Detected model: ${MODEL:-unknown}"
+info "Detected model: ${MODEL}"
 info "Using boot directory: ${BOOT_DIR}"
 info "Detected dwc2 mode: ${DWC2_MODE}"
 
@@ -117,8 +117,8 @@ cat <<EOF
 ${BOLD}Next steps${NC}
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo ${B2U_INSTALL_DIR}/scripts/smoke_test.sh
+   sudo ${B2U_INSTALL_DIR}/scripts/smoketest.sh
 3. If you want persistent read-only operation afterwards, run:
-   sudo ${B2U_INSTALL_DIR}/scripts/setup_persistent_bluetooth_state.sh --device /dev/YOUR-PARTITION
-   sudo ${B2U_INSTALL_DIR}/scripts/enable_readonly_overlayfs.sh
+   sudo ${B2U_INSTALL_DIR}/scripts/readonly-setup.sh --device /dev/YOUR-PARTITION
+   sudo ${B2U_INSTALL_DIR}/scripts/readonly-enable.sh
 EOF

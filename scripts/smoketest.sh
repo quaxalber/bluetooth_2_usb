@@ -18,11 +18,18 @@ VENV_DIR="${B2U_INSTALL_DIR}/venv"
 VERBOSE=0
 EXIT_CODE=0
 SOFT_WARNINGS=0
+ALLOW_NON_PI="${ALLOW_NON_PI:-0}"
+SMOKETEST_POST_REBOOT="${SMOKETEST_POST_REBOOT:-0}"
 
 usage() {
   cat <<EOF
-Usage: sudo ./scripts/smoke_test.sh [options]
+Usage: sudo ./scripts/smoketest.sh [options]
   --verbose           Print detailed diagnostics, including journalctl
+  --allow-non-pi      Suppress hard failures for non-Pi OverlayFS/rootfs
+                      detection uncertainty, including missing expected
+                      overlay lines, undetermined root filesystem type,
+                      unknown overlay configuration status, and unknown
+                      root overlay state
 EOF
 }
 
@@ -30,6 +37,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --verbose)
       VERBOSE=1
+      shift
+      ;;
+    --allow-non-pi)
+      ALLOW_NON_PI=1
       shift
       ;;
     -h | --help)
@@ -43,7 +54,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 ensure_root
-prepare_log "smoke"
+prepare_log "smoketest"
 load_readonly_config
 
 soft_warn() {
@@ -68,7 +79,44 @@ UDC_STATE_PATH=""
 UDC_STATE_VALUE=""
 DWC2_MODE="$(dwc2_mode)"
 IFS=',' read -r -a REQUIRED_MODULES <<<"$(required_boot_modules_csv)"
-EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line)"
+EXPECTED_OVERLAY_LINE="$(expected_dwc2_overlay_line 2>/dev/null || true)"
+OVERLAY_STATUS="$(overlay_status)"
+ROOT_OVERLAY_ACTIVE="unknown"
+ROOT_FILESYSTEM_TYPE="unknown"
+BLUETOOTH_STATE_PERSISTENT="no"
+CONFIGURED_INITRAMFS_FILE="$(configured_initramfs_file)"
+EXPECTED_BOOT_INITRAMFS_FILE="$(expected_boot_initramfs_file || true)"
+EXPECTED_BOOT_INITRAMFS_PATH=""
+
+if ROOT_FILESYSTEM_TYPE="$(current_root_filesystem_type)"; then
+  if [[ "$ROOT_FILESYSTEM_TYPE" == "overlay" ]]; then
+    ROOT_OVERLAY_ACTIVE="yes"
+  else
+    ROOT_OVERLAY_ACTIVE="no"
+  fi
+else
+  ROOT_FILESYSTEM_TYPE="unknown"
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Could not determine the live root filesystem type"
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$SMOKETEST_POST_REBOOT" != "1" ]]; then
+    soft_warn "Could not determine the live root filesystem type before reboot"
+  else
+    warn "Could not determine the live root filesystem type"
+    EXIT_CODE=1
+  fi
+fi
+
+if bluetooth_state_persistent; then
+  BLUETOOTH_STATE_PERSISTENT="yes"
+fi
+
+if [[ -n "$EXPECTED_BOOT_INITRAMFS_FILE" ]]; then
+  if [[ "$EXPECTED_BOOT_INITRAMFS_FILE" == /* ]]; then
+    EXPECTED_BOOT_INITRAMFS_PATH="$EXPECTED_BOOT_INITRAMFS_FILE"
+  else
+    EXPECTED_BOOT_INITRAMFS_PATH="$(boot_initramfs_target_path "$EXPECTED_BOOT_INITRAMFS_FILE" 2>/dev/null || true)"
+  fi
+fi
 
 modules_load_has_required_modules() {
   local module
@@ -109,7 +157,22 @@ required_modules_list() {
   printf '%s\n' "${joined%,}"
 }
 
-if grep -qxF "$EXPECTED_OVERLAY_LINE" "$CONFIG_TXT"; then
+print_verbose_section_header() {
+  if [[ ${VERBOSE_SECTION_COUNT:-0} -gt 0 ]]; then
+    echo
+  fi
+  VERBOSE_SECTION_COUNT=$((VERBOSE_SECTION_COUNT + 1))
+  echo "## $1"
+}
+
+if [[ -z "$EXPECTED_OVERLAY_LINE" ]]; then
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Could not determine expected Raspberry Pi overlay line"
+  else
+    warn "Could not determine expected Raspberry Pi overlay line"
+    EXIT_CODE=1
+  fi
+elif grep -qxF "$EXPECTED_OVERLAY_LINE" "$CONFIG_TXT"; then
   ok "config.txt contains expected overlay (${EXPECTED_OVERLAY_LINE})"
 else
   warn "config.txt is missing expected overlay (${EXPECTED_OVERLAY_LINE})"
@@ -267,11 +330,16 @@ else
   EXIT_CODE=1
 fi
 
-PAIRED_COUNT="$(bluetooth_paired_count)"
-if [[ "${PAIRED_COUNT:-0}" -gt 0 ]]; then
-  ok "Paired Bluetooth devices detected (${PAIRED_COUNT})"
+PAIRED_COUNT=0
+if PAIRED_COUNT="$(bluetooth_paired_count)"; then
+  if [[ "${PAIRED_COUNT:-0}" -gt 0 ]]; then
+    ok "Paired Bluetooth devices detected (${PAIRED_COUNT})"
+  else
+    soft_warn "No paired Bluetooth devices detected"
+  fi
 else
-  soft_warn "No paired Bluetooth devices detected"
+  warn "bluetoothctl failed while listing paired devices"
+  EXIT_CODE=1
 fi
 
 if [[ -d /var/lib/bluetooth ]]; then
@@ -281,66 +349,187 @@ else
   EXIT_CODE=1
 fi
 
-if [[ "$READONLY_MODE" == "persistent" ]]; then
-  if machine_id_valid; then
-    ok "machine-id is stable for persistent read-only mode"
+case "$OVERLAY_STATUS" in
+  enabled)
+    ok "OverlayFS boot configuration is enabled"
+    ;;
+  disabled)
+    ok "OverlayFS boot configuration is disabled"
+    ;;
+  *)
+    warn "OverlayFS boot configuration status is unknown"
+    if [[ "$ALLOW_NON_PI" != "1" ]]; then
+      EXIT_CODE=1
+    fi
+    ;;
+esac
+
+if [[ "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
+  ok "Root overlay is active"
+elif [[ "$ROOT_OVERLAY_ACTIVE" == "unknown" ]]; then
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Could not determine whether the root overlay is active"
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$SMOKETEST_POST_REBOOT" != "1" ]]; then
+    soft_warn "Could not determine whether the root overlay is active before reboot"
   else
-    warn "machine-id is missing or invalid for persistent read-only mode"
+    warn "Could not determine whether the root overlay is active"
     EXIT_CODE=1
   fi
-
-  if bluetooth_state_persistent; then
-    ok "Bluetooth state is mounted persistently"
-  else
-    warn "Bluetooth state is not mounted persistently"
+  ROOT_MOUNT_REPORT="$(root_overlay_report)"
+  if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
+    printf '%s\n' "$ROOT_MOUNT_REPORT"
+  fi
+elif [[ "$OVERLAY_STATUS" == "enabled" ]]; then
+  if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
+    warn "Root overlay is not active"
     EXIT_CODE=1
+  else
+    soft_warn "Root overlay is not active; reboot may still be pending"
+  fi
+  ROOT_MOUNT_REPORT="$(root_overlay_report)"
+  if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
+    printf '%s\n' "$ROOT_MOUNT_REPORT"
+  fi
+else
+  ok "Root overlay is inactive"
+fi
+
+if [[ "$OVERLAY_STATUS" == "enabled" || "$ROOT_OVERLAY_ACTIVE" == "yes" || "$READONLY_MODE" == "persistent" ]]; then
+  if [[ -n "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+    if [[ -s "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+      ok "Boot initramfs is present (${EXPECTED_BOOT_INITRAMFS_PATH})"
+    else
+      warn "Boot initramfs is missing or empty (${EXPECTED_BOOT_INITRAMFS_PATH})"
+      EXIT_CODE=1
+    fi
+  else
+    warn "Boot initramfs target could not be determined"
+    EXIT_CODE=1
+  fi
+elif [[ -n "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+  if [[ -s "$EXPECTED_BOOT_INITRAMFS_PATH" ]]; then
+    ok "Boot initramfs is present (${EXPECTED_BOOT_INITRAMFS_PATH})"
+  else
+    soft_warn "Boot initramfs is not present yet (${EXPECTED_BOOT_INITRAMFS_PATH})"
   fi
 fi
 
-if [[ "$(overlay_status)" == "enabled" && "$READONLY_MODE" != "persistent" ]]; then
-  warn "OverlayFS is enabled without persistent Bluetooth state; this setup is unsupported."
+if machine_id_valid; then
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    ok "machine-id is ready for persistent read-only mode"
+  else
+    ok "machine-id is stable"
+  fi
+elif [[ "$OVERLAY_STATUS" == "enabled" || "$READONLY_MODE" == "persistent" ]]; then
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    warn "machine-id is missing or invalid for persistent read-only mode"
+  else
+    warn "machine-id is missing or invalid"
+  fi
   EXIT_CODE=1
 fi
 
-info "OverlayFS status: $(overlay_status)"
-info "Read-only mode: ${READONLY_MODE}"
-info "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
+if [[ "$BLUETOOTH_STATE_PERSISTENT" == "yes" ]]; then
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    ok "Bluetooth state is mounted persistently"
+  else
+    ok "Bluetooth state persistence is active"
+  fi
+elif [[ "$OVERLAY_STATUS" == "enabled" || "$READONLY_MODE" == "persistent" ]]; then
+  if [[ "$READONLY_MODE" == "persistent" ]]; then
+    warn "Bluetooth state is not mounted persistently"
+  else
+    warn "Bluetooth state persistence is not active"
+  fi
+  EXIT_CODE=1
+else
+  ok "Bluetooth state persistence is not configured"
+fi
+
+if [[ "$READONLY_MODE" == "persistent" ]]; then
+  ok "Read-only mode is persistent"
+elif [[ "$READONLY_MODE" == "unknown" ]]; then
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Read-only mode could not be determined"
+  else
+    warn "Read-only mode could not be determined"
+    EXIT_CODE=1
+  fi
+else
+  if [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then
+    ok "Read-only mode is disabled"
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then
+    warn "Read-only mode is not persistent"
+    if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
+      EXIT_CODE=1
+    fi
+  elif [[ "$OVERLAY_STATUS" == "enabled" && "$ROOT_OVERLAY_ACTIVE" == "unknown" ]]; then
+    if [[ "$SMOKETEST_POST_REBOOT" == "1" ]]; then
+      warn "Read-only mode could not be confirmed after reboot"
+      EXIT_CODE=1
+    else
+      soft_warn "Read-only mode could not be confirmed yet; reboot may still be pending"
+    fi
+  elif [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "yes" ]]; then
+    warn "Read-only mode config drift: overlay active but not configured to persist"
+    EXIT_CODE=1
+  else
+    warn "Read-only mode is not persistent"
+    EXIT_CODE=1
+  fi
+fi
 
 if [[ $VERBOSE -eq 1 ]]; then
-  echo "## Summary"
+  VERBOSE_SECTION_COUNT=0
+  print_verbose_section_header "Summary"
   echo "Boot config: ${CONFIG_TXT}"
   echo "Cmdline: ${CMDLINE_TXT}"
   echo "modules-load token: ${MODULES_LOAD_VALUE:-<missing>}"
   echo "required modules: $(required_modules_list)"
   echo "required modules status: $(required_modules_status)"
   echo "expected overlay line: ${EXPECTED_OVERLAY_LINE}"
+  echo "configured kernel image: $(configured_kernel_image)"
+  echo "configured initramfs file: ${CONFIGURED_INITRAMFS_FILE:-<none>}"
+  echo "expected boot initramfs file: ${EXPECTED_BOOT_INITRAMFS_FILE:-<none>}"
+  echo "expected boot initramfs path: ${EXPECTED_BOOT_INITRAMFS_PATH:-<none>}"
   echo "UDC controllers: ${UDC_LIST:-<none>}"
   echo "UDC state path: ${UDC_STATE_PATH:-<unknown>}"
   echo "UDC state: ${UDC_STATE_VALUE:-<unknown>}"
   echo "Readonly mode: ${READONLY_MODE}"
-  echo "OverlayFS: $(overlay_status)"
-  echo "Bluetooth state persistent: $(bluetooth_state_persistent && echo yes || echo no)"
+  echo "OverlayFS configured: ${OVERLAY_STATUS}"
+  echo "Allow non-Pi overlay bypass: ${ALLOW_NON_PI}"
+  echo "Root filesystem type: ${ROOT_FILESYSTEM_TYPE}"
+  echo "Root overlay active: ${ROOT_OVERLAY_ACTIVE}"
+  ROOT_MOUNT_REPORT="$(root_overlay_report)"
+  if [[ -n "$ROOT_MOUNT_REPORT" ]]; then
+    printf 'Root mount:\n%s\n' "$ROOT_MOUNT_REPORT"
+  else
+    echo "Root mount: <unknown>"
+  fi
+  echo "Bluetooth state persistent: ${BLUETOOTH_STATE_PERSISTENT}"
+  echo "Smoketest post-reboot mode: ${SMOKETEST_POST_REBOOT}"
   echo "Relayable device count: ${RELAYABLE_COUNT:-unknown}"
   echo "Paired Bluetooth device count: ${PAIRED_COUNT:-unknown}"
   echo "Non-fatal warning count: ${SOFT_WARNINGS}"
-  echo "## CLI validate-env output"
+  print_verbose_section_header "CLI validate-env output"
   cat "$VALIDATE_LOG"
-  echo "## Service config check"
+  print_verbose_section_header "Service config check"
   cat "$SERVICE_CONFIG_LOG"
-  echo "## bluetoothctl show"
+  print_verbose_section_header "bluetoothctl show"
   cat "$BLUETOOTH_SHOW_LOG"
-  echo "## btmgmt info"
+  print_verbose_section_header "btmgmt info"
   cat "$BTMGMT_INFO_LOG"
-  echo "## rfkill bluetooth"
+  print_verbose_section_header "rfkill bluetooth"
   cat "$RFKILL_LOG"
-  echo "## Device inventory"
+  print_verbose_section_header "Device inventory"
   cat "$LIST_DEVICES_JSON"
-  echo "## Mount details"
+  print_verbose_section_header "Mount details"
+  findmnt -n -T / 2>/dev/null || true
   findmnt -n -T /var/lib/bluetooth 2>/dev/null || true
   findmnt -n "$B2U_PERSIST_MOUNT" 2>/dev/null || true
-  echo "## Service status"
+  print_verbose_section_header "Service status"
   systemctl --no-pager --full status "${B2U_SERVICE_UNIT}" || true
-  echo "## Journal"
+  print_verbose_section_header "Journal"
   journalctl -b -u "${B2U_SERVICE_UNIT}" -n 100 --no-pager || true
 fi
 

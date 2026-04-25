@@ -6,6 +6,7 @@ permissions:
 on:
   push:
     branches:
+      - staging
       - main
   pull_request:
 
@@ -24,8 +25,20 @@ jobs:
 
       - name: Install build and quality tooling
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -e . black ruff yamllint shfmt-py shellcheck-py build
+          retry() {
+            local attempts="$1"
+            shift
+            local n=1
+            until "$@"; do
+              if [ "$n" -ge "$attempts" ]; then
+                return 1
+              fi
+              n=$((n + 1))
+              sleep 5
+            done
+          }
+          retry 3 python -m pip install --upgrade pip setuptools wheel
+          retry 3 python -m pip install -e . black ruff yamllint shfmt-py shellcheck-py build
 
       - name: Python formatting checks
         run: |
@@ -51,15 +64,21 @@ jobs:
 
       - name: Shell formatting checks
         run: |
-          shfmt -d -i 2 -ci -bn scripts/*.sh scripts/lib/*.sh
+          mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "expected shell scripts under scripts/, found none"; exit 1; }
+          shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
 
       - name: Shell lint checks
         run: |
-          shellcheck -x scripts/*.sh scripts/lib/*.sh
+          mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "expected shell scripts under scripts/, found none"; exit 1; }
+          shellcheck -x "${shell_scripts[@]}"
 
       - name: Shell syntax checks
         run: |
-          bash -n scripts/*.sh scripts/lib/*.sh
+          mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
+          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "expected shell scripts under scripts/, found none"; exit 1; }
+          bash -n "${shell_scripts[@]}"
 
       - name: YAML lint checks
         run: |
