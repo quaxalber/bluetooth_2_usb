@@ -42,6 +42,7 @@ BTN_TASK = 279
 REL_X = 0
 REL_Y = 1
 REL_HWHEEL = 6
+REL_WHEEL = 8
 
 EVENT_TYPE_NAMES = {
     EV_KEY: "EV_KEY",
@@ -75,6 +76,7 @@ EVENT_CODE_NAMES = {
         REL_X: "REL_X",
         REL_Y: "REL_Y",
         REL_HWHEEL: "REL_HWHEEL",
+        REL_WHEEL: "REL_WHEEL",
     },
 }
 
@@ -269,6 +271,8 @@ MOUSE_SINGLE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, -1),
     ExpectedEvent(EV_REL, REL_Y, 1),
     ExpectedEvent(EV_REL, REL_Y, -1),
+    ExpectedEvent(EV_REL, REL_WHEEL, 1),
+    ExpectedEvent(EV_REL, REL_WHEEL, -1),
     ExpectedEvent(EV_REL, REL_HWHEEL, 1),
     ExpectedEvent(EV_REL, REL_HWHEEL, -1),
 )

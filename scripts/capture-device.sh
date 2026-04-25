@@ -9,4 +9,6 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   PYTHON_BIN="python3"
 fi
 
+export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+
 exec "$PYTHON_BIN" -m bluetooth_2_usb.capture_device "$@"

@@ -25,6 +25,7 @@ from bluetooth_2_usb.relay import (
     RelayController,
     RuntimeMonitor,
     ShortcutToggler,
+    ecodes,
     send_key_event,
 )
 
@@ -724,6 +725,34 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
                     await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(5, -3, 0, 2)])
+
+    async def test_frame_aggregates_high_resolution_horizontal_wheel(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+
+        def make_rel(code: int, value: int):
+            return SimpleNamespace(
+                event=SimpleNamespace(type=2, code=code, value=value)
+            )
+
+        input_device = _TestInputDevice(
+            [
+                make_rel(ecodes.REL_HWHEEL_HI_RES, 60),
+                make_rel(ecodes.REL_HWHEEL_HI_RES, 60),
+                SimpleNamespace(event=SimpleNamespace(type=0, code=0, value=0)),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.RelEvent", SimpleNamespace):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1)])
 
     async def test_touchpad_absolute_motion_falls_back_to_mouse_motion(self) -> None:
         relaying_active = asyncio.Event()

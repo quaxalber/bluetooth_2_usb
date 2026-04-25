@@ -36,6 +36,7 @@ from bluetooth_2_usb.loopback_common import (
     MOUSE_REL_STEPS,
     MOUSE_SINGLE_REL_STEPS,
     REL_HWHEEL,
+    REL_WHEEL,
     SCENARIOS,
     TEXT_BURST_STEPS,
     HarnessBusyError,
@@ -95,8 +96,8 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, MOUSE_BUTTON_STEPS)
         self.assertEqual(
-            [step.code for step in MOUSE_SINGLE_REL_STEPS[-2:]],
-            [REL_HWHEEL, REL_HWHEEL],
+            [step.code for step in MOUSE_SINGLE_REL_STEPS[-4:]],
+            [REL_WHEEL, REL_WHEEL, REL_HWHEEL, REL_HWHEEL],
         )
         self.assertEqual(
             [(step.code, step.value) for step in scenario.mouse_rel_steps[-3:]],
@@ -487,6 +488,14 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
         matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]))
         matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]))
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_vertical_wheel_reports(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_SINGLE_REL_STEPS[-4:-2], ())
+
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]))
 
         self.assertTrue(matcher.complete)
 

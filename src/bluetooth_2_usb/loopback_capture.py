@@ -25,6 +25,7 @@ from .loopback_common import (
     KEY_VOLUMEDOWN,
     KEY_VOLUMEUP,
     REL_HWHEEL,
+    REL_WHEEL,
     REL_X,
     REL_Y,
     GadgetNodes,
@@ -51,6 +52,7 @@ REL_NAMES = {
     REL_X: "REL_X",
     REL_Y: "REL_Y",
     REL_HWHEEL: "REL_HWHEEL",
+    REL_WHEEL: "REL_WHEEL",
 }
 
 MOUSE_BUTTON_BITS = {
@@ -200,10 +202,6 @@ class MouseSequenceMatcher:
                 f"Unexpected mouse report format: {report.hex(sep=' ')}"
             )
         buttons, rel_x, rel_y, wheel, pan = parsed
-        if wheel != 0:
-            raise CaptureMismatchError(
-                f"Unexpected mouse wheel movement in report {report.hex(sep=' ')}"
-            )
         if not self.expected_button_steps and buttons != 0:
             raise CaptureMismatchError(
                 f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
@@ -213,10 +211,12 @@ class MouseSequenceMatcher:
             self._apply_rel(REL_X, rel_x)
         if rel_y:
             self._apply_rel(REL_Y, rel_y)
+        if wheel:
+            self._apply_rel(REL_WHEEL, wheel)
         if pan:
             self._apply_rel(REL_HWHEEL, pan)
 
-        if rel_x == 0 and rel_y == 0 and pan == 0:
+        if rel_x == 0 and rel_y == 0 and wheel == 0 and pan == 0:
             if self.button_index >= len(self.expected_button_steps):
                 if buttons == 0:
                     return

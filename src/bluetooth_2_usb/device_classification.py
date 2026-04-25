@@ -94,7 +94,7 @@ TABLET_ABS = {
 
 
 def describe_capabilities(device: Any) -> DeviceCapabilities:
-    capabilities = device.capabilities(verbose=False)
+    capabilities = device.capabilities(verbose=False, absinfo=False)
     props = _device_properties(device)
     event_types = tuple(
         sorted(_event_type_name(event_type) for event_type in capabilities)
@@ -117,7 +117,7 @@ def _relay_classes(capabilities: dict[int, list[int]], props: set[int]) -> set[s
     rels = set(_codes(capabilities, ecodes.EV_REL))
     abs_axes = set(_codes(capabilities, ecodes.EV_ABS))
 
-    if keys:
+    if any(code < ecodes.BTN_MISC for code in keys):
         classes.add("keyboard")
     if rels or keys.intersection(
         {ecodes.BTN_LEFT, ecodes.BTN_RIGHT, ecodes.BTN_MIDDLE}

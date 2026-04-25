@@ -1278,9 +1278,9 @@ def is_consumer_key(event: KeyEvent) -> bool:
     return event.scancode in _CONSUMER_KEYS
 
 
-def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, int]:
+def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, float]:
     input_event: InputEvent = event.event
-    x, y, mwheel, pan = 0, 0, 0, 0
+    x, y, mwheel, pan = 0, 0, 0, 0.0
     if input_event.code == ecodes.REL_X:
         x = input_event.value
     elif input_event.code == ecodes.REL_Y:
@@ -1291,10 +1291,9 @@ def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, int]:
         pan = input_event.value
     elif input_event.code == ecodes.REL_HWHEEL_HI_RES:
         # Linux reports high-resolution wheel values in multiples/fractions of
-        # 120. Preserve the sign and round toward zero; stateful accumulation is
-        # handled in the relay frame accumulator when multiple events arrive
-        # before SYN_REPORT.
-        pan = int(input_event.value / 120)
+        # 120. Keep fractional steps so the relay frame accumulator can combine
+        # multiple events before quantizing the HID pan report.
+        pan = input_event.value / 120
     return x, y, mwheel, pan
 
 

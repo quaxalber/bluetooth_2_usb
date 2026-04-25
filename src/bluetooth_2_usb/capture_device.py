@@ -149,7 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.duration < 0:
         parser.error("--duration must be >= 0")
 
-    result = capture(args.device, args.duration)
+    try:
+        result = capture(args.device, args.duration)
+    except Exception as exc:
+        target = args.device or "inventory"
+        parser.exit(2, f"Failed to capture input device data from {target}: {exc}\n")
     if args.output == "json":
         print(json.dumps(result, sort_keys=True))
     else:

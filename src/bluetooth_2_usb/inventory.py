@@ -139,6 +139,8 @@ def describe_input_devices(
             exclusion_reason = auto_discover_exclusion_reason(
                 device, skip_name_prefixes
             )
+            if exclusion_reason is None and not relay_classes:
+                exclusion_reason = "missing supported relay classes"
 
         metadata.append(
             InputDeviceMetadata(
@@ -150,7 +152,7 @@ def describe_input_devices(
                 properties=properties,
                 abs_axes=abs_axes,
                 relay_classes=relay_classes,
-                relay_candidate=exclusion_reason is None,
+                relay_candidate=exclusion_reason is None and bool(relay_classes),
                 exclusion_reason=exclusion_reason,
             )
         )

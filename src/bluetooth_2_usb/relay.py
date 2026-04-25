@@ -1090,7 +1090,8 @@ class DeviceRelay:
         )
 
     async def _process_frame_with_retry(self, frame: list[InputEvent]) -> None:
-        rel_x = rel_y = rel_wheel = rel_pan = 0
+        rel_x = rel_y = rel_wheel = 0
+        rel_pan = 0.0
         rel_seen = False
         touch_seen = False
 
@@ -1113,7 +1114,9 @@ class DeviceRelay:
             await self._process_event_with_retry(event)
 
         if rel_seen:
-            await self._process_mouse_delta_with_retry(rel_x, rel_y, rel_wheel, rel_pan)
+            await self._process_mouse_delta_with_retry(
+                rel_x, rel_y, rel_wheel, int(rel_pan)
+            )
         if touch_seen:
             await self._process_touch_frame_with_retry()
 
@@ -1329,12 +1332,12 @@ def move_mouse(event: RelEvent, gadget_manager: GadgetManager) -> None:
 
 
 def move_mouse_delta(
-    x: int, y: int, mwheel: int, pan: int, gadget_manager: GadgetManager
+    x: int, y: int, mwheel: int, pan: int | float, gadget_manager: GadgetManager
 ) -> None:
     mouse = gadget_manager.get_mouse()
     if mouse is None:
         raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
-    mouse.move(x, y, mwheel, pan)
+    mouse.move(x, y, mwheel, int(pan))
 
 
 def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
