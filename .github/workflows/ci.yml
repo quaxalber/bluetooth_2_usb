@@ -65,19 +65,19 @@ jobs:
       - name: Shell formatting checks
         run: |
           mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
-          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "no shell scripts found"; exit 0; }
+          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "expected shell scripts under scripts/, found none"; exit 1; }
           shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
 
       - name: Shell lint checks
         run: |
           mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
-          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "no shell scripts found"; exit 0; }
+          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "expected shell scripts under scripts/, found none"; exit 1; }
           shellcheck -x "${shell_scripts[@]}"
 
       - name: Shell syntax checks
         run: |
           mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
-          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "no shell scripts found"; exit 0; }
+          [[ ${#shell_scripts[@]} -gt 0 ]] || { echo "expected shell scripts under scripts/, found none"; exit 1; }
           bash -n "${shell_scripts[@]}"
 
       - name: YAML lint checks

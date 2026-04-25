@@ -178,10 +178,19 @@ if value:
 PY
 }
 
+# shellcheck disable=SC2120  # Library helper accepts optional config path and model filters.
 configured_kernel_image() {
+  local config_file="${1:-$(boot_config_path)}"
+  local -a model_filters=()
   local value
 
-  value="$(boot_config_assignment_value "kernel")"
+  if (($# > 1)); then
+    model_filters=("${@:2}")
+  else
+    mapfile -t model_filters < <(boot_config_model_filters)
+  fi
+
+  value="$(boot_config_assignment_value "kernel" "$config_file" "${model_filters[@]}")"
   if [[ -n "$value" ]]; then
     printf '%s\n' "$value"
   else
@@ -232,7 +241,16 @@ PY
 }
 
 auto_initramfs_enabled() {
-  [[ "$(boot_config_assignment_value "auto_initramfs")" == "1" ]]
+  local config_file="${1:-$(boot_config_path)}"
+  local -a model_filters=()
+
+  if (($# > 1)); then
+    model_filters=("${@:2}")
+  else
+    mapfile -t model_filters < <(boot_config_model_filters)
+  fi
+
+  [[ "$(boot_config_assignment_value "auto_initramfs" "$config_file" "${model_filters[@]}")" == "1" ]]
 }
 
 effective_arm_64bit() {
@@ -252,8 +270,15 @@ effective_arm_64bit() {
 
 # shellcheck disable=SC2120  # Library helper forwards optional model filters.
 expected_auto_initramfs_name() {
-  local kernel_image="${1:-$(configured_kernel_image)}"
+  local kernel_image="${1:-}"
   local base_name
+
+  if [[ -z "$kernel_image" ]]; then
+    if (($# > 0)); then
+      shift
+    fi
+    kernel_image="$(configured_kernel_image "$@")"
+  fi
 
   base_name="${kernel_image##*/}"
   base_name="${base_name%.*}"
@@ -272,8 +297,8 @@ expected_boot_initramfs_file() {
     return
   fi
 
-  if auto_initramfs_enabled; then
-    expected_auto_initramfs_name
+  if auto_initramfs_enabled "$@"; then
+    expected_auto_initramfs_name "" "$@"
   fi
 }
 

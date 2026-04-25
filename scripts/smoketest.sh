@@ -111,7 +111,11 @@ if bluetooth_state_persistent; then
 fi
 
 if [[ -n "$EXPECTED_BOOT_INITRAMFS_FILE" ]]; then
-  EXPECTED_BOOT_INITRAMFS_PATH="$(boot_initramfs_target_path "$EXPECTED_BOOT_INITRAMFS_FILE" 2>/dev/null || true)"
+  if [[ "$EXPECTED_BOOT_INITRAMFS_FILE" == /* ]]; then
+    EXPECTED_BOOT_INITRAMFS_PATH="$EXPECTED_BOOT_INITRAMFS_FILE"
+  else
+    EXPECTED_BOOT_INITRAMFS_PATH="$(boot_initramfs_target_path "$EXPECTED_BOOT_INITRAMFS_FILE" 2>/dev/null || true)"
+  fi
 fi
 
 modules_load_has_required_modules() {
@@ -445,8 +449,12 @@ fi
 if [[ "$READONLY_MODE" == "persistent" ]]; then
   ok "Read-only mode is persistent"
 elif [[ "$READONLY_MODE" == "unknown" ]]; then
-  warn "Read-only mode could not be determined"
-  EXIT_CODE=1
+  if [[ "$ALLOW_NON_PI" == "1" ]]; then
+    soft_warn "Read-only mode could not be determined"
+  else
+    warn "Read-only mode could not be determined"
+    EXIT_CODE=1
+  fi
 else
   if [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then
     ok "Read-only mode is disabled"
