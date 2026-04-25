@@ -86,7 +86,7 @@ From the repository checkout on the host:
 Default behavior:
 
 - detects the gadget HID device by product name and HID usage
-- waits up to `5` seconds for the complete sequence
+- waits up to `10` seconds for the complete sequence
 - may temporarily claim the gadget HID interfaces while the capture runs, so do
   not assume the local desktop will process the same inputs during that window
 - uses a single harness lock file; do not run multiple inject/capture sessions
@@ -129,8 +129,8 @@ and emits this deterministic sequence:
 - keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
 - mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
   `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`, one coalesced `REL_X +2` /
-  `REL_Y -3` / `REL_HWHEEL +1` frame, then `BTN_FORWARD`, `BTN_BACK`, and
-  `BTN_TASK` press/release
+  `REL_Y -3` / `REL_HWHEEL +1` frame, then mouse buttons 1 through 8
+  press/release (`BTN_LEFT` through `BTN_TASK`)
 
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit wheel/pan.

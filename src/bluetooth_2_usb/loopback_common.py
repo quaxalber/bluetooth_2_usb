@@ -36,6 +36,11 @@ KEY_VOLUMEUP = 115
 KEY_VOLUMEDOWN = 114
 KEY_MINUS = 12
 KEY_SPACE = 57
+BTN_LEFT = 272
+BTN_RIGHT = 273
+BTN_MIDDLE = 274
+BTN_SIDE = 275
+BTN_EXTRA = 276
 BTN_FORWARD = 277
 BTN_BACK = 278
 BTN_TASK = 279
@@ -68,6 +73,11 @@ EVENT_CODE_NAMES = {
         KEY_VOLUMEDOWN: "KEY_VOLUMEDOWN",
         KEY_MINUS: "KEY_MINUS",
         KEY_SPACE: "KEY_SPACE",
+        BTN_LEFT: "BTN_LEFT",
+        BTN_RIGHT: "BTN_RIGHT",
+        BTN_MIDDLE: "BTN_MIDDLE",
+        BTN_SIDE: "BTN_SIDE",
+        BTN_EXTRA: "BTN_EXTRA",
         BTN_FORWARD: "BTN_FORWARD",
         BTN_BACK: "BTN_BACK",
         BTN_TASK: "BTN_TASK",
@@ -286,6 +296,16 @@ MOUSE_COALESCED_REL_STEPS = (
 MOUSE_REL_STEPS = MOUSE_SINGLE_REL_STEPS + MOUSE_COALESCED_REL_STEPS
 
 MOUSE_BUTTON_STEPS = (
+    ExpectedEvent(EV_KEY, BTN_LEFT, 1),
+    ExpectedEvent(EV_KEY, BTN_LEFT, 0),
+    ExpectedEvent(EV_KEY, BTN_RIGHT, 1),
+    ExpectedEvent(EV_KEY, BTN_RIGHT, 0),
+    ExpectedEvent(EV_KEY, BTN_MIDDLE, 1),
+    ExpectedEvent(EV_KEY, BTN_MIDDLE, 0),
+    ExpectedEvent(EV_KEY, BTN_SIDE, 1),
+    ExpectedEvent(EV_KEY, BTN_SIDE, 0),
+    ExpectedEvent(EV_KEY, BTN_EXTRA, 1),
+    ExpectedEvent(EV_KEY, BTN_EXTRA, 0),
     ExpectedEvent(EV_KEY, BTN_FORWARD, 1),
     ExpectedEvent(EV_KEY, BTN_FORWARD, 0),
     ExpectedEvent(EV_KEY, BTN_BACK, 1),

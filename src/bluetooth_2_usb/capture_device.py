@@ -58,6 +58,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def capture(device_path: str | None = None, duration: float = 10.0) -> dict[str, Any]:
+    if duration < 0:
+        raise ValueError("duration must be >= 0")
     result: dict[str, Any] = {
         "inventory": [device.to_dict() for device in describe_input_devices()],
         "sample": None,

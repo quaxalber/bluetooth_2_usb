@@ -82,8 +82,8 @@ def _build_parser() -> argparse.ArgumentParser:
     capture.add_argument(
         "--timeout-sec",
         type=float,
-        default=5.0,
-        help="Timeout waiting for relay events. Default: 5",
+        default=10.0,
+        help="Timeout waiting for relay events. Default: 10",
     )
     capture.add_argument(
         "--device-substring",

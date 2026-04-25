@@ -14,7 +14,12 @@ from adafruit_hid.keycode import Keycode
 from .evdev import evdev_to_usb_hid
 from .loopback_common import (
     BTN_BACK,
+    BTN_EXTRA,
     BTN_FORWARD,
+    BTN_LEFT,
+    BTN_MIDDLE,
+    BTN_RIGHT,
+    BTN_SIDE,
     BTN_TASK,
     DEFAULT_DEVICE_SUBSTRING,
     EXIT_ACCESS,
@@ -56,6 +61,11 @@ REL_NAMES = {
 }
 
 MOUSE_BUTTON_BITS = {
+    BTN_LEFT: 0x01,
+    BTN_RIGHT: 0x02,
+    BTN_MIDDLE: 0x04,
+    BTN_SIDE: 0x08,
+    BTN_EXTRA: 0x10,
     BTN_FORWARD: 0x20,
     BTN_BACK: 0x40,
     BTN_TASK: 0x80,
@@ -1037,7 +1047,7 @@ def _capture_once_linux_hidraw(
 
 def run_capture(
     scenario_name: str,
-    timeout_sec: float = 5.0,
+    timeout_sec: float = 10.0,
     device_substring: str = DEFAULT_DEVICE_SUBSTRING,
     keyboard_node: str | None = None,
     mouse_node: str | None = None,

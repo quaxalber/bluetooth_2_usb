@@ -6,7 +6,9 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${REPO_ROOT}/venv/bin/python"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
-  PYTHON_BIN="python3"
+  printf 'Missing repository virtualenv Python: %s\n' "$PYTHON_BIN" >&2
+  printf 'Run the installer or create the repo venv before capturing device data.\n' >&2
+  exit 3
 fi
 
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"

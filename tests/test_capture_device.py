@@ -7,6 +7,10 @@ from bluetooth_2_usb import capture_device
 
 
 class CaptureDeviceCliTest(unittest.TestCase):
+    def test_capture_rejects_negative_duration(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duration must be >= 0"):
+            capture_device.capture(duration=-1)
+
     def test_capture_failures_are_reported_without_traceback(self) -> None:
         stderr = io.StringIO()
 

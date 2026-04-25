@@ -105,7 +105,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         )
         self.assertEqual(
             [step.value for step in scenario.mouse_button_steps],
-            [1, 0, 1, 0, 1, 0],
+            [1, 0] * 8,
         )
 
     def test_mouse_injector_groups_coalesced_suffix_into_one_frame(self) -> None:
@@ -518,6 +518,16 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_extended_button_reports(self) -> None:
         matcher = MouseSequenceMatcher.create((), MOUSE_BUTTON_STEPS)
 
+        matcher.handle(bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
         matcher.handle(bytes([0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
         matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
         matcher.handle(bytes([0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
@@ -723,11 +733,14 @@ class LoopbackHarnessCliTest(unittest.TestCase):
             to_text=lambda: "ignored",
         )
 
-        with patch("bluetooth_2_usb.loopback_capture.run_capture", return_value=result):
+        with patch(
+            "bluetooth_2_usb.loopback_capture.run_capture", return_value=result
+        ) as run_capture:
             with redirect_stdout(stdout):
                 exit_code = run_harness(["capture", "--output", "json"])
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(run_capture.call_args.kwargs["timeout_sec"], 10.0)
         self.assertEqual(
             json.loads(stdout.getvalue())["details"]["keyboard_steps_seen"], 6
         )
