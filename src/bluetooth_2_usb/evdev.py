@@ -1206,6 +1206,11 @@ _MOUSE_BUTTONS = set(
         ecodes.BTN_LEFT,
         ecodes.BTN_RIGHT,
         ecodes.BTN_MIDDLE,
+        ecodes.BTN_SIDE,
+        ecodes.BTN_EXTRA,
+        ecodes.BTN_FORWARD,
+        ecodes.BTN_BACK,
+        ecodes.BTN_TASK,
     )
 )
 """Mouse button ecodes"""
@@ -1273,16 +1278,24 @@ def is_consumer_key(event: KeyEvent) -> bool:
     return event.scancode in _CONSUMER_KEYS
 
 
-def get_mouse_movement(event: RelEvent) -> tuple[int, int, int]:
+def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, int]:
     input_event: InputEvent = event.event
-    x, y, mwheel = 0, 0, 0
+    x, y, mwheel, pan = 0, 0, 0, 0
     if input_event.code == ecodes.REL_X:
         x = input_event.value
     elif input_event.code == ecodes.REL_Y:
         y = input_event.value
     elif input_event.code == ecodes.REL_WHEEL:
         mwheel = input_event.value
-    return x, y, mwheel
+    elif input_event.code == ecodes.REL_HWHEEL:
+        pan = input_event.value
+    elif input_event.code == ecodes.REL_HWHEEL_HI_RES:
+        # Linux reports high-resolution wheel values in multiples/fractions of
+        # 120. Preserve the sign and round toward zero; stateful accumulation is
+        # handled in the relay frame accumulator when multiple events arrive
+        # before SYN_REPORT.
+        pan = int(input_event.value / 120)
+    return x, y, mwheel, pan
 
 
 @lru_cache(maxsize=1)
@@ -1429,6 +1442,11 @@ def _evdev_to_usb_hid_map() -> dict[int, int]:
         ecodes.BTN_LEFT: MouseButton.LEFT,
         ecodes.BTN_RIGHT: MouseButton.RIGHT,
         ecodes.BTN_MIDDLE: MouseButton.MIDDLE,
+        ecodes.BTN_SIDE: 0x08,
+        ecodes.BTN_EXTRA: 0x10,
+        ecodes.BTN_FORWARD: 0x20,
+        ecodes.BTN_BACK: 0x40,
+        ecodes.BTN_TASK: 0x80,
         ecodes.KEY_POWER: ConsumerControlCode.POWER,
         ecodes.KEY_RESTART: ConsumerControlCode.RESET,
         ecodes.KEY_SLEEP: ConsumerControlCode.SLEEP,

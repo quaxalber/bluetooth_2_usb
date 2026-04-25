@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +10,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from .device_classification import AbsAxisInfo, describe_capabilities
 from .logging import get_logger
 
 _logger = get_logger()
@@ -33,7 +34,7 @@ try:
 except ModuleNotFoundError as exc:
     InputDevice = Any  # type: ignore[assignment]
     list_devices = None  # type: ignore[assignment]
-    native_ecodes = SimpleNamespace(EV_KEY=0x01, EV_REL=0x02)
+    native_ecodes = SimpleNamespace(EV_KEY=0x01, EV_REL=0x02, EV_ABS=0x03, EV_FF=0x15)
     _EVDEV_IMPORT_ERROR: ModuleNotFoundError | None = exc
 else:
     _EVDEV_IMPORT_ERROR = None
@@ -42,6 +43,8 @@ else:
 EVENT_TYPE_NAMES = {
     native_ecodes.EV_KEY: "EV_KEY",
     native_ecodes.EV_REL: "EV_REL",
+    native_ecodes.EV_ABS: "EV_ABS",
+    native_ecodes.EV_FF: "EV_FF",
 }
 
 
@@ -54,6 +57,9 @@ class InputDeviceMetadata:
     capabilities: list[str]
     relay_candidate: bool
     exclusion_reason: str | None
+    properties: list[str] = field(default_factory=list)
+    abs_axes: list[dict[str, object]] = field(default_factory=list)
+    relay_classes: list[str] = field(default_factory=list)
 
     @property
     def identity(self) -> str:
@@ -78,8 +84,11 @@ def auto_discover_exclusion_reason(
     except OSError as exc:
         return f"failed to read capabilities ({exc})"
 
-    if not any(code in capabilities for code in EVENT_TYPE_NAMES):
-        return "missing EV_KEY/EV_REL capabilities"
+    if not any(
+        code in capabilities
+        for code in (native_ecodes.EV_KEY, native_ecodes.EV_REL, native_ecodes.EV_ABS)
+    ):
+        return "missing supported input capabilities"
 
     return None
 
@@ -115,13 +124,16 @@ def describe_input_devices(
     metadata: list[InputDeviceMetadata] = []
     for device in list_input_devices():
         try:
-            capabilities = sorted(
-                EVENT_TYPE_NAMES[code]
-                for code in device.capabilities(verbose=False)
-                if code in EVENT_TYPE_NAMES
-            )
+            rich_capabilities = describe_capabilities(device)
+            capabilities = list(rich_capabilities.event_types)
+            properties = list(rich_capabilities.properties)
+            abs_axes = [_abs_axis_to_dict(axis) for axis in rich_capabilities.abs_axes]
+            relay_classes = list(rich_capabilities.relay_classes)
         except OSError as exc:
             capabilities = []
+            properties = []
+            abs_axes = []
+            relay_classes = []
             exclusion_reason = f"failed to read capabilities ({exc})"
         else:
             exclusion_reason = auto_discover_exclusion_reason(
@@ -135,12 +147,27 @@ def describe_input_devices(
                 phys=device.phys,
                 uniq=device.uniq or "",
                 capabilities=capabilities,
+                properties=properties,
+                abs_axes=abs_axes,
+                relay_classes=relay_classes,
                 relay_candidate=exclusion_reason is None,
                 exclusion_reason=exclusion_reason,
             )
         )
         device.close()
     return metadata
+
+
+def _abs_axis_to_dict(axis: AbsAxisInfo) -> dict[str, object]:
+    return {
+        "code": axis.code,
+        "name": axis.name,
+        "minimum": axis.minimum,
+        "maximum": axis.maximum,
+        "fuzz": axis.fuzz,
+        "flat": axis.flat,
+        "resolution": axis.resolution,
+    }
 
 
 def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
@@ -155,6 +182,7 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
     table.add_column("Device", min_width=18, overflow="fold")
     table.add_column("Identity", min_width=16, overflow="fold")
     table.add_column("Path", min_width=18, overflow="fold")
+    table.add_column("Classes", min_width=16, overflow="fold")
     table.add_column("Exclusion Reason", min_width=20, overflow="fold")
 
     for device in devices:
@@ -164,6 +192,7 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
             device.name or "-",
             device.identity,
             device.path,
+            ",".join(device.relay_classes) or "-",
             device.exclusion_reason or "",
         )
 

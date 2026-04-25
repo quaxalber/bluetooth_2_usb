@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .test_harness_common import (
+from .loopback_common import (
     DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
@@ -38,8 +38,8 @@ def _build_parser() -> argparse.ArgumentParser:
     inject.add_argument(
         "--pre-delay-ms",
         type=int,
-        default=1000,
-        help="Delay after virtual device creation before injection. Default: 1000",
+        default=6000,
+        help="Delay after virtual device creation before injection. Default: 6000",
     )
     inject.add_argument(
         "--event-gap-ms",
@@ -167,7 +167,7 @@ def run(argv: list[str] | None = None) -> int:
     try:
         with harness_session(args.command, args.scenario):
             if args.command == "inject":
-                from .test_harness_inject import run_inject
+                from .loopback_inject import run_inject
 
                 result = run_inject(
                     scenario_name=args.scenario,
@@ -178,7 +178,7 @@ def run(argv: list[str] | None = None) -> int:
                     consumer_name=args.consumer_name,
                 )
             else:
-                from .test_harness_capture import run_capture
+                from .loopback_capture import run_capture
 
                 result = run_capture(
                     scenario_name=args.scenario,

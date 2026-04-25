@@ -13,7 +13,7 @@ PYTHON_BIN="${B2U_INSTALL_DIR}/venv/bin/python"
 
 usage() {
   cat <<EOF
-Usage: sudo ${B2U_INSTALL_DIR}/scripts/loopback-inject.sh [test_harness inject options]
+Usage: sudo ${B2U_INSTALL_DIR}/scripts/loopback-inject.sh [loopback_harness inject options]
 
 Run the Pi-side loopback injector using the managed virtual environment.
 Example:
@@ -30,4 +30,4 @@ esac
 
 [[ -x "${PYTHON_BIN}" ]] || fail "Managed Python not found: ${PYTHON_BIN}"
 
-exec "${PYTHON_BIN}" -m bluetooth_2_usb.test_harness inject "$@"
+exec "${PYTHON_BIN}" -m bluetooth_2_usb.loopback_harness inject "$@"

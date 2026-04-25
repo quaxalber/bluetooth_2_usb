@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
-from .test_harness_common import (
+from .loopback_common import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
     DEFAULT_KEYBOARD_NAME,
@@ -13,6 +13,7 @@ from .test_harness_common import (
     EXIT_ACCESS,
     EXIT_OK,
     EXIT_PREREQUISITE,
+    MOUSE_COALESCED_REL_STEPS,
     SCENARIOS,
     HarnessResult,
     get_scenario,
@@ -26,6 +27,20 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
     device.write(step_event.event_type, step_event.code, step_event.value)
     device.syn()
     time.sleep(event_gap_ms / 1000.0)
+
+
+def _send_frame(device: UInput, step_events, event_gap_ms: int) -> None:
+    for step_event in step_events:
+        device.write(step_event.event_type, step_event.code, step_event.value)
+    device.syn()
+    time.sleep(event_gap_ms / 1000.0)
+
+
+def _mouse_rel_step_frames(scenario) -> tuple[tuple, tuple[tuple, ...]]:
+    coalesced = MOUSE_COALESCED_REL_STEPS
+    if scenario.mouse_rel_steps[-len(coalesced) :] == coalesced:
+        return scenario.mouse_rel_steps[: -len(coalesced)], (coalesced,)
+    return scenario.mouse_rel_steps, ()
 
 
 def _keyboard_capabilities() -> dict[int, list[int]]:
@@ -42,9 +57,26 @@ def _keyboard_capabilities() -> dict[int, list[int]]:
 
 
 def _mouse_capabilities() -> dict[int, list[int]]:
-    return {
-        ecodes.EV_REL: [ecodes.REL_X, ecodes.REL_Y],
-    }
+    rel_codes = sorted(
+        {
+            step.code
+            for scenario in SCENARIOS.values()
+            for step in scenario.mouse_rel_steps
+        }
+    )
+    button_codes = sorted(
+        {
+            step.code
+            for scenario in SCENARIOS.values()
+            for step in scenario.mouse_button_steps
+        }
+    )
+    capabilities: dict[int, list[int]] = {}
+    if rel_codes:
+        capabilities[ecodes.EV_REL] = rel_codes
+    if button_codes:
+        capabilities[ecodes.EV_KEY] = button_codes
+    return capabilities
 
 
 def _consumer_capabilities() -> dict[int, list[int]]:
@@ -55,7 +87,7 @@ def _consumer_capabilities() -> dict[int, list[int]]:
 
 def run_inject(
     scenario_name: str,
-    pre_delay_ms: int = 1000,
+    pre_delay_ms: int = 6000,
     event_gap_ms: int = 40,
     keyboard_name: str = DEFAULT_KEYBOARD_NAME,
     mouse_name: str = DEFAULT_MOUSE_NAME,
@@ -123,8 +155,11 @@ def run_inject(
             time.sleep(COMBO_MOUSE_DELAY_MS / 1000.0)
 
         if mouse is not None:
-            for step_event in scenario.mouse_rel_steps:
+            mouse_rel_steps, mouse_rel_frames = _mouse_rel_step_frames(scenario)
+            for step_event in mouse_rel_steps:
                 _send_step(mouse, step_event, event_gap_ms)
+            for frame in mouse_rel_frames:
+                _send_frame(mouse, frame, event_gap_ms)
             for step_event in scenario.mouse_button_steps:
                 _send_step(mouse, step_event, event_gap_ms)
 

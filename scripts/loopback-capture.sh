@@ -11,7 +11,7 @@ source "${SCRIPTS_DIR}/lib/common.sh"
 
 usage() {
   cat <<EOF
-Usage: ./scripts/loopback-capture.sh [test_harness capture options]
+Usage: ./scripts/loopback-capture.sh [loopback_harness capture options]
 
 Capture relay reports from the host-side gadget HID devices.
 On Linux, install the host hidapi udev rule first if unprivileged access fails.
@@ -40,4 +40,4 @@ else
 fi
 
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
-exec "${PYTHON_BIN}" -m bluetooth_2_usb.test_harness capture "$@"
+exec "${PYTHON_BIN}" -m bluetooth_2_usb.loopback_harness capture "$@"

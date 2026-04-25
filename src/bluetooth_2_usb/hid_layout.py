@@ -12,6 +12,92 @@ DEFAULT_KEYBOARD_DESCRIPTOR = bytes.fromhex(
     "0719002aff008100c0"
 )
 
+DEFAULT_MOUSE_DESCRIPTOR = bytes(
+    (
+        # Usage Page (Generic Desktop), Usage (Mouse), Collection (Application)
+        0x05,
+        0x01,
+        0x09,
+        0x02,
+        0xA1,
+        0x01,
+        # Usage (Pointer), Collection (Physical)
+        0x09,
+        0x01,
+        0xA1,
+        0x00,
+        # 8 buttons
+        0x05,
+        0x09,
+        0x19,
+        0x01,
+        0x29,
+        0x08,
+        0x15,
+        0x00,
+        0x25,
+        0x01,
+        0x95,
+        0x08,
+        0x75,
+        0x01,
+        0x81,
+        0x02,
+        # X/Y use signed 16-bit relative motion. Wheel and pan remain 8-bit.
+        0x05,
+        0x01,
+        0x09,
+        0x30,
+        0x09,
+        0x31,
+        0x16,
+        0x01,
+        0x80,
+        0x26,
+        0xFF,
+        0x7F,
+        0x75,
+        0x10,
+        0x95,
+        0x02,
+        0x81,
+        0x06,
+        # Vertical wheel
+        0x09,
+        0x38,
+        0x15,
+        0x81,
+        0x25,
+        0x7F,
+        0x75,
+        0x08,
+        0x95,
+        0x01,
+        0x81,
+        0x06,
+        # AC Pan lives on the Consumer page but is commonly used in mouse
+        # descriptors for horizontal wheel/pan.
+        0x05,
+        0x0C,
+        0x0A,
+        0x38,
+        0x02,
+        0x15,
+        0x81,
+        0x25,
+        0x7F,
+        0x75,
+        0x08,
+        0x95,
+        0x01,
+        0x81,
+        0x06,
+        # End Physical, End Application
+        0xC0,
+        0xC0,
+    )
+)
+
 
 class GadgetHidDevice(usb_hid.Device):
     def __init__(
@@ -63,6 +149,9 @@ class GadgetHidDevice(usb_hid.Device):
         subclass: int,
         descriptor: bytes | None = None,
         name: str | None = None,
+        report_ids: Sequence[int] | None = None,
+        in_report_lengths: Sequence[int] | None = None,
+        out_report_lengths: Sequence[int] | None = None,
         wakeup_on_write: bool | None = None,
     ) -> GadgetHidDevice:
         return cls(
@@ -71,9 +160,21 @@ class GadgetHidDevice(usb_hid.Device):
             ),
             usage_page=base_device.usage_page,
             usage=base_device.usage,
-            report_ids=tuple(base_device.report_ids),
-            in_report_lengths=tuple(base_device.in_report_lengths),
-            out_report_lengths=tuple(base_device.out_report_lengths),
+            report_ids=(
+                tuple(base_device.report_ids)
+                if report_ids is None
+                else tuple(report_ids)
+            ),
+            in_report_lengths=(
+                tuple(base_device.in_report_lengths)
+                if in_report_lengths is None
+                else tuple(in_report_lengths)
+            ),
+            out_report_lengths=(
+                tuple(base_device.out_report_lengths)
+                if out_report_lengths is None
+                else tuple(out_report_lengths)
+            ),
             name=base_device.name if name is None else name,
             function_index=function_index,
             protocol=protocol,
@@ -121,6 +222,11 @@ def build_default_layout() -> GadgetLayout:
                 function_index=1,
                 protocol=0,
                 subclass=0,
+                descriptor=DEFAULT_MOUSE_DESCRIPTOR,
+                name="mouse gadget",
+                report_ids=(0,),
+                in_report_lengths=(7,),
+                out_report_lengths=(0,),
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.CONSUMER_CONTROL,

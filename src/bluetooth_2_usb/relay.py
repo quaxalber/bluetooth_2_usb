@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 try:
-    from evdev import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
+    from evdev import AbsEvent, InputDevice, InputEvent, KeyEvent, RelEvent, categorize
+    from evdev import ecodes as native_ecodes
 except ModuleNotFoundError:
     InputEvent = Any  # type: ignore[assignment]
 
@@ -38,11 +39,17 @@ except ModuleNotFoundError:
     class RelEvent:
         pass
 
+    class AbsEvent:
+        pass
+
+    native_ecodes = None  # type: ignore[assignment]
+
     def categorize(event):
         return event
 
 
 from .evdev import (
+    ecodes,
     evdev_to_usb_hid,
     find_key_name,
     get_mouse_movement,
@@ -93,7 +100,187 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     from adafruit_hid.consumer_control import ConsumerControl
     from adafruit_hid.keyboard import Keyboard
-    from adafruit_hid.mouse import Mouse
+
+
+def _clamp_hid_i8(value: int) -> int:
+    return min(127, max(-127, value))
+
+
+def _clamp_hid_i16(value: int) -> int:
+    return min(32767, max(-32767, value))
+
+
+class ExtendedMouse:
+    """Small mouse report writer with horizontal pan support."""
+
+    LEFT_BUTTON = 1
+    RIGHT_BUTTON = 2
+    MIDDLE_BUTTON = 4
+    BACK_BUTTON = 8
+    FORWARD_BUTTON = 16
+    BUTTON_6 = 32
+    BUTTON_7 = 64
+    BUTTON_8 = 128
+
+    def __init__(self, devices) -> None:
+        from adafruit_hid import find_device
+
+        self._mouse_device = find_device(devices, usage_page=0x1, usage=0x02)
+        if not self._mouse_device:
+            raise ValueError("Could not find matching mouse HID device.")
+        self.report = bytearray(7)
+
+    def __str__(self):
+        return str(self._mouse_device)
+
+    def press(self, buttons: int) -> None:
+        self.report[0] |= buttons
+        self._send_no_move()
+
+    def release(self, buttons: int) -> None:
+        self.report[0] &= ~buttons
+        self._send_no_move()
+
+    def release_all(self) -> None:
+        self.report[0] = 0
+        self._send_no_move()
+
+    def move(self, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> None:
+        while x != 0 or y != 0 or wheel != 0 or pan != 0:
+            partial_x = _clamp_hid_i16(x)
+            partial_y = _clamp_hid_i16(y)
+            partial_wheel = _clamp_hid_i8(wheel)
+            partial_pan = _clamp_hid_i8(pan)
+            self.report[1:3] = partial_x.to_bytes(2, "little", signed=True)
+            self.report[3:5] = partial_y.to_bytes(2, "little", signed=True)
+            self.report[5] = partial_wheel & 0xFF
+            self.report[6] = partial_pan & 0xFF
+            self._mouse_device.send_report(self.report)
+            x -= partial_x
+            y -= partial_y
+            wheel -= partial_wheel
+            pan -= partial_pan
+
+    def _send_no_move(self) -> None:
+        self.report[1:7] = b"\x00" * 6
+        self._mouse_device.send_report(self.report)
+
+
+class KeyboardLedSync:
+    """Best-effort propagation of host keyboard LED OUT reports to input devices."""
+
+    POLL_INTERVAL_SEC = 0.1
+    HID_TO_EVDEV_LED = (
+        (0x01, "LED_NUML"),
+        (0x02, "LED_CAPSL"),
+        (0x04, "LED_SCROLLL"),
+        (0x08, "LED_COMPOSE"),
+        (0x10, "LED_KANA"),
+    )
+
+    def __init__(self, gadget_manager: GadgetManager) -> None:
+        self._gadget_manager = gadget_manager
+        self._devices: dict[str, InputDevice] = {}
+        self._last_led_status = b"\x00"
+        self._task: asyncio.Task | None = None
+        self._stop_event = asyncio.Event()
+
+    def register_input_device(self, device: InputDevice) -> None:
+        if not self._supports_leds(device):
+            return
+        self._devices[device.path] = device
+        self._apply_led_status(device, self._last_led_status)
+
+    def unregister_input_device(self, device: InputDevice) -> None:
+        self._devices.pop(device.path, None)
+
+    async def __aenter__(self) -> KeyboardLedSync:
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._poll_loop())
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self._stop_event.set()
+        if self._task is not None:
+            self._task.cancel()
+            await asyncio.gather(self._task, return_exceptions=True)
+        self._task = None
+        return False
+
+    async def _poll_loop(self) -> None:
+        while not self._stop_event.is_set():
+            self.poll_once()
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=self.POLL_INTERVAL_SEC
+                )
+            except TimeoutError:
+                pass
+
+    def poll_once(self) -> None:
+        keyboard = self._gadget_manager.get_keyboard()
+        if keyboard is None or not hasattr(keyboard, "led_status"):
+            return
+        try:
+            led_status = bytes(keyboard.led_status)
+        except (BlockingIOError, OSError, ValueError):
+            return
+        if not led_status or led_status == self._last_led_status:
+            return
+        self._last_led_status = led_status[:1]
+        for device in tuple(self._devices.values()):
+            self._apply_led_status(device, self._last_led_status)
+
+    def _supports_leds(self, device: InputDevice) -> bool:
+        if not hasattr(device, "set_led"):
+            return False
+        try:
+            capabilities = device.capabilities(verbose=False)
+        except (AttributeError, OSError):
+            return False
+        ev_led = getattr(native_ecodes, "EV_LED", 0x11)
+        return ev_led in capabilities
+
+    def _apply_led_status(self, device: InputDevice, led_status: bytes) -> None:
+        if not led_status:
+            return
+        status = led_status[0]
+        for hid_mask, evdev_name in self.HID_TO_EVDEV_LED:
+            led_code = getattr(native_ecodes, evdev_name, None)
+            if led_code is None:
+                continue
+            try:
+                device.set_led(led_code, int(bool(status & hid_mask)))
+            except (AttributeError, OSError):
+                _logger.debug("Skipping LED update for %s", device.path)
+
+
+class InputFrameAccumulator:
+    """Collect evdev events until SYN_REPORT so stateful reports can be coalesced."""
+
+    def __init__(self) -> None:
+        self._events: list[InputEvent] = []
+
+    def add(self, event: InputEvent) -> list[InputEvent] | None:
+        if self._is_syn_report(event):
+            return self.flush()
+        self._events.append(event)
+        return None
+
+    def flush(self) -> list[InputEvent] | None:
+        if not self._events:
+            return None
+        events = self._events
+        self._events = []
+        return events
+
+    def _is_syn_report(self, event: InputEvent) -> bool:
+        input_event = getattr(event, "event", event)
+        event_type = getattr(input_event, "type", None)
+        event_code = getattr(input_event, "code", None)
+        ev_syn = getattr(native_ecodes, "EV_SYN", 0)
+        syn_report = getattr(native_ecodes, "SYN_REPORT", 0)
+        return event_type == ev_syn and event_code == syn_report
 
 
 class GadgetManager:
@@ -210,10 +397,9 @@ class GadgetManager:
 
         from adafruit_hid.consumer_control import ConsumerControl
         from adafruit_hid.keyboard import Keyboard
-        from adafruit_hid.mouse import Mouse
 
         self._gadgets["keyboard"] = Keyboard(enabled_devices)
-        self._gadgets["mouse"] = Mouse(enabled_devices)
+        self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
         self._enabled = True
 
@@ -228,7 +414,7 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> Mouse | None:
+    def get_mouse(self) -> ExtendedMouse | None:
         """
         Get the Mouse gadget.
 
@@ -343,6 +529,7 @@ class RelayController:
         grab_devices: bool = False,
         relaying_active: asyncio.Event | None = None,
         shortcut_toggler: ShortcutToggler | None = None,
+        led_sync: KeyboardLedSync | None = None,
     ) -> None:
         """
         :param gadget_manager: Provides the USB HID gadget devices
@@ -364,6 +551,7 @@ class RelayController:
         self._grab_devices = grab_devices
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
+        self._led_sync = led_sync
 
         self._active_tasks: dict[str, Task] = {}
         self._active_devices: dict[str, InputDevice] = {}
@@ -660,6 +848,7 @@ class RelayController:
                 grab_device=self._grab_devices,
                 relaying_active=self._relaying_active,
                 shortcut_toggler=self._shortcut_toggler,
+                led_sync=self._led_sync,
             ) as relay:
                 _logger.info(f"Activated {relay}")
                 await relay.async_relay_events_loop()
@@ -713,6 +902,7 @@ class DeviceRelay:
         grab_device: bool = False,
         relaying_active: asyncio.Event | None = None,
         shortcut_toggler: ShortcutToggler | None = None,
+        led_sync: KeyboardLedSync | None = None,
     ) -> None:
         """
         :param input_device: The evdev input device
@@ -726,10 +916,19 @@ class DeviceRelay:
         self._grab_device = grab_device
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
+        self._led_sync = led_sync
 
         self._currently_grabbed = False
         self._hid_write_retries = 0
         self._hid_write_failures = 0
+        self._frame_accumulator = InputFrameAccumulator()
+        self._touch_active = False
+        self._touch_contacts = 0
+        self._touch_x: int | None = None
+        self._touch_y: int | None = None
+        self._last_touch_x: int | None = None
+        self._last_touch_y: int | None = None
+        self._touch_x_scale, self._touch_y_scale = self._detect_touch_scale()
 
     def __str__(self) -> str:
         return f"relay for {self._input_device}"
@@ -756,6 +955,8 @@ class DeviceRelay:
                 self._currently_grabbed = True
             except Exception as ex:
                 _logger.warning(f"Could not grab {self._input_device.path}: {ex}")
+        if self._led_sync is not None:
+            self._led_sync.register_input_device(self._input_device)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -781,6 +982,8 @@ class DeviceRelay:
             self._release_gadget_states()
         except Exception:
             _logger.debug("Ignoring gadget state release failure for %s", self)
+        if self._led_sync is not None:
+            self._led_sync.unregister_input_device(self._input_device)
         try:
             self._input_device.close()
         except Exception:
@@ -789,6 +992,25 @@ class DeviceRelay:
 
     def _should_ignore_ungrab_error(self, ex: Exception) -> bool:
         return isinstance(ex, OSError) and ex.errno in (errno.ENODEV, errno.EBADF)
+
+    def _detect_touch_scale(self) -> tuple[float, float]:
+        return (
+            self._axis_scale(ecodes.ABS_MT_POSITION_X, ecodes.ABS_X),
+            self._axis_scale(ecodes.ABS_MT_POSITION_Y, ecodes.ABS_Y),
+        )
+
+    def _axis_scale(self, preferred_code: int, fallback_code: int) -> float:
+        for code in (preferred_code, fallback_code):
+            try:
+                info = self._input_device.absinfo(code)
+            except (AttributeError, OSError):
+                continue
+            minimum = getattr(info, "min", 0)
+            maximum = getattr(info, "max", 0)
+            axis_range = maximum - minimum
+            if axis_range > 0:
+                return max(axis_range / 1024.0, 1.0)
+        return 16.0
 
     def _release_gadget_states(self) -> None:
         keyboard = self._gadget_manager.get_keyboard()
@@ -847,7 +1069,9 @@ class DeviceRelay:
                 if not active:
                     continue
 
-                await self._process_event_with_retry(event)
+                frame = self._frame_accumulator.add(event)
+                if frame is not None:
+                    await self._process_frame_with_retry(frame)
         except OSError as ex:
             if ex.errno != errno.ENODEV:
                 raise
@@ -855,12 +1079,131 @@ class DeviceRelay:
                 "Stopping relay loop for %s because the input device disappeared.",
                 self._input_device.path,
             )
+        pending_frame = self._frame_accumulator.flush()
+        if pending_frame is not None:
+            await self._process_frame_with_retry(pending_frame)
         _logger.debug(
             "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
             self._input_device.path,
             self._hid_write_retries,
             self._hid_write_failures,
         )
+
+    async def _process_frame_with_retry(self, frame: list[InputEvent]) -> None:
+        rel_x = rel_y = rel_wheel = rel_pan = 0
+        rel_seen = False
+        touch_seen = False
+
+        for event in frame:
+            if isinstance(event, RelEvent):
+                x, y, wheel, pan = get_mouse_movement(event)
+                rel_x += x
+                rel_y += y
+                rel_wheel += wheel
+                rel_pan += pan
+                rel_seen = True
+                continue
+            if isinstance(event, AbsEvent):
+                self._update_touch_abs(event)
+                touch_seen = True
+                continue
+            if isinstance(event, KeyEvent) and self._update_touch_key(event):
+                touch_seen = True
+                continue
+            await self._process_event_with_retry(event)
+
+        if rel_seen:
+            await self._process_mouse_delta_with_retry(rel_x, rel_y, rel_wheel, rel_pan)
+        if touch_seen:
+            await self._process_touch_frame_with_retry()
+
+    def _update_touch_abs(self, event: AbsEvent) -> None:
+        input_event = event.event
+        if input_event.code in (ecodes.ABS_X, ecodes.ABS_MT_POSITION_X):
+            self._touch_x = input_event.value
+        elif input_event.code in (ecodes.ABS_Y, ecodes.ABS_MT_POSITION_Y):
+            self._touch_y = input_event.value
+
+    def _update_touch_key(self, event: KeyEvent) -> bool:
+        scancode = event.scancode
+        is_down = event.keystate in (KeyEvent.key_down, KeyEvent.key_hold)
+        if scancode == ecodes.BTN_TOUCH:
+            self._touch_active = is_down
+            if not is_down:
+                self._last_touch_x = None
+                self._last_touch_y = None
+            return True
+        contact_counts = {
+            ecodes.BTN_TOOL_FINGER: 1,
+            ecodes.BTN_TOOL_DOUBLETAP: 2,
+            ecodes.BTN_TOOL_TRIPLETAP: 3,
+            ecodes.BTN_TOOL_QUADTAP: 4,
+            ecodes.BTN_TOOL_QUINTTAP: 5,
+        }
+        contact_count = contact_counts.get(scancode)
+        if contact_count is None:
+            return False
+        self._touch_contacts = (
+            contact_count if is_down else min(self._touch_contacts, contact_count - 1)
+        )
+        return True
+
+    async def _process_touch_frame_with_retry(self) -> None:
+        if not self._touch_active or self._touch_x is None or self._touch_y is None:
+            return
+        if self._last_touch_x is None or self._last_touch_y is None:
+            self._last_touch_x = self._touch_x
+            self._last_touch_y = self._touch_y
+            return
+
+        delta_x = self._touch_x - self._last_touch_x
+        delta_y = self._touch_y - self._last_touch_y
+        self._last_touch_x = self._touch_x
+        self._last_touch_y = self._touch_y
+
+        if self._touch_contacts >= 2:
+            pan = int(delta_x / self._touch_x_scale)
+            wheel = -int(delta_y / self._touch_y_scale)
+            await self._process_mouse_delta_with_retry(0, 0, wheel, pan)
+            return
+
+        x = int(delta_x / self._touch_x_scale)
+        y = int(delta_y / self._touch_y_scale)
+        await self._process_mouse_delta_with_retry(x, y, 0, 0)
+
+    async def _process_mouse_delta_with_retry(
+        self, x: int, y: int, wheel: int, pan: int
+    ) -> None:
+        if x == 0 and y == 0 and wheel == 0 and pan == 0:
+            return
+        max_tries = self.HID_WRITE_MAX_TRIES
+        retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
+        for attempt in range(1, max_tries + 1):
+            try:
+                move_mouse_delta(x, y, wheel, pan, self._gadget_manager)
+                return
+            except BlockingIOError:
+                if attempt < max_tries:
+                    self._hid_write_retries += 1
+                    _logger.debug(f"HID write blocked ({attempt}/{max_tries})")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    self._hid_write_failures += 1
+                    _logger.warning(f"HID write blocked ({attempt}/{max_tries})")
+            except BrokenPipeError:
+                self._hid_write_failures += 1
+                _logger.warning(
+                    "BrokenPipeError: USB cable likely disconnected or power-only. "
+                    "Pausing relay.\nSee: "
+                    "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
+                )
+                if self._relaying_active:
+                    self._relaying_active.clear()
+                return
+            except Exception:
+                self._hid_write_failures += 1
+                _logger.exception("Error processing mouse frame")
+                return
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
         """
@@ -981,8 +1324,17 @@ def move_mouse(event: RelEvent, gadget_manager: GadgetManager) -> None:
     if mouse is None:
         raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
 
-    x, y, mwheel = get_mouse_movement(event)
-    mouse.move(x, y, mwheel)
+    x, y, mwheel, pan = get_mouse_movement(event)
+    move_mouse_delta(x, y, mwheel, pan, gadget_manager)
+
+
+def move_mouse_delta(
+    x: int, y: int, mwheel: int, pan: int, gadget_manager: GadgetManager
+) -> None:
+    mouse = gadget_manager.get_mouse()
+    if mouse is None:
+        raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
+    mouse.move(x, y, mwheel, pan)
 
 
 def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
@@ -1011,7 +1363,7 @@ def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
 
 def get_output_device(
     event: KeyEvent, gadget_manager: GadgetManager
-) -> ConsumerControl | Keyboard | Mouse | None:
+) -> ConsumerControl | Keyboard | ExtendedMouse | None:
     """
     Determine which HID gadget to target for the given key event.
 

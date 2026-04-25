@@ -214,6 +214,7 @@ healthy.
 | Argument | Meaning |
 | --- | --- |
 | `--verbose` | Print fuller diagnostics, including the collected summary data. |
+| `--allow-non-pi` | Suppress hard failures for non-Pi OverlayFS and root filesystem detection uncertainty. |
 
 ### `debug.sh`
 
@@ -240,6 +241,12 @@ harness.
 ### `loopback-capture.ps1`
 
 Windows PowerShell wrapper for the same host-capture flow.
+
+### `capture-device.sh`
+
+Capture redacted input-device inventory and optional live evdev samples for
+hardware support work, such as gamepads, trackpads, drawing tablets, mouse pan,
+and keyboard LED behavior.
 
 ### `install-hid-udev-rule.sh`
 
@@ -279,6 +286,7 @@ Bluetooth-state configuration available.
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Pi validation flow: [docs/cli-service-test.md](docs/cli-service-test.md)
 - Loopback inject/capture harness: [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
+- Device capture workflow: [docs/device-capture.md](docs/device-capture.md)
 - Persistent read-only workflow: [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - Doc consistency review: [docs/doc-consistency-review.md](docs/doc-consistency-review.md)
 - Release tagging and versioning: [docs/release-versioning-policy.md](docs/release-versioning-policy.md)

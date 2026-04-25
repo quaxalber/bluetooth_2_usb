@@ -233,6 +233,7 @@ async def async_run(args: Arguments) -> int:
 
     from .relay import (
         GadgetManager,
+        KeyboardLedSync,
         RelayController,
         RuntimeMonitor,
         ShortcutToggler,
@@ -251,6 +252,7 @@ async def async_run(args: Arguments) -> int:
             gadget_manager=gadget_manager,
         )
 
+    led_sync = KeyboardLedSync(gadget_manager)
     relay_controller = RelayController(
         gadget_manager=gadget_manager,
         device_identifiers=args.device_ids,
@@ -258,6 +260,7 @@ async def async_run(args: Arguments) -> int:
         grab_devices=args.grab_devices,
         relaying_active=relaying_active,
         shortcut_toggler=shortcut_toggler,
+        led_sync=led_sync,
     )
 
     logger.debug(f"Detected UDC state file: {env_status.udc_path}")
@@ -267,10 +270,13 @@ async def async_run(args: Arguments) -> int:
     )
 
     try:
-        async with RuntimeMonitor(
-            relay_controller=relay_controller,
-            relaying_active=relaying_active,
-            udc_path=env_status.udc_path,
+        async with (
+            led_sync,
+            RuntimeMonitor(
+                relay_controller=relay_controller,
+                relaying_active=relaying_active,
+                udc_path=env_status.udc_path,
+            ),
         ):
             relay_task = asyncio.create_task(relay_controller.async_relay_devices())
             shutdown_task = asyncio.create_task(shutdown_event.wait())

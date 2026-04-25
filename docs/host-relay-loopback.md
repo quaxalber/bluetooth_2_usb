@@ -127,7 +127,13 @@ The injector creates temporary virtual devices named:
 and emits this deterministic sequence:
 
 - keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
-- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`
+- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
+  `REL_HWHEEL +1`, `REL_HWHEEL -1`, one coalesced `REL_X +2` /
+  `REL_Y -3` / `REL_HWHEEL +1` frame, then `BTN_FORWARD`, `BTN_BACK`, and
+  `BTN_TASK` press/release
+
+The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
+signed 8-bit wheel/pan.
 
 ## 4. Success criteria
 
@@ -235,9 +241,9 @@ run is active, clear the stale lock file and retry.
 
 Lock paths:
 
-- host Windows: `%TEMP%\bluetooth_2_usb_test_harness.lock`
-- host Linux/macOS: `/tmp/bluetooth_2_usb_test_harness.lock`
-- Pi: `/tmp/bluetooth_2_usb_test_harness.lock`
+- host Windows: `%TEMP%\bluetooth_2_usb_loopback_harness.lock`
+- host Linux/macOS: `/tmp/bluetooth_2_usb_loopback_harness.lock`
+- Pi: `/tmp/bluetooth_2_usb_loopback_harness.lock`
 
 ## 7. CI scope
 

@@ -6,7 +6,7 @@ import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
 
-from .test_harness_capture import (
+from .loopback_capture import (
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
@@ -17,7 +17,7 @@ from .test_harness_capture import (
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .test_harness_common import EXIT_OK, get_scenario
+from .loopback_common import EXIT_OK, get_scenario
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -59,6 +59,7 @@ RIM_TYPEHID = 2
 PM_REMOVE = 0x0001
 RI_KEY_BREAK = 0x0001
 RI_MOUSE_WHEEL = 0x0400
+RI_MOUSE_HORIZONTAL_WHEEL = 0x0800
 CW_USEDEFAULT = -2147483648
 GENERIC_DESKTOP_USAGE_PAGE = 0x01
 KEYBOARD_USAGE = 0x06
@@ -384,6 +385,7 @@ class _RawInputDebug:
         is_key_up: bool | None = None,
         rel_x: int | None = None,
         rel_y: int | None = None,
+        rel_pan: int | None = None,
     ) -> None:
         self.total_messages_seen += 1
         if role == "keyboard":
@@ -419,6 +421,8 @@ class _RawInputDebug:
         if rel_x is not None or rel_y is not None:
             event["rel_x"] = rel_x
             event["rel_y"] = rel_y
+        if rel_pan is not None:
+            event["rel_pan"] = rel_pan
         self.sample_events.append(event)
 
     def to_dict(self) -> dict[str, object]:
@@ -486,6 +490,11 @@ def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
     if button_flags & RI_MOUSE_WHEEL:
+        return reports
+    if button_flags & RI_MOUSE_HORIZONTAL_WHEEL:
+        pan = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
+        if pan:
+            reports.append(bytes([0x02, 0x00, 0x00, 0x00, 0x00, pan & 0xFF]))
         return reports
     if raw_mouse.lLastX:
         reports.append(bytes([0x02, 0x00, raw_mouse.lLastX & 0xFF, 0x00, 0x00]))
@@ -808,6 +817,13 @@ def _pump_raw_input(
                             matched=matched,
                             rel_x=raw.mouse.lLastX,
                             rel_y=raw.mouse.lLastY,
+                            rel_pan=(
+                                ctypes.c_short(
+                                    (raw.mouse.ulButtons >> 16) & 0xFFFF
+                                ).value
+                                if raw.mouse.ulButtons & RI_MOUSE_HORIZONTAL_WHEEL
+                                else None
+                            ),
                         )
                         if not matched:
                             continue
