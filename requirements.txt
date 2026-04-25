@@ -1,7 +1,7 @@
 # Newer releases currently depend on the upstream Adafruit-Blinka package,
 # which conflicts with the patched quax-Blinka fork used for built-in dwc2.
 adafruit-circuitpython-typing==1.2.0
-Adafruit-Blinka @ git+https://github.com/quaxalber/Adafruit_Blinka.git@aa687e03ec98a6a647e546e4180ece8f0c87e4e9
+Adafruit-Blinka @ git+https://github.com/quaxalber/Adafruit_Blinka.git@15f027f10ba9955bac16573a6e6930324f8dd082
 adafruit-circuitpython-hid @ git+https://github.com/quaxalber/Adafruit_CircuitPython_HID.git@247c0f670a376c10304a47b40d3e4d41418007bd
 Adafruit-PlatformDetect==3.88.0
 Adafruit-PureIO==1.1.11
