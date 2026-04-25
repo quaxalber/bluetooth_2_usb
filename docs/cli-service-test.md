@@ -201,14 +201,16 @@ ssh <pi-host> '
 After reboot:
 
 ```bash
-ssh <pi-host> '
-  sudo -n env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-  findmnt -no FSTYPE,SOURCE /
-  findmnt /var/lib/bluetooth
-  findmnt /mnt/b2u-persist
-  sudo bash -lc '"'"'. /opt/bluetooth_2_usb/scripts/lib/boot.sh; p="$(boot_initramfs_target_path || true)"; [ -s "$p" ] && printf "boot-initramfs %s\n" "$p"'"'"'
-  grep "^B2U_" /etc/default/bluetooth_2_usb_readonly
-'
+ssh <pi-host> 'bash -s' <<'EOF'
+sudo -n env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+findmnt -no FSTYPE,SOURCE /
+findmnt /var/lib/bluetooth
+findmnt /mnt/b2u-persist
+. /opt/bluetooth_2_usb/scripts/lib/boot.sh
+p="$(boot_initramfs_target_path || true)"
+[ -s "$p" ] && printf 'boot-initramfs %s\n' "$p"
+grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
+EOF
 ```
 
 ## Pairing persistence across reboot
