@@ -19,7 +19,7 @@ not part of the stock Bluetooth-2-USB install path.
 ## Tested setups
 
 - Raspberry Pi 4 Model B Rev 1.4:
-  patched `rpi-6.12.y` kernel `6.12.81-b2u-wake+`, `/boot/config-$(uname -r)`
+  patched `rpi-6.12.y` kernel `6.12.81-b2u-wake`, `/boot/config-$(uname -r)`
   installed, keyboard-only `wakeup_on_write`, and end-to-end wake from host
   suspend confirmed through normal Bluetooth-2-USB keyboard input
 - Raspberry Pi Zero W:
@@ -120,9 +120,12 @@ export JOBS="$(nproc)"
 export KERNEL=kernel8
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
+make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= Image modules dtbs
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= kernelrelease
 ```
+
+Pass `LOCALVERSION=` on the build and `kernelrelease` commands so the final
+release string stays `...-b2u-wake` instead of `...-b2u-wake+`.
 
 ### Raspberry Pi Zero W
 
@@ -177,8 +180,8 @@ export JOBS="$(nproc)"
 export KERNEL=kernel_2712
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2712_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
+make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= Image modules dtbs
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= kernelrelease
 ```
 
 ### Raspberry Pi 4B 32-bit
@@ -201,8 +204,8 @@ export JOBS="$(nproc)"
 export KERNEL=kernel8
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
 scripts/config --set-str LOCALVERSION "-b2u-wake"
-make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image modules dtbs
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- kernelrelease
+make -j"${JOBS}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= Image modules dtbs
+make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= kernelrelease
 ```
 
 ### Raspberry Pi Zero 2 W 32-bit

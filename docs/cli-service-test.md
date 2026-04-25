@@ -83,11 +83,13 @@ ssh <pi-host> '
 
 ```bash
 ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/install.sh'
+old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
-until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
+until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null)" \
+  && [[ "$new_boot_id" != "$old_boot_id" ]]; do
   if (( SECONDS >= deadline )); then
-    echo "Pi did not come back after reboot within 180s" >&2
+    echo "Pi did not come back after reboot within 180s with a new boot_id" >&2
     exit 1
   fi
   sleep 2
@@ -176,11 +178,13 @@ ssh <pi-host> '
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device <persist-partition>
   sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
 '
+old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
-until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
+until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null)" \
+  && [[ "$new_boot_id" != "$old_boot_id" ]]; do
   if (( SECONDS >= deadline )); then
-    echo "Pi did not come back after reboot within 180s" >&2
+    echo "Pi did not come back after reboot within 180s with a new boot_id" >&2
     exit 1
   fi
   sleep 2
@@ -283,11 +287,13 @@ Pass criteria:
 
 ```bash
 ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/readonly-disable.sh'
+old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
-until ssh -o ConnectTimeout=5 <pi-host> 'true' 2>/dev/null; do
+until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null)" \
+  && [[ "$new_boot_id" != "$old_boot_id" ]]; do
   if (( SECONDS >= deadline )); then
-    echo "Pi did not come back after reboot within 180s" >&2
+    echo "Pi did not come back after reboot within 180s with a new boot_id" >&2
     exit 1
   fi
   sleep 2
