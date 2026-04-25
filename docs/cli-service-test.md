@@ -72,6 +72,7 @@ ssh <pi-host> '
   bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/smoketest.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
+  bash /opt/bluetooth_2_usb/scripts/capture-device.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/loopback-inject.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/readonly-enable.sh --help >/dev/null
   bash /opt/bluetooth_2_usb/scripts/readonly-disable.sh --help >/dev/null

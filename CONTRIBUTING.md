@@ -141,6 +141,9 @@ Branch and commit naming:
   `test/`, `chore/`
 - use matching conventional commit prefixes such as `feat:`, `fix:`, `docs:`,
   `refactor:`, `test:`, `chore:`
+- keep branch names, commit messages, PR titles, and PR bodies focused on the
+  project change; do not include assistant, automation, or tool branding in
+  those Git artifacts
 - do not push directly to `main`
 
 ## Review and CI

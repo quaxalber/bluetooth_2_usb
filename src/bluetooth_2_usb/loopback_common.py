@@ -36,8 +36,12 @@ KEY_VOLUMEUP = 115
 KEY_VOLUMEDOWN = 114
 KEY_MINUS = 12
 KEY_SPACE = 57
+BTN_FORWARD = 277
+BTN_BACK = 278
+BTN_TASK = 279
 REL_X = 0
 REL_Y = 1
+REL_HWHEEL = 6
 
 EVENT_TYPE_NAMES = {
     EV_KEY: "EV_KEY",
@@ -63,20 +67,32 @@ EVENT_CODE_NAMES = {
         KEY_VOLUMEDOWN: "KEY_VOLUMEDOWN",
         KEY_MINUS: "KEY_MINUS",
         KEY_SPACE: "KEY_SPACE",
+        BTN_FORWARD: "BTN_FORWARD",
+        BTN_BACK: "BTN_BACK",
+        BTN_TASK: "BTN_TASK",
     },
     EV_REL: {
         REL_X: "REL_X",
         REL_Y: "REL_Y",
+        REL_HWHEEL: "REL_HWHEEL",
     },
 }
 
-SCENARIO_NAMES = ("keyboard", "mouse", "combo", "consumer", "text_burst")
+SCENARIO_NAMES = (
+    "keyboard",
+    "mouse",
+    "combo",
+    "consumer",
+    "text_burst",
+)
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
 DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
 DEFAULT_CONSUMER_NAME = "B2U Test Consumer"
 COMBO_MOUSE_DELAY_MS = 150
-HARNESS_LOCK_PATH = Path(tempfile.gettempdir()) / "bluetooth_2_usb_test_harness.lock"
+HARNESS_LOCK_PATH = (
+    Path(tempfile.gettempdir()) / "bluetooth_2_usb_loopback_harness.lock"
+)
 
 if os.name == "nt":
     import msvcrt
@@ -138,7 +154,7 @@ def harness_session(command: str, scenario: str):
             _lock_harness_file(lock_handle)
         except OSError as exc:
             raise HarnessBusyError(
-                "Another Bluetooth-2-USB test harness session is already running "
+                "Another Bluetooth-2-USB loopback harness session is already running "
                 f"(lock: {HARNESS_LOCK_PATH})"
             ) from exc
 
@@ -248,11 +264,30 @@ KEYBOARD_STEPS = (
     ExpectedEvent(EV_KEY, KEY_F15, 0),
 )
 
-MOUSE_REL_STEPS = (
+MOUSE_SINGLE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, 1),
     ExpectedEvent(EV_REL, REL_X, -1),
     ExpectedEvent(EV_REL, REL_Y, 1),
     ExpectedEvent(EV_REL, REL_Y, -1),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -1),
+)
+
+MOUSE_COALESCED_REL_STEPS = (
+    ExpectedEvent(EV_REL, REL_X, 2),
+    ExpectedEvent(EV_REL, REL_Y, -3),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
+)
+
+MOUSE_REL_STEPS = MOUSE_SINGLE_REL_STEPS + MOUSE_COALESCED_REL_STEPS
+
+MOUSE_BUTTON_STEPS = (
+    ExpectedEvent(EV_KEY, BTN_FORWARD, 1),
+    ExpectedEvent(EV_KEY, BTN_FORWARD, 0),
+    ExpectedEvent(EV_KEY, BTN_BACK, 1),
+    ExpectedEvent(EV_KEY, BTN_BACK, 0),
+    ExpectedEvent(EV_KEY, BTN_TASK, 1),
+    ExpectedEvent(EV_KEY, BTN_TASK, 0),
 )
 
 CONSUMER_STEPS = (
@@ -334,14 +369,14 @@ SCENARIOS = {
         name="mouse",
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=(),
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
     ),
     "combo": ScenarioDefinition(
         name="combo",
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=(),
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
     ),
     "consumer": ScenarioDefinition(
