@@ -260,14 +260,14 @@ uname -r
 2. the wakeup attribute exists
 
 ```bash
-find /sys/kernel/config/usb_gadget -path '*/functions/hid.*/*wakeup_on_write' -print
+sudo -n find /sys/kernel/config/usb_gadget -path '*/functions/hid.*/*wakeup_on_write' -print
 ```
 
 3. the gadget still advertises remote wakeup and the keyboard function has
    `wakeup_on_write=1`
 
 ```bash
-grep -H . /sys/kernel/config/usb_gadget/*/functions/hid.*/wakeup_on_write
+sudo -n grep -H . /sys/kernel/config/usb_gadget/*/functions/hid.*/wakeup_on_write
 ```
 
 4. the normal Bluetooth-2-USB checks still pass
