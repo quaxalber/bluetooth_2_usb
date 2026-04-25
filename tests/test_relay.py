@@ -273,7 +273,6 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         with patch.object(usb_hid.Device, "__init__", fake_device_init):
             GadgetHidDevice.from_existing(
                 usb_hid.Device.BOOT_KEYBOARD,
-                function_index=0,
                 protocol=1,
                 subclass=1,
             )
@@ -396,10 +395,14 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
             keyboard_wakeup = gadget_root / "functions/hid.usb0/wakeup_on_write"
-            mouse_wakeup = gadget_root / "functions/hid.usb1/wakeup_on_write"
+            mouse_wakeups = (
+                gadget_root / "functions/hid.usb1/wakeup_on_write",
+                gadget_root / "functions/hid.usb2/wakeup_on_write",
+            )
+            supported = {keyboard_wakeup, *mouse_wakeups}
 
             def fake_exists(path: Path) -> bool:
-                if path in {keyboard_wakeup, mouse_wakeup}:
+                if path in supported:
                     return True
                 return original_exists(path)
 
@@ -418,18 +421,59 @@ class GadgetManagerLayoutTest(unittest.TestCase):
                 keyboard_wakeup.read_text(encoding="utf-8").strip(),
                 "1",
             )
-            self.assertEqual(
-                mouse_wakeup.read_text(encoding="utf-8").strip(),
-                "0",
-            )
+            for mouse_wakeup in mouse_wakeups:
+                self.assertEqual(
+                    mouse_wakeup.read_text(encoding="utf-8").strip(),
+                    "0",
+                )
             self.assertFalse(
-                (gadget_root / "functions/hid.usb2/wakeup_on_write").exists()
+                (gadget_root / "functions/hid.usb3/wakeup_on_write").exists()
+            )
+
+    def test_rebuild_gadget_creates_one_function_per_report_id(self) -> None:
+        layout = build_default_layout()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
+            with patch("bluetooth_2_usb.gadget_config.GADGET_ROOT", gadget_root):
+                with patch(
+                    "bluetooth_2_usb.gadget_config._resolve_udc_name",
+                    return_value="dummy.udc",
+                ):
+                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
+                        devices = rebuild_gadget(layout)
+
+            functions_root = gadget_root / "functions"
+            self.assertTrue((functions_root / "hid.usb0").is_dir())
+            self.assertTrue((functions_root / "hid.usb1").is_dir())
+            self.assertTrue((functions_root / "hid.usb2").is_dir())
+            self.assertTrue((functions_root / "hid.usb3").is_dir())
+            self.assertFalse((functions_root / "hid.usb4").exists())
+
+            keyboard, mouse, consumer = devices
+            self.assertEqual(
+                keyboard._report_id_to_function_instance,
+                {keyboard.report_ids[0]: "usb0"},
+            )
+            self.assertEqual(
+                mouse._report_id_to_function_instance,
+                {mouse.report_ids[0]: "usb1", mouse.report_ids[1]: "usb2"},
+            )
+            self.assertEqual(
+                consumer._report_id_to_function_instance,
+                {consumer.report_ids[0]: "usb3"},
+            )
+
+            mouse_extended_length = (
+                functions_root / "hid.usb2" / "report_length"
+            ).read_text(encoding="utf-8").strip()
+            self.assertEqual(
+                mouse_extended_length,
+                str(mouse.in_report_lengths[1] + 1),
             )
 
     def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
         base_device = GadgetHidDevice.from_existing(
             usb_hid.Device.BOOT_KEYBOARD,
-            function_index=0,
             protocol=1,
             subclass=1,
             descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
@@ -438,7 +482,6 @@ class GadgetManagerLayoutTest(unittest.TestCase):
 
         cloned = GadgetHidDevice.from_existing(
             base_device,
-            function_index=1,
             protocol=0,
             subclass=0,
         )

@@ -109,15 +109,24 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
     if layout.max_speed is not None:
         _write_text(GADGET_ROOT / "max_speed", layout.max_speed)
 
+    function_instance_index = 0
     for device in layout.devices:
-        device_root = function_root / f"hid.usb{device.function_index}"
-        device_root.mkdir(parents=True, exist_ok=True)
-        _write_text(device_root / "protocol", str(device.protocol))
-        _write_text(device_root / "subclass", str(device.subclass))
-        _write_text(device_root / "report_length", str(device.in_report_lengths[0]))
-        (device_root / "report_desc").write_bytes(bytes(device.descriptor))
-        _maybe_write_wakeup_on_write(device_root, device.wakeup_on_write)
-        (config_root / f"hid.usb{device.function_index}").symlink_to(device_root)
+        device._report_id_to_function_instance = {}
+        for report_index, report_id in enumerate(device.report_ids):
+            instance = f"usb{function_instance_index}"
+            device_root = function_root / f"hid.{instance}"
+            device_root.mkdir(parents=True, exist_ok=True)
+            _write_text(device_root / "protocol", str(device.protocol))
+            _write_text(device_root / "subclass", str(device.subclass))
+            _write_text(
+                device_root / "report_length",
+                str(device.report_length_for(report_index)),
+            )
+            (device_root / "report_desc").write_bytes(bytes(device.descriptor))
+            _maybe_write_wakeup_on_write(device_root, device.wakeup_on_write)
+            (config_root / f"hid.{instance}").symlink_to(device_root)
+            device._report_id_to_function_instance[report_id] = instance
+            function_instance_index += 1
 
     _write_text(GADGET_ROOT / "UDC", _resolve_udc_name())
 

@@ -24,7 +24,6 @@ class GadgetHidDevice(usb_hid.Device):
         in_report_lengths: Sequence[int],
         out_report_lengths: Sequence[int],
         name: str,
-        function_index: int,
         protocol: int,
         subclass: int,
         wakeup_on_write: bool = False,
@@ -48,17 +47,21 @@ class GadgetHidDevice(usb_hid.Device):
             if "unexpected keyword argument 'subclass'" not in str(exc):
                 raise
             super().__init__(**init_kwargs)
-        self.function_index = function_index
         self.protocol = protocol
         self.subclass = subclass
         self.wakeup_on_write = wakeup_on_write
+        self._report_id_to_function_instance: dict[int, str] = {}
+
+    def report_length_for(self, report_index: int) -> int:
+        report_id = self.report_ids[report_index]
+        length = self.in_report_lengths[report_index]
+        return length + 1 if report_id > 0 else length
 
     @classmethod
     def from_existing(
         cls,
         base_device: usb_hid.Device,
         *,
-        function_index: int,
         protocol: int,
         subclass: int,
         descriptor: bytes | None = None,
@@ -75,7 +78,6 @@ class GadgetHidDevice(usb_hid.Device):
             in_report_lengths=tuple(base_device.in_report_lengths),
             out_report_lengths=tuple(base_device.out_report_lengths),
             name=base_device.name if name is None else name,
-            function_index=function_index,
             protocol=protocol,
             subclass=subclass,
             wakeup_on_write=(
@@ -86,9 +88,12 @@ class GadgetHidDevice(usb_hid.Device):
         )
 
     def get_device_path(self, report_id=None):
-        function_root = (
-            Path(usb_hid.gadget_root) / f"functions/hid.usb{self.function_index}"
+        if report_id is None:
+            report_id = self.report_ids[0]
+        instance = self._report_id_to_function_instance.get(
+            report_id, f"usb{report_id}"
         )
+        function_root = Path(usb_hid.gadget_root) / f"functions/hid.{instance}"
         device = function_root.joinpath("dev").read_text(encoding="utf-8").strip()
         return f"/dev/hidg{device.split(':')[1]}"
 
@@ -110,7 +115,6 @@ def build_default_layout() -> GadgetLayout:
         devices=(
             GadgetHidDevice.from_existing(
                 usb_hid.Device.BOOT_KEYBOARD,
-                function_index=0,
                 protocol=1,
                 subclass=1,
                 descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
@@ -118,13 +122,11 @@ def build_default_layout() -> GadgetLayout:
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.MOUSE,
-                function_index=1,
                 protocol=0,
                 subclass=0,
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.CONSUMER_CONTROL,
-                function_index=2,
                 protocol=0,
                 subclass=0,
             ),
