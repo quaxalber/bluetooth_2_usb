@@ -120,7 +120,7 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
             _write_text(device_root / "subclass", str(device.subclass))
             _write_text(
                 device_root / "report_length",
-                str(device.report_length_for(report_index)),
+                str(device.report_length_for(report_index) + 1),
             )
             (device_root / "report_desc").write_bytes(bytes(device.descriptor))
             _maybe_write_wakeup_on_write(device_root, device.wakeup_on_write)
