@@ -453,6 +453,7 @@ elif [[ "$READONLY_MODE" == "unknown" ]]; then
     soft_warn "Read-only mode could not be determined"
   else
     warn "Read-only mode could not be determined"
+    EXIT_CODE=1
   fi
 else
   if [[ "$OVERLAY_STATUS" == "disabled" && "$ROOT_OVERLAY_ACTIVE" == "no" ]]; then

@@ -123,6 +123,10 @@ This repository uses `staging` as its integration branch.
 - describe how you tested it
 - update docs when behavior, commands, paths, or defaults change
 - target `staging` for normal work
+- use a normal PR into `staging` for features, fixes, refactors, and other
+  non-trivial changes
+- small follow-up review fixes may be pushed directly to `staging` when that is
+  the least disruptive way to finish an in-flight review
 - do not target `main` directly for normal project work
 
 Merge policy:
