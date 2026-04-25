@@ -233,6 +233,22 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         self.assertEqual(resolved, str(dev_root / "hidraw7"))
 
+    def test_linux_hidraw_node_accepts_absolute_hidraw_path(self) -> None:
+        info = SimpleNamespace(node="/dev/hidraw3")
+
+        resolved = _resolve_hidraw_node(info)
+
+        self.assertEqual(resolved, "/dev/hidraw3")
+
+    def test_linux_hidraw_node_accepts_hidraw_device_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dev_root = Path(tmp) / "dev"
+            info = SimpleNamespace(node="hidraw4")
+
+            resolved = _resolve_hidraw_node(info, dev_root=dev_root)
+
+        self.assertEqual(resolved, str(dev_root / "hidraw4"))
+
     def test_discovery_accepts_linux_gadget_signature_without_product_strings(
         self,
     ) -> None:

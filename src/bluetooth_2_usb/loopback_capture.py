@@ -789,6 +789,12 @@ def _resolve_hidraw_node(
     sys_usb_root: Path = Path("/sys/bus/usb/devices"),
     dev_root: Path = Path("/dev"),
 ) -> str | None:
+    node_path = Path(info.node)
+    if node_path.is_absolute() and node_path.name.startswith("hidraw"):
+        return str(node_path)
+    if node_path.parent == Path(".") and node_path.name.startswith("hidraw"):
+        return str(dev_root / node_path.name)
+
     interface_root = sys_usb_root / info.node
     for hidraw_path in sorted(interface_root.glob("*/hidraw/hidraw*")):
         return str(dev_root / hidraw_path.name)

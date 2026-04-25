@@ -10,7 +10,11 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from .device_classification import AbsAxisInfo, describe_capabilities
+from .device_classification import (
+    AbsAxisInfo,
+    DeviceCapabilities,
+    describe_capabilities,
+)
 from .logging import get_logger
 
 _logger = get_logger()
@@ -72,6 +76,7 @@ class InputDeviceMetadata:
 def auto_discover_exclusion_reason(
     device: InputDevice,
     skip_name_prefixes: tuple[str, ...] = DEFAULT_SKIP_NAME_PREFIXES,
+    rich_capabilities: DeviceCapabilities | None = None,
 ) -> str | None:
     name = (device.name or "").strip()
     name_lower = name.lower()
@@ -80,15 +85,17 @@ def auto_discover_exclusion_reason(
             return f"name prefix {prefix}"
 
     try:
-        capabilities = device.capabilities(verbose=False)
+        rich_capabilities = rich_capabilities or describe_capabilities(device)
     except OSError as exc:
         return f"failed to read capabilities ({exc})"
 
     if not any(
-        code in capabilities
-        for code in (native_ecodes.EV_KEY, native_ecodes.EV_REL, native_ecodes.EV_ABS)
+        event_type in rich_capabilities.event_types
+        for event_type in ("EV_KEY", "EV_REL", "EV_ABS")
     ):
         return "missing supported input capabilities"
+    if not rich_capabilities.relay_classes:
+        return "missing supported relay classes"
 
     return None
 
@@ -137,10 +144,8 @@ def describe_input_devices(
             exclusion_reason = f"failed to read capabilities ({exc})"
         else:
             exclusion_reason = auto_discover_exclusion_reason(
-                device, skip_name_prefixes
+                device, skip_name_prefixes, rich_capabilities
             )
-            if exclusion_reason is None and not relay_classes:
-                exclusion_reason = "missing supported relay classes"
 
         metadata.append(
             InputDeviceMetadata(

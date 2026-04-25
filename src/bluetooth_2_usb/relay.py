@@ -274,6 +274,9 @@ class InputFrameAccumulator:
         self._events = []
         return events
 
+    def clear(self) -> None:
+        self._events = []
+
     def _is_syn_report(self, event: InputEvent) -> bool:
         input_event = getattr(event, "event", event)
         event_type = getattr(input_event, "type", None)
@@ -929,6 +932,7 @@ class DeviceRelay:
         self._last_touch_x: int | None = None
         self._last_touch_y: int | None = None
         self._touch_x_scale, self._touch_y_scale = self._detect_touch_scale()
+        self._rel_pan_remainder = 0.0
 
     def __str__(self) -> str:
         return f"relay for {self._input_device}"
@@ -1050,6 +1054,7 @@ class DeviceRelay:
 
         :return: None
         """
+        device_disappeared = False
         try:
             async for input_event in self._input_device.async_read_loop():
                 event = categorize(input_event)
@@ -1067,6 +1072,7 @@ class DeviceRelay:
                 self._update_grab_state(active)
 
                 if not active:
+                    self._discard_pending_input_state()
                     continue
 
                 frame = self._frame_accumulator.add(event)
@@ -1079,9 +1085,12 @@ class DeviceRelay:
                 "Stopping relay loop for %s because the input device disappeared.",
                 self._input_device.path,
             )
-        pending_frame = self._frame_accumulator.flush()
-        if pending_frame is not None:
-            await self._process_frame_with_retry(pending_frame)
+            device_disappeared = True
+            self._discard_pending_input_state()
+        if not device_disappeared:
+            pending_frame = self._frame_accumulator.flush()
+            if pending_frame is not None:
+                await self._process_frame_with_retry(pending_frame)
         _logger.debug(
             "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
             self._input_device.path,
@@ -1114,11 +1123,18 @@ class DeviceRelay:
             await self._process_event_with_retry(event)
 
         if rel_seen:
+            rel_pan = self._rel_pan_remainder + rel_pan
+            whole_pan = int(rel_pan)
+            self._rel_pan_remainder = rel_pan - whole_pan
             await self._process_mouse_delta_with_retry(
-                rel_x, rel_y, rel_wheel, int(rel_pan)
+                rel_x, rel_y, rel_wheel, whole_pan
             )
         if touch_seen:
             await self._process_touch_frame_with_retry()
+
+    def _discard_pending_input_state(self) -> None:
+        self._frame_accumulator.clear()
+        self._rel_pan_remainder = 0.0
 
     def _update_touch_abs(self, event: AbsEvent) -> None:
         input_event = event.event

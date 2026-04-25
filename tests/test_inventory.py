@@ -14,8 +14,8 @@ class _FakeDevice:
     def __init__(self) -> None:
         self.closed = False
 
-    def capabilities(self, verbose=False):
-        del verbose
+    def capabilities(self, **kwargs):
+        del kwargs
         return {inventory.native_ecodes.EV_ABS: [0]}
 
     def close(self) -> None:
@@ -44,6 +44,13 @@ class InventoryTest(unittest.TestCase):
         self.assertFalse(devices[0].relay_candidate)
         self.assertEqual(devices[0].exclusion_reason, "missing supported relay classes")
         self.assertTrue(device.closed)
+
+    def test_auto_discovery_rejects_classless_abs_devices(self) -> None:
+        device = _FakeDevice()
+
+        exclusion_reason = inventory.auto_discover_exclusion_reason(device)
+
+        self.assertEqual(exclusion_reason, "missing supported relay classes")
 
 
 if __name__ == "__main__":
