@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import usb_hid
+from adafruit_hid.mouse import Mouse
 
 from bluetooth_2_usb.gadget_config import rebuild_gadget
 from bluetooth_2_usb.hid_layout import (
@@ -39,6 +40,20 @@ class _FakeMouse:
 
     def release_all(self) -> None:
         self.release_all_calls += 1
+
+
+class _FakeHidMouseDevice:
+    usage_page = 0x1
+    usage = 0x02
+
+    def __init__(self, *, descriptor, report_ids=(0,), in_report_lengths=(4,)) -> None:
+        self.descriptor = descriptor
+        self.report_ids = report_ids
+        self.in_report_lengths = in_report_lengths
+        self.sent_reports = []
+
+    def send_report(self, report, report_id=None) -> None:
+        self.sent_reports.append((bytes(report), report_id))
 
 
 class _FakeGadgetManager:
@@ -160,6 +175,116 @@ class _TestInputDevice:
         return None
 
 
+class MouseDependencyTest(unittest.TestCase):
+    def test_mouse_device_metadata_is_split_between_basic_and_extended(self) -> None:
+        self.assertEqual(usb_hid.Device.BOOT_MOUSE.report_ids, [0])
+        self.assertEqual(usb_hid.Device.BOOT_MOUSE.in_report_lengths, [4])
+        self.assertEqual(usb_hid.Device.MOUSE.report_ids, [0])
+        self.assertEqual(usb_hid.Device.MOUSE.in_report_lengths, [4])
+        self.assertEqual(usb_hid.Device.MOUSE_EX.report_ids, [0])
+        self.assertEqual(usb_hid.Device.MOUSE_EX.in_report_lengths, [7])
+
+    def test_mouse_boot_mode_masks_buttons_ignores_pan_and_clears_motion(
+        self,
+    ) -> None:
+        device = _FakeHidMouseDevice(
+            descriptor=bytes(usb_hid.Device.BOOT_MOUSE.descriptor)
+        )
+        mouse = Mouse([device])
+
+        mouse.move(x=1, y=2, wheel=3, pan=4)
+        mouse.press(Mouse.LEFT_BUTTON | Mouse.SIDE_BUTTON)
+
+        self.assertEqual(
+            device.sent_reports,
+            [
+                (bytes([0x00, 0x01, 0x02, 0x03]), None),
+                (bytes([0x01, 0x00, 0x00, 0x00]), None),
+            ],
+        )
+
+    def test_mouse_basic_mode_masks_buttons_and_ignores_pan(self) -> None:
+        device = _FakeHidMouseDevice(descriptor=bytes(usb_hid.Device.MOUSE.descriptor))
+        mouse = Mouse([device])
+
+        mouse.press(Mouse.LEFT_BUTTON | Mouse.TASK_BUTTON)
+        mouse.move(x=200, pan=5)
+
+        self.assertEqual(
+            device.sent_reports,
+            [
+                (bytes([0x01, 0x00, 0x00, 0x00]), None),
+                (bytes([0x01, 0x7F, 0x00, 0x00]), None),
+                (bytes([0x01, 0x49, 0x00, 0x00]), None),
+            ],
+        )
+
+    def test_mouse_skips_report_when_requested_buttons_are_unsupported(self) -> None:
+        device = _FakeHidMouseDevice(
+            descriptor=bytes(usb_hid.Device.BOOT_MOUSE.descriptor)
+        )
+        mouse = Mouse([device])
+
+        mouse.press(Mouse.TASK_BUTTON)
+        mouse.release(Mouse.TASK_BUTTON)
+
+        self.assertEqual(device.sent_reports, [])
+
+    def test_mouse_extended_mode_sends_single_seven_byte_report(self) -> None:
+        device = _FakeHidMouseDevice(
+            descriptor=bytes(usb_hid.Device.MOUSE_EX.descriptor),
+            in_report_lengths=(7,),
+        )
+        mouse = Mouse([device])
+
+        mouse.move(x=300, y=-300, wheel=2, pan=-2)
+
+        self.assertEqual(
+            device.sent_reports,
+            [(bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x02, 0xFE]), None)],
+        )
+
+    def test_mouse_extended_mode_splits_large_movement_by_format_limits(
+        self,
+    ) -> None:
+        device = _FakeHidMouseDevice(
+            descriptor=bytes(usb_hid.Device.MOUSE_EX.descriptor),
+            in_report_lengths=(7,),
+        )
+        mouse = Mouse([device])
+
+        mouse.move(x=40000, wheel=200, pan=200)
+
+        self.assertEqual(
+            device.sent_reports,
+            [
+                (bytes([0x00, 0xFF, 0x7F, 0x00, 0x00, 0x7F, 0x7F]), None),
+                (bytes([0x00, 0x41, 0x1C, 0x00, 0x00, 0x49, 0x49]), None),
+            ],
+        )
+
+    def test_mouse_descriptor_clone_is_accepted(self) -> None:
+        device = _FakeHidMouseDevice(
+            descriptor=bytes(usb_hid.Device.MOUSE_EX.descriptor),
+            report_ids=(99,),
+            in_report_lengths=(99,),
+        )
+        mouse = Mouse([device])
+
+        mouse.move(pan=1)
+
+        self.assertEqual(
+            device.sent_reports,
+            [(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]), None)],
+        )
+
+    def test_mouse_rejects_unknown_report_descriptor(self) -> None:
+        device = _FakeHidMouseDevice(descriptor=b"unknown")
+
+        with self.assertRaisesRegex(ValueError, "Unsupported mouse HID report"):
+            Mouse([device])
+
+
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         event_state = asyncio.Event()
@@ -233,7 +358,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
-    def test_default_layout_uses_strict_keyboard_and_existing_mouse_consumer(
+    def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(
         self,
     ) -> None:
         layout = build_default_layout()
@@ -243,7 +368,8 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR
         )
         self.assertEqual(
-            bytes(layout.devices[1].descriptor), bytes(usb_hid.Device.MOUSE.descriptor)
+            bytes(layout.devices[1].descriptor),
+            bytes(usb_hid.Device.MOUSE_EX.descriptor),
         )
         self.assertEqual(
             bytes(layout.devices[2].descriptor),
@@ -395,11 +521,9 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
             keyboard_wakeup = gadget_root / "functions/hid.usb0/wakeup_on_write"
-            mouse_wakeups = (
-                gadget_root / "functions/hid.usb1/wakeup_on_write",
-                gadget_root / "functions/hid.usb2/wakeup_on_write",
-            )
-            supported = {keyboard_wakeup, *mouse_wakeups}
+            mouse_wakeup = gadget_root / "functions/hid.usb1/wakeup_on_write"
+            consumer_wakeup = gadget_root / "functions/hid.usb2/wakeup_on_write"
+            supported = {keyboard_wakeup, mouse_wakeup, consumer_wakeup}
 
             def fake_exists(path: Path) -> bool:
                 if path in supported:
@@ -421,11 +545,8 @@ class GadgetManagerLayoutTest(unittest.TestCase):
                 keyboard_wakeup.read_text(encoding="utf-8").strip(),
                 "1",
             )
-            for mouse_wakeup in mouse_wakeups:
-                self.assertEqual(
-                    mouse_wakeup.read_text(encoding="utf-8").strip(),
-                    "0",
-                )
+            self.assertEqual(mouse_wakeup.read_text(encoding="utf-8").strip(), "0")
+            self.assertEqual(consumer_wakeup.read_text(encoding="utf-8").strip(), "0")
             self.assertFalse(
                 (gadget_root / "functions/hid.usb3/wakeup_on_write").exists()
             )
@@ -446,8 +567,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             self.assertTrue((functions_root / "hid.usb0").is_dir())
             self.assertTrue((functions_root / "hid.usb1").is_dir())
             self.assertTrue((functions_root / "hid.usb2").is_dir())
-            self.assertTrue((functions_root / "hid.usb3").is_dir())
-            self.assertFalse((functions_root / "hid.usb4").exists())
+            self.assertFalse((functions_root / "hid.usb3").exists())
 
             keyboard, mouse, consumer = devices
             self.assertEqual(
@@ -456,19 +576,19 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             )
             self.assertEqual(
                 mouse._report_id_to_function_instance,
-                {mouse.report_ids[0]: "usb1", mouse.report_ids[1]: "usb2"},
+                {mouse.report_ids[0]: "usb1"},
             )
             self.assertEqual(
                 consumer._report_id_to_function_instance,
-                {consumer.report_ids[0]: "usb3"},
+                {consumer.report_ids[0]: "usb2"},
             )
 
-            mouse_extended_length = (
-                functions_root / "hid.usb2" / "report_length"
+            mouse_report_length = (
+                functions_root / "hid.usb1" / "report_length"
             ).read_text(encoding="utf-8").strip()
             self.assertEqual(
-                mouse_extended_length,
-                str(mouse.in_report_lengths[1] + 1),
+                mouse_report_length,
+                str(mouse.in_report_lengths[0]),
             )
 
     def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:

@@ -414,6 +414,16 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_mouse_matcher_accepts_enhanced_no_report_id_format(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+
+        matcher.handle(bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00]))
+
+        self.assertTrue(matcher.complete)
+
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 

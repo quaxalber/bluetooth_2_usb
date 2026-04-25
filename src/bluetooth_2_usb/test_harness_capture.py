@@ -184,10 +184,14 @@ class MouseSequenceMatcher:
             raise CaptureMismatchError(
                 f"Unexpected mouse report format: {report.hex(sep=' ')}"
             )
-        buttons, rel_x, rel_y, wheel = parsed
+        buttons, rel_x, rel_y, wheel, pan = parsed
         if wheel != 0:
             raise CaptureMismatchError(
                 f"Unexpected mouse wheel movement in report {report.hex(sep=' ')}"
+            )
+        if pan != 0:
+            raise CaptureMismatchError(
+                f"Unexpected mouse pan movement in report {report.hex(sep=' ')}"
             )
         if not self.expected_button_steps and buttons != 0:
             raise CaptureMismatchError(
@@ -308,9 +312,18 @@ def _normalize_keyboard_report(report: bytes) -> bytes | None:
     return None
 
 
-def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
+def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | None:
     payload = report
     wheel = 0
+
+    if len(payload) == 7:
+        buttons = payload[0]
+        rel_x = int.from_bytes(payload[1:3], "little", signed=True)
+        rel_y = int.from_bytes(payload[3:5], "little", signed=True)
+        wheel = int.from_bytes(payload[5:6], "little", signed=True)
+        pan = int.from_bytes(payload[6:7], "little", signed=True)
+        return buttons, rel_x, rel_y, wheel, pan
+
     if len(report) == 5 and report[0] == 0x02:
         payload = report[1:]
     elif len(report) == 4 and report[0] == 0x02:
@@ -327,7 +340,7 @@ def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
     rel_y = int.from_bytes(payload[2:3], "little", signed=True)
     if len(payload) >= 4:
         wheel = int.from_bytes(payload[3:4], "little", signed=True)
-    return buttons, rel_x, rel_y, wheel
+    return buttons, rel_x, rel_y, wheel, 0
 
 
 def _normalize_consumer_report(report: bytes) -> int | None:

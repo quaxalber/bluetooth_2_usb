@@ -121,7 +121,7 @@ def build_default_layout() -> GadgetLayout:
                 wakeup_on_write=True,
             ),
             GadgetHidDevice.from_existing(
-                usb_hid.Device.MOUSE,
+                usb_hid.Device.MOUSE_EX,
                 protocol=0,
                 subclass=0,
             ),
