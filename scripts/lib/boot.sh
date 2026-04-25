@@ -274,7 +274,9 @@ expected_auto_initramfs_name() {
   local base_name
 
   if [[ -z "$kernel_image" ]]; then
-    shift || true
+    if (($# > 0)); then
+      shift
+    fi
     kernel_image="$(configured_kernel_image "$@")"
   fi
 
