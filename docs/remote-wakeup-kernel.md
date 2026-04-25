@@ -232,7 +232,17 @@ same matrix when checking or troubleshooting boot artifacts.
 
 When you later enable persistent read-only mode, `readonly-enable.sh` rebuilds
 the initramfs for the running kernel and installs the matching boot initramfs
-file automatically.
+file automatically. That path depends on the running kernel being fully
+installed on the Pi, so do not treat `config-<kernelrelease>` as optional:
+
+- install `/lib/modules/<kernelrelease>`
+- install `/boot/config-<kernelrelease>` or otherwise keep `/proc/config.gz`
+  available
+- keep the custom kernel image selected in `config.txt` consistent with the
+  running release
+
+If those artifacts are missing, `readonly-enable.sh` aborts instead of trying
+to guess a bootable initramfs layout from documentation alone.
 
 Keep the stock kernel entry available so rollback is trivial.
 

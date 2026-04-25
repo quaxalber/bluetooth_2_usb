@@ -26,6 +26,9 @@ Before enabling read-only mode:
 2. identify or prepare a writable ext4 partition for Bluetooth state
 3. make sure you can still recover the Pi over SSH or local console if boot
    policy needs to be reverted
+4. if you run a custom kernel, keep the running kernel fully installed on the
+   Pi, including `/lib/modules/$(uname -r)` and either
+   `/boot/config-$(uname -r)` or `/proc/config.gz`
 
 ## Prepare the writable filesystem
 
@@ -86,10 +89,17 @@ That failure mode has been observed on current Raspberry Pi OS releases when
 `initramfs-tools` cannot infer the root device during `overlayroot` setup.
 
 When a custom kernel image is selected in `config.txt`, `readonly-enable.sh`
-refreshes the initramfs for the running kernel and installs it under the boot
-filename expected by the firmware. Keep the running kernel fully installed,
-including `/lib/modules/$(uname -r)` and `config-$(uname -r)`, so that
-`update-initramfs` can rebuild the image cleanly.
+does not just toggle OverlayFS. Before it finalizes read-only mode, it:
+
+- resolves the boot initramfs filename expected for the configured kernel image
+- runs `update-initramfs` for the current `uname -r`
+- installs the resulting image at the firmware-visible boot path
+
+That is why custom kernels must stay fully installed on the Pi before you run
+`readonly-enable.sh`. In practice this means the running kernel release needs
+its module tree under `/lib/modules/$(uname -r)` and its config available as
+`/boot/config-$(uname -r)` or `/proc/config.gz`, otherwise the script aborts
+instead of leaving you with a half-configured read-only boot path.
 
 ## Disable read-only mode
 
