@@ -42,8 +42,11 @@ Repo-owned focused guides:
   validation guidance change.
 - Do not push directly to `main`. Use `staging` as the integration branch for
   normal work.
-- Open normal PRs against `staging`, squash-merge them there, and promote
-  validated batches from `staging` to `main` with a normal merge commit.
+- Open normal PRs against `staging` and squash-merge them there. Small
+  follow-up review fixes may be pushed directly to `staging` when that is the
+  least disruptive path.
+- Promote validated batches from `staging` to `main` with a normal merge
+  commit.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 
