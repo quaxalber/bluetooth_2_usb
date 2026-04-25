@@ -230,10 +230,11 @@ With `auto_initramfs=1`, Raspberry Pi firmware derives the boot initramfs name
 from the kernel image name. Use the matching boot initramfs target from the
 same matrix when checking or troubleshooting boot artifacts.
 
-When you later enable persistent read-only mode, `readonly-enable.sh` rebuilds
-the initramfs for the running kernel and installs the matching boot initramfs
-file automatically. That path depends on the running kernel being fully
-installed on the Pi, so do not treat `config-<kernelrelease>` as optional:
+When you later enable persistent read-only mode, `readonly-enable.sh` ensures a
+bootable initramfs exists for the running kernel and installs or reuses the
+matching boot initramfs file automatically. That path depends on the running
+kernel being fully installed on the Pi, so do not treat
+`config-<kernelrelease>` as optional:
 
 - install `/lib/modules/<kernelrelease>`
 - install `/boot/config-<kernelrelease>` or otherwise keep `/proc/config.gz`
@@ -264,6 +265,10 @@ find /sys/kernel/config/usb_gadget -path '*/functions/hid.*/*wakeup_on_write' -p
 
 3. the gadget still advertises remote wakeup and the keyboard function has
    `wakeup_on_write=1`
+
+```bash
+grep -H . /sys/kernel/config/usb_gadget/*/functions/hid.*/wakeup_on_write
+```
 
 4. the normal Bluetooth-2-USB checks still pass
 
