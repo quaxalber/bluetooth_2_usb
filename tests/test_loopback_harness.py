@@ -233,6 +233,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         self.assertEqual(resolved, str(dev_root / "hidraw7"))
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux hidraw tests")
     def test_linux_hidraw_node_accepts_absolute_hidraw_path(self) -> None:
         info = SimpleNamespace(node="/dev/hidraw3")
 
@@ -240,6 +241,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         self.assertEqual(resolved, "/dev/hidraw3")
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux hidraw tests")
     def test_linux_hidraw_node_accepts_hidraw_device_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dev_root = Path(tmp) / "dev"
@@ -660,6 +662,19 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
             [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+        )
+
+    def test_mouse_event_to_reports_builds_16_bit_xy_reports(self) -> None:
+        raw_mouse = loopback_capture_windows.RAWMOUSE()
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            _mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x02, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x02, 0x00, 0x00, 0x00, 0xD4, 0xFE, 0x00, 0x00]),
+            ],
         )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:

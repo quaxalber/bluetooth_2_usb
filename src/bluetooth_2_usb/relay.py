@@ -931,6 +931,10 @@ class DeviceRelay:
         self._touch_y: int | None = None
         self._last_touch_x: int | None = None
         self._last_touch_y: int | None = None
+        self._touch_motion_x_remainder = 0.0
+        self._touch_motion_y_remainder = 0.0
+        self._touch_pan_remainder = 0.0
+        self._touch_wheel_remainder = 0.0
         self._touch_x_scale, self._touch_y_scale = self._detect_touch_scale()
         self._rel_pan_remainder = 0.0
 
@@ -1135,6 +1139,19 @@ class DeviceRelay:
     def _discard_pending_input_state(self) -> None:
         self._frame_accumulator.clear()
         self._rel_pan_remainder = 0.0
+        self._reset_touch_state()
+
+    def _reset_touch_state(self) -> None:
+        self._touch_active = False
+        self._touch_contacts = 0
+        self._touch_x = None
+        self._touch_y = None
+        self._last_touch_x = None
+        self._last_touch_y = None
+        self._touch_motion_x_remainder = 0.0
+        self._touch_motion_y_remainder = 0.0
+        self._touch_pan_remainder = 0.0
+        self._touch_wheel_remainder = 0.0
 
     def _update_touch_abs(self, event: AbsEvent) -> None:
         input_event = event.event
@@ -1149,8 +1166,7 @@ class DeviceRelay:
         if scancode == ecodes.BTN_TOUCH:
             self._touch_active = is_down
             if not is_down:
-                self._last_touch_x = None
-                self._last_touch_y = None
+                self._reset_touch_state()
             return True
         contact_counts = {
             ecodes.BTN_TOOL_FINGER: 1,
@@ -1181,14 +1197,30 @@ class DeviceRelay:
         self._last_touch_y = self._touch_y
 
         if self._touch_contacts >= 2:
-            pan = int(delta_x / self._touch_x_scale)
-            wheel = -int(delta_y / self._touch_y_scale)
+            pan = self._accumulate_scaled_touch_delta(
+                delta_x, self._touch_x_scale, "_touch_pan_remainder"
+            )
+            wheel = -self._accumulate_scaled_touch_delta(
+                delta_y, self._touch_y_scale, "_touch_wheel_remainder"
+            )
             await self._process_mouse_delta_with_retry(0, 0, wheel, pan)
             return
 
-        x = int(delta_x / self._touch_x_scale)
-        y = int(delta_y / self._touch_y_scale)
+        x = self._accumulate_scaled_touch_delta(
+            delta_x, self._touch_x_scale, "_touch_motion_x_remainder"
+        )
+        y = self._accumulate_scaled_touch_delta(
+            delta_y, self._touch_y_scale, "_touch_motion_y_remainder"
+        )
         await self._process_mouse_delta_with_retry(x, y, 0, 0)
+
+    def _accumulate_scaled_touch_delta(
+        self, delta: int, scale: float, remainder_attr: str
+    ) -> int:
+        total = getattr(self, remainder_attr) + delta
+        steps = int(total / scale)
+        setattr(self, remainder_attr, total - (steps * scale))
+        return steps
 
     async def _process_mouse_delta_with_retry(
         self, x: int, y: int, wheel: int, pan: int

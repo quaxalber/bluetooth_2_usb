@@ -486,6 +486,11 @@ def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
     return bytes([0x00, 0x00, hid_code, 0, 0, 0, 0, 0])
 
 
+def _mouse_i16_bytes(value: int) -> bytes:
+    clamped = min(32767, max(-32767, value))
+    return clamped.to_bytes(2, "little", signed=True)
+
+
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
@@ -497,9 +502,11 @@ def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
             reports.append(bytes([0x02, 0x00, 0x00, 0x00, 0x00, pan & 0xFF]))
         return reports
     if raw_mouse.lLastX:
-        reports.append(bytes([0x02, 0x00, raw_mouse.lLastX & 0xFF, 0x00, 0x00]))
+        x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
+        reports.append(bytes([0x02, 0x00, *x_bytes, 0x00, 0x00, 0x00, 0x00]))
     if raw_mouse.lLastY:
-        reports.append(bytes([0x02, 0x00, 0x00, raw_mouse.lLastY & 0xFF, 0x00]))
+        y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
+        reports.append(bytes([0x02, 0x00, 0x00, 0x00, *y_bytes, 0x00, 0x00]))
     return reports
 
 

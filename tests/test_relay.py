@@ -190,11 +190,14 @@ class _TestAbsEvent:
 
 
 class _TestInputDevice:
-    def __init__(self, events, *, removal_errno: int | None = None) -> None:
+    def __init__(
+        self, events, *, removal_errno: int | None = None, abs_max: int = 1024
+    ) -> None:
         self.path = "/dev/input/event-test"
         self.name = "test-input-device"
         self._events = list(events)
         self._removal_errno = removal_errno
+        self._abs_max = abs_max
 
     async def async_read_loop(self):
         for event in self._events:
@@ -206,7 +209,7 @@ class _TestInputDevice:
         return None
 
     def absinfo(self, _code: int):
-        return SimpleNamespace(min=0, max=1024)
+        return SimpleNamespace(min=0, max=self._abs_max)
 
 
 class _SequenceActive:
@@ -871,6 +874,102 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
                         await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(10, -5, 0, 0)])
+
+    def test_discard_pending_input_state_clears_touch_tracking(self) -> None:
+        relay = DeviceRelay(
+            _TestInputDevice([]),
+            _FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+        )
+        relay._touch_active = True
+        relay._touch_contacts = 2
+        relay._touch_x = 100
+        relay._touch_y = 200
+        relay._last_touch_x = 90
+        relay._last_touch_y = 190
+        relay._touch_motion_x_remainder = 0.5
+        relay._touch_motion_y_remainder = -0.5
+        relay._touch_pan_remainder = 0.5
+        relay._touch_wheel_remainder = -0.5
+
+        relay._discard_pending_input_state()
+
+        self.assertFalse(relay._touch_active)
+        self.assertEqual(relay._touch_contacts, 0)
+        self.assertIsNone(relay._touch_x)
+        self.assertIsNone(relay._touch_y)
+        self.assertIsNone(relay._last_touch_x)
+        self.assertIsNone(relay._last_touch_y)
+        self.assertEqual(relay._touch_motion_x_remainder, 0.0)
+        self.assertEqual(relay._touch_motion_y_remainder, 0.0)
+        self.assertEqual(relay._touch_pan_remainder, 0.0)
+        self.assertEqual(relay._touch_wheel_remainder, 0.0)
+
+    async def test_touchpad_motion_accumulates_sub_step_deltas(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        syn = SimpleNamespace(event=SimpleNamespace(type=0, code=0, value=0))
+        input_device = _TestInputDevice(
+            [
+                _TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_down),
+                _TestKeyEvent(ecodes.BTN_TOOL_FINGER, _TestKeyEvent.key_down),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_X, 100),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 100),
+                syn,
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_X, 101),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 100),
+                syn,
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_X, 102),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 100),
+                syn,
+            ],
+            abs_max=2048,
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+            with patch("bluetooth_2_usb.relay.AbsEvent", _TestAbsEvent):
+                with patch(
+                    "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                ):
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(1, 0, 0, 0)])
+
+    async def test_touchpad_scroll_accumulates_sub_step_deltas(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        syn = SimpleNamespace(event=SimpleNamespace(type=0, code=0, value=0))
+        input_device = _TestInputDevice(
+            [
+                _TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_down),
+                _TestKeyEvent(ecodes.BTN_TOOL_DOUBLETAP, _TestKeyEvent.key_down),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_X, 100),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 100),
+                syn,
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_X, 101),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 99),
+                syn,
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_X, 102),
+                _TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 98),
+                syn,
+            ],
+            abs_max=2048,
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+            with patch("bluetooth_2_usb.relay.AbsEvent", _TestAbsEvent):
+                with patch(
+                    "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                ):
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 1)])
 
 
 class KeyboardLedSyncTest(unittest.IsolatedAsyncioTestCase):
