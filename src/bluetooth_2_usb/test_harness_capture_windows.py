@@ -561,47 +561,22 @@ def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     button_flags = raw_mouse.ulButtons & 0xFFFF
     button_changed = _apply_mouse_button_flags(button_flags)
     wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
-    if button_flags & RI_MOUSE_WHEEL:
-        if wheel_value:
-            reports.append(
-                bytes(
-                    [
-                        0x02,
-                        _mouse_button_state,
-                        0x00,
-                        0x00,
-                        0x00,
-                        0x00,
-                        wheel_value & 0xFF,
-                        0x00,
-                    ]
-                )
-            )
-    if button_flags & RI_MOUSE_HORIZONTAL_WHEEL:
-        if wheel_value:
-            reports.append(
-                bytes(
-                    [
-                        0x02,
-                        _mouse_button_state,
-                        0x00,
-                        0x00,
-                        0x00,
-                        0x00,
-                        0x00,
-                        wheel_value & 0xFF,
-                    ]
-                )
-            )
-    if raw_mouse.lLastX:
+    wheel = wheel_value if button_flags & RI_MOUSE_WHEEL else 0
+    pan = wheel_value if button_flags & RI_MOUSE_HORIZONTAL_WHEEL else 0
+    if raw_mouse.lLastX or raw_mouse.lLastY or wheel or pan:
         x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
-        reports.append(
-            bytes([0x02, _mouse_button_state, *x_bytes, 0x00, 0x00, 0x00, 0x00])
-        )
-    if raw_mouse.lLastY:
         y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
         reports.append(
-            bytes([0x02, _mouse_button_state, 0x00, 0x00, *y_bytes, 0x00, 0x00])
+            bytes(
+                [
+                    0x02,
+                    _mouse_button_state,
+                    *x_bytes,
+                    *y_bytes,
+                    wheel & 0xFF,
+                    pan & 0xFF,
+                ]
+            )
         )
     if button_changed and not reports:
         reports.append(
