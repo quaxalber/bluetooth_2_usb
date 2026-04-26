@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .logging import get_logger
+
+_logger = get_logger()
+
 
 def _clamp_hid_i8(value: int) -> int:
     return min(127, max(-127, value))
@@ -58,6 +62,16 @@ class ExtendedMouse:
             self.report[3:5] = partial_y.to_bytes(2, "little", signed=True)
             self.report[5] = partial_wheel & 0xFF
             self.report[6] = partial_pan & 0xFF
+            _logger.debug(
+                "Sending mouse movement to gadget: buttons=0x%02x x=%s y=%s "
+                "wheel=%s pan=%s report=%s",
+                self.report[0],
+                partial_x,
+                partial_y,
+                partial_wheel,
+                partial_pan,
+                self.report.hex(" "),
+            )
             self._mouse_device.send_report(self.report)
             x -= partial_x
             y -= partial_y

@@ -249,6 +249,33 @@ class ExtendedMouseTest(unittest.TestCase):
             ],
         )
 
+    def test_move_debug_logs_reports_sent_to_gadget(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
+
+        self.assertEqual(len(device.sent), 2)
+        self.assertIn(
+            "Sending mouse movement to gadget: buttons=0x00 "
+            "x=32767 y=-32767 wheel=127 pan=-127 "
+            "report=00 ff 7f 01 80 7f 81",
+            logs.output[0],
+        )
+        self.assertIn(
+            "Sending mouse movement to gadget: buttons=0x00 "
+            "x=7233 y=-7233 wheel=73 pan=-73 "
+            "report=00 41 1c bf e3 49 b7",
+            logs.output[1],
+        )
+
     def test_button_reports_use_one_full_button_byte(self) -> None:
         device = SimpleNamespace(sent=[])
 
