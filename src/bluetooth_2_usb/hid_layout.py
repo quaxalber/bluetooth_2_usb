@@ -6,8 +6,8 @@ from pathlib import Path
 
 import usb_hid
 
-# Keep descriptor bytes in two-byte rows to match the Adafruit HID descriptor
-# style and make HID item boundaries easier to review.
+# Keep descriptor bytes in HID item rows to match the Adafruit HID descriptor
+# style and make item boundaries easier to review.
 # fmt: off
 DEFAULT_KEYBOARD_DESCRIPTOR = bytes(
     (
@@ -78,13 +78,13 @@ DEFAULT_MOUSE_DESCRIPTOR = bytes(
         0x95, 0x01,  # Report Count (1)
         0x81, 0x06,  # Input (Data, Variable, Relative)
         0x05, 0x0C,  # Usage Page (Consumer)
-        0x0A, 0x38,  # Usage (AC Pan)
-        0x02, 0x15,  # Usage continuation, Logical Minimum
-        0x81, 0x25,  # Logical Minimum continuation, Logical Maximum
-        0x7F, 0x75,  # Logical Maximum continuation, Report Size
-        0x08, 0x95,  # Report Size continuation, Report Count
-        0x01, 0x81,  # Report Count continuation, Input
-        0x06, 0xC0,  # Input continuation, End Collection
+        0x0A, 0x38, 0x02,  # Usage (AC Pan)
+        0x15, 0x81,  # Logical Minimum (-127)
+        0x25, 0x7F,  # Logical Maximum (127)
+        0x75, 0x08,  # Report Size (8)
+        0x95, 0x01,  # Report Count (1)
+        0x81, 0x06,  # Input (Data, Variable, Relative)
+        0xC0,  # End Collection
         0xC0,  # End Collection
     )
 )
