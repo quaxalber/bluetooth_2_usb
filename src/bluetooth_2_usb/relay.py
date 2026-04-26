@@ -734,7 +734,9 @@ class DeviceRelay:
         self._pending_rel_x = 0
         self._pending_rel_y = 0
         self._pending_rel_wheel = 0
-        self._pending_rel_pan = 0.0
+        self._pending_rel_pan_low_res = 0.0
+        self._pending_rel_pan_hi_res = 0.0
+        self._pending_rel_pan_hi_res_seen = False
         self._rel_pan_remainder = 0.0
 
     def __str__(self) -> str:
@@ -889,26 +891,39 @@ class DeviceRelay:
         self._pending_rel_x += x
         self._pending_rel_y += y
         self._pending_rel_wheel += wheel
-        self._pending_rel_pan += pan
+        if event.event.code == ecodes.REL_HWHEEL_HI_RES:
+            self._pending_rel_pan_hi_res += pan
+            self._pending_rel_pan_hi_res_seen = True
+        elif event.event.code == ecodes.REL_HWHEEL:
+            self._pending_rel_pan_low_res += pan
 
     def _discard_pending_mouse_state(self) -> None:
         self._pending_rel_x = 0
         self._pending_rel_y = 0
         self._pending_rel_wheel = 0
-        self._pending_rel_pan = 0.0
+        self._pending_rel_pan_low_res = 0.0
+        self._pending_rel_pan_hi_res = 0.0
+        self._pending_rel_pan_hi_res_seen = False
         self._rel_pan_remainder = 0.0
 
     async def _flush_pending_mouse_movement(self) -> None:
         x = self._pending_rel_x
         y = self._pending_rel_y
         wheel = self._pending_rel_wheel
-        pan_total = self._rel_pan_remainder + self._pending_rel_pan
+        pending_pan = (
+            self._pending_rel_pan_hi_res
+            if self._pending_rel_pan_hi_res_seen
+            else self._pending_rel_pan_low_res
+        )
+        pan_total = self._rel_pan_remainder + pending_pan
         pan = int(pan_total)
         self._rel_pan_remainder = pan_total - pan
         self._pending_rel_x = 0
         self._pending_rel_y = 0
         self._pending_rel_wheel = 0
-        self._pending_rel_pan = 0.0
+        self._pending_rel_pan_low_res = 0.0
+        self._pending_rel_pan_hi_res = 0.0
+        self._pending_rel_pan_hi_res_seen = False
         if x == 0 and y == 0 and wheel == 0 and pan == 0:
             return
         await self._process_mouse_delta_with_retry(x, y, wheel, pan)
