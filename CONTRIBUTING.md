@@ -113,6 +113,25 @@ sudo btmgmt info
 For relay-path changes, also use the host/Pi loopback inject/capture harness in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
+During fast iteration, maintainers may temporarily copy a working tree to a Pi
+with `rsync`. Treat that as provisional only. Before reporting hardware or
+loopback results as PR validation, push the PR branch, reinstall the Pi from the
+exact PR head commit, and verify the installed checkout:
+
+```bash
+git rev-parse HEAD
+ssh <pi-host> '
+  sudo -n git -C /opt/bluetooth_2_usb fetch origin <branch-name> &&
+  sudo -n git -C /opt/bluetooth_2_usb checkout <commit-sha> &&
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh &&
+  git -C /opt/bluetooth_2_usb rev-parse HEAD
+'
+```
+
+The local and Pi SHAs must match. Results from an rsynced tree that has not been
+reinstalled from the pushed PR head are useful debugging data, not final
+validation evidence.
+
 ## Pull request guidelines
 
 This repository uses `staging` as its integration branch.

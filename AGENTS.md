@@ -68,6 +68,12 @@ Minimum Pi-side checks:
 For relay-path changes, also use the host/Pi loopback inject/capture harness from
 `docs/host-relay-loopback.md`.
 
+`rsync` to `/opt/bluetooth_2_usb` is acceptable as a temporary Pi debugging
+shortcut, but it is not final validation. Before reporting Pi or loopback
+results as PR validation, push the branch, reinstall the Pi from the exact PR
+head commit with `scripts/install.sh`, verify `git -C /opt/bluetooth_2_usb
+rev-parse HEAD` matches the local PR head, then rerun the relevant checks.
+
 If destructive Pi flows were not executed, say so explicitly in the final
 summary.
 

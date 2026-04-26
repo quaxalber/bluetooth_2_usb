@@ -50,6 +50,27 @@ ssh <pi-host> '
 '
 ```
 
+For PR validation, install from an exact pushed commit, not from an uncommitted
+or rsynced working tree:
+
+```bash
+commit_sha="$(git rev-parse HEAD)"
+git push origin <branch-name>
+ssh <pi-host> "
+  sudo -n rm -rf /opt/bluetooth_2_usb &&
+  sudo -n git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb &&
+  sudo -n git -C /opt/bluetooth_2_usb fetch origin <branch-name> &&
+  sudo -n git -C /opt/bluetooth_2_usb checkout ${commit_sha} &&
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh &&
+  test \"\$(git -C /opt/bluetooth_2_usb rev-parse HEAD)\" = \"${commit_sha}\"
+"
+```
+
+It is acceptable to use `rsync` as a fast local shortcut while debugging a Pi,
+but that state is not authoritative. Before recording hardware validation for a
+PR, reinstall from the pushed PR head with the flow above and rerun the relevant
+checks.
+
 ## Baseline status snapshot
 
 Run this before mutating the system:

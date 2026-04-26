@@ -46,6 +46,23 @@ sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 ```
 
+For PR validation, the Pi must be installed from the exact pushed PR head before
+running the loopback harness. If you temporarily used `rsync` to iterate on the
+Pi, reinstall from the pushed branch first and verify the checkout SHA:
+
+```bash
+commit_sha="$(git rev-parse HEAD)"
+git push origin <branch-name>
+ssh <pi-host> "
+  sudo git -C /opt/bluetooth_2_usb fetch origin <branch-name> &&
+  sudo git -C /opt/bluetooth_2_usb checkout ${commit_sha} &&
+  sudo /opt/bluetooth_2_usb/scripts/install.sh &&
+  test \"\$(git -C /opt/bluetooth_2_usb rev-parse HEAD)\" = \"${commit_sha}\"
+"
+```
+
+Only treat loopback results as final validation after this reinstall step.
+
 ## 1. Confirm host-side enumeration
 
 On Linux:
