@@ -377,6 +377,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR
         )
         self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
+        self.assertEqual(DEFAULT_MOUSE_DESCRIPTOR.count(bytes((0x09, 0x48))), 2)
         self.assertEqual(tuple(layout.devices[1].report_ids), (0,))
         self.assertEqual(tuple(layout.devices[1].in_report_lengths), (7,))
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))

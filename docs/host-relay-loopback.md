@@ -136,9 +136,9 @@ For mouse wheel and horizontal wheel steps, the injector emits paired low-res
 and high-res evdev events in the same `SYN_REPORT` frame. The host capture
 expects the relay to emit one equivalent USB HID wheel or pan step.
 
-The `mouse_fast` scenario emits large relative X/Y movement and wheel/pan
-deltas that require multiple USB HID reports. Use it to stress high-speed mouse
-movement forwarding:
+The `mouse_fast` scenario emits large relative X/Y movement plus fast vertical
+wheel and horizontal pan deltas that require multiple USB HID reports. Use it to
+stress high-speed mouse movement and scrolling forwarding:
 
 ```bash
 ./scripts/loopback-capture.sh --scenario mouse_fast

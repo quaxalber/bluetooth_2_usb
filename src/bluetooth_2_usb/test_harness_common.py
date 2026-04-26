@@ -299,10 +299,10 @@ FAST_MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_Y, -40000),
     ExpectedEvent(EV_REL, REL_X, -45000),
     ExpectedEvent(EV_REL, REL_Y, 45000),
-    ExpectedEvent(EV_REL, REL_WHEEL, 200),
-    ExpectedEvent(EV_REL, REL_WHEEL, -200),
-    ExpectedEvent(EV_REL, REL_HWHEEL, 200),
-    ExpectedEvent(EV_REL, REL_HWHEEL, -200),
+    ExpectedEvent(EV_REL, REL_WHEEL, 600),
+    ExpectedEvent(EV_REL, REL_WHEEL, -600),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 600),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -600),
 )
 
 MOUSE_BUTTON_STEPS = (
