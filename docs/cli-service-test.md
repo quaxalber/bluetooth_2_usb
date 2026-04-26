@@ -50,8 +50,8 @@ ssh <pi-host> '
 '
 ```
 
-For PR validation, install from an exact pushed commit, not from an uncommitted
-or rsynced working tree:
+When the code is already pushed, install from the exact commit and verify the
+checkout SHA:
 
 ```bash
 commit_sha="$(git rev-parse HEAD)"
@@ -67,9 +67,22 @@ ssh <pi-host> "
 ```
 
 It is acceptable to use `rsync` as a fast local shortcut while debugging a Pi,
-but that state is not authoritative. Before recording hardware validation for a
-PR, reinstall from the pushed PR head with the flow above and rerun the relevant
-checks.
+including when the local tree is ahead of the PR branch. After rsyncing, rebuild
+the managed install from the copied tree before running validation:
+
+```bash
+rsync -a --delete --exclude .git --exclude venv ./ <pi-host>:/tmp/bluetooth_2_usb/
+ssh <pi-host> '
+  sudo -n rsync -a --delete /tmp/bluetooth_2_usb/ /opt/bluetooth_2_usb/ &&
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh &&
+  /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
+'
+```
+
+Before recording PR validation, push the tested code so reviewers can inspect
+the same tree. The key requirement is that validation runs against a managed
+install rebuilt from the exact tree under test, not against stale package
+metadata or service code.
 
 ## Baseline status snapshot
 

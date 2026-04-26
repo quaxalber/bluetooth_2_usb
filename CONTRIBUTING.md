@@ -114,9 +114,20 @@ For relay-path changes, also use the host/Pi loopback inject/capture harness in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 During fast iteration, maintainers may temporarily copy a working tree to a Pi
-with `rsync`. Treat that as provisional only. Before reporting hardware or
-loopback results as PR validation, push the PR branch, reinstall the Pi from the
-exact PR head commit, and verify the installed checkout:
+with `rsync`. Treat that copy as provisional until the managed install has been
+rebuilt from the copied tree:
+
+```bash
+rsync -a --delete --exclude .git --exclude venv ./ <pi-host>:/tmp/bluetooth_2_usb/
+ssh <pi-host> '
+  sudo -n rsync -a --delete /tmp/bluetooth_2_usb/ /opt/bluetooth_2_usb/ &&
+  sudo -n /opt/bluetooth_2_usb/scripts/install.sh &&
+  /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
+'
+```
+
+If the work is already pushed, prefer installing from the exact commit and
+verifying the checkout SHA:
 
 ```bash
 git rev-parse HEAD
@@ -128,9 +139,9 @@ ssh <pi-host> '
 '
 ```
 
-The local and Pi SHAs must match. Results from an rsynced tree that has not been
-reinstalled from the pushed PR head are useful debugging data, not final
-validation evidence.
+For PR validation, also push the branch before reporting results so reviewers can
+inspect the exact code. Results from an rsynced tree that has not been installed
+with `install.sh` are useful debugging data, not final validation evidence.
 
 ## Pull request guidelines
 
