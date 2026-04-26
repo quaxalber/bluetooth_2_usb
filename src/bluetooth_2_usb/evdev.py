@@ -1267,7 +1267,7 @@ def _get_hid_code_type(
     if is_consumer_key(event):
         return _consumer_control_code_type()
     if is_mouse_button(event):
-        return _mouse_button_type()
+        return ExtendedMouse
     return _keycode_type()
 
 
@@ -1303,11 +1303,6 @@ def _consumer_control_code_type():
 @lru_cache(maxsize=1)
 def _keycode_type():
     return import_module("adafruit_hid.keycode").Keycode
-
-
-@lru_cache(maxsize=1)
-def _mouse_button_type():
-    return ExtendedMouse
 
 
 @lru_cache(maxsize=1)
