@@ -174,7 +174,11 @@ class GadgetHidDevice(usb_hid.Device):
             function_index=function_index,
             protocol=protocol,
             subclass=subclass,
-            configfs_report_length=configfs_report_length,
+            configfs_report_length=(
+                getattr(base_device, "configfs_report_length", None)
+                if configfs_report_length is None
+                else configfs_report_length
+            ),
             wakeup_on_write=(
                 getattr(base_device, "wakeup_on_write", False)
                 if wakeup_on_write is None

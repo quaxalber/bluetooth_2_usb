@@ -58,6 +58,16 @@ RIM_TYPEKEYBOARD = 1
 RIM_TYPEHID = 2
 PM_REMOVE = 0x0001
 RI_KEY_BREAK = 0x0001
+RI_MOUSE_LEFT_BUTTON_DOWN = 0x0001
+RI_MOUSE_LEFT_BUTTON_UP = 0x0002
+RI_MOUSE_RIGHT_BUTTON_DOWN = 0x0004
+RI_MOUSE_RIGHT_BUTTON_UP = 0x0008
+RI_MOUSE_MIDDLE_BUTTON_DOWN = 0x0010
+RI_MOUSE_MIDDLE_BUTTON_UP = 0x0020
+RI_MOUSE_BUTTON_4_DOWN = 0x0040
+RI_MOUSE_BUTTON_4_UP = 0x0080
+RI_MOUSE_BUTTON_5_DOWN = 0x0100
+RI_MOUSE_BUTTON_5_UP = 0x0200
 RI_MOUSE_WHEEL = 0x0400
 RI_MOUSE_HORIZONTAL_WHEEL = 0x0800
 CW_USEDEFAULT = -2147483648
@@ -75,6 +85,16 @@ VK_TO_HID = {
     VK_F14: 105,
     VK_F15: 106,
 }
+
+RAW_MOUSE_BUTTON_BITS = (
+    (RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, 0x01),
+    (RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP, 0x02),
+    (RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP, 0x04),
+    (RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP, 0x08),
+    (RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP, 0x10),
+)
+
+_mouse_button_state = 0
 
 
 class RAWINPUTDEVICE(ctypes.Structure):
@@ -488,26 +508,77 @@ def _mouse_i16_bytes(value: int) -> bytes:
     return clamped.to_bytes(2, "little", signed=True)
 
 
+def _apply_mouse_button_flags(button_flags: int) -> bool:
+    global _mouse_button_state
+
+    changed = False
+    for down_flag, up_flag, button_bit in RAW_MOUSE_BUTTON_BITS:
+        if button_flags & down_flag:
+            _mouse_button_state |= button_bit
+            changed = True
+        if button_flags & up_flag:
+            _mouse_button_state &= ~button_bit
+            changed = True
+    return changed
+
+
+def _reset_mouse_button_state() -> None:
+    global _mouse_button_state
+
+    _mouse_button_state = 0
+
+
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
+    button_changed = _apply_mouse_button_flags(button_flags)
     wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
     if button_flags & RI_MOUSE_WHEEL:
         if wheel_value:
             reports.append(
-                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, wheel_value & 0xFF, 0x00])
+                bytes(
+                    [
+                        0x02,
+                        _mouse_button_state,
+                        0x00,
+                        0x00,
+                        0x00,
+                        0x00,
+                        wheel_value & 0xFF,
+                        0x00,
+                    ]
+                )
             )
     if button_flags & RI_MOUSE_HORIZONTAL_WHEEL:
         if wheel_value:
             reports.append(
-                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, wheel_value & 0xFF])
+                bytes(
+                    [
+                        0x02,
+                        _mouse_button_state,
+                        0x00,
+                        0x00,
+                        0x00,
+                        0x00,
+                        0x00,
+                        wheel_value & 0xFF,
+                    ]
+                )
             )
     if raw_mouse.lLastX:
         x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
-        reports.append(bytes([0x02, 0x00, *x_bytes, 0x00, 0x00, 0x00, 0x00]))
+        reports.append(
+            bytes([0x02, _mouse_button_state, *x_bytes, 0x00, 0x00, 0x00, 0x00])
+        )
     if raw_mouse.lLastY:
         y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
-        reports.append(bytes([0x02, 0x00, 0x00, 0x00, *y_bytes, 0x00, 0x00]))
+        reports.append(
+            bytes([0x02, _mouse_button_state, 0x00, 0x00, *y_bytes, 0x00, 0x00])
+        )
+    if button_changed and not reports:
+        reports.append(
+            bytes([0x02, _mouse_button_state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        )
     return reports
 
 
@@ -734,6 +805,7 @@ def _pump_raw_input(
     scenario_name: str,
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
+    _reset_mouse_button_state()
     keyboard_candidate = (
         _RawInputCandidate(
             "keyboard",

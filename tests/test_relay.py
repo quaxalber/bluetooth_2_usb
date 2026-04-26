@@ -587,6 +587,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             protocol=1,
             subclass=1,
             descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
+            configfs_report_length=8,
             wakeup_on_write=True,
         )
 
@@ -598,6 +599,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         )
 
         self.assertTrue(cloned.wakeup_on_write)
+        self.assertEqual(cloned.configfs_report_length, 8)
 
 
 class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):

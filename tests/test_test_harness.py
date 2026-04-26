@@ -20,11 +20,14 @@ from bluetooth_2_usb.test_harness_capture import (
 from bluetooth_2_usb.test_harness_capture_windows import (
     RAWMOUSE,
     RI_MOUSE_HORIZONTAL_WHEEL,
+    RI_MOUSE_LEFT_BUTTON_DOWN,
+    RI_MOUSE_LEFT_BUTTON_UP,
     RI_MOUSE_WHEEL,
     _device_matches_candidate,
     _extract_device_identities,
     _keyboard_event_to_report,
     _mouse_event_to_reports,
+    _reset_mouse_button_state,
     _stable_device_identity,
 )
 from bluetooth_2_usb.test_harness_common import (
@@ -507,6 +510,9 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
+    def setUp(self) -> None:
+        _reset_mouse_button_state()
+
     def test_extract_device_identities_collapses_windows_hid_paths(self) -> None:
         self.assertEqual(
             _extract_device_identities(
@@ -591,6 +597,28 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
             [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+        )
+
+    def test_mouse_event_to_reports_tracks_button_state(self) -> None:
+        left_button_down = RAWMOUSE()
+        left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
+        self.assertEqual(
+            _mouse_event_to_reports(left_button_down),
+            [bytes([0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        move_while_pressed = RAWMOUSE()
+        move_while_pressed.lLastX = 1
+        self.assertEqual(
+            _mouse_event_to_reports(move_while_pressed),
+            [bytes([0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        left_button_up = RAWMOUSE()
+        left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
+        self.assertEqual(
+            _mouse_event_to_reports(left_button_up),
+            [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
     def test_mouse_event_to_reports_keeps_wheel_and_motion_reports(self) -> None:
