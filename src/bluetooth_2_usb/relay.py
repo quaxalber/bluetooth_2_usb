@@ -50,6 +50,7 @@ from .evdev import (
     is_consumer_key,
     is_mouse_button,
 )
+from .extended_mouse import ExtendedMouse
 from .gadget_config import rebuild_gadget
 from .hid_layout import build_default_layout
 from .inventory import (
@@ -94,71 +95,6 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     from adafruit_hid.consumer_control import ConsumerControl
     from adafruit_hid.keyboard import Keyboard
-    from adafruit_hid.mouse import Mouse
-
-
-def _clamp_hid_i8(value: int) -> int:
-    return min(127, max(-127, value))
-
-
-def _clamp_hid_i16(value: int) -> int:
-    return min(32767, max(-32767, value))
-
-
-class ExtendedMouse:
-    """Small mouse report writer with horizontal pan support."""
-
-    LEFT_BUTTON = 0x01
-    RIGHT_BUTTON = 0x02
-    MIDDLE_BUTTON = 0x04
-    SIDE_BUTTON = 0x08
-    EXTRA_BUTTON = 0x10
-    FORWARD_BUTTON = 0x20
-    BACK_BUTTON = 0x40
-    TASK_BUTTON = 0x80
-
-    def __init__(self, devices) -> None:
-        from adafruit_hid import find_device
-
-        self._mouse_device = find_device(devices, usage_page=0x1, usage=0x02)
-        if not self._mouse_device:
-            raise ValueError("Could not find matching mouse HID device.")
-        self.report = bytearray(7)
-
-    def __str__(self):
-        return str(self._mouse_device)
-
-    def press(self, buttons: int) -> None:
-        self.report[0] |= buttons
-        self._send_no_move()
-
-    def release(self, buttons: int) -> None:
-        self.report[0] &= ~buttons
-        self._send_no_move()
-
-    def release_all(self) -> None:
-        self.report[0] = 0
-        self._send_no_move()
-
-    def move(self, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> None:
-        while x != 0 or y != 0 or wheel != 0 or pan != 0:
-            partial_x = _clamp_hid_i16(x)
-            partial_y = _clamp_hid_i16(y)
-            partial_wheel = _clamp_hid_i8(wheel)
-            partial_pan = _clamp_hid_i8(pan)
-            self.report[1:3] = partial_x.to_bytes(2, "little", signed=True)
-            self.report[3:5] = partial_y.to_bytes(2, "little", signed=True)
-            self.report[5] = partial_wheel & 0xFF
-            self.report[6] = partial_pan & 0xFF
-            self._mouse_device.send_report(self.report)
-            x -= partial_x
-            y -= partial_y
-            wheel -= partial_wheel
-            pan -= partial_pan
-
-    def _send_no_move(self) -> None:
-        self.report[1:7] = b"\x00" * 6
-        self._mouse_device.send_report(self.report)
 
 
 class GadgetManager:
@@ -292,7 +228,7 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> Mouse | None:
+    def get_mouse(self) -> ExtendedMouse | None:
         """
         Get the Mouse gadget.
 
@@ -1132,8 +1068,7 @@ def move_mouse(event: RelEvent, gadget_manager: GadgetManager) -> None:
     if mouse is None:
         raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
 
-    x, y, mwheel, pan = get_mouse_movement(event)
-    mouse.move(x, y, mwheel, int(pan))
+    mouse.move(*get_mouse_movement(event))
 
 
 def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
@@ -1162,7 +1097,7 @@ def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
 
 def get_output_device(
     event: KeyEvent, gadget_manager: GadgetManager
-) -> ConsumerControl | Keyboard | Mouse | None:
+) -> ConsumerControl | Keyboard | ExtendedMouse | None:
     """
     Determine which HID gadget to target for the given key event.
 
