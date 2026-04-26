@@ -1288,6 +1288,8 @@ def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, float]:
         y = input_event.value
     elif input_event.code == ecodes.REL_WHEEL:
         mwheel = input_event.value
+    elif input_event.code == ecodes.REL_WHEEL_HI_RES:
+        mwheel = input_event.value / 120
     elif input_event.code == ecodes.REL_HWHEEL:
         pan = input_event.value
     elif input_event.code == ecodes.REL_HWHEEL_HI_RES:

@@ -733,7 +733,10 @@ class DeviceRelay:
         self._hid_write_failures = 0
         self._pending_rel_x = 0
         self._pending_rel_y = 0
-        self._pending_rel_wheel = 0
+        self._pending_rel_wheel_low_res = 0.0
+        self._pending_rel_wheel_hi_res = 0.0
+        self._pending_rel_wheel_hi_res_seen = False
+        self._rel_wheel_remainder = 0.0
         self._pending_rel_pan_low_res = 0.0
         self._pending_rel_pan_hi_res = 0.0
         self._pending_rel_pan_hi_res_seen = False
@@ -890,7 +893,11 @@ class DeviceRelay:
         x, y, wheel, pan = get_mouse_movement(event)
         self._pending_rel_x += x
         self._pending_rel_y += y
-        self._pending_rel_wheel += wheel
+        if event.event.code == ecodes.REL_WHEEL_HI_RES:
+            self._pending_rel_wheel_hi_res += wheel
+            self._pending_rel_wheel_hi_res_seen = True
+        elif event.event.code == ecodes.REL_WHEEL:
+            self._pending_rel_wheel_low_res += wheel
         if event.event.code == ecodes.REL_HWHEEL_HI_RES:
             self._pending_rel_pan_hi_res += pan
             self._pending_rel_pan_hi_res_seen = True
@@ -900,7 +907,10 @@ class DeviceRelay:
     def _discard_pending_mouse_state(self) -> None:
         self._pending_rel_x = 0
         self._pending_rel_y = 0
-        self._pending_rel_wheel = 0
+        self._pending_rel_wheel_low_res = 0.0
+        self._pending_rel_wheel_hi_res = 0.0
+        self._pending_rel_wheel_hi_res_seen = False
+        self._rel_wheel_remainder = 0.0
         self._pending_rel_pan_low_res = 0.0
         self._pending_rel_pan_hi_res = 0.0
         self._pending_rel_pan_hi_res_seen = False
@@ -909,7 +919,14 @@ class DeviceRelay:
     async def _flush_pending_mouse_movement(self) -> None:
         x = self._pending_rel_x
         y = self._pending_rel_y
-        wheel = self._pending_rel_wheel
+        pending_wheel = (
+            self._pending_rel_wheel_hi_res
+            if self._pending_rel_wheel_hi_res_seen
+            else self._pending_rel_wheel_low_res
+        )
+        wheel_total = self._rel_wheel_remainder + pending_wheel
+        wheel = int(wheel_total)
+        self._rel_wheel_remainder = wheel_total - wheel
         pending_pan = (
             self._pending_rel_pan_hi_res
             if self._pending_rel_pan_hi_res_seen
@@ -920,7 +937,9 @@ class DeviceRelay:
         self._rel_pan_remainder = pan_total - pan
         self._pending_rel_x = 0
         self._pending_rel_y = 0
-        self._pending_rel_wheel = 0
+        self._pending_rel_wheel_low_res = 0.0
+        self._pending_rel_wheel_hi_res = 0.0
+        self._pending_rel_wheel_hi_res_seen = False
         self._pending_rel_pan_low_res = 0.0
         self._pending_rel_pan_hi_res = 0.0
         self._pending_rel_pan_hi_res_seen = False

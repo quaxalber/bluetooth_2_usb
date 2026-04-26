@@ -763,6 +763,31 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1)])
 
+    async def test_high_resolution_vertical_wheel_accumulates_fractional_steps(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0)])
+
     async def test_high_resolution_horizontal_wheel_suppresses_low_res_fallback(
         self,
     ) -> None:
@@ -789,6 +814,33 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
                     await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1), (0, 0, 0, -1)])
+
+    async def test_high_resolution_vertical_wheel_suppresses_low_res_fallback(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_WHEEL, 1),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 120),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, -120),
+                _TestRelEvent(ecodes.REL_WHEEL, -1),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0), (0, 0, -1, 0)])
 
     async def test_inactive_relay_discards_pending_mouse_events(self) -> None:
         relaying_active = asyncio.Event()
