@@ -330,10 +330,6 @@ SAFE_MOUSE_BUTTON_STEPS = (
     ExpectedEvent(EV_KEY, BTN_SIDE, 0),
     ExpectedEvent(EV_KEY, BTN_EXTRA, 1),
     ExpectedEvent(EV_KEY, BTN_EXTRA, 0),
-    ExpectedEvent(EV_KEY, BTN_FORWARD, 1),
-    ExpectedEvent(EV_KEY, BTN_FORWARD, 0),
-    ExpectedEvent(EV_KEY, BTN_BACK, 1),
-    ExpectedEvent(EV_KEY, BTN_BACK, 0),
 )
 
 CONSUMER_STEPS = (

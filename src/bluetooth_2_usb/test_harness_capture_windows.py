@@ -17,7 +17,18 @@ from .test_harness_capture import (
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .test_harness_common import EXIT_OK, get_scenario
+from .test_harness_common import (
+    BTN_EXTRA,
+    BTN_LEFT,
+    BTN_MIDDLE,
+    BTN_RIGHT,
+    BTN_SIDE,
+    EV_KEY,
+    EVENT_CODE_NAMES,
+    EXIT_OK,
+    EXIT_PREREQUISITE,
+    get_scenario,
+)
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -93,6 +104,13 @@ RAW_MOUSE_BUTTON_BITS = (
     (RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP, 0x08),
     (RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP, 0x10),
 )
+WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES = {
+    BTN_LEFT,
+    BTN_RIGHT,
+    BTN_MIDDLE,
+    BTN_SIDE,
+    BTN_EXTRA,
+}
 
 _mouse_button_state = 0
 
@@ -526,6 +544,16 @@ def _reset_mouse_button_state() -> None:
     global _mouse_button_state
 
     _mouse_button_state = 0
+
+
+def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
+    return tuple(
+        dict.fromkeys(
+            step.code
+            for step in scenario.mouse_button_steps
+            if step.code not in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
+        )
+    )
 
 
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
@@ -1020,6 +1048,28 @@ def run_windows_raw_input_capture(
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
+    unsupported_mouse_buttons = _unsupported_windows_mouse_button_codes(scenario)
+    if unsupported_mouse_buttons:
+        unsupported_names = [
+            EVENT_CODE_NAMES[EV_KEY].get(code, str(code))
+            for code in unsupported_mouse_buttons
+        ]
+        return HarnessResult(
+            command="capture",
+            scenario=scenario.name,
+            success=False,
+            exit_code=EXIT_PREREQUISITE,
+            message=(
+                "Windows Raw Input capture only exposes mouse buttons through "
+                f"{EVENT_CODE_NAMES[EV_KEY][BTN_EXTRA]}; unsupported scenario "
+                f"buttons: {', '.join(unsupported_names)}"
+            ),
+            details={
+                "capture_backend": "raw_input",
+                "unsupported_mouse_buttons": unsupported_names,
+            },
+        )
+
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
     consumer_candidate_identities: tuple[str, ...] = ()

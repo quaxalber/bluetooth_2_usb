@@ -976,7 +976,10 @@ class DeviceRelay:
                     )
                 mouse.move(partial_x, partial_y, partial_wheel, partial_pan)
 
-            await self._process_hid_action_with_retry(move_mouse, "mouse movement")
+            if not await self._process_hid_action_with_retry(
+                move_mouse, "mouse movement"
+            ):
+                return
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
         """
@@ -994,7 +997,7 @@ class DeviceRelay:
         self,
         action: Callable[[], Any],
         action_name: str,
-    ) -> None:
+    ) -> bool:
         """
         Attempt to relay one HID action and retry transient write blocking.
 
@@ -1006,7 +1009,7 @@ class DeviceRelay:
         for attempt in range(1, max_tries + 1):
             try:
                 action()
-                return
+                return True
             except BlockingIOError:
                 if attempt < max_tries:
                     self._hid_write_retries += 1
@@ -1015,6 +1018,7 @@ class DeviceRelay:
                 else:
                     self._hid_write_failures += 1
                     _logger.warning(f"HID write blocked ({attempt}/{max_tries})")
+                    return False
             except BrokenPipeError:
                 self._hid_write_failures += 1
                 _logger.warning(
@@ -1024,11 +1028,12 @@ class DeviceRelay:
                 )
                 if self._relaying_active:
                     self._relaying_active.clear()
-                return
+                return False
             except Exception:
                 self._hid_write_failures += 1
                 _logger.exception(f"Error processing {action_name}")
-                return
+                return False
+        return False
 
 
 class DeviceIdentifier:

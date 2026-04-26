@@ -19,6 +19,10 @@ from bluetooth_2_usb.test_harness_capture import (
 )
 from bluetooth_2_usb.test_harness_capture_windows import (
     RAWMOUSE,
+    RI_MOUSE_BUTTON_4_DOWN,
+    RI_MOUSE_BUTTON_4_UP,
+    RI_MOUSE_BUTTON_5_DOWN,
+    RI_MOUSE_BUTTON_5_UP,
     RI_MOUSE_HORIZONTAL_WHEEL,
     RI_MOUSE_LEFT_BUTTON_DOWN,
     RI_MOUSE_LEFT_BUTTON_UP,
@@ -94,7 +98,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(len(combo.keyboard_steps), 6)
         self.assertEqual(len(combo.mouse_rel_steps), 11)
         self.assertEqual(combo.mouse_button_steps, SAFE_MOUSE_BUTTON_STEPS)
-        self.assertEqual(len(combo.mouse_button_steps), 8)
+        self.assertEqual(len(combo.mouse_button_steps), 4)
         self.assertEqual(combo.mouse_coalesced_tail_count, 3)
 
     def test_intrusive_mouse_button_scenario_contains_all_button_bits(self) -> None:
@@ -709,6 +713,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         )
 
     def test_mouse_event_to_reports_tracks_button_state(self) -> None:
+        _reset_mouse_button_state()
         left_button_down = RAWMOUSE()
         left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
         self.assertEqual(
@@ -727,6 +732,36 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
         self.assertEqual(
             _mouse_event_to_reports(left_button_up),
+            [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+    def test_mouse_event_to_reports_tracks_windows_extra_button_state(self) -> None:
+        _reset_mouse_button_state()
+        button_4_down = RAWMOUSE()
+        button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
+        self.assertEqual(
+            _mouse_event_to_reports(button_4_down),
+            [bytes([0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        button_5_down = RAWMOUSE()
+        button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
+        self.assertEqual(
+            _mouse_event_to_reports(button_5_down),
+            [bytes([0x02, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        button_4_up = RAWMOUSE()
+        button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
+        self.assertEqual(
+            _mouse_event_to_reports(button_4_up),
+            [bytes([0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        button_5_up = RAWMOUSE()
+        button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
+        self.assertEqual(
+            _mouse_event_to_reports(button_5_up),
             [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
@@ -774,6 +809,27 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                     consumer_nodes=(),
                 ),
             )
+
+    def test_windows_backend_reports_unsupported_intrusive_mouse_buttons(
+        self,
+    ) -> None:
+        with patch("bluetooth_2_usb.test_harness_capture_windows.IS_WINDOWS", True):
+            result = test_harness_capture_windows.run_windows_raw_input_capture(
+                scenario_name="mouse_buttons_intrusive",
+                timeout_sec=1.0,
+                candidate_nodes=test_harness_capture_windows.GadgetNodeCandidates(
+                    keyboard_nodes=(),
+                    mouse_nodes=(),
+                    consumer_nodes=(),
+                ),
+            )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_PREREQUISITE)
+        self.assertEqual(
+            result.details["unsupported_mouse_buttons"],
+            ["BTN_FORWARD", "BTN_BACK", "BTN_TASK"],
+        )
 
     def test_windows_backend_imports_with_missing_non_windows_handle_aliases(
         self,

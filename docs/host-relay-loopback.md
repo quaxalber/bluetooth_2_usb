@@ -15,8 +15,9 @@ This validates the path:
 `Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
 By default, run only the lower-risk scenarios: `keyboard`, `mouse`,
-`mouse_fast`, `combo`, and `consumer`. These avoid left, right, middle, and task
-mouse button down events. Run `mouse_buttons_intrusive` only when you
+`mouse_fast`, `combo`, and `consumer`. These avoid left, right, middle,
+forward, back, and task mouse button down events. Run `mouse_buttons_intrusive`
+only when you
 intentionally want full live button-bit validation and can tolerate possible
 host UI interaction.
 
@@ -136,7 +137,7 @@ and emits this deterministic sequence:
 - mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
   `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`,
   one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then
-  side/extra/forward/back mouse button bits press/release
+  side/extra mouse button bits press/release
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
 and high-res evdev events in the same `SYN_REPORT` frame. The host capture

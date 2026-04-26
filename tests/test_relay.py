@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import usb_hid
 
@@ -839,6 +839,25 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
                 (7233, -7233, 73, -73),
             ],
         )
+
+    async def test_large_mouse_deltas_abort_remaining_chunks_after_write_failure(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        manager = _FakeGadgetManager()
+        manager.mouse.move = Mock(side_effect=BrokenPipeError())
+        relay = DeviceRelay(
+            _TestInputDevice([]),
+            manager,
+            relaying_active=relaying_active,
+        )
+
+        await relay._process_mouse_delta_with_retry(40000, -40000, 200, -200)
+
+        manager.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
+        self.assertEqual(relay._hid_write_failures, 1)
+        self.assertFalse(relaying_active.is_set())
 
     async def test_high_resolution_horizontal_wheel_accumulates_fractional_steps(
         self,
