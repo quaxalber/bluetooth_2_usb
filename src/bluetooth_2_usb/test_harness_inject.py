@@ -28,6 +28,25 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
     time.sleep(event_gap_ms / 1000.0)
 
 
+_HI_RES_REL_CODES = {
+    ecodes.REL_WHEEL: ecodes.REL_WHEEL_HI_RES,
+    ecodes.REL_HWHEEL: ecodes.REL_HWHEEL_HI_RES,
+}
+
+
+def _write_mouse_rel_step(device: UInput, step_event) -> None:
+    device.write(step_event.event_type, step_event.code, step_event.value)
+    hi_res_code = _HI_RES_REL_CODES.get(step_event.code)
+    if step_event.event_type == ecodes.EV_REL and hi_res_code is not None:
+        device.write(step_event.event_type, hi_res_code, step_event.value * 120)
+
+
+def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
+    _write_mouse_rel_step(device, step_event)
+    device.syn()
+    time.sleep(event_gap_ms / 1000.0)
+
+
 def _keyboard_capabilities() -> dict[int, list[int]]:
     keyboard_codes = sorted(
         {
@@ -55,7 +74,9 @@ def _mouse_capabilities() -> dict[int, list[int]]:
             ecodes.REL_X,
             ecodes.REL_Y,
             ecodes.REL_WHEEL,
+            ecodes.REL_WHEEL_HI_RES,
             ecodes.REL_HWHEEL,
+            ecodes.REL_HWHEEL_HI_RES,
         ],
     }
 
@@ -137,9 +158,9 @@ def run_inject(
 
         if mouse is not None:
             for step_event in scenario.mouse_rel_steps[:-3]:
-                _send_step(mouse, step_event, event_gap_ms)
+                _send_mouse_rel_step(mouse, step_event, event_gap_ms)
             for step_event in scenario.mouse_rel_steps[-3:]:
-                mouse.write(step_event.event_type, step_event.code, step_event.value)
+                _write_mouse_rel_step(mouse, step_event)
             if scenario.mouse_rel_steps[-3:]:
                 mouse.syn()
                 time.sleep(event_gap_ms / 1000.0)

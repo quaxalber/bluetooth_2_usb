@@ -132,6 +132,19 @@ and emits this deterministic sequence:
   one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then all
   eight mouse button bits press/release
 
+For mouse wheel and horizontal wheel steps, the injector emits paired low-res
+and high-res evdev events in the same `SYN_REPORT` frame. The host capture
+expects the relay to emit one equivalent USB HID wheel or pan step.
+
+The `mouse_fast` scenario emits large relative X/Y movement and wheel/pan
+deltas that require multiple USB HID reports. Use it to stress high-speed mouse
+movement forwarding:
+
+```bash
+./scripts/loopback-capture.sh --scenario mouse_fast
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_fast
+```
+
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit vertical wheel and horizontal pan.
 

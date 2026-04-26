@@ -35,6 +35,7 @@ from bluetooth_2_usb.test_harness_common import (
     EXIT_INTERRUPTED,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
+    FAST_MOUSE_REL_STEPS,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
     SCENARIOS,
@@ -93,10 +94,19 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
 
+    def test_fast_mouse_scenario_contains_large_relative_motion(self) -> None:
+        scenario = SCENARIOS["mouse_fast"]
+
+        self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertEqual(scenario.mouse_rel_steps, FAST_MOUSE_REL_STEPS)
+        self.assertGreater(
+            max(abs(step.value) for step in scenario.mouse_rel_steps), 32767
+        )
+
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, combo, consumer, text_burst",
+            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, mouse_fast, combo, consumer, text_burst",
         ):
             get_scenario("nope")
 
@@ -399,6 +409,20 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
 
 class MouseSequenceMatcherTest(unittest.TestCase):
+    @staticmethod
+    def _extended_mouse_report(
+        x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0
+    ) -> bytes:
+        return bytes(
+            [
+                0x00,
+                *x.to_bytes(2, "little", signed=True),
+                *y.to_bytes(2, "little", signed=True),
+                wheel & 0xFF,
+                pan & 0xFF,
+            ]
+        )
+
     def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
@@ -431,7 +455,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
-        with self.assertRaisesRegex(CaptureMismatchError, "expected EV_REL/REL_X=1"):
+        with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
             matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
 
     def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
@@ -446,6 +470,31 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]))
         matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]))
         matcher.handle(bytes([0x00, 0x02, 0x00, 0xFD, 0xFF, 0x00, 0x01]))
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_chunked_fast_motion(self) -> None:
+        matcher = MouseSequenceMatcher.create(FAST_MOUSE_REL_STEPS, ())
+
+        for report in (
+            self._extended_mouse_report(x=32767),
+            self._extended_mouse_report(x=7233),
+            self._extended_mouse_report(y=-32767),
+            self._extended_mouse_report(y=-7233),
+            self._extended_mouse_report(x=-32767),
+            self._extended_mouse_report(x=-12233),
+            self._extended_mouse_report(y=32767),
+            self._extended_mouse_report(y=12233),
+            self._extended_mouse_report(wheel=127),
+            self._extended_mouse_report(wheel=73),
+            self._extended_mouse_report(wheel=-127),
+            self._extended_mouse_report(wheel=-73),
+            self._extended_mouse_report(pan=127),
+            self._extended_mouse_report(pan=73),
+            self._extended_mouse_report(pan=-127),
+            self._extended_mouse_report(pan=-73),
+        ):
+            matcher.handle(report)
 
         self.assertTrue(matcher.complete)
 

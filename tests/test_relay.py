@@ -738,6 +738,36 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(manager.mouse.moves, [(2, -3, 1, 1)])
 
+    async def test_large_mouse_deltas_are_split_before_retry_boundary(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 40000),
+                _TestRelEvent(ecodes.REL_Y, -40000),
+                _TestRelEvent(ecodes.REL_WHEEL, 200),
+                _TestRelEvent(ecodes.REL_HWHEEL, -200),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(
+            manager.mouse.moves,
+            [
+                (32767, -32767, 127, -127),
+                (7233, -7233, 73, -73),
+            ],
+        )
+
     async def test_high_resolution_horizontal_wheel_accumulates_fractional_steps(
         self,
     ) -> None:

@@ -192,6 +192,8 @@ class MouseSequenceMatcher:
     rel_index: int = 0
     button_index: int = 0
     _button_state: int = 0
+    _pending_rel_code: int | None = None
+    _pending_rel_remaining: int = 0
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
@@ -259,17 +261,36 @@ class MouseSequenceMatcher:
         return self._button_state
 
     def _apply_rel(self, code: int, value: int) -> None:
-        if self.rel_index >= len(self.expected_rel_steps):
-            raise CaptureMismatchError(
-                f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
-            )
-        pending_step = self.expected_rel_steps[self.rel_index]
-        if pending_step.code != code or pending_step.value != value:
+        if self._pending_rel_code is None:
+            if self.rel_index >= len(self.expected_rel_steps):
+                raise CaptureMismatchError(
+                    f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
+                )
+            pending_step = self.expected_rel_steps[self.rel_index]
+            self._pending_rel_code = pending_step.code
+            self._pending_rel_remaining = pending_step.value
+
+        if self._pending_rel_code != code or not _same_direction(
+            self._pending_rel_remaining, value
+        ):
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}; expected {pending_step.describe()}"
+                f"{REL_NAMES.get(code, code)}={value}; expected "
+                f"{REL_NAMES.get(self._pending_rel_code, self._pending_rel_code)}="
+                f"{self._pending_rel_remaining}"
             )
-        self.rel_index += 1
+
+        if abs(value) > abs(self._pending_rel_remaining):
+            raise CaptureMismatchError(
+                "Unexpected mouse relative event "
+                f"{REL_NAMES.get(code, code)}={value}; exceeds pending "
+                f"{REL_NAMES.get(code, code)}={self._pending_rel_remaining}"
+            )
+
+        self._pending_rel_remaining -= value
+        if self._pending_rel_remaining == 0:
+            self.rel_index += 1
+            self._pending_rel_code = None
 
     @property
     def rel_complete(self) -> bool:
@@ -280,6 +301,10 @@ class MouseSequenceMatcher:
         return self.rel_complete and self.button_index >= len(
             self.expected_button_steps
         )
+
+
+def _same_direction(expected: int, observed: int) -> bool:
+    return (expected > 0 and observed > 0) or (expected < 0 and observed < 0)
 
 
 @dataclass(slots=True)

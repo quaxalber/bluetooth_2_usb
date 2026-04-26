@@ -950,15 +950,24 @@ class DeviceRelay:
     async def _process_mouse_delta_with_retry(
         self, x: int, y: int, wheel: int, pan: int
     ) -> None:
-        def move_mouse() -> None:
-            mouse = self._gadget_manager.get_mouse()
-            if mouse is None:
-                raise RuntimeError(
-                    "Mouse gadget not initialized or manager not enabled."
-                )
-            mouse.move(x, y, wheel, pan)
+        for partial_x, partial_y, partial_wheel, partial_pan in _chunk_mouse_delta(
+            x, y, wheel, pan
+        ):
 
-        await self._process_hid_action_with_retry(move_mouse, "mouse movement")
+            def move_mouse(
+                partial_x=partial_x,
+                partial_y=partial_y,
+                partial_wheel=partial_wheel,
+                partial_pan=partial_pan,
+            ) -> None:
+                mouse = self._gadget_manager.get_mouse()
+                if mouse is None:
+                    raise RuntimeError(
+                        "Mouse gadget not initialized or manager not enabled."
+                    )
+                mouse.move(partial_x, partial_y, partial_wheel, partial_pan)
+
+            await self._process_hid_action_with_retry(move_mouse, "mouse movement")
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
         """
@@ -1084,6 +1093,27 @@ def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:
         mouse.move(*get_mouse_movement(event))
     elif isinstance(event, KeyEvent):
         send_key_event(event, gadget_manager)
+
+
+def _chunk_hid_i8(value: int) -> int:
+    return min(127, max(-127, value))
+
+
+def _chunk_hid_i16(value: int) -> int:
+    return min(32767, max(-32767, value))
+
+
+def _chunk_mouse_delta(x: int, y: int, wheel: int, pan: int):
+    while x != 0 or y != 0 or wheel != 0 or pan != 0:
+        partial_x = _chunk_hid_i16(x)
+        partial_y = _chunk_hid_i16(y)
+        partial_wheel = _chunk_hid_i8(wheel)
+        partial_pan = _chunk_hid_i8(pan)
+        yield partial_x, partial_y, partial_wheel, partial_pan
+        x -= partial_x
+        y -= partial_y
+        wheel -= partial_wheel
+        pan -= partial_pan
 
 
 def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:

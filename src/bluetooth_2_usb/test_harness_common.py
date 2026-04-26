@@ -48,6 +48,8 @@ REL_X = 0
 REL_Y = 1
 REL_HWHEEL = 6
 REL_WHEEL = 8
+REL_WHEEL_HI_RES = 11
+REL_HWHEEL_HI_RES = 12
 
 EVENT_TYPE_NAMES = {
     EV_KEY: "EV_KEY",
@@ -87,10 +89,19 @@ EVENT_CODE_NAMES = {
         REL_Y: "REL_Y",
         REL_HWHEEL: "REL_HWHEEL",
         REL_WHEEL: "REL_WHEEL",
+        REL_WHEEL_HI_RES: "REL_WHEEL_HI_RES",
+        REL_HWHEEL_HI_RES: "REL_HWHEEL_HI_RES",
     },
 }
 
-SCENARIO_NAMES = ("keyboard", "mouse", "combo", "consumer", "text_burst")
+SCENARIO_NAMES = (
+    "keyboard",
+    "mouse",
+    "mouse_fast",
+    "combo",
+    "consumer",
+    "text_burst",
+)
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
 DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
@@ -282,6 +293,17 @@ MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_HWHEEL, 1),
 )
 
+FAST_MOUSE_REL_STEPS = (
+    ExpectedEvent(EV_REL, REL_X, 40000),
+    ExpectedEvent(EV_REL, REL_Y, -40000),
+    ExpectedEvent(EV_REL, REL_X, -45000),
+    ExpectedEvent(EV_REL, REL_Y, 45000),
+    ExpectedEvent(EV_REL, REL_WHEEL, 200),
+    ExpectedEvent(EV_REL, REL_WHEEL, -200),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 200),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -200),
+)
+
 MOUSE_BUTTON_STEPS = (
     ExpectedEvent(EV_KEY, BTN_LEFT, 1),
     ExpectedEvent(EV_KEY, BTN_LEFT, 0),
@@ -381,6 +403,13 @@ SCENARIOS = {
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
+        consumer_steps=(),
+    ),
+    "mouse_fast": ScenarioDefinition(
+        name="mouse_fast",
+        keyboard_steps=(),
+        mouse_rel_steps=FAST_MOUSE_REL_STEPS,
+        mouse_button_steps=(),
         consumer_steps=(),
     ),
     "combo": ScenarioDefinition(
