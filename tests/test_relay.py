@@ -766,6 +766,50 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(manager.mouse.moves, [(2, -3, 1, 1)])
 
+    async def test_relative_mouse_events_log_normalized_values(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 2),
+                _TestRelEvent(ecodes.REL_Y, -3),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, -60),
+                _TestSynEvent(),
+            ]
+        )
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        output = "\n".join(logs.output)
+        self.assertIn(
+            "Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0 pan=0.0",
+            output,
+        )
+        self.assertIn(
+            "Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0 pan=0.0",
+            output,
+        )
+        self.assertIn(
+            "Mouse REL input: code=11 value=60 -> x=0 y=0 wheel=0.5 pan=0.0",
+            output,
+        )
+        self.assertIn(
+            "Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0 pan=-0.5",
+            output,
+        )
+
     async def test_large_mouse_deltas_are_split_before_retry_boundary(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()

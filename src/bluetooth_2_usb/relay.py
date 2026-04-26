@@ -891,6 +891,15 @@ class DeviceRelay:
 
     def _accumulate_mouse_movement(self, event: RelEvent) -> None:
         x, y, wheel, pan = get_mouse_movement(event)
+        _logger.debug(
+            "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
+            event.event.code,
+            event.event.value,
+            x,
+            y,
+            wheel,
+            pan,
+        )
         self._pending_rel_x += x
         self._pending_rel_y += y
         if event.event.code == ecodes.REL_WHEEL_HI_RES:
