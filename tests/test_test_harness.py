@@ -432,11 +432,11 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 class MouseSequenceMatcherTest(unittest.TestCase):
     @staticmethod
     def _extended_mouse_report(
-        x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0
+        buttons: int = 0, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0
     ) -> bytes:
         return bytes(
             [
-                0x00,
+                buttons,
                 *x.to_bytes(2, "little", signed=True),
                 *y.to_bytes(2, "little", signed=True),
                 wheel & 0xFF,
@@ -458,7 +458,19 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
-            matcher.handle(bytes([0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
+            matcher.handle(self._extended_mouse_report(buttons=0x02, x=1))
+
+    def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(
+        self,
+    ) -> None:
+        matcher = MouseSequenceMatcher.create(
+            MOUSE_REL_STEPS[:4], SAFE_MOUSE_BUTTON_STEPS
+        )
+
+        with self.assertRaisesRegex(
+            CaptureMismatchError, "Mouse button report arrived before movement"
+        ):
+            matcher.handle(self._extended_mouse_report(buttons=0x08, x=1))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())

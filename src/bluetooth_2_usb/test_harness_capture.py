@@ -215,10 +215,7 @@ class MouseSequenceMatcher:
                 f"Unexpected mouse report format: {report.hex(sep=' ')}"
             )
         buttons, rel_x, rel_y, wheel, pan = parsed
-        if not self.expected_button_steps and buttons != 0:
-            raise CaptureMismatchError(
-                f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
-            )
+        self._apply_button_report(buttons, report)
 
         rel_events = []
         if rel_x:
@@ -232,28 +229,23 @@ class MouseSequenceMatcher:
         if rel_events:
             self._apply_rel_report(rel_events)
 
-        if rel_x == 0 and rel_y == 0 and wheel == 0 and pan == 0:
-            if self.button_index >= len(self.expected_button_steps):
-                if buttons == 0:
-                    return
-                raise CaptureMismatchError(
-                    f"Unexpected extra mouse button report {report.hex(sep=' ')}"
-                )
+    def _apply_button_report(self, buttons: int, report: bytes) -> None:
+        if buttons == self._button_state:
+            return
+        if self.button_index >= len(self.expected_button_steps):
+            raise CaptureMismatchError(
+                f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
+            )
+        if not self.rel_complete:
+            raise CaptureMismatchError("Mouse button report arrived before movement")
 
-            if not self.rel_complete:
-                if buttons != 0:
-                    raise CaptureMismatchError(
-                        "Mouse button report arrived before movement"
-                    )
-                return
-
-            expected = self.expected_button_steps[self.button_index]
-            expected_buttons = self._apply_button_step(expected)
-            if buttons != expected_buttons:
-                raise CaptureMismatchError(
-                    f"Unexpected mouse button report {report.hex(sep=' ')}; expected {expected.describe()}"
-                )
-            self.button_index += 1
+        expected = self.expected_button_steps[self.button_index]
+        expected_buttons = self._apply_button_step(expected)
+        if buttons != expected_buttons:
+            raise CaptureMismatchError(
+                f"Unexpected mouse button report {report.hex(sep=' ')}; expected {expected.describe()}"
+            )
+        self.button_index += 1
 
     def _apply_button_step(self, expected) -> int:
         button_bit = MOUSE_BUTTON_BITS.get(expected.code)
