@@ -403,6 +403,8 @@ def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | N
         payload = report[1:]
     elif len(report) == 5 and report[0] == 0x02:
         payload = report[1:]
+    elif len(report) == 5:
+        payload = report
     elif len(report) == 4 and report[0] == 0x02:
         payload = report[1:]
     elif len(report) == 4:

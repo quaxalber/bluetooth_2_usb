@@ -476,6 +476,15 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_mouse_matcher_accepts_compact_unnumbered_pan_format(self) -> None:
+        matcher = MouseSequenceMatcher.create(
+            (ExpectedEvent(EV_REL, REL_HWHEEL, 1),), ()
+        )
+
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x01]))
+
+        self.assertTrue(matcher.complete)
+
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
