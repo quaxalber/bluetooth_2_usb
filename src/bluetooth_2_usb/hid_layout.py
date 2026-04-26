@@ -33,6 +33,7 @@ class GadgetHidDevice(usb_hid.Device):
         function_index: int,
         protocol: int,
         subclass: int,
+        configfs_report_length: int | None = None,
         wakeup_on_write: bool = False,
     ) -> None:
         init_kwargs = {
@@ -57,6 +58,7 @@ class GadgetHidDevice(usb_hid.Device):
         self.function_index = function_index
         self.protocol = protocol
         self.subclass = subclass
+        self.configfs_report_length = configfs_report_length
         self.wakeup_on_write = wakeup_on_write
 
     @classmethod
@@ -72,6 +74,7 @@ class GadgetHidDevice(usb_hid.Device):
         report_ids: Sequence[int] | None = None,
         in_report_lengths: Sequence[int] | None = None,
         out_report_lengths: Sequence[int] | None = None,
+        configfs_report_length: int | None = None,
         wakeup_on_write: bool | None = None,
     ) -> GadgetHidDevice:
         return cls(
@@ -99,6 +102,7 @@ class GadgetHidDevice(usb_hid.Device):
             function_index=function_index,
             protocol=protocol,
             subclass=subclass,
+            configfs_report_length=configfs_report_length,
             wakeup_on_write=(
                 getattr(base_device, "wakeup_on_write", False)
                 if wakeup_on_write is None
@@ -147,6 +151,7 @@ def build_default_layout() -> GadgetLayout:
                 report_ids=(0,),
                 in_report_lengths=(7,),
                 out_report_lengths=(0,),
+                configfs_report_length=8,
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.CONSUMER_CONTROL,

@@ -334,6 +334,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         self.assertEqual(tuple(layout.devices[1].report_ids), (0,))
         self.assertEqual(tuple(layout.devices[1].in_report_lengths), (7,))
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
+        self.assertEqual(layout.devices[1].configfs_report_length, 8)
         self.assertEqual(
             bytes(layout.devices[2].descriptor),
             bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor),
@@ -478,6 +479,24 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             self.assertEqual(
                 (gadget_root / "max_speed").read_text(encoding="utf-8").strip(),
                 "high-speed",
+            )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb0/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "8",
+            )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb1/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "8",
+            )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb2/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "2",
             )
 
     def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:
