@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
@@ -192,8 +192,13 @@ class MouseSequenceMatcher:
     rel_index: int = 0
     button_index: int = 0
     _button_state: int = 0
-    _pending_rel_code: int | None = None
-    _pending_rel_remaining: int = 0
+    _pending_rel_remaining_by_code: dict[int, list[int]] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        pending: dict[int, list[int]] = {}
+        for step in self.expected_rel_steps:
+            pending.setdefault(step.code, []).append(step.value)
+        self._pending_rel_remaining_by_code = pending
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
@@ -261,36 +266,33 @@ class MouseSequenceMatcher:
         return self._button_state
 
     def _apply_rel(self, code: int, value: int) -> None:
-        if self._pending_rel_code is None:
-            if self.rel_index >= len(self.expected_rel_steps):
-                raise CaptureMismatchError(
-                    f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
-                )
-            pending_step = self.expected_rel_steps[self.rel_index]
-            self._pending_rel_code = pending_step.code
-            self._pending_rel_remaining = pending_step.value
+        remaining_by_code = self._pending_rel_remaining_by_code.get(code)
+        if not remaining_by_code:
+            raise CaptureMismatchError(
+                f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
+            )
 
-        if self._pending_rel_code != code or not _same_direction(
-            self._pending_rel_remaining, value
-        ):
+        remaining = remaining_by_code[0]
+        if not _same_direction(remaining, value):
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
                 f"{REL_NAMES.get(code, code)}={value}; expected "
-                f"{REL_NAMES.get(self._pending_rel_code, self._pending_rel_code)}="
-                f"{self._pending_rel_remaining}"
+                f"{REL_NAMES.get(code, code)}={remaining}"
             )
 
-        if abs(value) > abs(self._pending_rel_remaining):
+        if abs(value) > abs(remaining):
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
                 f"{REL_NAMES.get(code, code)}={value}; exceeds pending "
-                f"{REL_NAMES.get(code, code)}={self._pending_rel_remaining}"
+                f"{REL_NAMES.get(code, code)}={remaining}"
             )
 
-        self._pending_rel_remaining -= value
-        if self._pending_rel_remaining == 0:
+        remaining -= value
+        if remaining == 0:
             self.rel_index += 1
-            self._pending_rel_code = None
+            remaining_by_code.pop(0)
+        else:
+            remaining_by_code[0] = remaining
 
     @property
     def rel_complete(self) -> bool:
@@ -398,6 +400,8 @@ def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | N
     rel_y = int.from_bytes(payload[2:3], "little", signed=True)
     if len(payload) >= 4:
         wheel = int.from_bytes(payload[3:4], "little", signed=True)
+    if len(payload) >= 5:
+        pan = int.from_bytes(payload[4:5], "little", signed=True)
     return buttons, rel_x, rel_y, wheel, pan
 
 

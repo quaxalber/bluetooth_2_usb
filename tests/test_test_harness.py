@@ -32,15 +32,21 @@ from bluetooth_2_usb.test_harness_capture_windows import (
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
+    EV_REL,
     EXIT_INTERRUPTED,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
     FAST_MOUSE_REL_STEPS,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
+    REL_HWHEEL,
+    REL_WHEEL,
+    REL_X,
+    REL_Y,
     SAFE_MOUSE_BUTTON_STEPS,
     SCENARIOS,
     TEXT_BURST_STEPS,
+    ExpectedEvent,
     HarnessBusyError,
     HarnessResult,
     get_scenario,
@@ -457,6 +463,15 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_mouse_matcher_accepts_compact_report_id_pan_format(self) -> None:
+        matcher = MouseSequenceMatcher.create(
+            (ExpectedEvent(EV_REL, REL_HWHEEL, 1),), ()
+        )
+
+        matcher.handle(bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]))
+
+        self.assertTrue(matcher.complete)
+
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
@@ -516,6 +531,28 @@ class MouseSequenceMatcherTest(unittest.TestCase):
             self._extended_mouse_report(pan=-127),
             self._extended_mouse_report(pan=-127),
             self._extended_mouse_report(pan=-92),
+        ):
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_combined_chunked_fast_motion(self) -> None:
+        matcher = MouseSequenceMatcher.create(
+            (
+                ExpectedEvent(EV_REL, REL_X, 40000),
+                ExpectedEvent(EV_REL, REL_Y, -40000),
+                ExpectedEvent(EV_REL, REL_WHEEL, 600),
+                ExpectedEvent(EV_REL, REL_HWHEEL, -600),
+            ),
+            (),
+        )
+
+        for report in (
+            self._extended_mouse_report(x=32767, y=-32767, wheel=127, pan=-127),
+            self._extended_mouse_report(x=7233, y=-7233, wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=92, pan=-92),
         ):
             matcher.handle(report)
 
