@@ -151,6 +151,8 @@ def build_default_layout() -> GadgetLayout:
                 report_ids=(0,),
                 in_report_lengths=(7,),
                 out_report_lengths=(0,),
+                # dwc2/configfs emits an extra empty interrupt-IN completion when
+                # report_length exactly matches this full-size mouse payload.
                 configfs_report_length=8,
             ),
             GadgetHidDevice.from_existing(
