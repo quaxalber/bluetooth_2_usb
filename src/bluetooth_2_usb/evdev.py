@@ -1278,9 +1278,9 @@ def is_consumer_key(event: KeyEvent) -> bool:
     return event.scancode in _CONSUMER_KEYS
 
 
-def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, int]:
+def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, float]:
     input_event: InputEvent = event.event
-    x, y, mwheel, pan = 0, 0, 0, 0
+    x, y, mwheel, pan = 0, 0, 0, 0.0
     if input_event.code == ecodes.REL_X:
         x = input_event.value
     elif input_event.code == ecodes.REL_Y:
@@ -1289,6 +1289,8 @@ def get_mouse_movement(event: RelEvent) -> tuple[int, int, int, int]:
         mwheel = input_event.value
     elif input_event.code == ecodes.REL_HWHEEL:
         pan = input_event.value
+    elif input_event.code == ecodes.REL_HWHEEL_HI_RES:
+        pan = input_event.value / 120
     return x, y, mwheel, pan
 
 
@@ -1436,11 +1438,11 @@ def _evdev_to_usb_hid_map() -> dict[int, int]:
         ecodes.BTN_LEFT: MouseButton.LEFT,
         ecodes.BTN_RIGHT: MouseButton.RIGHT,
         ecodes.BTN_MIDDLE: MouseButton.MIDDLE,
-        ecodes.BTN_SIDE: MouseButton.SIDE,
-        ecodes.BTN_EXTRA: MouseButton.EXTRA,
-        ecodes.BTN_FORWARD: MouseButton.FORWARD,
-        ecodes.BTN_BACK: MouseButton.BACK,
-        ecodes.BTN_TASK: MouseButton.TASK,
+        ecodes.BTN_SIDE: 0x08,
+        ecodes.BTN_EXTRA: 0x10,
+        ecodes.BTN_FORWARD: 0x20,
+        ecodes.BTN_BACK: 0x40,
+        ecodes.BTN_TASK: 0x80,
         ecodes.KEY_POWER: ConsumerControlCode.POWER,
         ecodes.KEY_RESTART: ConsumerControlCode.RESET,
         ecodes.KEY_SLEEP: ConsumerControlCode.SLEEP,

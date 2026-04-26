@@ -127,7 +127,13 @@ The injector creates temporary virtual devices named:
 and emits this deterministic sequence:
 
 - keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
-- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`
+- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
+  `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`,
+  one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then all
+  eight mouse button bits press/release
+
+The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
+signed 8-bit vertical wheel and horizontal pan.
 
 ## 4. Success criteria
 

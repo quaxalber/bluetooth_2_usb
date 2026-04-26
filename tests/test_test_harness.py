@@ -18,9 +18,12 @@ from bluetooth_2_usb.test_harness_capture import (
     discover_gadget_nodes,
 )
 from bluetooth_2_usb.test_harness_capture_windows import (
+    RAWMOUSE,
+    RI_MOUSE_HORIZONTAL_WHEEL,
     _device_matches_candidate,
     _extract_device_identities,
     _keyboard_event_to_report,
+    _mouse_event_to_reports,
     _stable_device_identity,
 )
 from bluetooth_2_usb.test_harness_common import (
@@ -28,6 +31,7 @@ from bluetooth_2_usb.test_harness_common import (
     EXIT_INTERRUPTED,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
+    MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
     SCENARIOS,
     TEXT_BURST_STEPS,
@@ -76,8 +80,8 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(combo.required_nodes, ("keyboard", "mouse"))
         self.assertEqual(len(combo.keyboard_steps), 6)
-        self.assertEqual(len(combo.mouse_rel_steps), 4)
-        self.assertEqual(len(combo.mouse_button_steps), 0)
+        self.assertEqual(len(combo.mouse_rel_steps), 11)
+        self.assertEqual(len(combo.mouse_button_steps), 16)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
@@ -392,7 +396,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
 class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         matcher.handle(bytes([0x02, 0x00, 0x01, 0x00, 0x00]))
         matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
@@ -402,7 +406,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_compact_report_id_format(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         matcher.handle(bytes([0x02, 0x00, 0x01, 0x00]))
         matcher.handle(bytes([0x00]))
@@ -415,16 +419,40 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
             matcher.handle(bytes([0x02, 0x02, 0, 0, 0]))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "expected EV_REL/REL_X=1"):
             matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
+
+    def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+
+        matcher.handle(bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]))
+        matcher.handle(bytes([0x00, 0x02, 0x00, 0xFD, 0xFF, 0x00, 0x01]))
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_all_extended_button_bits(self) -> None:
+        matcher = MouseSequenceMatcher.create((), MOUSE_BUTTON_STEPS)
+
+        for button in (0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80):
+            matcher.handle(bytes([button, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+            matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+
+        self.assertTrue(matcher.complete)
 
 
 class ConsumerSequenceMatcherTest(unittest.TestCase):
@@ -541,6 +569,28 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
         self.assertIsNone(_keyboard_event_to_report(0x41, is_key_up=False))
+
+    def test_mouse_event_to_reports_builds_16_bit_xy_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            _mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x02, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x02, 0x00, 0x00, 0x00, 0xD4, 0xFE, 0x00, 0x00]),
+            ],
+        )
+
+    def test_mouse_event_to_reports_builds_horizontal_pan_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
+
+        self.assertEqual(
+            _mouse_event_to_reports(raw_mouse),
+            [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+        )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
         if sys.platform == "win32":

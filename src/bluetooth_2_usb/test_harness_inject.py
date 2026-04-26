@@ -42,8 +42,21 @@ def _keyboard_capabilities() -> dict[int, list[int]]:
 
 
 def _mouse_capabilities() -> dict[int, list[int]]:
+    scenario_button_codes = sorted(
+        {
+            step.code
+            for scenario in SCENARIOS.values()
+            for step in scenario.mouse_button_steps
+        }
+    )
     return {
-        ecodes.EV_REL: [ecodes.REL_X, ecodes.REL_Y],
+        ecodes.EV_KEY: scenario_button_codes,
+        ecodes.EV_REL: [
+            ecodes.REL_X,
+            ecodes.REL_Y,
+            ecodes.REL_WHEEL,
+            ecodes.REL_HWHEEL,
+        ],
     }
 
 
@@ -123,8 +136,13 @@ def run_inject(
             time.sleep(COMBO_MOUSE_DELAY_MS / 1000.0)
 
         if mouse is not None:
-            for step_event in scenario.mouse_rel_steps:
+            for step_event in scenario.mouse_rel_steps[:-3]:
                 _send_step(mouse, step_event, event_gap_ms)
+            for step_event in scenario.mouse_rel_steps[-3:]:
+                mouse.write(step_event.event_type, step_event.code, step_event.value)
+            if scenario.mouse_rel_steps[-3:]:
+                mouse.syn()
+                time.sleep(event_gap_ms / 1000.0)
             for step_event in scenario.mouse_button_steps:
                 _send_step(mouse, step_event, event_gap_ms)
 

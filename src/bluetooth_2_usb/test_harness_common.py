@@ -36,8 +36,18 @@ KEY_VOLUMEUP = 115
 KEY_VOLUMEDOWN = 114
 KEY_MINUS = 12
 KEY_SPACE = 57
+BTN_LEFT = 272
+BTN_RIGHT = 273
+BTN_MIDDLE = 274
+BTN_SIDE = 275
+BTN_EXTRA = 276
+BTN_FORWARD = 277
+BTN_BACK = 278
+BTN_TASK = 279
 REL_X = 0
 REL_Y = 1
+REL_HWHEEL = 6
+REL_WHEEL = 8
 
 EVENT_TYPE_NAMES = {
     EV_KEY: "EV_KEY",
@@ -63,10 +73,20 @@ EVENT_CODE_NAMES = {
         KEY_VOLUMEDOWN: "KEY_VOLUMEDOWN",
         KEY_MINUS: "KEY_MINUS",
         KEY_SPACE: "KEY_SPACE",
+        BTN_LEFT: "BTN_LEFT",
+        BTN_RIGHT: "BTN_RIGHT",
+        BTN_MIDDLE: "BTN_MIDDLE",
+        BTN_SIDE: "BTN_SIDE",
+        BTN_EXTRA: "BTN_EXTRA",
+        BTN_FORWARD: "BTN_FORWARD",
+        BTN_BACK: "BTN_BACK",
+        BTN_TASK: "BTN_TASK",
     },
     EV_REL: {
         REL_X: "REL_X",
         REL_Y: "REL_Y",
+        REL_HWHEEL: "REL_HWHEEL",
+        REL_WHEEL: "REL_WHEEL",
     },
 }
 
@@ -253,6 +273,32 @@ MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, -1),
     ExpectedEvent(EV_REL, REL_Y, 1),
     ExpectedEvent(EV_REL, REL_Y, -1),
+    ExpectedEvent(EV_REL, REL_WHEEL, 1),
+    ExpectedEvent(EV_REL, REL_WHEEL, -1),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -1),
+    ExpectedEvent(EV_REL, REL_X, 2),
+    ExpectedEvent(EV_REL, REL_Y, -3),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
+)
+
+MOUSE_BUTTON_STEPS = (
+    ExpectedEvent(EV_KEY, BTN_LEFT, 1),
+    ExpectedEvent(EV_KEY, BTN_LEFT, 0),
+    ExpectedEvent(EV_KEY, BTN_RIGHT, 1),
+    ExpectedEvent(EV_KEY, BTN_RIGHT, 0),
+    ExpectedEvent(EV_KEY, BTN_MIDDLE, 1),
+    ExpectedEvent(EV_KEY, BTN_MIDDLE, 0),
+    ExpectedEvent(EV_KEY, BTN_SIDE, 1),
+    ExpectedEvent(EV_KEY, BTN_SIDE, 0),
+    ExpectedEvent(EV_KEY, BTN_EXTRA, 1),
+    ExpectedEvent(EV_KEY, BTN_EXTRA, 0),
+    ExpectedEvent(EV_KEY, BTN_FORWARD, 1),
+    ExpectedEvent(EV_KEY, BTN_FORWARD, 0),
+    ExpectedEvent(EV_KEY, BTN_BACK, 1),
+    ExpectedEvent(EV_KEY, BTN_BACK, 0),
+    ExpectedEvent(EV_KEY, BTN_TASK, 1),
+    ExpectedEvent(EV_KEY, BTN_TASK, 0),
 )
 
 CONSUMER_STEPS = (
@@ -334,14 +380,14 @@ SCENARIOS = {
         name="mouse",
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=(),
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
     ),
     "combo": ScenarioDefinition(
         name="combo",
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=(),
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
     ),
     "consumer": ScenarioDefinition(

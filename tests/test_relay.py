@@ -10,14 +10,17 @@ from unittest.mock import patch
 
 import usb_hid
 
+from bluetooth_2_usb.evdev import ecodes
 from bluetooth_2_usb.gadget_config import rebuild_gadget
 from bluetooth_2_usb.hid_layout import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
+    DEFAULT_MOUSE_DESCRIPTOR,
     GadgetHidDevice,
     build_default_layout,
 )
 from bluetooth_2_usb.relay import (
     DeviceRelay,
+    ExtendedMouse,
     GadgetManager,
     RelayController,
     RuntimeMonitor,
@@ -36,9 +39,21 @@ class _FakeKeyboard:
 class _FakeMouse:
     def __init__(self) -> None:
         self.release_all_calls = 0
+        self.moves = []
+        self.presses = []
+        self.releases = []
 
     def release_all(self) -> None:
         self.release_all_calls += 1
+
+    def move(self, x=0, y=0, wheel=0, pan=0) -> None:
+        self.moves.append((x, y, wheel, pan))
+
+    def press(self, key_id) -> None:
+        self.presses.append(key_id)
+
+    def release(self, key_id) -> None:
+        self.releases.append(key_id)
 
 
 class _FakeGadgetManager:
@@ -143,6 +158,17 @@ class _TestKeyEvent:
         self.keystate = keystate
 
 
+class _TestRelEvent:
+    def __init__(self, code: int, value: int) -> None:
+        self.event = SimpleNamespace(type=2, code=code, value=value)
+
+
+class _TestSynEvent:
+    type = 0
+    code = 0
+    value = 0
+
+
 class _TestInputDevice:
     def __init__(self, events, *, removal_errno: int | None = None) -> None:
         self.path = "/dev/input/event-test"
@@ -158,6 +184,68 @@ class _TestInputDevice:
 
     def close(self) -> None:
         return None
+
+
+class ExtendedMouseTest(unittest.TestCase):
+    def test_move_uses_16_bit_xy_and_8_bit_wheel_pan(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(x=300, y=-300, wheel=1, pan=-1)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0xFF]),
+            ],
+        )
+
+    def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x7F, 0x81]),
+                bytes([0x00, 0x41, 0x1C, 0xBF, 0xE3, 0x49, 0xB7]),
+            ],
+        )
+
+    def test_button_reports_use_one_full_button_byte(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.press(ExtendedMouse.TASK_BUTTON)
+            mouse.release(ExtendedMouse.TASK_BUTTON)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            ],
+        )
 
 
 class ShortcutTogglerTest(unittest.TestCase):
@@ -233,7 +321,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
-    def test_default_layout_uses_strict_keyboard_and_existing_mouse_consumer(
+    def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(
         self,
     ) -> None:
         layout = build_default_layout()
@@ -242,9 +330,10 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         self.assertEqual(
             bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR
         )
-        self.assertEqual(
-            bytes(layout.devices[1].descriptor), bytes(usb_hid.Device.MOUSE.descriptor)
-        )
+        self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
+        self.assertEqual(tuple(layout.devices[1].report_ids), (0,))
+        self.assertEqual(tuple(layout.devices[1].in_report_lengths), (7,))
+        self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
         self.assertEqual(
             bytes(layout.devices[2].descriptor),
             bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor),
@@ -557,6 +646,86 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(relaying_active.is_set())
         self.assertEqual(relay._hid_write_failures, 1)
+
+    async def test_relative_mouse_events_are_coalesced_until_syn_report(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 2),
+                _TestRelEvent(ecodes.REL_Y, -3),
+                _TestRelEvent(ecodes.REL_WHEEL, 1),
+                _TestRelEvent(ecodes.REL_HWHEEL, 1),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(2, -3, 1, 1)])
+
+    async def test_high_resolution_horizontal_wheel_accumulates_fractional_steps(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1)])
+
+    async def test_inactive_relay_discards_pending_mouse_events(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 5),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestKeyEvent(183, _TestKeyEvent.key_down),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        async def deactivate(_event) -> None:
+            relaying_active.clear()
+
+        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+            with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+                with patch(
+                    "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                ):
+                    with patch.object(
+                        relay, "_process_event_with_retry", side_effect=deactivate
+                    ):
+                        async with relay:
+                            await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(5, 0, 0, 0)])
 
 
 class RelayControllerHotplugTest(unittest.TestCase):

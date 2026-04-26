@@ -12,6 +12,12 @@ DEFAULT_KEYBOARD_DESCRIPTOR = bytes.fromhex(
     "0719002aff008100c0"
 )
 
+DEFAULT_MOUSE_DESCRIPTOR = bytes.fromhex(
+    "05010902a1010901a10005091901290815002501950875018102"
+    "05010930093116018026ff7f75109502810609381581257f7508"
+    "95018106050c0a38021581257f750895018106c0c0"
+)
+
 
 class GadgetHidDevice(usb_hid.Device):
     def __init__(
@@ -63,6 +69,9 @@ class GadgetHidDevice(usb_hid.Device):
         subclass: int,
         descriptor: bytes | None = None,
         name: str | None = None,
+        report_ids: Sequence[int] | None = None,
+        in_report_lengths: Sequence[int] | None = None,
+        out_report_lengths: Sequence[int] | None = None,
         wakeup_on_write: bool | None = None,
     ) -> GadgetHidDevice:
         return cls(
@@ -71,9 +80,21 @@ class GadgetHidDevice(usb_hid.Device):
             ),
             usage_page=base_device.usage_page,
             usage=base_device.usage,
-            report_ids=tuple(base_device.report_ids),
-            in_report_lengths=tuple(base_device.in_report_lengths),
-            out_report_lengths=tuple(base_device.out_report_lengths),
+            report_ids=(
+                tuple(base_device.report_ids)
+                if report_ids is None
+                else tuple(report_ids)
+            ),
+            in_report_lengths=(
+                tuple(base_device.in_report_lengths)
+                if in_report_lengths is None
+                else tuple(in_report_lengths)
+            ),
+            out_report_lengths=(
+                tuple(base_device.out_report_lengths)
+                if out_report_lengths is None
+                else tuple(out_report_lengths)
+            ),
             name=base_device.name if name is None else name,
             function_index=function_index,
             protocol=protocol,
@@ -121,6 +142,11 @@ def build_default_layout() -> GadgetLayout:
                 function_index=1,
                 protocol=0,
                 subclass=0,
+                descriptor=DEFAULT_MOUSE_DESCRIPTOR,
+                name="mouse gadget",
+                report_ids=(0,),
+                in_report_lengths=(7,),
+                out_report_lengths=(0,),
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.CONSUMER_CONTROL,

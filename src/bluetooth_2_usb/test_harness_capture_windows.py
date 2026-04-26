@@ -59,6 +59,7 @@ RIM_TYPEHID = 2
 PM_REMOVE = 0x0001
 RI_KEY_BREAK = 0x0001
 RI_MOUSE_WHEEL = 0x0400
+RI_MOUSE_HORIZONTAL_WHEEL = 0x0800
 CW_USEDEFAULT = -2147483648
 GENERIC_DESKTOP_USAGE_PAGE = 0x01
 KEYBOARD_USAGE = 0x06
@@ -482,15 +483,29 @@ def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
     return bytes([0x00, 0x00, hid_code, 0, 0, 0, 0, 0])
 
 
+def _mouse_i16_bytes(value: int) -> bytes:
+    clamped = min(32767, max(-32767, value))
+    return clamped.to_bytes(2, "little", signed=True)
+
+
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
     if button_flags & RI_MOUSE_WHEEL:
         return reports
+    if button_flags & RI_MOUSE_HORIZONTAL_WHEEL:
+        pan = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
+        if pan:
+            reports.append(
+                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, pan & 0xFF])
+            )
+        return reports
     if raw_mouse.lLastX:
-        reports.append(bytes([0x02, 0x00, raw_mouse.lLastX & 0xFF, 0x00, 0x00]))
+        x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
+        reports.append(bytes([0x02, 0x00, *x_bytes, 0x00, 0x00, 0x00, 0x00]))
     if raw_mouse.lLastY:
-        reports.append(bytes([0x02, 0x00, 0x00, raw_mouse.lLastY & 0xFF, 0x00]))
+        y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
+        reports.append(bytes([0x02, 0x00, 0x00, 0x00, *y_bytes, 0x00, 0x00]))
     return reports
 
 

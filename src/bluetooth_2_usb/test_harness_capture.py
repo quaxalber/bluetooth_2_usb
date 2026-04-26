@@ -10,6 +10,14 @@ from adafruit_hid.keycode import Keycode
 
 from .evdev import evdev_to_usb_hid
 from .test_harness_common import (
+    BTN_BACK,
+    BTN_EXTRA,
+    BTN_FORWARD,
+    BTN_LEFT,
+    BTN_MIDDLE,
+    BTN_RIGHT,
+    BTN_SIDE,
+    BTN_TASK,
     DEFAULT_DEVICE_SUBSTRING,
     EXIT_ACCESS,
     EXIT_MISMATCH,
@@ -18,6 +26,8 @@ from .test_harness_common import (
     EXIT_TIMEOUT,
     KEY_VOLUMEDOWN,
     KEY_VOLUMEUP,
+    REL_HWHEEL,
+    REL_WHEEL,
     REL_X,
     REL_Y,
     GadgetNodes,
@@ -43,6 +53,19 @@ CONSUMER_USAGES = {
 REL_NAMES = {
     REL_X: "REL_X",
     REL_Y: "REL_Y",
+    REL_HWHEEL: "REL_HWHEEL",
+    REL_WHEEL: "REL_WHEEL",
+}
+
+MOUSE_BUTTON_BITS = {
+    BTN_LEFT: 0x01,
+    BTN_RIGHT: 0x02,
+    BTN_MIDDLE: 0x04,
+    BTN_SIDE: 0x08,
+    BTN_EXTRA: 0x10,
+    BTN_FORWARD: 0x20,
+    BTN_BACK: 0x40,
+    BTN_TASK: 0x80,
 }
 
 
@@ -168,6 +191,7 @@ class MouseSequenceMatcher:
     expected_button_steps: tuple
     rel_index: int = 0
     button_index: int = 0
+    _button_state: int = 0
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
@@ -184,11 +208,7 @@ class MouseSequenceMatcher:
             raise CaptureMismatchError(
                 f"Unexpected mouse report format: {report.hex(sep=' ')}"
             )
-        buttons, rel_x, rel_y, wheel = parsed
-        if wheel != 0:
-            raise CaptureMismatchError(
-                f"Unexpected mouse wheel movement in report {report.hex(sep=' ')}"
-            )
+        buttons, rel_x, rel_y, wheel, pan = parsed
         if not self.expected_button_steps and buttons != 0:
             raise CaptureMismatchError(
                 f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
@@ -198,13 +218,12 @@ class MouseSequenceMatcher:
             self._apply_rel(REL_X, rel_x)
         if rel_y:
             self._apply_rel(REL_Y, rel_y)
+        if wheel:
+            self._apply_rel(REL_WHEEL, wheel)
+        if pan:
+            self._apply_rel(REL_HWHEEL, pan)
 
-        if buttons not in (0, 1, 2):
-            raise CaptureMismatchError(
-                f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
-            )
-
-        if rel_x == 0 and rel_y == 0:
+        if rel_x == 0 and rel_y == 0 and wheel == 0 and pan == 0:
             if self.button_index >= len(self.expected_button_steps):
                 if buttons == 0:
                     return
@@ -220,11 +239,24 @@ class MouseSequenceMatcher:
                 return
 
             expected = self.expected_button_steps[self.button_index]
-            if buttons != expected.value:
+            expected_buttons = self._apply_button_step(expected)
+            if buttons != expected_buttons:
                 raise CaptureMismatchError(
                     f"Unexpected mouse button report {report.hex(sep=' ')}; expected {expected.describe()}"
                 )
             self.button_index += 1
+
+    def _apply_button_step(self, expected) -> int:
+        button_bit = MOUSE_BUTTON_BITS.get(expected.code)
+        if button_bit is None:
+            raise CaptureMismatchError(
+                f"Expected mouse button step {expected.describe()} is not mappable to HID"
+            )
+        if expected.value == 1:
+            self._button_state |= button_bit
+        elif expected.value == 0:
+            self._button_state &= ~button_bit
+        return self._button_state
 
     def _apply_rel(self, code: int, value: int) -> None:
         if self.rel_index >= len(self.expected_rel_steps):
@@ -308,10 +340,17 @@ def _normalize_keyboard_report(report: bytes) -> bytes | None:
     return None
 
 
-def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
+def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | None:
     payload = report
     wheel = 0
-    if len(report) == 5 and report[0] == 0x02:
+    pan = 0
+    if len(report) == 8 and report[0] == 0x02:
+        payload = report[1:]
+    elif len(report) == 7:
+        payload = report
+    elif len(report) == 6 and report[0] == 0x02:
+        payload = report[1:]
+    elif len(report) == 5 and report[0] == 0x02:
         payload = report[1:]
     elif len(report) == 4 and report[0] == 0x02:
         payload = report[1:]
@@ -323,11 +362,18 @@ def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
         return None
 
     buttons = payload[0]
+    if len(payload) == 7:
+        rel_x = int.from_bytes(payload[1:3], "little", signed=True)
+        rel_y = int.from_bytes(payload[3:5], "little", signed=True)
+        wheel = int.from_bytes(payload[5:6], "little", signed=True)
+        pan = int.from_bytes(payload[6:7], "little", signed=True)
+        return buttons, rel_x, rel_y, wheel, pan
+
     rel_x = int.from_bytes(payload[1:2], "little", signed=True)
     rel_y = int.from_bytes(payload[2:3], "little", signed=True)
     if len(payload) >= 4:
         wheel = int.from_bytes(payload[3:4], "little", signed=True)
-    return buttons, rel_x, rel_y, wheel
+    return buttons, rel_x, rel_y, wheel, pan
 
 
 def _normalize_consumer_report(report: bytes) -> int | None:
