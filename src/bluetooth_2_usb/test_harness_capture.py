@@ -192,13 +192,12 @@ class MouseSequenceMatcher:
     rel_index: int = 0
     button_index: int = 0
     _button_state: int = 0
-    _pending_rel_remaining_by_code: dict[int, list[int]] = field(init=False, repr=False)
+    _pending_rel_remaining: list[list[int]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        pending: dict[int, list[int]] = {}
-        for step in self.expected_rel_steps:
-            pending.setdefault(step.code, []).append(step.value)
-        self._pending_rel_remaining_by_code = pending
+        self._pending_rel_remaining = [
+            [step.code, step.value] for step in self.expected_rel_steps
+        ]
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
@@ -221,14 +220,17 @@ class MouseSequenceMatcher:
                 f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
             )
 
+        rel_events = []
         if rel_x:
-            self._apply_rel(REL_X, rel_x)
+            rel_events.append((REL_X, rel_x))
         if rel_y:
-            self._apply_rel(REL_Y, rel_y)
+            rel_events.append((REL_Y, rel_y))
         if wheel:
-            self._apply_rel(REL_WHEEL, wheel)
+            rel_events.append((REL_WHEEL, wheel))
         if pan:
-            self._apply_rel(REL_HWHEEL, pan)
+            rel_events.append((REL_HWHEEL, pan))
+        if rel_events:
+            self._apply_rel_report(rel_events)
 
         if rel_x == 0 and rel_y == 0 and wheel == 0 and pan == 0:
             if self.button_index >= len(self.expected_button_steps):
@@ -265,14 +267,28 @@ class MouseSequenceMatcher:
             self._button_state &= ~button_bit
         return self._button_state
 
-    def _apply_rel(self, code: int, value: int) -> None:
-        remaining_by_code = self._pending_rel_remaining_by_code.get(code)
-        if not remaining_by_code:
+    def _apply_rel_report(self, rel_events: list[tuple[int, int]]) -> None:
+        report_codes = {code for code, _value in rel_events}
+        for code, value in rel_events:
+            self._apply_rel(code, value, report_codes)
+
+    def _apply_rel(self, code: int, value: int, report_codes: set[int]) -> None:
+        pending_index = self._find_pending_rel_index(code, report_codes)
+        if pending_index is None:
+            expected = (
+                self._pending_rel_remaining[0] if self._pending_rel_remaining else None
+            )
+            expected_label = (
+                f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}"
+                if expected
+                else ""
+            )
             raise CaptureMismatchError(
-                f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
+                "Unexpected mouse relative event "
+                f"{REL_NAMES.get(code, code)}={value}{expected_label}"
             )
 
-        remaining = remaining_by_code[0]
+        remaining = self._pending_rel_remaining[pending_index][1]
         if not _same_direction(remaining, value):
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
@@ -290,9 +306,17 @@ class MouseSequenceMatcher:
         remaining -= value
         if remaining == 0:
             self.rel_index += 1
-            remaining_by_code.pop(0)
+            self._pending_rel_remaining.pop(pending_index)
         else:
-            remaining_by_code[0] = remaining
+            self._pending_rel_remaining[pending_index][1] = remaining
+
+    def _find_pending_rel_index(self, code: int, report_codes: set[int]) -> int | None:
+        for index, (pending_code, _remaining) in enumerate(self._pending_rel_remaining):
+            if pending_code not in report_codes:
+                break
+            if pending_code == code:
+                return index
+        return None
 
     @property
     def rel_complete(self) -> bool:

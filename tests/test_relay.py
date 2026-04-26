@@ -229,6 +229,29 @@ class ExtendedMouseTest(unittest.TestCase):
             ],
         )
 
+    def test_move_accumulates_fractional_wheel_across_calls(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(wheel=0.5)
+            mouse.move(wheel=0.5)
+            mouse.move(wheel=-0.5)
+            mouse.move(wheel=-0.5)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]),
+            ],
+        )
+
     def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
         device = SimpleNamespace(sent=[])
 
@@ -794,11 +817,11 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
 
         output = "\n".join(logs.output)
         self.assertIn(
-            "Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0 pan=0.0",
+            "Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0.0 pan=0.0",
             output,
         )
         self.assertIn(
-            "Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0 pan=0.0",
+            "Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0.0 pan=0.0",
             output,
         )
         self.assertIn(
@@ -806,7 +829,7 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             output,
         )
         self.assertIn(
-            "Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0 pan=-0.5",
+            "Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0.0 pan=-0.5",
             output,
         )
 

@@ -488,6 +488,14 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
             matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
 
+    def test_mouse_matcher_rejects_cross_axis_reordering_between_reports(
+        self,
+    ) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+
+        with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
+            matcher.handle(bytes([0x02, 0x00, 0x00, 0x01, 0x00]))
+
     def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 
