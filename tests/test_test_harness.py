@@ -447,41 +447,10 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
-        matcher.handle(bytes([0x02, 0x00, 0x01, 0x00, 0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0x01, 0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0xFF, 0x00]))
-
-        self.assertTrue(matcher.complete)
-
-    def test_mouse_matcher_accepts_compact_report_id_format(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
-
-        matcher.handle(bytes([0x02, 0x00, 0x01, 0x00]))
-        matcher.handle(bytes([0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00]))
-        matcher.handle(bytes([0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0x01]))
-        matcher.handle(bytes([0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0xFF]))
-
-        self.assertTrue(matcher.complete)
-
-    def test_mouse_matcher_accepts_compact_report_id_pan_format(self) -> None:
-        matcher = MouseSequenceMatcher.create(
-            (ExpectedEvent(EV_REL, REL_HWHEEL, 1),), ()
-        )
-
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]))
-
-        self.assertTrue(matcher.complete)
-
-    def test_mouse_matcher_accepts_compact_unnumbered_pan_format(self) -> None:
-        matcher = MouseSequenceMatcher.create(
-            (ExpectedEvent(EV_REL, REL_HWHEEL, 1),), ()
-        )
-
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x01]))
+        matcher.handle(self._extended_mouse_report(x=1))
+        matcher.handle(self._extended_mouse_report(x=-1))
+        matcher.handle(self._extended_mouse_report(y=1))
+        matcher.handle(self._extended_mouse_report(y=-1))
 
         self.assertTrue(matcher.complete)
 
@@ -489,13 +458,13 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
-            matcher.handle(bytes([0x02, 0x02, 0, 0, 0]))
+            matcher.handle(bytes([0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
-            matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
+            matcher.handle(self._extended_mouse_report(x=-1))
 
     def test_mouse_matcher_rejects_cross_axis_reordering_between_reports(
         self,
@@ -503,7 +472,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
-            matcher.handle(bytes([0x02, 0x00, 0x00, 0x01, 0x00]))
+            matcher.handle(self._extended_mouse_report(y=1))
 
     def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
@@ -715,7 +684,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
             [
-                bytes([0x02, 0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00]),
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00]),
             ],
         )
 
@@ -725,7 +694,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
-            [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
         )
 
     def test_mouse_event_to_reports_tracks_button_state(self) -> None:
@@ -734,21 +703,21 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
         self.assertEqual(
             _mouse_event_to_reports(left_button_down),
-            [bytes([0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         move_while_pressed = RAWMOUSE()
         move_while_pressed.lLastX = 1
         self.assertEqual(
             _mouse_event_to_reports(move_while_pressed),
-            [bytes([0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         left_button_up = RAWMOUSE()
         left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
         self.assertEqual(
             _mouse_event_to_reports(left_button_up),
-            [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
     def test_mouse_event_to_reports_tracks_windows_extra_button_state(self) -> None:
@@ -757,28 +726,28 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
         self.assertEqual(
             _mouse_event_to_reports(button_4_down),
-            [bytes([0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         button_5_down = RAWMOUSE()
         button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
         self.assertEqual(
             _mouse_event_to_reports(button_5_down),
-            [bytes([0x02, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         button_4_up = RAWMOUSE()
         button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
         self.assertEqual(
             _mouse_event_to_reports(button_4_up),
-            [bytes([0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         button_5_up = RAWMOUSE()
         button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
         self.assertEqual(
             _mouse_event_to_reports(button_5_up),
-            [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
     def test_mouse_event_to_reports_keeps_wheel_and_motion_reports(self) -> None:
@@ -790,7 +759,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
             [
-                bytes([0x02, 0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00]),
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00]),
             ],
         )
 
@@ -803,7 +772,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
             [
-                bytes([0x02, 0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF]),
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF]),
             ],
         )
 

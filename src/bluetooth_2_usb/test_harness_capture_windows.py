@@ -569,7 +569,6 @@ def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
         reports.append(
             bytes(
                 [
-                    0x02,
                     _mouse_button_state,
                     *x_bytes,
                     *y_bytes,
@@ -579,9 +578,7 @@ def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
             )
         )
     if button_changed and not reports:
-        reports.append(
-            bytes([0x02, _mouse_button_state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        )
+        reports.append(bytes([_mouse_button_state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
     return reports
 
 

@@ -392,42 +392,14 @@ def _normalize_keyboard_report(report: bytes) -> bytes | None:
 
 
 def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | None:
-    payload = report
-    wheel = 0
-    pan = 0
-    if len(report) == 8 and report[0] == 0x02:
-        payload = report[1:]
-    elif len(report) == 7:
-        payload = report
-    elif len(report) == 6 and report[0] == 0x02:
-        payload = report[1:]
-    elif len(report) == 5 and report[0] == 0x02:
-        payload = report[1:]
-    elif len(report) == 5:
-        payload = report
-    elif len(report) == 4 and report[0] == 0x02:
-        payload = report[1:]
-    elif len(report) == 4:
-        payload = report
-    elif len(report) == 3:
-        payload = report
-    else:
+    if len(report) != 7:
         return None
 
-    buttons = payload[0]
-    if len(payload) == 7:
-        rel_x = int.from_bytes(payload[1:3], "little", signed=True)
-        rel_y = int.from_bytes(payload[3:5], "little", signed=True)
-        wheel = int.from_bytes(payload[5:6], "little", signed=True)
-        pan = int.from_bytes(payload[6:7], "little", signed=True)
-        return buttons, rel_x, rel_y, wheel, pan
-
-    rel_x = int.from_bytes(payload[1:2], "little", signed=True)
-    rel_y = int.from_bytes(payload[2:3], "little", signed=True)
-    if len(payload) >= 4:
-        wheel = int.from_bytes(payload[3:4], "little", signed=True)
-    if len(payload) >= 5:
-        pan = int.from_bytes(payload[4:5], "little", signed=True)
+    buttons = report[0]
+    rel_x = int.from_bytes(report[1:3], "little", signed=True)
+    rel_y = int.from_bytes(report[3:5], "little", signed=True)
+    wheel = int.from_bytes(report[5:6], "little", signed=True)
+    pan = int.from_bytes(report[6:7], "little", signed=True)
     return buttons, rel_x, rel_y, wheel, pan
 
 
