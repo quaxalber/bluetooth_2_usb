@@ -145,7 +145,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
 
 class _HelpAction(argparse._HelpAction):
-    def __call__(self, parser, namespace, values, option_string=None) -> None:
+    def __call__(self, parser, _namespace, _values, _option_string=None) -> None:
         parser.print_help()
         parser.exit()
 

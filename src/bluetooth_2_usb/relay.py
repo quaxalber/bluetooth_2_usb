@@ -24,8 +24,8 @@ except ModuleNotFoundError:
             self.uniq = uniq
 
         async def async_read_loop(self):
-            if False:
-                yield None
+            for event in ():
+                yield event
             return
 
         def close(self) -> None:
@@ -764,7 +764,7 @@ class DeviceRelay:
                 _logger.warning(f"Could not grab {self._input_device.path}: {ex}")
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> bool:
         """
         Async context manager exit. Ungrabs the device if we grabbed it.
 
@@ -1044,24 +1044,12 @@ def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:
     :raises BlockingIOError: If HID device write is blocked
     """
     if isinstance(event, RelEvent):
-        move_mouse(event, gadget_manager)
+        mouse = gadget_manager.get_mouse()
+        if mouse is None:
+            raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
+        mouse.move(*get_mouse_movement(event))
     elif isinstance(event, KeyEvent):
         send_key_event(event, gadget_manager)
-
-
-def move_mouse(event: RelEvent, gadget_manager: GadgetManager) -> None:
-    """
-    Relay relative mouse movement events to the USB HID Mouse gadget.
-
-    :param event: A RelEvent describing the movement
-    :param gadget_manager: GadgetManager with Mouse reference
-    :raises RuntimeError: If Mouse gadget is not available
-    """
-    mouse = gadget_manager.get_mouse()
-    if mouse is None:
-        raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
-
-    mouse.move(*get_mouse_movement(event))
 
 
 def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
@@ -1147,7 +1135,7 @@ class RuntimeMonitor:
         _logger.debug("RuntimeMonitor started.")
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
         self._stop_event.set()
         self.observer.stop()
         if self._task:

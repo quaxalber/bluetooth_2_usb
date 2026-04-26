@@ -182,7 +182,7 @@ class GadgetHidDevice(usb_hid.Device):
             ),
         )
 
-    def get_device_path(self, report_id=None):
+    def get_device_path(self, _report_id=None):
         function_root = (
             Path(usb_hid.gadget_root) / f"functions/hid.usb{self.function_index}"
         )
