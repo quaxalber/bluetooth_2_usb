@@ -14,6 +14,12 @@ This validates the path:
 
 `Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
+By default, run only the lower-risk scenarios: `keyboard`, `mouse`,
+`mouse_fast`, `combo`, and `consumer`. These avoid left, right, middle, and task
+mouse button down events. Run `mouse_buttons_intrusive` only when you
+intentionally want full live button-bit validation and can tolerate possible
+host UI interaction.
+
 ## Preconditions
 
 - the Pi is connected to the host through the OTG-capable data path
@@ -148,10 +154,7 @@ sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_fast
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit vertical wheel and horizontal pan.
 
-The default `mouse` and `combo` scenarios avoid left, right, middle, and task
-button down events to reduce accidental host UI interaction during live
-validation. To validate all eight button bits, run the explicit intrusive
-button scenario:
+To validate all eight button bits, run the explicit intrusive button scenario:
 
 ```bash
 ./scripts/loopback-capture.sh --scenario mouse_buttons_intrusive
