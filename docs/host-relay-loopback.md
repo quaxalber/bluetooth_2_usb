@@ -129,8 +129,8 @@ and emits this deterministic sequence:
 - keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
 - mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
   `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`,
-  one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then all
-  eight mouse button bits press/release
+  one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then
+  side/extra/forward/back mouse button bits press/release
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
 and high-res evdev events in the same `SYN_REPORT` frame. The host capture
@@ -147,6 +147,16 @@ sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_fast
 
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit vertical wheel and horizontal pan.
+
+The default `mouse` and `combo` scenarios avoid left, right, middle, and task
+button down events to reduce accidental host UI interaction during live
+validation. To validate all eight button bits, run the explicit intrusive
+button scenario:
+
+```bash
+./scripts/loopback-capture.sh --scenario mouse_buttons_intrusive
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_buttons_intrusive
+```
 
 ## 4. Success criteria
 

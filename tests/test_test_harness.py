@@ -38,6 +38,7 @@ from bluetooth_2_usb.test_harness_common import (
     FAST_MOUSE_REL_STEPS,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
+    SAFE_MOUSE_BUTTON_STEPS,
     SCENARIOS,
     TEXT_BURST_STEPS,
     HarnessBusyError,
@@ -86,8 +87,16 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(combo.required_nodes, ("keyboard", "mouse"))
         self.assertEqual(len(combo.keyboard_steps), 6)
         self.assertEqual(len(combo.mouse_rel_steps), 11)
-        self.assertEqual(len(combo.mouse_button_steps), 16)
+        self.assertEqual(combo.mouse_button_steps, SAFE_MOUSE_BUTTON_STEPS)
+        self.assertEqual(len(combo.mouse_button_steps), 8)
         self.assertEqual(combo.mouse_coalesced_tail_count, 3)
+
+    def test_intrusive_mouse_button_scenario_contains_all_button_bits(self) -> None:
+        scenario = SCENARIOS["mouse_buttons_intrusive"]
+
+        self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertEqual(scenario.mouse_button_steps, MOUSE_BUTTON_STEPS)
+        self.assertEqual(len(scenario.mouse_button_steps), 16)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
@@ -108,7 +117,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
-            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, mouse_fast, combo, consumer, text_burst",
+            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, mouse_fast, mouse_buttons_intrusive, combo, consumer, text_burst",
         ):
             get_scenario("nope")
 

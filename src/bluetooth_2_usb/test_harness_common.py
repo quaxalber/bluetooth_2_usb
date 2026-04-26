@@ -98,6 +98,7 @@ SCENARIO_NAMES = (
     "keyboard",
     "mouse",
     "mouse_fast",
+    "mouse_buttons_intrusive",
     "combo",
     "consumer",
     "text_burst",
@@ -324,6 +325,17 @@ MOUSE_BUTTON_STEPS = (
     ExpectedEvent(EV_KEY, BTN_TASK, 0),
 )
 
+SAFE_MOUSE_BUTTON_STEPS = (
+    ExpectedEvent(EV_KEY, BTN_SIDE, 1),
+    ExpectedEvent(EV_KEY, BTN_SIDE, 0),
+    ExpectedEvent(EV_KEY, BTN_EXTRA, 1),
+    ExpectedEvent(EV_KEY, BTN_EXTRA, 0),
+    ExpectedEvent(EV_KEY, BTN_FORWARD, 1),
+    ExpectedEvent(EV_KEY, BTN_FORWARD, 0),
+    ExpectedEvent(EV_KEY, BTN_BACK, 1),
+    ExpectedEvent(EV_KEY, BTN_BACK, 0),
+)
+
 CONSUMER_STEPS = (
     ExpectedEvent(EV_KEY, KEY_VOLUMEUP, 1),
     ExpectedEvent(EV_KEY, KEY_VOLUMEUP, 0),
@@ -403,7 +415,7 @@ SCENARIOS = {
         name="mouse",
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=MOUSE_BUTTON_STEPS,
+        mouse_button_steps=SAFE_MOUSE_BUTTON_STEPS,
         consumer_steps=(),
         mouse_coalesced_tail_count=3,
     ),
@@ -414,11 +426,18 @@ SCENARIOS = {
         mouse_button_steps=(),
         consumer_steps=(),
     ),
+    "mouse_buttons_intrusive": ScenarioDefinition(
+        name="mouse_buttons_intrusive",
+        keyboard_steps=(),
+        mouse_rel_steps=(),
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
+        consumer_steps=(),
+    ),
     "combo": ScenarioDefinition(
         name="combo",
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=MOUSE_BUTTON_STEPS,
+        mouse_button_steps=SAFE_MOUSE_BUTTON_STEPS,
         consumer_steps=(),
         mouse_coalesced_tail_count=3,
     ),
