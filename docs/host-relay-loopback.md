@@ -46,38 +46,6 @@ sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 ```
 
-Before running the loopback harness, the Pi must be running a managed install
-rebuilt from the exact tree under test. If the code is already pushed, install
-from the exact commit and verify the checkout SHA:
-
-```bash
-commit_sha="$(git rev-parse HEAD)"
-git push origin <branch-name>
-ssh <pi-host> "
-  sudo git -C /opt/bluetooth_2_usb fetch origin <branch-name> &&
-  sudo git -C /opt/bluetooth_2_usb checkout ${commit_sha} &&
-  sudo /opt/bluetooth_2_usb/scripts/install.sh &&
-  test \"\$(git -C /opt/bluetooth_2_usb rev-parse HEAD)\" = \"${commit_sha}\"
-"
-```
-
-If the local tree is intentionally ahead of the pushed branch, it is acceptable
-to `rsync` that tree to the Pi for debugging. After the copy, rerun the
-installer from the rsynced tree before starting capture/inject:
-
-```bash
-rsync -a --delete --exclude .git --exclude venv ./ <pi-host>:/tmp/bluetooth_2_usb/
-ssh <pi-host> '
-  sudo rsync -a --delete /tmp/bluetooth_2_usb/ /opt/bluetooth_2_usb/ &&
-  sudo /opt/bluetooth_2_usb/scripts/install.sh &&
-  /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --version
-'
-```
-
-Only treat loopback results as final validation after the service, scripts, and
-managed Python package have been rebuilt from the same tree being tested. For PR
-validation, push that tree before reporting the result.
-
 ## 1. Confirm host-side enumeration
 
 On Linux:
