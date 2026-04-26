@@ -87,6 +87,8 @@ KEYBOARD_USAGE = 0x06
 MOUSE_USAGE = 0x02
 CONSUMER_USAGE_PAGE = 0x0C
 CONSUMER_USAGE = 0x01
+HID_MOUSE_I16_MIN = -32767
+HID_MOUSE_I16_MAX = 32767
 VK_F13 = 0x7C
 VK_F14 = 0x7D
 VK_F15 = 0x7E
@@ -522,7 +524,7 @@ def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
 
 
 def _mouse_i16_bytes(value: int) -> bytes:
-    clamped = min(32767, max(-32767, value))
+    clamped = min(HID_MOUSE_I16_MAX, max(HID_MOUSE_I16_MIN, value))
     return clamped.to_bytes(2, "little", signed=True)
 
 

@@ -700,6 +700,18 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             ],
         )
 
+    def test_mouse_event_to_reports_clamps_xy_to_descriptor_bounds(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.lLastX = 40000
+        raw_mouse.lLastY = -40000
+
+        self.assertEqual(
+            _mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00]),
+            ],
+        )
+
     def test_mouse_event_to_reports_builds_horizontal_pan_reports(self) -> None:
         raw_mouse = RAWMOUSE()
         raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
