@@ -27,12 +27,6 @@ from bluetooth_2_usb.test_harness_capture_windows import (
     RI_MOUSE_LEFT_BUTTON_DOWN,
     RI_MOUSE_LEFT_BUTTON_UP,
     RI_MOUSE_WHEEL,
-    _device_matches_candidate,
-    _extract_device_identities,
-    _keyboard_event_to_report,
-    _mouse_event_to_reports,
-    _reset_mouse_button_state,
-    _stable_device_identity,
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
@@ -125,11 +119,13 @@ class ScenarioDefinitionTest(unittest.TestCase):
         )
 
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
-        with self.assertRaisesRegex(
-            ValueError,
-            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, mouse_fast, mouse_buttons_intrusive, combo, consumer, text_burst",
-        ):
+        with self.assertRaises(ValueError) as error:
             get_scenario("nope")
+
+        self.assertEqual(
+            str(error.exception),
+            f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}",
+        )
 
     def test_text_burst_scenario_is_keyboard_only_and_contains_shifted_steps(
         self,
@@ -622,11 +618,11 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
     def setUp(self) -> None:
-        _reset_mouse_button_state()
+        test_harness_capture_windows._reset_mouse_button_state()
 
     def test_extract_device_identities_collapses_windows_hid_paths(self) -> None:
         self.assertEqual(
-            _extract_device_identities(
+            test_harness_capture_windows._extract_device_identities(
                 (
                     r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{GUID}",
                     r"\\?\hid#vid_1d6b&pid_0104&mi_00#9&314c2078&0&0000#{guid}",
@@ -637,7 +633,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_matches_candidate_on_same_hid_instance_identity(self) -> None:
         self.assertTrue(
-            _device_matches_candidate(
+            test_harness_capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
             )
@@ -645,13 +641,13 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_stable_device_identity_ignores_guid_and_suffix_differences(self) -> None:
         self.assertEqual(
-            _stable_device_identity(
+            test_harness_capture_windows._stable_device_identity(
                 r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}\KBD"
             ),
             r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
         )
         self.assertEqual(
-            _stable_device_identity(
+            test_harness_capture_windows._stable_device_identity(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{884b96c3-56ef-11d1-bc8c-00a0c91405dd}"
             ),
             r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
@@ -659,7 +655,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_matches_candidate_on_shared_hid_instance_identity(self) -> None:
         self.assertTrue(
-            _device_matches_candidate(
+            test_harness_capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",),
             )
@@ -667,7 +663,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_does_not_match_different_hid_instance_identity(self) -> None:
         self.assertFalse(
-            _device_matches_candidate(
+            test_harness_capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (
                     r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",
@@ -677,16 +673,24 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
-            _keyboard_event_to_report(0x7C, is_key_up=False),
+            test_harness_capture_windows._keyboard_event_to_report(
+                0x7C, is_key_up=False
+            ),
             bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]),
         )
         self.assertEqual(
-            _keyboard_event_to_report(0x7C, is_key_up=True),
+            test_harness_capture_windows._keyboard_event_to_report(
+                0x7C, is_key_up=True
+            ),
             bytes([0x00] * 8),
         )
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
-        self.assertIsNone(_keyboard_event_to_report(0x41, is_key_up=False))
+        self.assertIsNone(
+            test_harness_capture_windows._keyboard_event_to_report(
+                0x41, is_key_up=False
+            )
+        )
 
     def test_mouse_event_to_reports_builds_16_bit_xy_reports(self) -> None:
         raw_mouse = RAWMOUSE()
@@ -694,7 +698,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            _mouse_event_to_reports(raw_mouse),
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
             [
                 bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00]),
             ],
@@ -706,7 +710,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -40000
 
         self.assertEqual(
-            _mouse_event_to_reports(raw_mouse),
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
             [
                 bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00]),
             ],
@@ -717,60 +721,60 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
 
         self.assertEqual(
-            _mouse_event_to_reports(raw_mouse),
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
             [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
         )
 
     def test_mouse_event_to_reports_tracks_button_state(self) -> None:
-        _reset_mouse_button_state()
+        test_harness_capture_windows._reset_mouse_button_state()
         left_button_down = RAWMOUSE()
         left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
         self.assertEqual(
-            _mouse_event_to_reports(left_button_down),
+            test_harness_capture_windows._mouse_event_to_reports(left_button_down),
             [bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         move_while_pressed = RAWMOUSE()
         move_while_pressed.lLastX = 1
         self.assertEqual(
-            _mouse_event_to_reports(move_while_pressed),
+            test_harness_capture_windows._mouse_event_to_reports(move_while_pressed),
             [bytes([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         left_button_up = RAWMOUSE()
         left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
         self.assertEqual(
-            _mouse_event_to_reports(left_button_up),
+            test_harness_capture_windows._mouse_event_to_reports(left_button_up),
             [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
     def test_mouse_event_to_reports_tracks_windows_extra_button_state(self) -> None:
-        _reset_mouse_button_state()
+        test_harness_capture_windows._reset_mouse_button_state()
         button_4_down = RAWMOUSE()
         button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
         self.assertEqual(
-            _mouse_event_to_reports(button_4_down),
+            test_harness_capture_windows._mouse_event_to_reports(button_4_down),
             [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         button_5_down = RAWMOUSE()
         button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
         self.assertEqual(
-            _mouse_event_to_reports(button_5_down),
+            test_harness_capture_windows._mouse_event_to_reports(button_5_down),
             [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         button_4_up = RAWMOUSE()
         button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
         self.assertEqual(
-            _mouse_event_to_reports(button_4_up),
+            test_harness_capture_windows._mouse_event_to_reports(button_4_up),
             [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
         button_5_up = RAWMOUSE()
         button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
         self.assertEqual(
-            _mouse_event_to_reports(button_5_up),
+            test_harness_capture_windows._mouse_event_to_reports(button_5_up),
             [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
         )
 
@@ -781,7 +785,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            _mouse_event_to_reports(raw_mouse),
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
             [
                 bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00]),
             ],
@@ -794,7 +798,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            _mouse_event_to_reports(raw_mouse),
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
             [
                 bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF]),
             ],
