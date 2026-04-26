@@ -151,8 +151,10 @@ def build_default_layout() -> GadgetLayout:
                 report_ids=(0,),
                 in_report_lengths=(7,),
                 out_report_lengths=(0,),
-                # dwc2/configfs emits an extra empty interrupt-IN completion when
-                # report_length exactly matches this full-size mouse payload.
+                # Keep the HID input report at 7 bytes, but make the configfs
+                # request size larger so each write is a short packet. On Pi
+                # dwc2 this avoids an extra empty interrupt-IN completion after
+                # every full-size mouse report.
                 configfs_report_length=8,
             ),
             GadgetHidDevice.from_existing(
