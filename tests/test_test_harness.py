@@ -87,6 +87,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(len(combo.keyboard_steps), 6)
         self.assertEqual(len(combo.mouse_rel_steps), 11)
         self.assertEqual(len(combo.mouse_button_steps), 16)
+        self.assertEqual(combo.mouse_coalesced_tail_count, 3)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
@@ -99,6 +100,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(scenario.required_nodes, ("mouse",))
         self.assertEqual(scenario.mouse_rel_steps, FAST_MOUSE_REL_STEPS)
+        self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
         self.assertGreater(
             max(abs(step.value) for step in scenario.mouse_rel_steps), 32767
         )

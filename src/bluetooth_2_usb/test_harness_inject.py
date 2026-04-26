@@ -157,11 +157,18 @@ def run_inject(
             time.sleep(COMBO_MOUSE_DELAY_MS / 1000.0)
 
         if mouse is not None:
-            for step_event in scenario.mouse_rel_steps[:-3]:
+            coalesced_tail_count = scenario.mouse_coalesced_tail_count
+            individual_steps = scenario.mouse_rel_steps
+            coalesced_steps = ()
+            if coalesced_tail_count:
+                individual_steps = scenario.mouse_rel_steps[:-coalesced_tail_count]
+                coalesced_steps = scenario.mouse_rel_steps[-coalesced_tail_count:]
+
+            for step_event in individual_steps:
                 _send_mouse_rel_step(mouse, step_event, event_gap_ms)
-            for step_event in scenario.mouse_rel_steps[-3:]:
+            for step_event in coalesced_steps:
                 _write_mouse_rel_step(mouse, step_event)
-            if scenario.mouse_rel_steps[-3:]:
+            if coalesced_steps:
                 mouse.syn()
                 time.sleep(event_gap_ms / 1000.0)
             for step_event in scenario.mouse_button_steps:

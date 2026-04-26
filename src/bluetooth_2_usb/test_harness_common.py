@@ -245,6 +245,7 @@ class ScenarioDefinition:
     mouse_rel_steps: tuple[ExpectedEvent, ...]
     mouse_button_steps: tuple[ExpectedEvent, ...]
     consumer_steps: tuple[ExpectedEvent, ...]
+    mouse_coalesced_tail_count: int = 0
 
     @property
     def keyboard_enabled(self) -> bool:
@@ -404,6 +405,7 @@ SCENARIOS = {
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
+        mouse_coalesced_tail_count=3,
     ),
     "mouse_fast": ScenarioDefinition(
         name="mouse_fast",
@@ -418,6 +420,7 @@ SCENARIOS = {
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
+        mouse_coalesced_tail_count=3,
     ),
     "consumer": ScenarioDefinition(
         name="consumer",
@@ -506,6 +509,7 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
             event_to_dict(step) for step in scenario.mouse_button_steps
         ],
         "consumer_steps": [event_to_dict(step) for step in scenario.consumer_steps],
+        "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
     }
 
 
