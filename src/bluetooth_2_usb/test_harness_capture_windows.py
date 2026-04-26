@@ -491,15 +491,17 @@ def _mouse_i16_bytes(value: int) -> bytes:
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
+    wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
     if button_flags & RI_MOUSE_WHEEL:
-        return reports
-    if button_flags & RI_MOUSE_HORIZONTAL_WHEEL:
-        pan = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
-        if pan:
+        if wheel_value:
             reports.append(
-                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, pan & 0xFF])
+                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, wheel_value & 0xFF, 0x00])
             )
-        return reports
+    if button_flags & RI_MOUSE_HORIZONTAL_WHEEL:
+        if wheel_value:
+            reports.append(
+                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, wheel_value & 0xFF])
+            )
     if raw_mouse.lLastX:
         x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
         reports.append(bytes([0x02, 0x00, *x_bytes, 0x00, 0x00, 0x00, 0x00]))

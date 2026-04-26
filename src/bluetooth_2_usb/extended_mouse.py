@@ -28,6 +28,7 @@ class ExtendedMouse:
         if not self._mouse_device:
             raise ValueError("Could not find matching mouse HID device.")
         self.report = bytearray(7)
+        self._pan_remainder = 0.0
 
     def __str__(self):
         return str(self._mouse_device)
@@ -45,7 +46,9 @@ class ExtendedMouse:
         self._send_no_move()
 
     def move(self, x: int = 0, y: int = 0, wheel: int = 0, pan: float = 0) -> None:
-        pan = int(pan)
+        pan_total = self._pan_remainder + pan
+        pan = int(pan_total)
+        self._pan_remainder = pan_total - pan
         while x != 0 or y != 0 or wheel != 0 or pan != 0:
             partial_x = _clamp_hid_i16(x)
             partial_y = _clamp_hid_i16(y)

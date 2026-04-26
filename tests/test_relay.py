@@ -206,6 +206,29 @@ class ExtendedMouseTest(unittest.TestCase):
             ],
         )
 
+    def test_move_accumulates_fractional_pan_across_calls(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(pan=0.5)
+            mouse.move(pan=0.5)
+            mouse.move(pan=-0.5)
+            mouse.move(pan=-0.5)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]),
+            ],
+        )
+
     def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
         device = SimpleNamespace(sent=[])
 

@@ -8,6 +8,7 @@ import stat
 import threading
 import time
 from asyncio import Task, TaskGroup
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -232,8 +233,8 @@ class GadgetManager:
         """
         Get the Mouse gadget.
 
-        :return: A Mouse object, or None if not initialized
-        :rtype: Mouse | None
+        :return: An ExtendedMouse object, or None if not initialized
+        :rtype: ExtendedMouse | None
         """
         return self._gadgets["mouse"]
 
@@ -915,39 +916,15 @@ class DeviceRelay:
     async def _process_mouse_delta_with_retry(
         self, x: int, y: int, wheel: int, pan: int
     ) -> None:
-        max_tries = self.HID_WRITE_MAX_TRIES
-        retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
-        for attempt in range(1, max_tries + 1):
-            try:
-                mouse = self._gadget_manager.get_mouse()
-                if mouse is None:
-                    raise RuntimeError(
-                        "Mouse gadget not initialized or manager not enabled."
-                    )
-                mouse.move(x, y, wheel, pan)
-                return
-            except BlockingIOError:
-                if attempt < max_tries:
-                    self._hid_write_retries += 1
-                    _logger.debug(f"HID write blocked ({attempt}/{max_tries})")
-                    await asyncio.sleep(retry_delay)
-                else:
-                    self._hid_write_failures += 1
-                    _logger.warning(f"HID write blocked ({attempt}/{max_tries})")
-            except BrokenPipeError:
-                self._hid_write_failures += 1
-                _logger.warning(
-                    "BrokenPipeError: USB cable likely disconnected or power-only. "
-                    "Pausing relay.\nSee: "
-                    "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
+        def move_mouse() -> None:
+            mouse = self._gadget_manager.get_mouse()
+            if mouse is None:
+                raise RuntimeError(
+                    "Mouse gadget not initialized or manager not enabled."
                 )
-                if self._relaying_active:
-                    self._relaying_active.clear()
-                return
-            except Exception:
-                self._hid_write_failures += 1
-                _logger.exception("Error processing mouse movement")
-                return
+            mouse.move(x, y, wheel, pan)
+
+        await self._process_hid_action_with_retry(move_mouse, "mouse movement")
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
         """
@@ -956,11 +933,27 @@ class DeviceRelay:
 
         :param event: The InputEvent to process
         """
+        await self._process_hid_action_with_retry(
+            lambda: relay_event(event, self._gadget_manager),
+            f"{event}",
+        )
+
+    async def _process_hid_action_with_retry(
+        self,
+        action: Callable[[], Any],
+        action_name: str,
+    ) -> None:
+        """
+        Attempt to relay one HID action and retry transient write blocking.
+
+        :param action: Callable that performs one HID write operation
+        :param action_name: Human-readable action for error logging
+        """
         max_tries = self.HID_WRITE_MAX_TRIES
         retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
         for attempt in range(1, max_tries + 1):
             try:
-                relay_event(event, self._gadget_manager)
+                action()
                 return
             except BlockingIOError:
                 if attempt < max_tries:
@@ -982,7 +975,7 @@ class DeviceRelay:
                 return
             except Exception:
                 self._hid_write_failures += 1
-                _logger.exception(f"Error processing {event}")
+                _logger.exception(f"Error processing {action_name}")
                 return
 
 

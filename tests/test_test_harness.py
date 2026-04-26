@@ -20,6 +20,7 @@ from bluetooth_2_usb.test_harness_capture import (
 from bluetooth_2_usb.test_harness_capture_windows import (
     RAWMOUSE,
     RI_MOUSE_HORIZONTAL_WHEEL,
+    RI_MOUSE_WHEEL,
     _device_matches_candidate,
     _extract_device_identities,
     _keyboard_event_to_report,
@@ -590,6 +591,36 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             _mouse_event_to_reports(raw_mouse),
             [bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+        )
+
+    def test_mouse_event_to_reports_keeps_wheel_and_motion_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.ulButtons = RI_MOUSE_WHEEL | (0x0001 << 16)
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            _mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
+                bytes([0x02, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x02, 0x00, 0x00, 0x00, 0xD4, 0xFE, 0x00, 0x00]),
+            ],
+        )
+
+    def test_mouse_event_to_reports_keeps_pan_and_motion_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            _mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]),
+                bytes([0x02, 0x00, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x02, 0x00, 0x00, 0x00, 0xD4, 0xFE, 0x00, 0x00]),
+            ],
         )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
