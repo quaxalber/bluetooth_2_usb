@@ -49,7 +49,7 @@ wait_for_service_settle() {
   now_us="$(awk '{ printf "%.0f", $1 * 1000000 }' /proc/uptime)"
   settle_us="$(awk -v sec="${SERVICE_SETTLE_SEC}" 'BEGIN { printf "%.0f", sec * 1000000 }')"
   age_us=$((now_us - active_since_us))
-  (( age_us < settle_us )) || return 0
+  ((age_us < settle_us)) || return 0
 
   remaining_sec="$(awk -v remaining_us="$((settle_us - age_us))" \
     'BEGIN { printf "%.3f", remaining_us / 1000000 }')"
