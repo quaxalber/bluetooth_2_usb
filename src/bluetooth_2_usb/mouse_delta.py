@@ -14,6 +14,12 @@ class MouseDelta:
     wheel: int
     pan: int
 
+    def __iter__(self) -> Iterator[int]:
+        yield self.x
+        yield self.y
+        yield self.wheel
+        yield self.pan
+
 
 class MouseDeltaAccumulator:
     def __init__(self) -> None:

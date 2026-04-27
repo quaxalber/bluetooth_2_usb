@@ -125,14 +125,15 @@ class _FakeLoop:
 
 
 class _FakeTaskHandle:
-    def __init__(self) -> None:
+    def __init__(self, *, done: bool = False) -> None:
         self.cancel_calls = 0
+        self._done = done
 
     def cancel(self) -> None:
         self.cancel_calls += 1
 
     def done(self) -> bool:
-        return False
+        return self._done
 
 
 class _FakeInputHandle:
@@ -741,12 +742,14 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen, [(183, 1), (183, 0), (184, 1), (184, 0)])
 
     async def test_aexit_ignores_ebadf_from_ungrab_on_disappeared_device(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EBADF)
         relay = DeviceRelay(
             input_device,
             _FakeGadgetManager(),
             grab_device=True,
-            relaying_active=asyncio.Event(),
+            relaying_active=relaying_active,
         )
 
         async with relay:
@@ -756,6 +759,23 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(input_device.ungrab_calls, 1)
         self.assertEqual(input_device.close_calls, 1)
         self.assertFalse(relay._currently_grabbed)
+
+    async def test_aenter_defers_grab_while_relaying_is_paused(self) -> None:
+        relaying_active = asyncio.Event()
+        input_device = _FakeGrabInputDevice()
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            grab_device=True,
+            relaying_active=relaying_active,
+        )
+
+        async with relay:
+            self.assertFalse(relay._currently_grabbed)
+
+        self.assertEqual(input_device.grab_calls, 0)
+        self.assertEqual(input_device.ungrab_calls, 0)
+        self.assertEqual(input_device.close_calls, 1)
 
     async def test_input_device_removal_stops_reader_without_failing_task_group(
         self,
@@ -1145,3 +1165,22 @@ class RelayControllerHotplugTest(unittest.TestCase):
         self.assertEqual(controller._pending_add_paths, [])
         self.assertEqual(task.cancel_calls, 1)
         self.assertEqual(device.close_calls, 0)
+        self.assertIs(controller._active_tasks["/dev/input/event7"], task)
+        self.assertIs(controller._active_devices["/dev/input/event7"], device)
+
+    def test_remove_device_closes_handle_after_task_is_done(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            device_identifiers=[],
+            relaying_active=asyncio.Event(),
+        )
+        task = _FakeTaskHandle(done=True)
+        device = _FakeInputHandle()
+        controller._active_tasks["/dev/input/event7"] = task
+        controller._active_devices["/dev/input/event7"] = device
+
+        controller.remove_device("/dev/input/event7")
+
+        self.assertEqual(task.cancel_calls, 0)
+        self.assertEqual(device.close_calls, 1)
+        self.assertNotIn("/dev/input/event7", controller._active_devices)
