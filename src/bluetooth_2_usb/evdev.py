@@ -1,24 +1,10 @@
 from functools import lru_cache
 from importlib import import_module
-from typing import Any
 
+from .evdev_compat import InputEvent, KeyEvent, RelEvent
 from .evdev_ecodes import ecodes
 from .extended_mouse import ExtendedMouse
 from .logging import get_logger
-
-try:
-    from evdev import InputEvent, KeyEvent, RelEvent
-except ModuleNotFoundError:
-    InputEvent = Any  # type: ignore[assignment]
-
-    class KeyEvent:
-        key_down = 1
-        key_hold = 2
-        key_up = 0
-
-    class RelEvent:
-        pass
-
 
 logger = get_logger(__name__)
 

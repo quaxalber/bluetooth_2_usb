@@ -391,6 +391,7 @@ class RuntimeMonitorTest(unittest.TestCase):
                     monitor = RuntimeMonitor(
                         relay_controller=relay_controller,
                         relaying_active=relaying_active,
+                        udc_path=Path("/tmp/missing-b2u-udc-state"),
                     )
 
         monitor._udev_event_callback(
