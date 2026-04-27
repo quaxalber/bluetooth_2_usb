@@ -33,11 +33,11 @@ class RelayController:
     def __init__(
         self,
         gadget_manager: GadgetManager,
+        relaying_active: asyncio.Event,
         device_identifiers: list[str] | None = None,
         auto_discover: bool = False,
         skip_name_prefixes: list[str] | None = None,
         grab_devices: bool = False,
-        relaying_active: asyncio.Event | None = None,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
@@ -60,9 +60,6 @@ class RelayController:
             else DEFAULT_SKIP_NAME_PREFIXES
         )
         self._grab_devices = grab_devices
-        if relaying_active is None:
-            relaying_active = asyncio.Event()
-            relaying_active.set()
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
 
@@ -133,8 +130,7 @@ class RelayController:
         self._hotplug_ready = False
         self._pop_pending_adds()
 
-        if self._relaying_active is not None:
-            self._relaying_active.clear()
+        self._relaying_active.clear()
 
         def _begin_shutdown() -> None:
             for device_path in list(self._active_tasks):

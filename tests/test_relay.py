@@ -1086,6 +1086,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
     def test_schedule_add_device_queues_until_controller_is_ready(self) -> None:
         controller = RelayController(
             gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
             device_identifiers=[],
         )
 
@@ -1112,6 +1113,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
     def test_schedule_remove_device_drops_queued_startup_add(self) -> None:
         controller = RelayController(
             gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
             device_identifiers=[],
         )
 
