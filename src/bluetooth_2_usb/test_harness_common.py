@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .evdev import ecodes
+
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_PREREQUISITE = 3
@@ -16,82 +18,58 @@ EXIT_TIMEOUT = 5
 EXIT_MISMATCH = 6
 EXIT_INTERRUPTED = 130
 
-EV_KEY = 1
-EV_REL = 2
+EV_KEY = ecodes.EV_KEY
+EV_REL = ecodes.EV_REL
 
-KEY_F13 = 183
-KEY_F14 = 184
-KEY_F15 = 185
-KEY_A = 30
-KEY_E = 18
-KEY_K = 37
-KEY_O = 24
-KEY_R = 19
-KEY_T = 20
-KEY_Y = 21
-KEY_B = 48
-KEY_D = 32
-KEY_LEFTSHIFT = 42
-KEY_VOLUMEUP = 115
-KEY_VOLUMEDOWN = 114
-KEY_MINUS = 12
-KEY_SPACE = 57
-BTN_LEFT = 272
-BTN_RIGHT = 273
-BTN_MIDDLE = 274
-BTN_SIDE = 275
-BTN_EXTRA = 276
-BTN_FORWARD = 277
-BTN_BACK = 278
-BTN_TASK = 279
-REL_X = 0
-REL_Y = 1
-REL_HWHEEL = 6
-REL_WHEEL = 8
-REL_WHEEL_HI_RES = 11
-REL_HWHEEL_HI_RES = 12
+KEY_F13 = ecodes.KEY_F13
+KEY_F14 = ecodes.KEY_F14
+KEY_F15 = ecodes.KEY_F15
+KEY_A = ecodes.KEY_A
+KEY_E = ecodes.KEY_E
+KEY_K = ecodes.KEY_K
+KEY_O = ecodes.KEY_O
+KEY_R = ecodes.KEY_R
+KEY_T = ecodes.KEY_T
+KEY_Y = ecodes.KEY_Y
+KEY_B = ecodes.KEY_B
+KEY_D = ecodes.KEY_D
+KEY_LEFTSHIFT = ecodes.KEY_LEFTSHIFT
+KEY_VOLUMEUP = ecodes.KEY_VOLUMEUP
+KEY_VOLUMEDOWN = ecodes.KEY_VOLUMEDOWN
+KEY_MINUS = ecodes.KEY_MINUS
+KEY_SPACE = ecodes.KEY_SPACE
+BTN_LEFT = ecodes.BTN_LEFT
+BTN_RIGHT = ecodes.BTN_RIGHT
+BTN_MIDDLE = ecodes.BTN_MIDDLE
+BTN_SIDE = ecodes.BTN_SIDE
+BTN_EXTRA = ecodes.BTN_EXTRA
+BTN_FORWARD = ecodes.BTN_FORWARD
+BTN_BACK = ecodes.BTN_BACK
+BTN_TASK = ecodes.BTN_TASK
+REL_X = ecodes.REL_X
+REL_Y = ecodes.REL_Y
+REL_HWHEEL = ecodes.REL_HWHEEL
+REL_WHEEL = ecodes.REL_WHEEL
+REL_WHEEL_HI_RES = ecodes.REL_WHEEL_HI_RES
+REL_HWHEEL_HI_RES = ecodes.REL_HWHEEL_HI_RES
 
 EVENT_TYPE_NAMES = {
     EV_KEY: "EV_KEY",
     EV_REL: "EV_REL",
 }
 
+
+def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
+    return {
+        getattr(ecodes, attribute): attribute
+        for attribute in dir(ecodes)
+        if attribute.startswith(prefixes)
+    }
+
+
 EVENT_CODE_NAMES = {
-    EV_KEY: {
-        KEY_F13: "KEY_F13",
-        KEY_F14: "KEY_F14",
-        KEY_F15: "KEY_F15",
-        KEY_A: "KEY_A",
-        KEY_E: "KEY_E",
-        KEY_K: "KEY_K",
-        KEY_O: "KEY_O",
-        KEY_R: "KEY_R",
-        KEY_T: "KEY_T",
-        KEY_Y: "KEY_Y",
-        KEY_B: "KEY_B",
-        KEY_D: "KEY_D",
-        KEY_LEFTSHIFT: "KEY_LEFTSHIFT",
-        KEY_VOLUMEUP: "KEY_VOLUMEUP",
-        KEY_VOLUMEDOWN: "KEY_VOLUMEDOWN",
-        KEY_MINUS: "KEY_MINUS",
-        KEY_SPACE: "KEY_SPACE",
-        BTN_LEFT: "BTN_LEFT",
-        BTN_RIGHT: "BTN_RIGHT",
-        BTN_MIDDLE: "BTN_MIDDLE",
-        BTN_SIDE: "BTN_SIDE",
-        BTN_EXTRA: "BTN_EXTRA",
-        BTN_FORWARD: "BTN_FORWARD",
-        BTN_BACK: "BTN_BACK",
-        BTN_TASK: "BTN_TASK",
-    },
-    EV_REL: {
-        REL_X: "REL_X",
-        REL_Y: "REL_Y",
-        REL_HWHEEL: "REL_HWHEEL",
-        REL_WHEEL: "REL_WHEEL",
-        REL_WHEEL_HI_RES: "REL_WHEEL_HI_RES",
-        REL_HWHEEL_HI_RES: "REL_HWHEEL_HI_RES",
-    },
+    EV_KEY: _event_code_names(("KEY_", "BTN_")),
+    EV_REL: _event_code_names(("REL_",)),
 }
 
 SCENARIO_NAMES = (
