@@ -8,6 +8,7 @@ from typing import Any
 from .evdev import ecodes, get_mouse_movement
 from .evdev_compat import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
 from .gadget_manager import GadgetManager
+from .hid_compat import release_consumer_control
 from .hid_dispatch import dispatch_event_to_hid
 from .logging import get_logger
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator, iter_mouse_delta_chunks
@@ -121,7 +122,7 @@ class DeviceRelay:
         if mouse is not None:
             mouse.release_all()
         if consumer is not None:
-            consumer.release()
+            release_consumer_control(consumer)
 
     def _update_grab_state(self, active: bool) -> None:
         if self._grab_device and active and not self._currently_grabbed:
