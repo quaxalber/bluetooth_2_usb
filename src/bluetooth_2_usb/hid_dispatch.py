@@ -11,7 +11,6 @@ from .evdev import (
 from .evdev_compat import InputEvent, KeyEvent, RelEvent
 from .extended_mouse import ExtendedMouse
 from .gadget_manager import GadgetManager
-from .hid_compat import release_consumer_control
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -60,7 +59,7 @@ def dispatch_key_event_to_hid(event: KeyEvent, gadget_manager: GadgetManager) ->
     elif event.keystate == KeyEvent.key_up:
         logger.debug(f"Releasing {key_name} (0x{key_id:02X}) via {output_gadget}")
         if is_consumer_key(event):
-            release_consumer_control(output_gadget)
+            output_gadget.release()
         else:
             output_gadget.release(key_id)
 

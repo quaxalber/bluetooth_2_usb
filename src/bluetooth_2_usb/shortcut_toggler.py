@@ -5,7 +5,6 @@ import asyncio
 from .evdev import find_key_name
 from .evdev_compat import KeyEvent
 from .gadget_manager import GadgetManager
-from .hid_compat import release_consumer_control
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -83,7 +82,7 @@ class ShortcutToggler:
             if mouse:
                 mouse.release_all()
             if consumer:
-                release_consumer_control(consumer)
+                consumer.release()
 
             self._relaying_active.clear()
             logger.info("ShortcutToggler: Relaying is now OFF.")

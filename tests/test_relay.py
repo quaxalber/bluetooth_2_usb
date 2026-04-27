@@ -15,7 +15,6 @@ from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
 from bluetooth_2_usb.gadget_config import rebuild_gadget
 from bluetooth_2_usb.gadget_manager import GadgetManager
-from bluetooth_2_usb.hid_compat import release_consumer_control
 from bluetooth_2_usb.hid_dispatch import dispatch_key_event_to_hid
 from bluetooth_2_usb.hid_layout import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
@@ -67,14 +66,6 @@ class _FakeConsumer:
 
     def release(self) -> None:
         self.release_calls += 1
-
-
-class _FakeConsumerReleaseWithIgnoredArgument:
-    def __init__(self) -> None:
-        self.release_args = []
-
-    def release(self, consumer_code) -> None:
-        self.release_args.append(consumer_code)
 
 
 class _FakeGadgetManager:
@@ -380,13 +371,6 @@ class HidDispatchTest(unittest.TestCase):
 
         self.assertEqual(gadget_manager.consumer.release_calls, 1)
         self.assertEqual(gadget_manager.mouse.releases, [])
-
-    def test_consumer_release_compat_supports_fork_argument(self) -> None:
-        consumer = _FakeConsumerReleaseWithIgnoredArgument()
-
-        release_consumer_control(consumer)
-
-        self.assertEqual(consumer.release_args, [0])
 
 
 class ShortcutTogglerTest(unittest.TestCase):
