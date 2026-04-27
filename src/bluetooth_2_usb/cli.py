@@ -113,7 +113,7 @@ def print_version() -> int:
 
 def configure_logging(args: Arguments) -> None:
     if args.debug:
-        logger.setLevel(DEBUG)
+        get_logger().setLevel(DEBUG)
 
     if args.log_to_file:
         add_file_handler(args.log_path)

@@ -31,8 +31,8 @@ class DeviceRelay:
         self,
         input_device: InputDevice,
         gadget_manager: GadgetManager,
+        relaying_active: asyncio.Event,
         grab_device: bool = False,
-        relaying_active: asyncio.Event | None = None,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
@@ -115,10 +115,13 @@ class DeviceRelay:
     def _release_gadget_states(self) -> None:
         keyboard = self._gadget_manager.get_keyboard()
         mouse = self._gadget_manager.get_mouse()
+        consumer = self._gadget_manager.get_consumer()
         if keyboard is not None:
             keyboard.release_all()
         if mouse is not None:
             mouse.release_all()
+        if consumer is not None:
+            consumer.release()
 
     def _update_grab_state(self, active: bool) -> None:
         if self._grab_device and active and not self._currently_grabbed:
@@ -167,7 +170,7 @@ class DeviceRelay:
                     if self._shortcut_toggler.handle_key_event(event):
                         continue
 
-                active = bool(self._relaying_active and self._relaying_active.is_set())
+                active = self._relaying_active.is_set()
                 self._update_grab_state(active)
 
                 if not active:
@@ -283,8 +286,7 @@ class DeviceRelay:
                     "Pausing relay.\nSee: "
                     "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
                 )
-                if self._relaying_active:
-                    self._relaying_active.clear()
+                self._relaying_active.clear()
                 return False
             except Exception:
                 self._hid_write_failures += 1

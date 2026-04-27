@@ -76,10 +76,13 @@ class ShortcutToggler:
         if self._relaying_active.is_set():
             keyboard = self._gadget_manager.get_keyboard()
             mouse = self._gadget_manager.get_mouse()
+            consumer = self._gadget_manager.get_consumer()
             if keyboard:
                 keyboard.release_all()
             if mouse:
                 mouse.release_all()
+            if consumer:
+                consumer.release()
 
             self._relaying_active.clear()
             logger.info("ShortcutToggler: Relaying is now OFF.")

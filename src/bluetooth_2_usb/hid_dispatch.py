@@ -58,7 +58,10 @@ def dispatch_key_event_to_hid(event: KeyEvent, gadget_manager: GadgetManager) ->
         output_gadget.press(key_id)
     elif event.keystate == KeyEvent.key_up:
         logger.debug(f"Releasing {key_name} (0x{key_id:02X}) via {output_gadget}")
-        output_gadget.release(key_id)
+        if is_consumer_key(event):
+            output_gadget.release()
+        else:
+            output_gadget.release(key_id)
 
 
 def select_hid_gadget(

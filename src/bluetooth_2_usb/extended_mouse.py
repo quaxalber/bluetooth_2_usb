@@ -64,8 +64,8 @@ class ExtendedMouse:
             partial_pan = _clamp_hid_i8(pan)
             self.report[1:3] = partial_x.to_bytes(2, "little", signed=True)
             self.report[3:5] = partial_y.to_bytes(2, "little", signed=True)
-            self.report[5] = partial_wheel & 0xFF
-            self.report[6] = partial_pan & 0xFF
+            self.report[5:6] = partial_wheel.to_bytes(1, "little", signed=True)
+            self.report[6:7] = partial_pan.to_bytes(1, "little", signed=True)
             logger.debug(
                 "Sending mouse movement to gadget: buttons=0x%02x x=%s y=%s "
                 "wheel=%s pan=%s report=%s",

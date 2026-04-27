@@ -72,15 +72,6 @@ EVENT_CODE_NAMES = {
     EV_REL: _event_code_names(("REL_",)),
 }
 
-SCENARIO_NAMES = (
-    "keyboard",
-    "mouse",
-    "mouse_fast",
-    "mouse_buttons_intrusive",
-    "combo",
-    "consumer",
-    "text_burst",
-)
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
 DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
@@ -430,6 +421,8 @@ SCENARIOS = {
         consumer_steps=(),
     ),
 }
+
+SCENARIO_NAMES = tuple(SCENARIOS.keys())
 
 
 @dataclass(frozen=True, slots=True)
