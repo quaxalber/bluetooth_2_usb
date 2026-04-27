@@ -10,22 +10,21 @@ from unittest.mock import Mock, patch
 
 import usb_hid
 
+from bluetooth_2_usb.device_relay import DeviceRelay
 from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
 from bluetooth_2_usb.gadget_config import rebuild_gadget
+from bluetooth_2_usb.gadget_manager import GadgetManager
 from bluetooth_2_usb.hid_layout import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
     DEFAULT_MOUSE_DESCRIPTOR,
     GadgetHidDevice,
     build_default_layout,
 )
-from bluetooth_2_usb.relay import (
-    DeviceRelay,
-    GadgetManager,
-    RelayController,
-    RuntimeMonitor,
-    ShortcutToggler,
-)
+from bluetooth_2_usb.mouse_delta import MouseDelta
+from bluetooth_2_usb.relay_controller import RelayController
+from bluetooth_2_usb.runtime_monitor import RuntimeMonitor
+from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
 
 
 class _FakeKeyboard:
@@ -376,13 +375,15 @@ class RuntimeMonitorTest(unittest.TestCase):
         relay_controller = _FakeRelayController()
         relaying_active = asyncio.Event()
 
-        with patch("bluetooth_2_usb.relay.pyudev.Context", return_value=object()):
+        with patch(
+            "bluetooth_2_usb.runtime_monitor.pyudev.Context", return_value=object()
+        ):
             with patch(
-                "bluetooth_2_usb.relay.pyudev.Monitor.from_netlink",
+                "bluetooth_2_usb.runtime_monitor.pyudev.Monitor.from_netlink",
                 return_value=_FakeMonitor(),
             ):
                 with patch(
-                    "bluetooth_2_usb.relay.pyudev.MonitorObserver",
+                    "bluetooth_2_usb.runtime_monitor.pyudev.MonitorObserver",
                     side_effect=lambda monitor, callback: _FakeObserver(
                         monitor, callback
                     ),
@@ -410,7 +411,7 @@ class RuntimeMonitorTest(unittest.TestCase):
 class GadgetManagerLayoutTest(unittest.TestCase):
     def test_requested_devices_use_default_layout(self) -> None:
         with patch(
-            "bluetooth_2_usb.relay.build_default_layout",
+            "bluetooth_2_usb.gadget_manager.build_default_layout",
             return_value=SimpleNamespace(devices=("keyboard", "mouse", "consumer")),
         ):
             devices = GadgetManager()._requested_devices()
@@ -498,7 +499,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             "_collect_invalid_hidg_nodes",
             side_effect=[["/dev/hidg0 (missing)"], []],
         ) as collect_invalid:
-            with patch("bluetooth_2_usb.relay.time.sleep") as sleep:
+            with patch("bluetooth_2_usb.gadget_manager.time.sleep") as sleep:
                 manager._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
 
         self.assertEqual(collect_invalid.call_count, 2)
@@ -514,13 +515,15 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         with patch.object(manager, "_expected_hidg_paths", return_value=(path,)):
             with patch.object(Path, "stat", return_value=stats):
                 with patch(
-                    "bluetooth_2_usb.relay.os.minor",
+                    "bluetooth_2_usb.gadget_manager.os.minor",
                     return_value=0,
                     create=True,
                 ):
-                    with patch("bluetooth_2_usb.relay.os.O_NONBLOCK", 0, create=True):
+                    with patch(
+                        "bluetooth_2_usb.gadget_manager.os.O_NONBLOCK", 0, create=True
+                    ):
                         with patch(
-                            "bluetooth_2_usb.relay.os.open",
+                            "bluetooth_2_usb.gadget_manager.os.open",
                             side_effect=OSError(errno.ENODEV, "No such device"),
                         ):
                             invalid_paths = manager._collect_invalid_hidg_nodes()
@@ -676,9 +679,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             seen.append((event.scancode, event.keystate))
             await asyncio.sleep(0.001)
 
-        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with patch.object(
                     relay, "_process_event_with_retry", side_effect=_slow_process
@@ -727,9 +731,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         async def _record_process(event) -> None:
             seen.append((event.scancode, event.keystate))
 
-        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with patch.object(
                     relay, "_process_event_with_retry", side_effect=_record_process
@@ -751,12 +756,13 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             relaying_active=relaying_active,
         )
 
-        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with patch(
-                    "bluetooth_2_usb.relay.relay_event",
+                    "bluetooth_2_usb.device_relay.dispatch_event_to_hid",
                     side_effect=BrokenPipeError(),
                 ):
                     async with relay:
@@ -780,9 +786,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         manager = _FakeGadgetManager()
         relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 async with relay:
                     await relay.async_relay_events_loop()
@@ -807,9 +814,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             relaying_active=relaying_active,
         )
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
                     async with relay:
@@ -848,9 +856,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         manager = _FakeGadgetManager()
         relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 async with relay:
                     await relay.async_relay_events_loop()
@@ -876,7 +885,9 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             relaying_active=relaying_active,
         )
 
-        await relay._process_mouse_delta_with_retry(40000, -40000, 200, -200)
+        await relay._process_mouse_delta_with_retry(
+            MouseDelta(40000, -40000, 200, -200)
+        )
 
         manager.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
         self.assertEqual(relay._hid_write_failures, 1)
@@ -898,9 +909,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         manager = _FakeGadgetManager()
         relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 async with relay:
                     await relay.async_relay_events_loop()
@@ -923,9 +935,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         manager = _FakeGadgetManager()
         relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 async with relay:
                     await relay.async_relay_events_loop()
@@ -950,9 +963,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         manager = _FakeGadgetManager()
         relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 async with relay:
                     await relay.async_relay_events_loop()
@@ -977,9 +991,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         manager = _FakeGadgetManager()
         relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 async with relay:
                     await relay.async_relay_events_loop()
@@ -1004,10 +1019,11 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         async def deactivate(_event) -> None:
             relaying_active.clear()
 
-        with patch("bluetooth_2_usb.relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
                 with patch(
-                    "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                    "bluetooth_2_usb.device_relay.categorize",
+                    side_effect=lambda event: event,
                 ):
                     with patch.object(
                         relay, "_process_event_with_retry", side_effect=deactivate
