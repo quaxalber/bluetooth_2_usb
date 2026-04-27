@@ -322,6 +322,8 @@ class MouseSequenceMatcher:
 
 
 def _same_direction(expected: int, observed: int) -> bool:
+    if expected == 0:
+        return observed == 0
     return (expected > 0 and observed > 0) or (expected < 0 and observed < 0)
 
 

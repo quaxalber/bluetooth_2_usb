@@ -60,6 +60,9 @@ class RelayController:
             else DEFAULT_SKIP_NAME_PREFIXES
         )
         self._grab_devices = grab_devices
+        if relaying_active is None:
+            relaying_active = asyncio.Event()
+            relaying_active.set()
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
 
@@ -402,4 +405,4 @@ async def async_list_input_devices() -> list[InputDevice]:
     :return: List of InputDevice objects
     :rtype: list[InputDevice]
     """
-    return list_input_devices()
+    return await asyncio.to_thread(list_input_devices)

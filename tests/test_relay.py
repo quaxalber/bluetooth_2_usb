@@ -15,6 +15,7 @@ from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
 from bluetooth_2_usb.gadget_config import rebuild_gadget
 from bluetooth_2_usb.gadget_manager import GadgetManager
+from bluetooth_2_usb.hid_dispatch import dispatch_key_event_to_hid
 from bluetooth_2_usb.hid_layout import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
     DEFAULT_MOUSE_DESCRIPTOR,
@@ -55,16 +56,32 @@ class _FakeMouse:
         self.releases.append(key_id)
 
 
+class _FakeConsumer:
+    def __init__(self) -> None:
+        self.presses = []
+        self.release_calls = 0
+
+    def press(self, key_id) -> None:
+        self.presses.append(key_id)
+
+    def release(self) -> None:
+        self.release_calls += 1
+
+
 class _FakeGadgetManager:
     def __init__(self) -> None:
         self.keyboard = _FakeKeyboard()
         self.mouse = _FakeMouse()
+        self.consumer = _FakeConsumer()
 
     def get_keyboard(self):
         return self.keyboard
 
     def get_mouse(self):
         return self.mouse
+
+    def get_consumer(self):
+        return self.consumer
 
 
 class _FakeRelayController:
@@ -343,6 +360,19 @@ class ExtendedMouseButtonMappingTest(unittest.TestCase):
                 self.assertIsNotNone(hid_name)
 
 
+class HidDispatchTest(unittest.TestCase):
+    def test_consumer_key_release_uses_consumer_control_release_api(self) -> None:
+        gadget_manager = _FakeGadgetManager()
+
+        dispatch_key_event_to_hid(
+            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0),
+            gadget_manager,
+        )
+
+        self.assertEqual(gadget_manager.consumer.release_calls, 1)
+        self.assertEqual(gadget_manager.mouse.releases, [])
+
+
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         event_state = asyncio.Event()
@@ -368,6 +398,23 @@ class ShortcutTogglerTest(unittest.TestCase):
         self.assertFalse(toggler.handle_key_event(make_event(42, 1)))
         self.assertTrue(toggler.handle_key_event(make_event(88, 1)))
         self.assertFalse(event_state.is_set())
+
+    def test_toggle_off_releases_consumer_control(self) -> None:
+        event_state = asyncio.Event()
+        event_state.set()
+        gadget_manager = _FakeGadgetManager()
+        toggler = ShortcutToggler(
+            shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"},
+            relaying_active=event_state,
+            gadget_manager=gadget_manager,
+        )
+
+        toggler.toggle_relaying()
+
+        self.assertFalse(event_state.is_set())
+        self.assertEqual(gadget_manager.keyboard.release_all_calls, 1)
+        self.assertEqual(gadget_manager.mouse.release_all_calls, 1)
+        self.assertEqual(gadget_manager.consumer.release_calls, 1)
 
 
 class RuntimeMonitorTest(unittest.TestCase):
