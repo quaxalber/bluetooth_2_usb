@@ -329,13 +329,20 @@ class RelayController:
 
         :param device_path: The path of the device to remove
         """
-        task = self._active_tasks.pop(device_path, None)
-        device = self._active_devices.pop(device_path, None)
-        if task and not task.done():
+        task = self._active_tasks.get(device_path)
+        device = self._active_devices.get(device_path)
+        try:
+            current_task = asyncio.current_task()
+        except RuntimeError:
+            current_task = None
+
+        if task and not task.done() and task is not current_task:
             task.cancel()
             logger.debug(f"Cancelled relay for {device_path}.")
             return
 
+        self._active_tasks.pop(device_path, None)
+        device = self._active_devices.pop(device_path, None)
         logger.debug(f"No active task found for {device_path} to remove.")
         if device is None:
             return

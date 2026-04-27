@@ -167,11 +167,12 @@ To validate all eight button bits, run the explicit intrusive button scenario:
 sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_buttons_intrusive
 ```
 
-On Windows, Raw Input does not expose all eight extended mouse button bits used
-by `mouse_buttons_intrusive`. The Windows capture backend rejects that scenario
-with `EXIT_PREREQUISITE` when it includes `BTN_FORWARD`, `BTN_BACK`, or
-`BTN_TASK`; use the default `mouse` or `combo` scenario there, or run intrusive
-button validation on a backend that can surface every button bit.
+On Windows, the current Raw Input capture backend only maps mouse button bits
+through `BTN_EXTRA`. It rejects `mouse_buttons_intrusive` with
+`EXIT_PREREQUISITE` because that scenario also includes `BTN_FORWARD`,
+`BTN_BACK`, and `BTN_TASK`; use the default `mouse` or `combo` scenario there,
+or run intrusive button validation on a backend that can surface every button
+bit.
 
 ## 4. Success criteria
 

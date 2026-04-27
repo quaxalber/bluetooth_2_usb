@@ -15,12 +15,12 @@ class LoggingConfigurationTest(unittest.TestCase):
         self.original_propagate = self.package_logger.propagate
         for handler in list(self.package_logger.handlers):
             self.package_logger.removeHandler(handler)
-            handler.close()
 
     def tearDown(self) -> None:
         for handler in list(self.package_logger.handlers):
             self.package_logger.removeHandler(handler)
-            handler.close()
+            if handler not in self.original_handlers:
+                handler.close()
         for handler in self.original_handlers:
             self.package_logger.addHandler(handler)
         self.package_logger.setLevel(self.original_level)

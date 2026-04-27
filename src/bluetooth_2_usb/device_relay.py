@@ -72,12 +72,12 @@ class DeviceRelay:
 
         :return: self
         """
-        if self._grab_device:
+        if self._grab_device and self._relaying_active.is_set():
             try:
                 self._input_device.grab()
                 self._currently_grabbed = True
             except Exception as ex:
-                logger.warning(f"Could not grab {self._input_device.path}: {ex}")
+                logger.warning("Could not grab %s: %s", self._input_device.path, ex)
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> bool:
@@ -86,7 +86,7 @@ class DeviceRelay:
 
         :return: False to propagate exceptions
         """
-        if self._grab_device:
+        if self._currently_grabbed:
             try:
                 self._input_device.ungrab()
                 self._currently_grabbed = False
@@ -98,7 +98,9 @@ class DeviceRelay:
                         self._input_device.path,
                     )
                 else:
-                    logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
+                    logger.warning(
+                        "Unable to ungrab %s: %s", self._input_device.path, ex
+                    )
         try:
             self._release_gadget_states()
         except Exception:
@@ -128,14 +130,14 @@ class DeviceRelay:
             try:
                 self._input_device.grab()
                 self._currently_grabbed = True
-                logger.debug(f"Grabbed {self._input_device}")
+                logger.debug("Grabbed %s", self._input_device)
             except Exception as ex:
-                logger.warning(f"Could not grab {self._input_device}: {ex}")
+                logger.warning("Could not grab %s: %s", self._input_device, ex)
         elif self._grab_device and not active and self._currently_grabbed:
             try:
                 self._input_device.ungrab()
                 self._currently_grabbed = False
-                logger.debug(f"Ungrabbed {self._input_device}")
+                logger.debug("Ungrabbed %s", self._input_device)
             except Exception as ex:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
@@ -144,7 +146,7 @@ class DeviceRelay:
                         self._input_device.path,
                     )
                 else:
-                    logger.warning(f"Could not ungrab {self._input_device}: {ex}")
+                    logger.warning("Could not ungrab %s: %s", self._input_device, ex)
 
     async def async_relay_events_loop(self) -> None:
         """
@@ -163,7 +165,10 @@ class DeviceRelay:
 
                 if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
                     logger.debug(
-                        f"Received {event} from {self._input_device.name} ({self._input_device.path})"
+                        "Received %s from %s (%s)",
+                        event,
+                        self._input_device.name,
+                        self._input_device.path,
                     )
 
                 if self._shortcut_toggler and isinstance(event, KeyEvent):
@@ -234,7 +239,7 @@ class DeviceRelay:
                     raise RuntimeError(
                         "Mouse gadget not initialized or manager not enabled."
                     )
-                mouse.move(partial.x, partial.y, partial.wheel, partial.pan)
+                mouse.move(*partial)
 
             if not await self._process_hid_action_with_retry(
                 move_mouse, "mouse movement"
@@ -273,11 +278,11 @@ class DeviceRelay:
             except BlockingIOError:
                 if attempt < max_tries:
                     self._hid_write_retries += 1
-                    logger.debug(f"HID write blocked ({attempt}/{max_tries})")
+                    logger.debug("HID write blocked (%s/%s)", attempt, max_tries)
                     await asyncio.sleep(retry_delay)
                 else:
                     self._hid_write_failures += 1
-                    logger.warning(f"HID write blocked ({attempt}/{max_tries})")
+                    logger.warning("HID write blocked (%s/%s)", attempt, max_tries)
                     return False
             except BrokenPipeError:
                 self._hid_write_failures += 1
@@ -290,6 +295,6 @@ class DeviceRelay:
                 return False
             except Exception:
                 self._hid_write_failures += 1
-                logger.exception(f"Error processing {action_name}")
+                logger.exception("Error processing %s", action_name)
                 return False
         return False
