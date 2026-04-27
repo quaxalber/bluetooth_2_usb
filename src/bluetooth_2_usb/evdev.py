@@ -2,6 +2,9 @@ from functools import lru_cache
 from importlib import import_module
 from typing import Any
 
+from .extended_mouse import ExtendedMouse
+from .logging import get_logger
+
 try:
     from evdev import InputEvent, KeyEvent, RelEvent
 except ModuleNotFoundError:
@@ -15,8 +18,6 @@ except ModuleNotFoundError:
     class RelEvent:
         pass
 
-
-from .logging import get_logger
 
 _logger = get_logger()
 
@@ -1206,6 +1207,11 @@ _MOUSE_BUTTONS = set(
         ecodes.BTN_LEFT,
         ecodes.BTN_RIGHT,
         ecodes.BTN_MIDDLE,
+        ecodes.BTN_SIDE,
+        ecodes.BTN_EXTRA,
+        ecodes.BTN_FORWARD,
+        ecodes.BTN_BACK,
+        ecodes.BTN_TASK,
     )
 )
 """Mouse button ecodes"""
@@ -1261,7 +1267,7 @@ def _get_hid_code_type(
     if is_consumer_key(event):
         return _consumer_control_code_type()
     if is_mouse_button(event):
-        return _mouse_button_type()
+        return ExtendedMouse
     return _keycode_type()
 
 
@@ -1273,16 +1279,22 @@ def is_consumer_key(event: KeyEvent) -> bool:
     return event.scancode in _CONSUMER_KEYS
 
 
-def get_mouse_movement(event: RelEvent) -> tuple[int, int, int]:
+def get_mouse_movement(event: RelEvent) -> tuple[int, int, float, float]:
     input_event: InputEvent = event.event
-    x, y, mwheel = 0, 0, 0
+    x, y, mwheel, pan = 0, 0, 0.0, 0.0
     if input_event.code == ecodes.REL_X:
         x = input_event.value
     elif input_event.code == ecodes.REL_Y:
         y = input_event.value
     elif input_event.code == ecodes.REL_WHEEL:
         mwheel = input_event.value
-    return x, y, mwheel
+    elif input_event.code == ecodes.REL_WHEEL_HI_RES:
+        mwheel = input_event.value / 120.0
+    elif input_event.code == ecodes.REL_HWHEEL:
+        pan = input_event.value
+    elif input_event.code == ecodes.REL_HWHEEL_HI_RES:
+        pan = input_event.value / 120.0
+    return x, y, mwheel, pan
 
 
 @lru_cache(maxsize=1)
@@ -1296,15 +1308,9 @@ def _keycode_type():
 
 
 @lru_cache(maxsize=1)
-def _mouse_button_type():
-    return import_module("adafruit_hid.keycode").MouseButton
-
-
-@lru_cache(maxsize=1)
 def _evdev_to_usb_hid_map() -> dict[int, int]:
     ConsumerControlCode = _consumer_control_code_type()
     Keycode = _keycode_type()
-    MouseButton = _mouse_button_type()
     return {
         ecodes.KEY_A: Keycode.A,
         ecodes.KEY_B: Keycode.B,
@@ -1426,9 +1432,14 @@ def _evdev_to_usb_hid_map() -> dict[int, int]:
         ecodes.KEY_RIGHTSHIFT: Keycode.RIGHT_SHIFT,
         ecodes.KEY_RIGHTALT: Keycode.RIGHT_ALT,
         ecodes.KEY_RIGHTMETA: Keycode.RIGHT_GUI,
-        ecodes.BTN_LEFT: MouseButton.LEFT,
-        ecodes.BTN_RIGHT: MouseButton.RIGHT,
-        ecodes.BTN_MIDDLE: MouseButton.MIDDLE,
+        ecodes.BTN_LEFT: ExtendedMouse.LEFT,
+        ecodes.BTN_RIGHT: ExtendedMouse.RIGHT,
+        ecodes.BTN_MIDDLE: ExtendedMouse.MIDDLE,
+        ecodes.BTN_SIDE: ExtendedMouse.SIDE,
+        ecodes.BTN_EXTRA: ExtendedMouse.EXTRA,
+        ecodes.BTN_FORWARD: ExtendedMouse.FORWARD,
+        ecodes.BTN_BACK: ExtendedMouse.BACK,
+        ecodes.BTN_TASK: ExtendedMouse.TASK,
         ecodes.KEY_POWER: ConsumerControlCode.POWER,
         ecodes.KEY_RESTART: ConsumerControlCode.RESET,
         ecodes.KEY_SLEEP: ConsumerControlCode.SLEEP,

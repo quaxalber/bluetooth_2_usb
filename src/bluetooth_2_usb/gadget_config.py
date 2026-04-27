@@ -114,7 +114,8 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
         device_root.mkdir(parents=True, exist_ok=True)
         _write_text(device_root / "protocol", str(device.protocol))
         _write_text(device_root / "subclass", str(device.subclass))
-        _write_text(device_root / "report_length", str(device.in_report_lengths[0]))
+        report_length = device.configfs_report_length or device.in_report_lengths[0]
+        _write_text(device_root / "report_length", str(report_length))
         (device_root / "report_desc").write_bytes(bytes(device.descriptor))
         _maybe_write_wakeup_on_write(device_root, device.wakeup_on_write)
         (config_root / f"hid.usb{device.function_index}").symlink_to(device_root)

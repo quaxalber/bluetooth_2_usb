@@ -8,6 +8,7 @@ import stat
 import threading
 import time
 from asyncio import Task, TaskGroup
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,8 +24,8 @@ except ModuleNotFoundError:
             self.uniq = uniq
 
         async def async_read_loop(self):
-            if False:
-                yield None
+            for event in ():
+                yield event
             return
 
         def close(self) -> None:
@@ -43,12 +44,14 @@ except ModuleNotFoundError:
 
 
 from .evdev import (
+    ecodes,
     evdev_to_usb_hid,
     find_key_name,
     get_mouse_movement,
     is_consumer_key,
     is_mouse_button,
 )
+from .extended_mouse import ExtendedMouse
 from .gadget_config import rebuild_gadget
 from .hid_layout import build_default_layout
 from .inventory import (
@@ -93,7 +96,6 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     from adafruit_hid.consumer_control import ConsumerControl
     from adafruit_hid.keyboard import Keyboard
-    from adafruit_hid.mouse import Mouse
 
 
 class GadgetManager:
@@ -210,10 +212,9 @@ class GadgetManager:
 
         from adafruit_hid.consumer_control import ConsumerControl
         from adafruit_hid.keyboard import Keyboard
-        from adafruit_hid.mouse import Mouse
 
         self._gadgets["keyboard"] = Keyboard(enabled_devices)
-        self._gadgets["mouse"] = Mouse(enabled_devices)
+        self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
         self._enabled = True
 
@@ -228,12 +229,12 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> Mouse | None:
+    def get_mouse(self) -> ExtendedMouse | None:
         """
         Get the Mouse gadget.
 
-        :return: A Mouse object, or None if not initialized
-        :rtype: Mouse | None
+        :return: An ExtendedMouse object, or None if not initialized
+        :rtype: ExtendedMouse | None
         """
         return self._gadgets["mouse"]
 
@@ -730,6 +731,16 @@ class DeviceRelay:
         self._currently_grabbed = False
         self._hid_write_retries = 0
         self._hid_write_failures = 0
+        self._pending_rel_x = 0
+        self._pending_rel_y = 0
+        self._pending_rel_wheel_low_res = 0.0
+        self._pending_rel_wheel_hi_res = 0.0
+        self._pending_rel_wheel_hi_res_seen = False
+        self._rel_wheel_remainder = 0.0
+        self._pending_rel_pan_low_res = 0.0
+        self._pending_rel_pan_hi_res = 0.0
+        self._pending_rel_pan_hi_res_seen = False
+        self._rel_pan_remainder = 0.0
 
     def __str__(self) -> str:
         return f"relay for {self._input_device}"
@@ -758,7 +769,7 @@ class DeviceRelay:
                 _logger.warning(f"Could not grab {self._input_device.path}: {ex}")
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> bool:
         """
         Async context manager exit. Ungrabs the device if we grabbed it.
 
@@ -831,6 +842,10 @@ class DeviceRelay:
         try:
             async for input_event in self._input_device.async_read_loop():
                 event = categorize(input_event)
+                is_syn_report = (
+                    getattr(input_event, "type", None) == ecodes.EV_SYN
+                    and getattr(input_event, "code", None) == ecodes.SYN_REPORT
+                )
 
                 if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
                     _logger.debug(
@@ -845,8 +860,18 @@ class DeviceRelay:
                 self._update_grab_state(active)
 
                 if not active:
+                    self._discard_pending_mouse_state()
                     continue
 
+                if isinstance(event, RelEvent):
+                    self._accumulate_mouse_movement(event)
+                    continue
+
+                if is_syn_report:
+                    await self._flush_pending_mouse_movement()
+                    continue
+
+                await self._flush_pending_mouse_movement()
                 await self._process_event_with_retry(event)
         except OSError as ex:
             if ex.errno != errno.ENODEV:
@@ -855,12 +880,106 @@ class DeviceRelay:
                 "Stopping relay loop for %s because the input device disappeared.",
                 self._input_device.path,
             )
+            self._discard_pending_mouse_state()
+        await self._flush_pending_mouse_movement()
         _logger.debug(
             "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
             self._input_device.path,
             self._hid_write_retries,
             self._hid_write_failures,
         )
+
+    def _accumulate_mouse_movement(self, event: RelEvent) -> None:
+        x, y, wheel, pan = get_mouse_movement(event)
+        _logger.debug(
+            "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
+            event.event.code,
+            event.event.value,
+            x,
+            y,
+            wheel,
+            pan,
+        )
+        self._pending_rel_x += x
+        self._pending_rel_y += y
+        if event.event.code == ecodes.REL_WHEEL_HI_RES:
+            self._pending_rel_wheel_hi_res += wheel
+            self._pending_rel_wheel_hi_res_seen = True
+        elif event.event.code == ecodes.REL_WHEEL:
+            self._pending_rel_wheel_low_res += wheel
+        if event.event.code == ecodes.REL_HWHEEL_HI_RES:
+            self._pending_rel_pan_hi_res += pan
+            self._pending_rel_pan_hi_res_seen = True
+        elif event.event.code == ecodes.REL_HWHEEL:
+            self._pending_rel_pan_low_res += pan
+
+    def _discard_pending_mouse_state(self) -> None:
+        self._pending_rel_x = 0
+        self._pending_rel_y = 0
+        self._pending_rel_wheel_low_res = 0.0
+        self._pending_rel_wheel_hi_res = 0.0
+        self._pending_rel_wheel_hi_res_seen = False
+        self._rel_wheel_remainder = 0.0
+        self._pending_rel_pan_low_res = 0.0
+        self._pending_rel_pan_hi_res = 0.0
+        self._pending_rel_pan_hi_res_seen = False
+        self._rel_pan_remainder = 0.0
+
+    async def _flush_pending_mouse_movement(self) -> None:
+        x = self._pending_rel_x
+        y = self._pending_rel_y
+        pending_wheel = (
+            self._pending_rel_wheel_hi_res
+            if self._pending_rel_wheel_hi_res_seen
+            else self._pending_rel_wheel_low_res
+        )
+        wheel_total = self._rel_wheel_remainder + pending_wheel
+        wheel = int(wheel_total)
+        self._rel_wheel_remainder = wheel_total - wheel
+        pending_pan = (
+            self._pending_rel_pan_hi_res
+            if self._pending_rel_pan_hi_res_seen
+            else self._pending_rel_pan_low_res
+        )
+        pan_total = self._rel_pan_remainder + pending_pan
+        pan = int(pan_total)
+        self._rel_pan_remainder = pan_total - pan
+        self._pending_rel_x = 0
+        self._pending_rel_y = 0
+        self._pending_rel_wheel_low_res = 0.0
+        self._pending_rel_wheel_hi_res = 0.0
+        self._pending_rel_wheel_hi_res_seen = False
+        self._pending_rel_pan_low_res = 0.0
+        self._pending_rel_pan_hi_res = 0.0
+        self._pending_rel_pan_hi_res_seen = False
+        if x == 0 and y == 0 and wheel == 0 and pan == 0:
+            return
+        await self._process_mouse_delta_with_retry(x, y, wheel, pan)
+
+    async def _process_mouse_delta_with_retry(
+        self, x: int, y: int, wheel: int, pan: int
+    ) -> None:
+        for partial_x, partial_y, partial_wheel, partial_pan in _chunk_mouse_delta(
+            x, y, wheel, pan
+        ):
+
+            def move_mouse(
+                partial_x=partial_x,
+                partial_y=partial_y,
+                partial_wheel=partial_wheel,
+                partial_pan=partial_pan,
+            ) -> None:
+                mouse = self._gadget_manager.get_mouse()
+                if mouse is None:
+                    raise RuntimeError(
+                        "Mouse gadget not initialized or manager not enabled."
+                    )
+                mouse.move(partial_x, partial_y, partial_wheel, partial_pan)
+
+            if not await self._process_hid_action_with_retry(
+                move_mouse, "mouse movement"
+            ):
+                return
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:
         """
@@ -869,12 +988,28 @@ class DeviceRelay:
 
         :param event: The InputEvent to process
         """
+        await self._process_hid_action_with_retry(
+            lambda: relay_event(event, self._gadget_manager),
+            f"{event}",
+        )
+
+    async def _process_hid_action_with_retry(
+        self,
+        action: Callable[[], Any],
+        action_name: str,
+    ) -> bool:
+        """
+        Attempt to relay one HID action and retry transient write blocking.
+
+        :param action: Callable that performs one HID write operation
+        :param action_name: Human-readable action for error logging
+        """
         max_tries = self.HID_WRITE_MAX_TRIES
         retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
         for attempt in range(1, max_tries + 1):
             try:
-                relay_event(event, self._gadget_manager)
-                return
+                action()
+                return True
             except BlockingIOError:
                 if attempt < max_tries:
                     self._hid_write_retries += 1
@@ -883,6 +1018,7 @@ class DeviceRelay:
                 else:
                     self._hid_write_failures += 1
                     _logger.warning(f"HID write blocked ({attempt}/{max_tries})")
+                    return False
             except BrokenPipeError:
                 self._hid_write_failures += 1
                 _logger.warning(
@@ -892,11 +1028,12 @@ class DeviceRelay:
                 )
                 if self._relaying_active:
                     self._relaying_active.clear()
-                return
+                return False
             except Exception:
                 self._hid_write_failures += 1
-                _logger.exception(f"Error processing {event}")
-                return
+                _logger.exception(f"Error processing {action_name}")
+                return False
+        return False
 
 
 class DeviceIdentifier:
@@ -964,25 +1101,33 @@ def relay_event(event: InputEvent, gadget_manager: GadgetManager) -> None:
     :raises BlockingIOError: If HID device write is blocked
     """
     if isinstance(event, RelEvent):
-        move_mouse(event, gadget_manager)
+        mouse = gadget_manager.get_mouse()
+        if mouse is None:
+            raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
+        mouse.move(*get_mouse_movement(event))
     elif isinstance(event, KeyEvent):
         send_key_event(event, gadget_manager)
 
 
-def move_mouse(event: RelEvent, gadget_manager: GadgetManager) -> None:
-    """
-    Relay relative mouse movement events to the USB HID Mouse gadget.
+def _chunk_hid_i8(value: int) -> int:
+    return min(127, max(-127, value))
 
-    :param event: A RelEvent describing the movement
-    :param gadget_manager: GadgetManager with Mouse reference
-    :raises RuntimeError: If Mouse gadget is not available
-    """
-    mouse = gadget_manager.get_mouse()
-    if mouse is None:
-        raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
 
-    x, y, mwheel = get_mouse_movement(event)
-    mouse.move(x, y, mwheel)
+def _chunk_hid_i16(value: int) -> int:
+    return min(32767, max(-32767, value))
+
+
+def _chunk_mouse_delta(x: int, y: int, wheel: int, pan: int):
+    while x != 0 or y != 0 or wheel != 0 or pan != 0:
+        partial_x = _chunk_hid_i16(x)
+        partial_y = _chunk_hid_i16(y)
+        partial_wheel = _chunk_hid_i8(wheel)
+        partial_pan = _chunk_hid_i8(pan)
+        yield partial_x, partial_y, partial_wheel, partial_pan
+        x -= partial_x
+        y -= partial_y
+        wheel -= partial_wheel
+        pan -= partial_pan
 
 
 def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
@@ -1011,7 +1156,7 @@ def send_key_event(event: KeyEvent, gadget_manager: GadgetManager) -> None:
 
 def get_output_device(
     event: KeyEvent, gadget_manager: GadgetManager
-) -> ConsumerControl | Keyboard | Mouse | None:
+) -> ConsumerControl | Keyboard | ExtendedMouse | None:
     """
     Determine which HID gadget to target for the given key event.
 
@@ -1068,7 +1213,7 @@ class RuntimeMonitor:
         _logger.debug("RuntimeMonitor started.")
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
         self._stop_event.set()
         self.observer.stop()
         if self._task:
