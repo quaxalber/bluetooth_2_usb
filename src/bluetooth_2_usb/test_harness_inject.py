@@ -28,6 +28,25 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
     time.sleep(event_gap_ms / 1000.0)
 
 
+_HI_RES_REL_CODES = {
+    ecodes.REL_WHEEL: ecodes.REL_WHEEL_HI_RES,
+    ecodes.REL_HWHEEL: ecodes.REL_HWHEEL_HI_RES,
+}
+
+
+def _write_mouse_rel_step(device: UInput, step_event) -> None:
+    device.write(step_event.event_type, step_event.code, step_event.value)
+    hi_res_code = _HI_RES_REL_CODES.get(step_event.code)
+    if step_event.event_type == ecodes.EV_REL and hi_res_code is not None:
+        device.write(step_event.event_type, hi_res_code, step_event.value * 120)
+
+
+def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
+    _write_mouse_rel_step(device, step_event)
+    device.syn()
+    time.sleep(event_gap_ms / 1000.0)
+
+
 def _keyboard_capabilities() -> dict[int, list[int]]:
     keyboard_codes = sorted(
         {
@@ -42,8 +61,23 @@ def _keyboard_capabilities() -> dict[int, list[int]]:
 
 
 def _mouse_capabilities() -> dict[int, list[int]]:
+    scenario_button_codes = sorted(
+        {
+            step.code
+            for scenario in SCENARIOS.values()
+            for step in scenario.mouse_button_steps
+        }
+    )
     return {
-        ecodes.EV_REL: [ecodes.REL_X, ecodes.REL_Y],
+        ecodes.EV_KEY: scenario_button_codes,
+        ecodes.EV_REL: [
+            ecodes.REL_X,
+            ecodes.REL_Y,
+            ecodes.REL_WHEEL,
+            ecodes.REL_WHEEL_HI_RES,
+            ecodes.REL_HWHEEL,
+            ecodes.REL_HWHEEL_HI_RES,
+        ],
     }
 
 
@@ -123,8 +157,20 @@ def run_inject(
             time.sleep(COMBO_MOUSE_DELAY_MS / 1000.0)
 
         if mouse is not None:
-            for step_event in scenario.mouse_rel_steps:
-                _send_step(mouse, step_event, event_gap_ms)
+            coalesced_tail_count = scenario.mouse_coalesced_tail_count
+            individual_steps = scenario.mouse_rel_steps
+            coalesced_steps = ()
+            if coalesced_tail_count:
+                individual_steps = scenario.mouse_rel_steps[:-coalesced_tail_count]
+                coalesced_steps = scenario.mouse_rel_steps[-coalesced_tail_count:]
+
+            for step_event in individual_steps:
+                _send_mouse_rel_step(mouse, step_event, event_gap_ms)
+            for step_event in coalesced_steps:
+                _write_mouse_rel_step(mouse, step_event)
+            if coalesced_steps:
+                mouse.syn()
+                time.sleep(event_gap_ms / 1000.0)
             for step_event in scenario.mouse_button_steps:
                 _send_step(mouse, step_event, event_gap_ms)
 

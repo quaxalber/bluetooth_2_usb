@@ -18,19 +18,33 @@ from bluetooth_2_usb.test_harness_capture import (
     discover_gadget_nodes,
 )
 from bluetooth_2_usb.test_harness_capture_windows import (
-    _device_matches_candidate,
-    _extract_device_identities,
-    _keyboard_event_to_report,
-    _stable_device_identity,
+    RAWMOUSE,
+    RI_MOUSE_BUTTON_4_DOWN,
+    RI_MOUSE_BUTTON_4_UP,
+    RI_MOUSE_BUTTON_5_DOWN,
+    RI_MOUSE_BUTTON_5_UP,
+    RI_MOUSE_HORIZONTAL_WHEEL,
+    RI_MOUSE_LEFT_BUTTON_DOWN,
+    RI_MOUSE_LEFT_BUTTON_UP,
+    RI_MOUSE_WHEEL,
 )
 from bluetooth_2_usb.test_harness_common import (
     CONSUMER_STEPS,
+    EV_REL,
     EXIT_INTERRUPTED,
     EXIT_PREREQUISITE,
     EXIT_USAGE,
+    FAST_MOUSE_REL_STEPS,
+    MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
+    REL_HWHEEL,
+    REL_WHEEL,
+    REL_X,
+    REL_Y,
+    SAFE_MOUSE_BUTTON_STEPS,
     SCENARIOS,
     TEXT_BURST_STEPS,
+    ExpectedEvent,
     HarnessBusyError,
     HarnessResult,
     get_scenario,
@@ -76,8 +90,17 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(combo.required_nodes, ("keyboard", "mouse"))
         self.assertEqual(len(combo.keyboard_steps), 6)
-        self.assertEqual(len(combo.mouse_rel_steps), 4)
-        self.assertEqual(len(combo.mouse_button_steps), 0)
+        self.assertEqual(len(combo.mouse_rel_steps), 11)
+        self.assertEqual(combo.mouse_button_steps, SAFE_MOUSE_BUTTON_STEPS)
+        self.assertEqual(len(combo.mouse_button_steps), 4)
+        self.assertEqual(combo.mouse_coalesced_tail_count, 3)
+
+    def test_intrusive_mouse_button_scenario_contains_all_button_bits(self) -> None:
+        scenario = SCENARIOS["mouse_buttons_intrusive"]
+
+        self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertEqual(scenario.mouse_button_steps, MOUSE_BUTTON_STEPS)
+        self.assertEqual(len(scenario.mouse_button_steps), 16)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
@@ -85,12 +108,24 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
 
+    def test_fast_mouse_scenario_contains_large_relative_motion(self) -> None:
+        scenario = SCENARIOS["mouse_fast"]
+
+        self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertEqual(scenario.mouse_rel_steps, FAST_MOUSE_REL_STEPS)
+        self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
+        self.assertGreater(
+            max(abs(step.value) for step in scenario.mouse_rel_steps), 32767
+        )
+
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
-        with self.assertRaisesRegex(
-            ValueError,
-            "Unknown scenario 'nope'. Expected one of: keyboard, mouse, combo, consumer, text_burst",
-        ):
+        with self.assertRaises(ValueError) as error:
             get_scenario("nope")
+
+        self.assertEqual(
+            str(error.exception),
+            f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}",
+        )
 
     def test_text_burst_scenario_is_keyboard_only_and_contains_shifted_steps(
         self,
@@ -391,40 +426,151 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
 
 class MouseSequenceMatcherTest(unittest.TestCase):
-    def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+    @staticmethod
+    def _extended_mouse_report(
+        buttons: int = 0, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0
+    ) -> bytes:
+        return bytes(
+            [
+                buttons,
+                *x.to_bytes(2, "little", signed=True),
+                *y.to_bytes(2, "little", signed=True),
+                wheel & 0xFF,
+                pan & 0xFF,
+            ]
+        )
 
-        matcher.handle(bytes([0x02, 0x00, 0x01, 0x00, 0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0x01, 0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0xFF, 0x00]))
+    def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+
+        matcher.handle(self._extended_mouse_report(x=1))
+        matcher.handle(self._extended_mouse_report(x=-1))
+        matcher.handle(self._extended_mouse_report(y=1))
+        matcher.handle(self._extended_mouse_report(y=-1))
 
         self.assertTrue(matcher.complete)
 
-    def test_mouse_matcher_accepts_compact_report_id_format(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+    def test_mouse_matcher_accepts_zero_prefixed_hidapi_report(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:1], ())
 
-        matcher.handle(bytes([0x02, 0x00, 0x01, 0x00]))
-        matcher.handle(bytes([0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00]))
-        matcher.handle(bytes([0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0x01]))
-        matcher.handle(bytes([0x00]))
-        matcher.handle(bytes([0x02, 0x00, 0x00, 0xFF]))
+        matcher.handle(bytes([0x00]) + self._extended_mouse_report(x=1))
 
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
-            matcher.handle(bytes([0x02, 0x02, 0, 0, 0]))
+            matcher.handle(self._extended_mouse_report(buttons=0x02, x=1))
+
+    def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(
+        self,
+    ) -> None:
+        matcher = MouseSequenceMatcher.create(
+            MOUSE_REL_STEPS[:4], SAFE_MOUSE_BUTTON_STEPS
+        )
+
+        with self.assertRaisesRegex(
+            CaptureMismatchError, "Mouse button report arrived before movement"
+        ):
+            matcher.handle(self._extended_mouse_report(buttons=0x08, x=1))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+
+        with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
+            matcher.handle(self._extended_mouse_report(x=-1))
+
+    def test_mouse_matcher_rejects_cross_axis_reordering_between_reports(
+        self,
+    ) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+
+        with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
+            matcher.handle(self._extended_mouse_report(y=1))
+
+    def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 
-        with self.assertRaisesRegex(CaptureMismatchError, "expected EV_REL/REL_X=1"):
-            matcher.handle(bytes([0x02, 0x00, 0xFF, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]))
+        matcher.handle(bytes([0x00, 0x02, 0x00, 0xFD, 0xFF, 0x00, 0x01]))
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_chunked_fast_motion(self) -> None:
+        matcher = MouseSequenceMatcher.create(FAST_MOUSE_REL_STEPS, ())
+
+        for report in (
+            self._extended_mouse_report(x=32767),
+            self._extended_mouse_report(x=7233),
+            self._extended_mouse_report(y=-32767),
+            self._extended_mouse_report(y=-7233),
+            self._extended_mouse_report(x=-32767),
+            self._extended_mouse_report(x=-12233),
+            self._extended_mouse_report(y=32767),
+            self._extended_mouse_report(y=12233),
+            self._extended_mouse_report(wheel=127),
+            self._extended_mouse_report(wheel=127),
+            self._extended_mouse_report(wheel=127),
+            self._extended_mouse_report(wheel=127),
+            self._extended_mouse_report(wheel=92),
+            self._extended_mouse_report(wheel=-127),
+            self._extended_mouse_report(wheel=-127),
+            self._extended_mouse_report(wheel=-127),
+            self._extended_mouse_report(wheel=-127),
+            self._extended_mouse_report(wheel=-92),
+            self._extended_mouse_report(pan=127),
+            self._extended_mouse_report(pan=127),
+            self._extended_mouse_report(pan=127),
+            self._extended_mouse_report(pan=127),
+            self._extended_mouse_report(pan=92),
+            self._extended_mouse_report(pan=-127),
+            self._extended_mouse_report(pan=-127),
+            self._extended_mouse_report(pan=-127),
+            self._extended_mouse_report(pan=-127),
+            self._extended_mouse_report(pan=-92),
+        ):
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_combined_chunked_fast_motion(self) -> None:
+        matcher = MouseSequenceMatcher.create(
+            (
+                ExpectedEvent(EV_REL, REL_X, 40000),
+                ExpectedEvent(EV_REL, REL_Y, -40000),
+                ExpectedEvent(EV_REL, REL_WHEEL, 600),
+                ExpectedEvent(EV_REL, REL_HWHEEL, -600),
+            ),
+            (),
+        )
+
+        for report in (
+            self._extended_mouse_report(x=32767, y=-32767, wheel=127, pan=-127),
+            self._extended_mouse_report(x=7233, y=-7233, wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=92, pan=-92),
+        ):
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
+    def test_mouse_matcher_accepts_all_extended_button_bits(self) -> None:
+        matcher = MouseSequenceMatcher.create((), MOUSE_BUTTON_STEPS)
+
+        for button in (0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80):
+            matcher.handle(bytes([button, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+            matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+
+        self.assertTrue(matcher.complete)
 
 
 class ConsumerSequenceMatcherTest(unittest.TestCase):
@@ -478,9 +624,12 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
+    def setUp(self) -> None:
+        test_harness_capture_windows._reset_mouse_button_state()
+
     def test_extract_device_identities_collapses_windows_hid_paths(self) -> None:
         self.assertEqual(
-            _extract_device_identities(
+            test_harness_capture_windows._extract_device_identities(
                 (
                     r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{GUID}",
                     r"\\?\hid#vid_1d6b&pid_0104&mi_00#9&314c2078&0&0000#{guid}",
@@ -491,7 +640,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_matches_candidate_on_same_hid_instance_identity(self) -> None:
         self.assertTrue(
-            _device_matches_candidate(
+            test_harness_capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
             )
@@ -499,13 +648,13 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_stable_device_identity_ignores_guid_and_suffix_differences(self) -> None:
         self.assertEqual(
-            _stable_device_identity(
+            test_harness_capture_windows._stable_device_identity(
                 r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}\KBD"
             ),
             r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
         )
         self.assertEqual(
-            _stable_device_identity(
+            test_harness_capture_windows._stable_device_identity(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{884b96c3-56ef-11d1-bc8c-00a0c91405dd}"
             ),
             r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
@@ -513,7 +662,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_matches_candidate_on_shared_hid_instance_identity(self) -> None:
         self.assertTrue(
-            _device_matches_candidate(
+            test_harness_capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",),
             )
@@ -521,7 +670,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_does_not_match_different_hid_instance_identity(self) -> None:
         self.assertFalse(
-            _device_matches_candidate(
+            test_harness_capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (
                     r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",
@@ -531,16 +680,136 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
-            _keyboard_event_to_report(0x7C, is_key_up=False),
+            test_harness_capture_windows._keyboard_event_to_report(
+                0x7C, is_key_up=False
+            ),
             bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]),
         )
         self.assertEqual(
-            _keyboard_event_to_report(0x7C, is_key_up=True),
+            test_harness_capture_windows._keyboard_event_to_report(
+                0x7C, is_key_up=True
+            ),
             bytes([0x00] * 8),
         )
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
-        self.assertIsNone(_keyboard_event_to_report(0x41, is_key_up=False))
+        self.assertIsNone(
+            test_harness_capture_windows._keyboard_event_to_report(
+                0x41, is_key_up=False
+            )
+        )
+
+    def test_mouse_event_to_reports_builds_16_bit_xy_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00]),
+            ],
+        )
+
+    def test_mouse_event_to_reports_clamps_xy_to_descriptor_bounds(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.lLastX = 40000
+        raw_mouse.lLastY = -40000
+
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00]),
+            ],
+        )
+
+    def test_mouse_event_to_reports_builds_horizontal_pan_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
+
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+        )
+
+    def test_mouse_event_to_reports_tracks_button_state(self) -> None:
+        test_harness_capture_windows._reset_mouse_button_state()
+        left_button_down = RAWMOUSE()
+        left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(left_button_down),
+            [bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        move_while_pressed = RAWMOUSE()
+        move_while_pressed.lLastX = 1
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(move_while_pressed),
+            [bytes([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        left_button_up = RAWMOUSE()
+        left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(left_button_up),
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+    def test_mouse_event_to_reports_tracks_windows_extra_button_state(self) -> None:
+        test_harness_capture_windows._reset_mouse_button_state()
+        button_4_down = RAWMOUSE()
+        button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(button_4_down),
+            [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        button_5_down = RAWMOUSE()
+        button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(button_5_down),
+            [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        button_4_up = RAWMOUSE()
+        button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(button_4_up),
+            [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+        button_5_up = RAWMOUSE()
+        button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(button_5_up),
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+        )
+
+    def test_mouse_event_to_reports_keeps_wheel_and_motion_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.ulButtons = RI_MOUSE_WHEEL | (0x0001 << 16)
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00]),
+            ],
+        )
+
+    def test_mouse_event_to_reports_keeps_pan_and_motion_reports(self) -> None:
+        raw_mouse = RAWMOUSE()
+        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
+        raw_mouse.lLastX = 300
+        raw_mouse.lLastY = -300
+
+        self.assertEqual(
+            test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
+            [
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF]),
+            ],
+        )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
         if sys.platform == "win32":
@@ -556,6 +825,27 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                     consumer_nodes=(),
                 ),
             )
+
+    def test_windows_backend_reports_unsupported_intrusive_mouse_buttons(
+        self,
+    ) -> None:
+        with patch("bluetooth_2_usb.test_harness_capture_windows.IS_WINDOWS", True):
+            result = test_harness_capture_windows.run_windows_raw_input_capture(
+                scenario_name="mouse_buttons_intrusive",
+                timeout_sec=1.0,
+                candidate_nodes=test_harness_capture_windows.GadgetNodeCandidates(
+                    keyboard_nodes=(),
+                    mouse_nodes=(),
+                    consumer_nodes=(),
+                ),
+            )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_PREREQUISITE)
+        self.assertEqual(
+            result.details["unsupported_mouse_buttons"],
+            ["BTN_FORWARD", "BTN_BACK", "BTN_TASK"],
+        )
 
     def test_windows_backend_imports_with_missing_non_windows_handle_aliases(
         self,

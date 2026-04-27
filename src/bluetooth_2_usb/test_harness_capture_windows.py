@@ -17,7 +17,18 @@ from .test_harness_capture import (
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .test_harness_common import EXIT_OK, get_scenario
+from .test_harness_common import (
+    BTN_EXTRA,
+    BTN_LEFT,
+    BTN_MIDDLE,
+    BTN_RIGHT,
+    BTN_SIDE,
+    EV_KEY,
+    EVENT_CODE_NAMES,
+    EXIT_OK,
+    EXIT_PREREQUISITE,
+    get_scenario,
+)
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -58,13 +69,26 @@ RIM_TYPEKEYBOARD = 1
 RIM_TYPEHID = 2
 PM_REMOVE = 0x0001
 RI_KEY_BREAK = 0x0001
+RI_MOUSE_LEFT_BUTTON_DOWN = 0x0001
+RI_MOUSE_LEFT_BUTTON_UP = 0x0002
+RI_MOUSE_RIGHT_BUTTON_DOWN = 0x0004
+RI_MOUSE_RIGHT_BUTTON_UP = 0x0008
+RI_MOUSE_MIDDLE_BUTTON_DOWN = 0x0010
+RI_MOUSE_MIDDLE_BUTTON_UP = 0x0020
+RI_MOUSE_BUTTON_4_DOWN = 0x0040
+RI_MOUSE_BUTTON_4_UP = 0x0080
+RI_MOUSE_BUTTON_5_DOWN = 0x0100
+RI_MOUSE_BUTTON_5_UP = 0x0200
 RI_MOUSE_WHEEL = 0x0400
+RI_MOUSE_HORIZONTAL_WHEEL = 0x0800
 CW_USEDEFAULT = -2147483648
 GENERIC_DESKTOP_USAGE_PAGE = 0x01
 KEYBOARD_USAGE = 0x06
 MOUSE_USAGE = 0x02
 CONSUMER_USAGE_PAGE = 0x0C
 CONSUMER_USAGE = 0x01
+HID_MOUSE_I16_MIN = -32767
+HID_MOUSE_I16_MAX = 32767
 VK_F13 = 0x7C
 VK_F14 = 0x7D
 VK_F15 = 0x7E
@@ -74,6 +98,23 @@ VK_TO_HID = {
     VK_F14: 105,
     VK_F15: 106,
 }
+
+RAW_MOUSE_BUTTON_BITS = (
+    (RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, 0x01),
+    (RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP, 0x02),
+    (RI_MOUSE_MIDDLE_BUTTON_DOWN, RI_MOUSE_MIDDLE_BUTTON_UP, 0x04),
+    (RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP, 0x08),
+    (RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP, 0x10),
+)
+WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES = {
+    BTN_LEFT,
+    BTN_RIGHT,
+    BTN_MIDDLE,
+    BTN_SIDE,
+    BTN_EXTRA,
+}
+
+_mouse_button_state = 0
 
 
 class RAWINPUTDEVICE(ctypes.Structure):
@@ -482,15 +523,64 @@ def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
     return bytes([0x00, 0x00, hid_code, 0, 0, 0, 0, 0])
 
 
+def _mouse_i16_bytes(value: int) -> bytes:
+    clamped = min(HID_MOUSE_I16_MAX, max(HID_MOUSE_I16_MIN, value))
+    return clamped.to_bytes(2, "little", signed=True)
+
+
+def _apply_mouse_button_flags(button_flags: int) -> bool:
+    global _mouse_button_state
+
+    changed = False
+    for down_flag, up_flag, button_bit in RAW_MOUSE_BUTTON_BITS:
+        if button_flags & down_flag:
+            _mouse_button_state |= button_bit
+            changed = True
+        if button_flags & up_flag:
+            _mouse_button_state &= ~button_bit
+            changed = True
+    return changed
+
+
+def _reset_mouse_button_state() -> None:
+    global _mouse_button_state
+
+    _mouse_button_state = 0
+
+
+def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
+    return tuple(
+        dict.fromkeys(
+            step.code
+            for step in scenario.mouse_button_steps
+            if step.code not in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
+        )
+    )
+
+
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
-    if button_flags & RI_MOUSE_WHEEL:
-        return reports
-    if raw_mouse.lLastX:
-        reports.append(bytes([0x02, 0x00, raw_mouse.lLastX & 0xFF, 0x00, 0x00]))
-    if raw_mouse.lLastY:
-        reports.append(bytes([0x02, 0x00, 0x00, raw_mouse.lLastY & 0xFF, 0x00]))
+    button_changed = _apply_mouse_button_flags(button_flags)
+    wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
+    wheel = wheel_value if button_flags & RI_MOUSE_WHEEL else 0
+    pan = wheel_value if button_flags & RI_MOUSE_HORIZONTAL_WHEEL else 0
+    if raw_mouse.lLastX or raw_mouse.lLastY or wheel or pan:
+        x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
+        y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
+        reports.append(
+            bytes(
+                [
+                    _mouse_button_state,
+                    *x_bytes,
+                    *y_bytes,
+                    wheel & 0xFF,
+                    pan & 0xFF,
+                ]
+            )
+        )
+    if button_changed and not reports:
+        reports.append(bytes([_mouse_button_state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
     return reports
 
 
@@ -717,6 +807,7 @@ def _pump_raw_input(
     scenario_name: str,
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
+    _reset_mouse_button_state()
     keyboard_candidate = (
         _RawInputCandidate(
             "keyboard",
@@ -931,6 +1022,28 @@ def run_windows_raw_input_capture(
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
+    unsupported_mouse_buttons = _unsupported_windows_mouse_button_codes(scenario)
+    if unsupported_mouse_buttons:
+        unsupported_names = [
+            EVENT_CODE_NAMES[EV_KEY].get(code, str(code))
+            for code in unsupported_mouse_buttons
+        ]
+        return HarnessResult(
+            command="capture",
+            scenario=scenario.name,
+            success=False,
+            exit_code=EXIT_PREREQUISITE,
+            message=(
+                "Windows Raw Input capture only exposes mouse buttons through "
+                f"{EVENT_CODE_NAMES[EV_KEY][BTN_EXTRA]}; unsupported scenario "
+                f"buttons: {', '.join(unsupported_names)}"
+            ),
+            details={
+                "capture_backend": "raw_input",
+                "unsupported_mouse_buttons": unsupported_names,
+            },
+        )
+
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
     consumer_candidate_identities: tuple[str, ...] = ()

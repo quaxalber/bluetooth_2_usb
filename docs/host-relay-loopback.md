@@ -14,6 +14,13 @@ This validates the path:
 
 `Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
+By default, run only the lower-risk scenarios: `keyboard`, `mouse`,
+`mouse_fast`, `combo`, and `consumer`. These avoid left, right, middle,
+forward, back, and task mouse button down events. Run `mouse_buttons_intrusive`
+only when you
+intentionally want full live button-bit validation and can tolerate possible
+host UI interaction.
+
 ## Preconditions
 
 - the Pi is connected to the host through the OTG-capable data path
@@ -119,6 +126,11 @@ On the Pi:
 sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario combo
 ```
 
+When `bluetooth_2_usb.service` is active, the injector waits up to the default
+service-settle window before emitting events. This avoids racing a freshly
+re-enumerated USB HID gadget before the host has started draining reports. Set
+`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that harness-only wait.
+
 The injector creates temporary virtual devices named:
 
 - `B2U Test Keyboard`
@@ -127,7 +139,40 @@ The injector creates temporary virtual devices named:
 and emits this deterministic sequence:
 
 - keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
-- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`
+- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
+  `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`,
+  one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then
+  side/extra mouse button bits press/release
+
+For mouse wheel and horizontal wheel steps, the injector emits paired low-res
+and high-res evdev events in the same `SYN_REPORT` frame. The host capture
+expects the relay to emit one equivalent USB HID wheel or pan step.
+
+The `mouse_fast` scenario emits large relative X/Y movement plus fast vertical
+wheel and horizontal pan deltas that require multiple USB HID reports. Use it to
+stress high-speed mouse movement and scrolling forwarding:
+
+```bash
+./scripts/loopback-capture.sh --scenario mouse_fast
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_fast
+```
+
+The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
+signed 8-bit vertical wheel and horizontal pan.
+
+To validate all eight button bits, run the explicit intrusive button scenario:
+
+```bash
+./scripts/loopback-capture.sh --scenario mouse_buttons_intrusive
+sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_buttons_intrusive
+```
+
+On Windows, the current Raw Input capture backend only maps mouse button bits
+through `BTN_EXTRA`. It rejects `mouse_buttons_intrusive` with
+`EXIT_PREREQUISITE` because that scenario also includes `BTN_FORWARD`,
+`BTN_BACK`, and `BTN_TASK`; use the default `mouse` or `combo` scenario there,
+or run intrusive button validation on a backend that can surface every button
+bit.
 
 ## 4. Success criteria
 

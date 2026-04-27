@@ -12,7 +12,7 @@ from rich.table import Table
 
 from .logging import get_logger
 
-_logger = get_logger()
+logger = get_logger(__name__)
 
 DEFAULT_SKIP_NAME_PREFIXES = (
     "vc4-hdmi",

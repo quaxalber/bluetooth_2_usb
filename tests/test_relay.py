@@ -6,23 +6,26 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import usb_hid
 
+from bluetooth_2_usb.device_relay import DeviceRelay
+from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
+from bluetooth_2_usb.extended_mouse import ExtendedMouse
 from bluetooth_2_usb.gadget_config import rebuild_gadget
+from bluetooth_2_usb.gadget_manager import GadgetManager
+from bluetooth_2_usb.hid_dispatch import dispatch_key_event_to_hid
 from bluetooth_2_usb.hid_layout import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
+    DEFAULT_MOUSE_DESCRIPTOR,
     GadgetHidDevice,
     build_default_layout,
 )
-from bluetooth_2_usb.relay import (
-    DeviceRelay,
-    GadgetManager,
-    RelayController,
-    RuntimeMonitor,
-    ShortcutToggler,
-)
+from bluetooth_2_usb.mouse_delta import MouseDelta
+from bluetooth_2_usb.relay_controller import RelayController
+from bluetooth_2_usb.runtime_monitor import RuntimeMonitor
+from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
 
 
 class _FakeKeyboard:
@@ -36,21 +39,49 @@ class _FakeKeyboard:
 class _FakeMouse:
     def __init__(self) -> None:
         self.release_all_calls = 0
+        self.moves = []
+        self.presses = []
+        self.releases = []
 
     def release_all(self) -> None:
         self.release_all_calls += 1
+
+    def move(self, x=0, y=0, wheel=0, pan=0) -> None:
+        self.moves.append((x, y, wheel, pan))
+
+    def press(self, key_id) -> None:
+        self.presses.append(key_id)
+
+    def release(self, key_id) -> None:
+        self.releases.append(key_id)
+
+
+class _FakeConsumer:
+    def __init__(self) -> None:
+        self.presses = []
+        self.release_calls = 0
+
+    def press(self, key_id) -> None:
+        self.presses.append(key_id)
+
+    def release(self) -> None:
+        self.release_calls += 1
 
 
 class _FakeGadgetManager:
     def __init__(self) -> None:
         self.keyboard = _FakeKeyboard()
         self.mouse = _FakeMouse()
+        self.consumer = _FakeConsumer()
 
     def get_keyboard(self):
         return self.keyboard
 
     def get_mouse(self):
         return self.mouse
+
+    def get_consumer(self):
+        return self.consumer
 
 
 class _FakeRelayController:
@@ -94,14 +125,15 @@ class _FakeLoop:
 
 
 class _FakeTaskHandle:
-    def __init__(self) -> None:
+    def __init__(self, *, done: bool = False) -> None:
         self.cancel_calls = 0
+        self._done = done
 
     def cancel(self) -> None:
         self.cancel_calls += 1
 
     def done(self) -> bool:
-        return False
+        return self._done
 
 
 class _FakeInputHandle:
@@ -143,6 +175,17 @@ class _TestKeyEvent:
         self.keystate = keystate
 
 
+class _TestRelEvent:
+    def __init__(self, code: int, value: int) -> None:
+        self.event = SimpleNamespace(type=2, code=code, value=value)
+
+
+class _TestSynEvent:
+    type = 0
+    code = 0
+    value = 0
+
+
 class _TestInputDevice:
     def __init__(self, events, *, removal_errno: int | None = None) -> None:
         self.path = "/dev/input/event-test"
@@ -158,6 +201,177 @@ class _TestInputDevice:
 
     def close(self) -> None:
         return None
+
+
+class ExtendedMouseTest(unittest.TestCase):
+    def test_move_uses_16_bit_xy_and_8_bit_wheel_pan(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(x=300, y=-300, wheel=1, pan=-1)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0xFF]),
+            ],
+        )
+
+    def test_move_accumulates_fractional_pan_across_calls(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(pan=0.5)
+            mouse.move(pan=0.5)
+            mouse.move(pan=-0.5)
+            mouse.move(pan=-0.5)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]),
+            ],
+        )
+
+    def test_move_accumulates_fractional_wheel_across_calls(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(wheel=0.5)
+            mouse.move(wheel=0.5)
+            mouse.move(wheel=-0.5)
+            mouse.move(wheel=-0.5)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]),
+            ],
+        )
+
+    def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x7F, 0x81]),
+                bytes([0x00, 0x41, 0x1C, 0xBF, 0xE3, 0x49, 0xB7]),
+            ],
+        )
+
+    def test_move_debug_logs_reports_sent_to_gadget(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
+
+        self.assertEqual(len(device.sent), 2)
+        self.assertIn(
+            "Sending mouse movement to gadget: buttons=0x00 "
+            "x=32767 y=-32767 wheel=127 pan=-127 "
+            "report=00 ff 7f 01 80 7f 81",
+            logs.output[0],
+        )
+        self.assertIn(
+            "Sending mouse movement to gadget: buttons=0x00 "
+            "x=7233 y=-7233 wheel=73 pan=-73 "
+            "report=00 41 1c bf e3 49 b7",
+            logs.output[1],
+        )
+
+    def test_button_reports_use_one_full_button_byte(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with patch("adafruit_hid.find_device", return_value=device):
+            mouse = ExtendedMouse(devices=[])
+            mouse.press(ExtendedMouse.TASK_BUTTON)
+            mouse.release(ExtendedMouse.TASK_BUTTON)
+
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            ],
+        )
+
+
+class ExtendedMouseButtonMappingTest(unittest.TestCase):
+    def test_evdev_uses_extended_mouse_button_bits(self) -> None:
+        expected_buttons = {
+            ecodes.BTN_LEFT: ExtendedMouse.LEFT,
+            ecodes.BTN_RIGHT: ExtendedMouse.RIGHT,
+            ecodes.BTN_MIDDLE: ExtendedMouse.MIDDLE,
+            ecodes.BTN_SIDE: ExtendedMouse.SIDE,
+            ecodes.BTN_EXTRA: ExtendedMouse.EXTRA,
+            ecodes.BTN_FORWARD: ExtendedMouse.FORWARD,
+            ecodes.BTN_BACK: ExtendedMouse.BACK,
+            ecodes.BTN_TASK: ExtendedMouse.TASK,
+        }
+
+        for scancode, button in expected_buttons.items():
+            with self.subTest(scancode=scancode):
+                hid_code, hid_name = evdev_to_usb_hid(
+                    SimpleNamespace(scancode=scancode, keystate=1)
+                )
+
+                self.assertEqual(hid_code, button)
+                self.assertIsNotNone(hid_name)
+
+
+class HidDispatchTest(unittest.TestCase):
+    def test_consumer_key_release_uses_consumer_control_release_api(self) -> None:
+        gadget_manager = _FakeGadgetManager()
+
+        dispatch_key_event_to_hid(
+            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0),
+            gadget_manager,
+        )
+
+        self.assertEqual(gadget_manager.consumer.release_calls, 1)
+        self.assertEqual(gadget_manager.mouse.releases, [])
 
 
 class ShortcutTogglerTest(unittest.TestCase):
@@ -186,19 +400,38 @@ class ShortcutTogglerTest(unittest.TestCase):
         self.assertTrue(toggler.handle_key_event(make_event(88, 1)))
         self.assertFalse(event_state.is_set())
 
+    def test_toggle_off_releases_consumer_control(self) -> None:
+        event_state = asyncio.Event()
+        event_state.set()
+        gadget_manager = _FakeGadgetManager()
+        toggler = ShortcutToggler(
+            shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"},
+            relaying_active=event_state,
+            gadget_manager=gadget_manager,
+        )
+
+        toggler.toggle_relaying()
+
+        self.assertFalse(event_state.is_set())
+        self.assertEqual(gadget_manager.keyboard.release_all_calls, 1)
+        self.assertEqual(gadget_manager.mouse.release_all_calls, 1)
+        self.assertEqual(gadget_manager.consumer.release_calls, 1)
+
 
 class RuntimeMonitorTest(unittest.TestCase):
     def test_runtime_monitor_routes_hotplug_events(self) -> None:
         relay_controller = _FakeRelayController()
         relaying_active = asyncio.Event()
 
-        with patch("bluetooth_2_usb.relay.pyudev.Context", return_value=object()):
+        with patch(
+            "bluetooth_2_usb.runtime_monitor.pyudev.Context", return_value=object()
+        ):
             with patch(
-                "bluetooth_2_usb.relay.pyudev.Monitor.from_netlink",
+                "bluetooth_2_usb.runtime_monitor.pyudev.Monitor.from_netlink",
                 return_value=_FakeMonitor(),
             ):
                 with patch(
-                    "bluetooth_2_usb.relay.pyudev.MonitorObserver",
+                    "bluetooth_2_usb.runtime_monitor.pyudev.MonitorObserver",
                     side_effect=lambda monitor, callback: _FakeObserver(
                         monitor, callback
                     ),
@@ -206,6 +439,7 @@ class RuntimeMonitorTest(unittest.TestCase):
                     monitor = RuntimeMonitor(
                         relay_controller=relay_controller,
                         relaying_active=relaying_active,
+                        udc_path=Path("/tmp/missing-b2u-udc-state"),
                     )
 
         monitor._udev_event_callback(
@@ -226,14 +460,14 @@ class RuntimeMonitorTest(unittest.TestCase):
 class GadgetManagerLayoutTest(unittest.TestCase):
     def test_requested_devices_use_default_layout(self) -> None:
         with patch(
-            "bluetooth_2_usb.relay.build_default_layout",
+            "bluetooth_2_usb.gadget_manager.build_default_layout",
             return_value=SimpleNamespace(devices=("keyboard", "mouse", "consumer")),
         ):
             devices = GadgetManager()._requested_devices()
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
-    def test_default_layout_uses_strict_keyboard_and_existing_mouse_consumer(
+    def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(
         self,
     ) -> None:
         layout = build_default_layout()
@@ -242,9 +476,12 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         self.assertEqual(
             bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR
         )
-        self.assertEqual(
-            bytes(layout.devices[1].descriptor), bytes(usb_hid.Device.MOUSE.descriptor)
-        )
+        self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
+        self.assertEqual(DEFAULT_MOUSE_DESCRIPTOR.count(bytes((0x09, 0x48))), 2)
+        self.assertEqual(tuple(layout.devices[1].report_ids), (0,))
+        self.assertEqual(tuple(layout.devices[1].in_report_lengths), (7,))
+        self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
+        self.assertEqual(layout.devices[1].configfs_report_length, 8)
         self.assertEqual(
             bytes(layout.devices[2].descriptor),
             bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor),
@@ -311,7 +548,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             "_collect_invalid_hidg_nodes",
             side_effect=[["/dev/hidg0 (missing)"], []],
         ) as collect_invalid:
-            with patch("bluetooth_2_usb.relay.time.sleep") as sleep:
+            with patch("bluetooth_2_usb.gadget_manager.time.sleep") as sleep:
                 manager._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
 
         self.assertEqual(collect_invalid.call_count, 2)
@@ -327,13 +564,15 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         with patch.object(manager, "_expected_hidg_paths", return_value=(path,)):
             with patch.object(Path, "stat", return_value=stats):
                 with patch(
-                    "bluetooth_2_usb.relay.os.minor",
+                    "bluetooth_2_usb.gadget_manager.os.minor",
                     return_value=0,
                     create=True,
                 ):
-                    with patch("bluetooth_2_usb.relay.os.O_NONBLOCK", 0, create=True):
+                    with patch(
+                        "bluetooth_2_usb.gadget_manager.os.O_NONBLOCK", 0, create=True
+                    ):
                         with patch(
-                            "bluetooth_2_usb.relay.os.open",
+                            "bluetooth_2_usb.gadget_manager.os.open",
                             side_effect=OSError(errno.ENODEV, "No such device"),
                         ):
                             invalid_paths = manager._collect_invalid_hidg_nodes()
@@ -390,6 +629,24 @@ class GadgetManagerLayoutTest(unittest.TestCase):
                 (gadget_root / "max_speed").read_text(encoding="utf-8").strip(),
                 "high-speed",
             )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb0/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "8",
+            )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb1/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "8",
+            )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb2/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "2",
+            )
 
     def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:
         layout = build_default_layout()
@@ -433,6 +690,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             protocol=1,
             subclass=1,
             descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
+            configfs_report_length=8,
             wakeup_on_write=True,
         )
 
@@ -444,6 +702,7 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         )
 
         self.assertTrue(cloned.wakeup_on_write)
+        self.assertEqual(cloned.configfs_report_length, 8)
 
 
 class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
@@ -469,9 +728,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             seen.append((event.scancode, event.keystate))
             await asyncio.sleep(0.001)
 
-        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with patch.object(
                     relay, "_process_event_with_retry", side_effect=_slow_process
@@ -482,12 +742,14 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen, [(183, 1), (183, 0), (184, 1), (184, 0)])
 
     async def test_aexit_ignores_ebadf_from_ungrab_on_disappeared_device(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EBADF)
         relay = DeviceRelay(
             input_device,
             _FakeGadgetManager(),
             grab_device=True,
-            relaying_active=asyncio.Event(),
+            relaying_active=relaying_active,
         )
 
         async with relay:
@@ -497,6 +759,23 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(input_device.ungrab_calls, 1)
         self.assertEqual(input_device.close_calls, 1)
         self.assertFalse(relay._currently_grabbed)
+
+    async def test_aenter_defers_grab_while_relaying_is_paused(self) -> None:
+        relaying_active = asyncio.Event()
+        input_device = _FakeGrabInputDevice()
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            grab_device=True,
+            relaying_active=relaying_active,
+        )
+
+        async with relay:
+            self.assertFalse(relay._currently_grabbed)
+
+        self.assertEqual(input_device.grab_calls, 0)
+        self.assertEqual(input_device.ungrab_calls, 0)
+        self.assertEqual(input_device.close_calls, 1)
 
     async def test_input_device_removal_stops_reader_without_failing_task_group(
         self,
@@ -520,9 +799,10 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         async def _record_process(event) -> None:
             seen.append((event.scancode, event.keystate))
 
-        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with patch.object(
                     relay, "_process_event_with_retry", side_effect=_record_process
@@ -544,12 +824,13 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
             relaying_active=relaying_active,
         )
 
-        with patch("bluetooth_2_usb.relay.KeyEvent", _TestKeyEvent):
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
             with patch(
-                "bluetooth_2_usb.relay.categorize", side_effect=lambda event: event
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
             ):
                 with patch(
-                    "bluetooth_2_usb.relay.relay_event",
+                    "bluetooth_2_usb.device_relay.dispatch_event_to_hid",
                     side_effect=BrokenPipeError(),
                 ):
                     async with relay:
@@ -558,11 +839,274 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(relaying_active.is_set())
         self.assertEqual(relay._hid_write_failures, 1)
 
+    async def test_relative_mouse_events_are_coalesced_until_syn_report(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 2),
+                _TestRelEvent(ecodes.REL_Y, -3),
+                _TestRelEvent(ecodes.REL_WHEEL, 1),
+                _TestRelEvent(ecodes.REL_HWHEEL, 1),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(2, -3, 1, 1)])
+
+    async def test_relative_mouse_events_log_normalized_values(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 2),
+                _TestRelEvent(ecodes.REL_Y, -3),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, -60),
+                _TestSynEvent(),
+            ]
+        )
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        output = "\n".join(logs.output)
+        self.assertIn(
+            "Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0.0 pan=0.0",
+            output,
+        )
+        self.assertIn(
+            "Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0.0 pan=0.0",
+            output,
+        )
+        self.assertIn(
+            "Mouse REL input: code=11 value=60 -> x=0 y=0 wheel=0.5 pan=0.0",
+            output,
+        )
+        self.assertIn(
+            "Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0.0 pan=-0.5",
+            output,
+        )
+
+    async def test_large_mouse_deltas_are_split_before_retry_boundary(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 40000),
+                _TestRelEvent(ecodes.REL_Y, -40000),
+                _TestRelEvent(ecodes.REL_WHEEL, 200),
+                _TestRelEvent(ecodes.REL_HWHEEL, -200),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(
+            manager.mouse.moves,
+            [
+                (32767, -32767, 127, -127),
+                (7233, -7233, 73, -73),
+            ],
+        )
+
+    async def test_large_mouse_deltas_abort_remaining_chunks_after_write_failure(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        manager = _FakeGadgetManager()
+        manager.mouse.move = Mock(side_effect=BrokenPipeError())
+        relay = DeviceRelay(
+            _TestInputDevice([]),
+            manager,
+            relaying_active=relaying_active,
+        )
+
+        await relay._process_mouse_delta_with_retry(
+            MouseDelta(40000, -40000, 200, -200)
+        )
+
+        manager.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
+        self.assertEqual(relay._hid_write_failures, 1)
+        self.assertFalse(relaying_active.is_set())
+
+    async def test_high_resolution_horizontal_wheel_accumulates_fractional_steps(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1)])
+
+    async def test_high_resolution_vertical_wheel_accumulates_fractional_steps(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0)])
+
+    async def test_high_resolution_horizontal_wheel_suppresses_low_res_fallback(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_HWHEEL, 1),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 120),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, -120),
+                _TestRelEvent(ecodes.REL_HWHEEL, -1),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1), (0, 0, 0, -1)])
+
+    async def test_high_resolution_vertical_wheel_suppresses_low_res_fallback(
+        self,
+    ) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_WHEEL, 1),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 120),
+                _TestSynEvent(),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, -120),
+                _TestRelEvent(ecodes.REL_WHEEL, -1),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                async with relay:
+                    await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0), (0, 0, -1, 0)])
+
+    async def test_inactive_relay_discards_pending_mouse_events(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 5),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestKeyEvent(183, _TestKeyEvent.key_down),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 60),
+                _TestSynEvent(),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        async def deactivate(_event) -> None:
+            relaying_active.clear()
+
+        with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+            with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
+                with patch(
+                    "bluetooth_2_usb.device_relay.categorize",
+                    side_effect=lambda event: event,
+                ):
+                    with patch.object(
+                        relay, "_process_event_with_retry", side_effect=deactivate
+                    ):
+                        async with relay:
+                            await relay.async_relay_events_loop()
+
+        self.assertEqual(manager.mouse.moves, [(5, 0, 0, 0)])
+
 
 class RelayControllerHotplugTest(unittest.TestCase):
     def test_schedule_add_device_queues_until_controller_is_ready(self) -> None:
         controller = RelayController(
             gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
             device_identifiers=[],
         )
 
@@ -589,6 +1133,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
     def test_schedule_remove_device_drops_queued_startup_add(self) -> None:
         controller = RelayController(
             gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
             device_identifiers=[],
         )
 
@@ -620,3 +1165,22 @@ class RelayControllerHotplugTest(unittest.TestCase):
         self.assertEqual(controller._pending_add_paths, [])
         self.assertEqual(task.cancel_calls, 1)
         self.assertEqual(device.close_calls, 0)
+        self.assertIs(controller._active_tasks["/dev/input/event7"], task)
+        self.assertIs(controller._active_devices["/dev/input/event7"], device)
+
+    def test_remove_device_closes_handle_after_task_is_done(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            device_identifiers=[],
+            relaying_active=asyncio.Event(),
+        )
+        task = _FakeTaskHandle(done=True)
+        device = _FakeInputHandle()
+        controller._active_tasks["/dev/input/event7"] = task
+        controller._active_devices["/dev/input/event7"] = device
+
+        controller.remove_device("/dev/input/event7")
+
+        self.assertEqual(task.cancel_calls, 0)
+        self.assertEqual(device.close_calls, 1)
+        self.assertNotIn("/dev/input/event7", controller._active_devices)

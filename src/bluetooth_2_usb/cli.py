@@ -22,7 +22,7 @@ EXIT_ENVIRONMENT = 3
 EXIT_RUNTIME = 4
 GRACEFUL_SHUTDOWN_TIMEOUT_SEC = 4.0
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -113,7 +113,7 @@ def print_version() -> int:
 
 def configure_logging(args: Arguments) -> None:
     if args.debug:
-        logger.setLevel(DEBUG)
+        get_logger().setLevel(DEBUG)
 
     if args.log_to_file:
         add_file_handler(args.log_path)
@@ -231,12 +231,10 @@ async def async_run(args: Arguments) -> int:
 
     relaying_active = asyncio.Event()
 
-    from .relay import (
-        GadgetManager,
-        RelayController,
-        RuntimeMonitor,
-        ShortcutToggler,
-    )
+    from .gadget_manager import GadgetManager
+    from .relay_controller import RelayController
+    from .runtime_monitor import RuntimeMonitor
+    from .shortcut_toggler import ShortcutToggler
 
     gadget_manager = GadgetManager()
     gadget_manager.enable_gadgets()

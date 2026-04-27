@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +10,14 @@ from adafruit_hid.keycode import Keycode
 
 from .evdev import evdev_to_usb_hid
 from .test_harness_common import (
+    BTN_BACK,
+    BTN_EXTRA,
+    BTN_FORWARD,
+    BTN_LEFT,
+    BTN_MIDDLE,
+    BTN_RIGHT,
+    BTN_SIDE,
+    BTN_TASK,
     DEFAULT_DEVICE_SUBSTRING,
     EXIT_ACCESS,
     EXIT_MISMATCH,
@@ -18,6 +26,8 @@ from .test_harness_common import (
     EXIT_TIMEOUT,
     KEY_VOLUMEDOWN,
     KEY_VOLUMEUP,
+    REL_HWHEEL,
+    REL_WHEEL,
     REL_X,
     REL_Y,
     GadgetNodes,
@@ -43,6 +53,19 @@ CONSUMER_USAGES = {
 REL_NAMES = {
     REL_X: "REL_X",
     REL_Y: "REL_Y",
+    REL_HWHEEL: "REL_HWHEEL",
+    REL_WHEEL: "REL_WHEEL",
+}
+
+MOUSE_BUTTON_BITS = {
+    BTN_LEFT: 0x01,
+    BTN_RIGHT: 0x02,
+    BTN_MIDDLE: 0x04,
+    BTN_SIDE: 0x08,
+    BTN_EXTRA: 0x10,
+    BTN_FORWARD: 0x20,
+    BTN_BACK: 0x40,
+    BTN_TASK: 0x80,
 }
 
 
@@ -168,6 +191,13 @@ class MouseSequenceMatcher:
     expected_button_steps: tuple
     rel_index: int = 0
     button_index: int = 0
+    _button_state: int = 0
+    _pending_rel_remaining: list[list[int]] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._pending_rel_remaining = [
+            [step.code, step.value] for step in self.expected_rel_steps
+        ]
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
@@ -184,60 +214,101 @@ class MouseSequenceMatcher:
             raise CaptureMismatchError(
                 f"Unexpected mouse report format: {report.hex(sep=' ')}"
             )
-        buttons, rel_x, rel_y, wheel = parsed
-        if wheel != 0:
-            raise CaptureMismatchError(
-                f"Unexpected mouse wheel movement in report {report.hex(sep=' ')}"
-            )
-        if not self.expected_button_steps and buttons != 0:
-            raise CaptureMismatchError(
-                f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
-            )
+        buttons, rel_x, rel_y, wheel, pan = parsed
+        self._apply_button_report(buttons, report)
 
+        rel_events = []
         if rel_x:
-            self._apply_rel(REL_X, rel_x)
+            rel_events.append((REL_X, rel_x))
         if rel_y:
-            self._apply_rel(REL_Y, rel_y)
+            rel_events.append((REL_Y, rel_y))
+        if wheel:
+            rel_events.append((REL_WHEEL, wheel))
+        if pan:
+            rel_events.append((REL_HWHEEL, pan))
+        if rel_events:
+            self._apply_rel_report(rel_events)
 
-        if buttons not in (0, 1, 2):
+    def _apply_button_report(self, buttons: int, report: bytes) -> None:
+        if buttons == self._button_state:
+            return
+        if self.button_index >= len(self.expected_button_steps):
             raise CaptureMismatchError(
                 f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
             )
+        if not self.rel_complete:
+            raise CaptureMismatchError("Mouse button report arrived before movement")
 
-        if rel_x == 0 and rel_y == 0:
-            if self.button_index >= len(self.expected_button_steps):
-                if buttons == 0:
-                    return
-                raise CaptureMismatchError(
-                    f"Unexpected extra mouse button report {report.hex(sep=' ')}"
-                )
-
-            if not self.rel_complete:
-                if buttons != 0:
-                    raise CaptureMismatchError(
-                        "Mouse button report arrived before movement"
-                    )
-                return
-
-            expected = self.expected_button_steps[self.button_index]
-            if buttons != expected.value:
-                raise CaptureMismatchError(
-                    f"Unexpected mouse button report {report.hex(sep=' ')}; expected {expected.describe()}"
-                )
-            self.button_index += 1
-
-    def _apply_rel(self, code: int, value: int) -> None:
-        if self.rel_index >= len(self.expected_rel_steps):
+        expected = self.expected_button_steps[self.button_index]
+        expected_buttons = self._apply_button_step(expected)
+        if buttons != expected_buttons:
             raise CaptureMismatchError(
-                f"Unexpected extra mouse relative event {REL_NAMES.get(code, code)}={value}"
+                f"Unexpected mouse button report {report.hex(sep=' ')}; expected {expected.describe()}"
             )
-        pending_step = self.expected_rel_steps[self.rel_index]
-        if pending_step.code != code or pending_step.value != value:
+        self.button_index += 1
+
+    def _apply_button_step(self, expected) -> int:
+        button_bit = MOUSE_BUTTON_BITS.get(expected.code)
+        if button_bit is None:
+            raise CaptureMismatchError(
+                f"Expected mouse button step {expected.describe()} is not mappable to HID"
+            )
+        if expected.value == 1:
+            self._button_state |= button_bit
+        elif expected.value == 0:
+            self._button_state &= ~button_bit
+        return self._button_state
+
+    def _apply_rel_report(self, rel_events: list[tuple[int, int]]) -> None:
+        report_codes = {code for code, _value in rel_events}
+        for code, value in rel_events:
+            self._apply_rel(code, value, report_codes)
+
+    def _apply_rel(self, code: int, value: int, report_codes: set[int]) -> None:
+        pending_index = self._find_pending_rel_index(code, report_codes)
+        if pending_index is None:
+            expected = (
+                self._pending_rel_remaining[0] if self._pending_rel_remaining else None
+            )
+            expected_label = (
+                f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}"
+                if expected
+                else ""
+            )
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}; expected {pending_step.describe()}"
+                f"{REL_NAMES.get(code, code)}={value}{expected_label}"
             )
-        self.rel_index += 1
+
+        remaining = self._pending_rel_remaining[pending_index][1]
+        if not _same_direction(remaining, value):
+            raise CaptureMismatchError(
+                "Unexpected mouse relative event "
+                f"{REL_NAMES.get(code, code)}={value}; expected "
+                f"{REL_NAMES.get(code, code)}={remaining}"
+            )
+
+        if abs(value) > abs(remaining):
+            raise CaptureMismatchError(
+                "Unexpected mouse relative event "
+                f"{REL_NAMES.get(code, code)}={value}; exceeds pending "
+                f"{REL_NAMES.get(code, code)}={remaining}"
+            )
+
+        remaining -= value
+        if remaining == 0:
+            self.rel_index += 1
+            self._pending_rel_remaining.pop(pending_index)
+        else:
+            self._pending_rel_remaining[pending_index][1] = remaining
+
+    def _find_pending_rel_index(self, code: int, report_codes: set[int]) -> int | None:
+        for index, (pending_code, _remaining) in enumerate(self._pending_rel_remaining):
+            if pending_code not in report_codes:
+                break
+            if pending_code == code:
+                return index
+        return None
 
     @property
     def rel_complete(self) -> bool:
@@ -248,6 +319,12 @@ class MouseSequenceMatcher:
         return self.rel_complete and self.button_index >= len(
             self.expected_button_steps
         )
+
+
+def _same_direction(expected: int, observed: int) -> bool:
+    if expected == 0:
+        return observed == 0
+    return (expected > 0 and observed > 0) or (expected < 0 and observed < 0)
 
 
 @dataclass(slots=True)
@@ -308,26 +385,18 @@ def _normalize_keyboard_report(report: bytes) -> bytes | None:
     return None
 
 
-def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int] | None:
-    payload = report
-    wheel = 0
-    if len(report) == 5 and report[0] == 0x02:
-        payload = report[1:]
-    elif len(report) == 4 and report[0] == 0x02:
-        payload = report[1:]
-    elif len(report) == 4:
-        payload = report
-    elif len(report) == 3:
-        payload = report
-    else:
+def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | None:
+    if len(report) == 8 and report[0] == 0x00:
+        report = report[1:]
+    if len(report) != 7:
         return None
 
-    buttons = payload[0]
-    rel_x = int.from_bytes(payload[1:2], "little", signed=True)
-    rel_y = int.from_bytes(payload[2:3], "little", signed=True)
-    if len(payload) >= 4:
-        wheel = int.from_bytes(payload[3:4], "little", signed=True)
-    return buttons, rel_x, rel_y, wheel
+    buttons = report[0]
+    rel_x = int.from_bytes(report[1:3], "little", signed=True)
+    rel_y = int.from_bytes(report[3:5], "little", signed=True)
+    wheel = int.from_bytes(report[5:6], "little", signed=True)
+    pan = int.from_bytes(report[6:7], "little", signed=True)
+    return buttons, rel_x, rel_y, wheel, pan
 
 
 def _normalize_consumer_report(report: bytes) -> int | None:
