@@ -45,8 +45,8 @@ class GadgetManager:
 
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(
-            Path(f"/dev/hidg{index}")
-            for index, _ in enumerate(self._requested_devices())
+            Path(f"/dev/hidg{device.function_index}")
+            for device in self._requested_devices()
         )
 
     def _prune_stale_hidg_nodes(
@@ -64,7 +64,9 @@ class GadgetManager:
 
     def _collect_invalid_hidg_nodes(self) -> list[str]:
         invalid_paths: list[str] = []
-        for index, path in enumerate(self._expected_hidg_paths()):
+        for device, path in zip(
+            self._requested_devices(), self._expected_hidg_paths(), strict=False
+        ):
             try:
                 stats = path.stat()
             except FileNotFoundError:
@@ -74,9 +76,10 @@ class GadgetManager:
             if not stat.S_ISCHR(mode):
                 invalid_paths.append(f"{path} (mode=0o{mode:o})")
                 continue
-            if os.minor(stats.st_rdev) != index:
+            expected_minor = device.function_index
+            if os.minor(stats.st_rdev) != expected_minor:
                 invalid_paths.append(
-                    f"{path} (minor={os.minor(stats.st_rdev)}, expected={index})"
+                    f"{path} (minor={os.minor(stats.st_rdev)}, expected={expected_minor})"
                 )
                 continue
             try:

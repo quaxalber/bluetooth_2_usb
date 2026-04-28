@@ -48,4 +48,4 @@ class DeviceIdentifier:
             return self._value == device.path
         if self._kind == "mac":
             return self._normalized_value == (device.uniq or "").lower()
-        return self._normalized_value in device.name.lower()
+        return self._normalized_value in (device.name or "").lower()

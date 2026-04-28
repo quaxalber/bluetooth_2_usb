@@ -8,9 +8,12 @@ except ModuleNotFoundError:
     InputEvent = Any  # type: ignore[assignment]
 
     class InputDevice:
-        def __init__(self, path: str = "", name: str = "", uniq: str = "") -> None:
+        def __init__(
+            self, path: str = "", name: str = "", phys: str = "", uniq: str = ""
+        ) -> None:
             self.path = path
             self.name = name
+            self.phys = phys
             self.uniq = uniq
 
         async def async_read_loop(self):

@@ -1,16 +1,9 @@
 from __future__ import annotations
 
+from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 from .logging import get_logger
 
 logger = get_logger(__name__)
-
-
-def _clamp_hid_i8(value: int) -> int:
-    return min(127, max(-127, value))
-
-
-def _clamp_hid_i16(value: int) -> int:
-    return min(32767, max(-32767, value))
 
 
 class ExtendedMouse:
@@ -58,10 +51,10 @@ class ExtendedMouse:
         pan = int(pan_total)
         self._pan_remainder = pan_total - pan
         while x != 0 or y != 0 or wheel != 0 or pan != 0:
-            partial_x = _clamp_hid_i16(x)
-            partial_y = _clamp_hid_i16(y)
-            partial_wheel = _clamp_hid_i8(wheel)
-            partial_pan = _clamp_hid_i8(pan)
+            partial_x = clamp_hid_i16(x)
+            partial_y = clamp_hid_i16(y)
+            partial_wheel = clamp_hid_i8(wheel)
+            partial_pan = clamp_hid_i8(pan)
             self.report[1:3] = partial_x.to_bytes(2, "little", signed=True)
             self.report[3:5] = partial_y.to_bytes(2, "little", signed=True)
             self.report[5:6] = partial_wheel.to_bytes(1, "little", signed=True)

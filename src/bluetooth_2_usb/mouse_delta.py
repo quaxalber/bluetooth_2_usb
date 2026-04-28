@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from .evdev import ecodes, get_mouse_movement
 from .evdev_compat import RelEvent
+from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,14 +82,6 @@ class MouseDeltaAccumulator:
         self._pan_low_res = 0.0
         self._pan_hi_res = 0.0
         self._pan_hi_res_seen = False
-
-
-def clamp_hid_i8(value: int) -> int:
-    return min(127, max(-127, value))
-
-
-def clamp_hid_i16(value: int) -> int:
-    return min(32767, max(-32767, value))
 
 
 def iter_mouse_delta_chunks(delta: MouseDelta) -> Iterator[MouseDelta]:

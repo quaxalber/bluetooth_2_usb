@@ -457,6 +457,13 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_mouse_matcher_accepts_report_id_prefixed_hidapi_report(self) -> None:
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:1], ())
+
+        matcher.handle(bytes([0x02]) + self._extended_mouse_report(x=1))
+
+        self.assertTrue(matcher.complete)
+
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 

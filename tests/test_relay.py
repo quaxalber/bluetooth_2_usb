@@ -467,6 +467,19 @@ class GadgetManagerLayoutTest(unittest.TestCase):
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
+    def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
+        devices = (
+            SimpleNamespace(function_index=2),
+            SimpleNamespace(function_index=7),
+        )
+        with patch(
+            "bluetooth_2_usb.gadget_manager.build_default_layout",
+            return_value=SimpleNamespace(devices=devices),
+        ):
+            paths = GadgetManager()._expected_hidg_paths()
+
+        self.assertEqual(paths, (Path("/dev/hidg2"), Path("/dev/hidg7")))
+
     def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(
         self,
     ) -> None:
