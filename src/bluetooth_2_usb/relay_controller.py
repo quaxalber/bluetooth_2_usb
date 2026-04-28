@@ -68,6 +68,9 @@ class RelayController:
         :param shortcut_toggler: ShortcutToggler to allow toggling relaying globally
         """
         self._gadget_manager = gadget_manager
+        self._relaying_active = relaying_active
+        self._shortcut_toggler = shortcut_toggler
+
         self._device_identifiers = [
             DeviceIdentifier(identifier) for identifier in (device_identifiers or [])
         ]
@@ -77,15 +80,15 @@ class RelayController:
             if skip_name_prefixes is not None
             else DEFAULT_SKIP_NAME_PREFIXES
         )
-        self._grab_devices = grab_devices
-        self._relaying_active = relaying_active
-        self._shortcut_toggler = shortcut_toggler
 
-        self._active_relays: dict[str, _ActiveRelay] = {}
-        self._task_group: TaskGroup | None = None
+        self._grab_devices = grab_devices
+
+        self._state = _ControllerState.NEW
         self._shutdown_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._state = _ControllerState.NEW
+        self._task_group: TaskGroup | None = None
+
+        self._active_relays: dict[str, _ActiveRelay] = {}
         self._pending_add_paths: set[str] = set()
         self._pending_add_lock = threading.Lock()
 
@@ -218,6 +221,45 @@ class RelayController:
                 device_path,
             )
 
+    def notify_device_removed(self, device_path: str) -> None:
+        if self._state is _ControllerState.NEW:
+            if self._discard_pending_add(device_path):
+                logger.debug(
+                    "Dropped queued add for %s because the device was removed before startup completed.",
+                    device_path,
+                )
+            return
+
+        if self._state is _ControllerState.STARTING:
+            if self._discard_pending_add(device_path):
+                logger.debug(
+                    "Dropped queued add for %s because the device was removed before startup completed.",
+                    device_path,
+                )
+                return
+            if device_path not in self._active_relays:
+                return
+
+        if self._state in (_ControllerState.SHUTTING_DOWN, _ControllerState.STOPPED):
+            logger.debug(
+                "Ignoring remove for %s; controller is shutting down.",
+                device_path,
+            )
+            return
+        loop = self._loop
+        if loop is None or self._shutdown_requested():
+            logger.debug(
+                f"Ignoring remove for {device_path}; event loop is unavailable."
+            )
+            return
+        try:
+            loop.call_soon_threadsafe(self._cancel_active_relay, device_path)
+        except RuntimeError:
+            logger.debug(
+                "Ignoring remove for %s; controller is shutting down.",
+                device_path,
+            )
+
     def _queue_pending_add(self, device_path: str) -> None:
         with self._pending_add_lock:
             self._pending_add_paths.add(device_path)
@@ -301,45 +343,6 @@ class RelayController:
             return
 
         self._start_open_device(device)
-
-    def notify_device_removed(self, device_path: str) -> None:
-        if self._state is _ControllerState.NEW:
-            if self._discard_pending_add(device_path):
-                logger.debug(
-                    "Dropped queued add for %s because the device was removed before startup completed.",
-                    device_path,
-                )
-            return
-
-        if self._state is _ControllerState.STARTING:
-            if self._discard_pending_add(device_path):
-                logger.debug(
-                    "Dropped queued add for %s because the device was removed before startup completed.",
-                    device_path,
-                )
-                return
-            if device_path not in self._active_relays:
-                return
-
-        if self._state in (_ControllerState.SHUTTING_DOWN, _ControllerState.STOPPED):
-            logger.debug(
-                "Ignoring remove for %s; controller is shutting down.",
-                device_path,
-            )
-            return
-        loop = self._loop
-        if loop is None or self._shutdown_requested():
-            logger.debug(
-                f"Ignoring remove for {device_path}; event loop is unavailable."
-            )
-            return
-        try:
-            loop.call_soon_threadsafe(self._cancel_active_relay, device_path)
-        except RuntimeError:
-            logger.debug(
-                "Ignoring remove for %s; controller is shutting down.",
-                device_path,
-            )
 
     def _start_open_device(self, device: InputDevice) -> None:
         if self._state not in (_ControllerState.STARTING, _ControllerState.RUNNING):
