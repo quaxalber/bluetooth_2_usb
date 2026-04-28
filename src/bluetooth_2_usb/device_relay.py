@@ -179,6 +179,7 @@ class DeviceRelay:
                     await self._flush_pending_mouse_movement()
                     continue
 
+                # Preserve cross-gadget event order if another event arrives before SYN_REPORT.
                 await self._flush_pending_mouse_movement()
                 await self._process_event_with_retry(event)
         except OSError as ex:
@@ -223,7 +224,7 @@ class DeviceRelay:
         for partial in iter_mouse_delta_chunks(delta):
 
             def move_mouse(partial=partial) -> None:
-                mouse = self._gadget_manager.get_mouse()
+                mouse = self._gadget_manager.mouse
                 if mouse is None:
                     raise RuntimeError(
                         "Mouse gadget not initialized or manager not enabled."

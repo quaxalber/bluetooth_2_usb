@@ -143,7 +143,8 @@ class GadgetManager:
 
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)
 
-    def get_keyboard(self) -> Keyboard | None:
+    @property
+    def keyboard(self) -> Keyboard | None:
         """
         Get the Keyboard gadget.
 
@@ -152,7 +153,8 @@ class GadgetManager:
         """
         return self._gadgets["keyboard"]
 
-    def get_mouse(self) -> ExtendedMouse | None:
+    @property
+    def mouse(self) -> ExtendedMouse | None:
         """
         Get the Mouse gadget.
 
@@ -161,7 +163,8 @@ class GadgetManager:
         """
         return self._gadgets["mouse"]
 
-    def get_consumer(self) -> ConsumerControl | None:
+    @property
+    def consumer(self) -> ConsumerControl | None:
         """
         Get the ConsumerControl gadget.
 

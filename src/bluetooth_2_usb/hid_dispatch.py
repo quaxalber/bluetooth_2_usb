@@ -29,7 +29,7 @@ def dispatch_event_to_hid(event: InputEvent, gadget_manager: GadgetManager) -> N
     :raises BlockingIOError: If HID device write is blocked
     """
     if isinstance(event, RelEvent):
-        mouse = gadget_manager.get_mouse()
+        mouse = gadget_manager.mouse
         if mouse is None:
             raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
         mouse.move(*get_mouse_movement(event))
@@ -75,7 +75,7 @@ def select_hid_gadget(
     :return: A ConsumerControl, Mouse, or Keyboard object, or None if not found
     """
     if is_consumer_key(event):
-        return gadget_manager.get_consumer()
+        return gadget_manager.consumer
     if is_mouse_button(event):
-        return gadget_manager.get_mouse()
-    return gadget_manager.get_keyboard()
+        return gadget_manager.mouse
+    return gadget_manager.keyboard

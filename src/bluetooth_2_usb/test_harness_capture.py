@@ -387,7 +387,7 @@ def _normalize_keyboard_report(report: bytes) -> bytes | None:
 
 def _normalize_mouse_report(report: bytes) -> tuple[int, int, int, int, int] | None:
     if len(report) in (8, 9):
-        report = report[1:]
+        report = report[-7:]
     if len(report) != 7:
         return None
 

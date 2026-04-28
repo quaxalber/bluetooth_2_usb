@@ -75,15 +75,6 @@ class _FakeGadgetManager:
         self.consumer = _FakeConsumer()
         self.release_all_gadgets_calls = 0
 
-    def get_keyboard(self):
-        return self.keyboard
-
-    def get_mouse(self):
-        return self.mouse
-
-    def get_consumer(self):
-        return self.consumer
-
     def release_all_gadgets(self) -> None:
         self.release_all_gadgets_calls += 1
         self.keyboard.release_all()
@@ -957,6 +948,37 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
                     await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(2, -3, 1, 1)])
+
+    async def test_pending_mouse_delta_flushes_before_later_key_event(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 5),
+                _TestKeyEvent(183, _TestKeyEvent.key_down),
+            ]
+        )
+        manager = _FakeGadgetManager()
+        order = []
+        manager.mouse.move = lambda *args: order.append(("mouse", args))
+        relay = DeviceRelay(input_device, manager, relaying_active=relaying_active)
+
+        async def _record_key(event) -> None:
+            order.append(("key", event.scancode))
+
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
+            with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+                with patch(
+                    "bluetooth_2_usb.device_relay.categorize",
+                    side_effect=lambda event: event,
+                ):
+                    with patch.object(
+                        relay, "_process_event_with_retry", side_effect=_record_key
+                    ):
+                        async with relay:
+                            await relay.async_relay_events_loop()
+
+        self.assertEqual(order, [("mouse", (5, 0, 0, 0)), ("key", 183)])
 
     async def test_relative_mouse_events_log_normalized_values(self) -> None:
         relaying_active = asyncio.Event()
