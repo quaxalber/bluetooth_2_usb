@@ -64,7 +64,7 @@ def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
     for attribute in sorted(dir(ecodes)):
         if not attribute.startswith(prefixes):
             continue
-        if attribute.endswith(("_MIN", "_MAX", "_CNT")):
+        if any(marker in attribute for marker in ("_MIN", "_MAX", "_CNT")):
             continue
         value = getattr(ecodes, attribute)
         if not isinstance(value, int):

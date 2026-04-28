@@ -293,6 +293,6 @@ class DeviceRelay:
                 return False
             except Exception:
                 self._hid_write_failures += 1
-                logger.exception("Error processing %s", action_name)
-                return False
+                logger.exception("Unexpected error processing %s", action_name)
+                raise
         return False

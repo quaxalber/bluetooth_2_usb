@@ -33,6 +33,9 @@ class GadgetManager:
         """
         Initialize without enabling devices. Call enable_gadgets() to enable them.
         """
+        self._clear_gadget_state()
+
+    def _clear_gadget_state(self) -> None:
         self._gadgets = {
             "keyboard": None,
             "mouse": None,
@@ -121,6 +124,7 @@ class GadgetManager:
         Disable and re-enable usb_hid devices, then store references
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
+        self._clear_gadget_state()
         self._prune_stale_hidg_nodes(remove_character_devices=True)
         enabled_devices = list(rebuild_gadget(build_default_layout()))
         try:

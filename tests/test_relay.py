@@ -133,6 +133,15 @@ class _FakeLoop:
         return handle
 
 
+class _ImmediateLoop:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def call_soon_threadsafe(self, callback, *args) -> None:
+        self.calls.append((callback, args))
+        callback(*args)
+
+
 class _FakeTimerHandle:
     def __init__(self) -> None:
         self.cancel_calls = 0
@@ -521,6 +530,7 @@ class RuntimeMonitorTest(unittest.TestCase):
                         relaying_active=relaying_active,
                         udc_path=Path("/tmp/missing-b2u-udc-state"),
                     )
+        monitor._loop = _ImmediateLoop()
 
         monitor._udev_event_callback(
             "add", SimpleNamespace(device_node="/dev/input/event7")
@@ -535,6 +545,7 @@ class RuntimeMonitorTest(unittest.TestCase):
 
         self.assertEqual(relay_controller.added, ["/dev/input/event7"])
         self.assertEqual(relay_controller.removed, ["/dev/input/event7"])
+        self.assertEqual(len(monitor._loop.calls), 2)
 
     def test_runtime_monitor_treats_udc_read_errors_as_not_attached(self) -> None:
         monitor = RuntimeMonitor.__new__(RuntimeMonitor)
@@ -586,11 +597,13 @@ class RuntimeMonitorLifecycleTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(monitor._last_state)
         self.assertTrue(monitor._observer.started)
+        self.assertIsNotNone(monitor._loop)
 
         await monitor.__aexit__(None, None, None)
 
         self.assertFalse(monitor._observer.started)
         self.assertIsNone(monitor._task)
+        self.assertIsNone(monitor._loop)
 
 
 class GadgetManagerLayoutTest(unittest.TestCase):
@@ -616,6 +629,29 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         self.assertEqual(manager._gadgets["keyboard"].release_all_calls, 1)
         self.assertEqual(manager._gadgets["mouse"].release_all_calls, 1)
         self.assertEqual(manager._gadgets["consumer"].release_calls, 1)
+
+    def test_enable_gadgets_clears_published_refs_before_rebuild(self) -> None:
+        manager = GadgetManager()
+        manager._gadgets = {
+            "keyboard": _FakeKeyboard(),
+            "mouse": _FakeMouse(),
+            "consumer": _FakeConsumer(),
+        }
+        manager._enabled = True
+
+        with patch.object(manager, "_prune_stale_hidg_nodes"):
+            with patch(
+                "bluetooth_2_usb.gadget_manager.rebuild_gadget",
+                side_effect=RuntimeError("rebuild failed"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "rebuild failed"):
+                    manager.enable_gadgets()
+
+        self.assertEqual(
+            manager._gadgets,
+            {"keyboard": None, "mouse": None, "consumer": None},
+        )
+        self.assertFalse(manager._enabled)
 
     def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
         devices = (
@@ -1092,6 +1128,32 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
                         await relay.async_relay_events_loop()
 
         self.assertFalse(relaying_active.is_set())
+        self.assertEqual(relay._hid_write_failures, 1)
+
+    async def test_unexpected_dispatch_error_propagates(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
+            with patch(
+                "bluetooth_2_usb.device_relay.categorize",
+                side_effect=lambda event: event,
+            ):
+                with patch(
+                    "bluetooth_2_usb.device_relay.dispatch_event_to_hid",
+                    side_effect=RuntimeError("dispatch bug"),
+                ):
+                    async with relay:
+                        with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
+                            await relay.async_relay_events_loop()
+
+        self.assertTrue(relaying_active.is_set())
         self.assertEqual(relay._hid_write_failures, 1)
 
     async def test_relative_mouse_events_are_coalesced_until_syn_report(self) -> None:
@@ -1802,9 +1864,12 @@ class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         device.close.assert_not_called()
 
     async def test_task_group_failures_are_reraised_after_logging(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        gadget_manager = _FakeGadgetManager()
         controller = RelayController(
-            gadget_manager=_FakeGadgetManager(),
-            relaying_active=asyncio.Event(),
+            gadget_manager=gadget_manager,
+            relaying_active=relaying_active,
             device_identifiers=[],
         )
 
@@ -1821,3 +1886,5 @@ class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(raised.exception.exceptions[0], RuntimeError)
         self.assertEqual(str(raised.exception.exceptions[0]), "boom")
+        self.assertFalse(relaying_active.is_set())
+        self.assertEqual(gadget_manager.release_all_gadgets_calls, 1)

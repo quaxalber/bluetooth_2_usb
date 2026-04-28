@@ -62,7 +62,17 @@ class LoggingConfigurationTest(unittest.TestCase):
         bt_logging.get_logger("bluetooth_2_usb.device_relay")
 
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ, {"HOME": tmp}):
+            env = {"HOME": tmp}
+            if os.name == "nt":
+                drive, tail = os.path.splitdrive(tmp)
+                env.update(
+                    {
+                        "USERPROFILE": tmp,
+                        "HOMEDRIVE": drive,
+                        "HOMEPATH": tail or "\\",
+                    }
+                )
+            with patch.dict(os.environ, env, clear=False):
                 bt_logging.add_file_handler("~/relay.log")
 
             file_handlers = [

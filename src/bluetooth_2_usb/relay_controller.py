@@ -85,6 +85,7 @@ class RelayController:
 
         self._state = _ControllerState.NEW
         self._shutdown_event = asyncio.Event()
+        self._gadgets_released = False
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task_group: TaskGroup | None = None
 
@@ -160,6 +161,8 @@ class RelayController:
             self._cancel_all_pending_probes()
             for device_path, active_relay in list(self._active_relays.items()):
                 self._relay_task_done(device_path, active_relay.task)
+            self._relaying_active.clear()
+            self._release_all_gadgets_once()
             logger.debug("RelayController: TaskGroup exited.")
 
     def request_shutdown(self) -> None:
@@ -437,16 +440,22 @@ class RelayController:
     ) -> None:
         pending_tasks = {task for task in tasks if not task.done()}
         if not pending_tasks:
-            self._gadget_manager.release_all_gadgets()
+            self._release_all_gadgets_once()
             return
 
         def _release_when_last_task_stops(done_task: asyncio.Task[None]) -> None:
             pending_tasks.discard(done_task)
             if not pending_tasks:
-                self._gadget_manager.release_all_gadgets()
+                self._release_all_gadgets_once()
 
         for task in pending_tasks:
             task.add_done_callback(_release_when_last_task_stops)
+
+    def _release_all_gadgets_once(self) -> None:
+        if self._gadgets_released:
+            return
+        self._gadgets_released = True
+        self._gadget_manager.release_all_gadgets()
 
     def _relay_task_done(
         self,
