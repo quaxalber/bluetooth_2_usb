@@ -277,6 +277,25 @@ async def async_run(args: Arguments) -> int:
                 return_when=asyncio.FIRST_COMPLETED,
             )
 
+            if shutdown_task in done:
+                logger.debug("Shutdown event triggered. Cancelling relay task...")
+                relay_controller.request_shutdown()
+                shutdown_task.cancel()
+                try:
+                    await asyncio.wait_for(
+                        relay_task,
+                        timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                    )
+                except TimeoutError:
+                    logger.warning(
+                        "Relay shutdown exceeded %.1fs; cancelling remaining tasks.",
+                        GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                    )
+                    relay_task.cancel()
+                    await asyncio.gather(relay_task, return_exceptions=True)
+                await asyncio.gather(shutdown_task, return_exceptions=True)
+                return EXIT_OK
+
             if relay_task in done:
                 relay_controller.request_shutdown()
                 if relay_task.cancelled():
@@ -298,23 +317,6 @@ async def async_run(args: Arguments) -> int:
                     shutdown_task.cancel()
                 await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
                 return EXIT_RUNTIME
-
-            logger.debug("Shutdown event triggered. Cancelling relay task...")
-            relay_controller.request_shutdown()
-            shutdown_task.cancel()
-            try:
-                await asyncio.wait_for(
-                    relay_task,
-                    timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
-                )
-            except TimeoutError:
-                logger.warning(
-                    "Relay shutdown exceeded %.1fs; cancelling remaining tasks.",
-                    GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
-                )
-                relay_task.cancel()
-                await asyncio.gather(relay_task, return_exceptions=True)
-            await asyncio.gather(shutdown_task, return_exceptions=True)
     finally:
         _restore_signal_handlers(
             previous_handlers,

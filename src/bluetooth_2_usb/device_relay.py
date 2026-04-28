@@ -101,10 +101,6 @@ class DeviceRelay:
                     logger.warning(
                         "Unable to ungrab %s: %s", self._input_device.path, ex
                     )
-        try:
-            self._input_device.close()
-        except Exception:
-            logger.debug("Ignoring close failure for %s", self._input_device.path)
         return False
 
     def _should_ignore_ungrab_error(self, ex: Exception) -> bool:

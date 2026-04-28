@@ -3,6 +3,7 @@ import json
 import signal
 import unittest
 from contextlib import redirect_stdout
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from bluetooth_2_usb import cli
@@ -146,3 +147,74 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, cli.EXIT_OK)
         self.assertEqual(json.loads(stdout.getvalue())[0]["path"], "/dev/input/event1")
+
+    def test_shutdown_wins_when_relay_and_shutdown_tasks_finish_together(self) -> None:
+        class _FakeGadgetManager:
+            def enable_gadgets(self) -> None:
+                pass
+
+        class _FakeRelayController:
+            request_shutdown_calls = 0
+
+            def __init__(self, **_kwargs) -> None:
+                pass
+
+            async def async_relay_devices(self) -> None:
+                return None
+
+            def request_shutdown(self) -> None:
+                self.request_shutdown_calls += 1
+
+        class _FakeRuntimeMonitor:
+            def __init__(self, **_kwargs) -> None:
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return False
+
+        args = SimpleNamespace(
+            auto_discover=False,
+            debug=False,
+            device_ids=[],
+            grab_devices=False,
+            interrupt_shortcut=None,
+            list_devices=False,
+            log_path="",
+            log_to_file=False,
+            output="text",
+            validate_env=False,
+            version=False,
+        )
+        env_status = cli.EnvironmentStatus(
+            configfs=True,
+            udc_present=True,
+            udc_path=None,
+        )
+
+        def _install_handlers(shutdown_event):
+            shutdown_event.set()
+            return {}, ()
+
+        with patch("bluetooth_2_usb.cli.validate_environment", return_value=env_status):
+            with patch(
+                "bluetooth_2_usb.cli._install_shutdown_signal_handlers",
+                side_effect=_install_handlers,
+            ):
+                with patch(
+                    "bluetooth_2_usb.gadget_manager.GadgetManager",
+                    _FakeGadgetManager,
+                ):
+                    with patch(
+                        "bluetooth_2_usb.relay_controller.RelayController",
+                        _FakeRelayController,
+                    ):
+                        with patch(
+                            "bluetooth_2_usb.runtime_monitor.RuntimeMonitor",
+                            _FakeRuntimeMonitor,
+                        ):
+                            exit_code = cli.asyncio.run(cli.async_run(args))
+
+        self.assertEqual(exit_code, cli.EXIT_OK)

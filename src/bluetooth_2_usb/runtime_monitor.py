@@ -127,7 +127,7 @@ class RuntimeMonitor:
 
         if action == "add":
             logger.debug(f"RuntimeMonitor: Added input => {device_node}")
-            self._relay_controller.schedule_add_device(device_node)
+            self._relay_controller.notify_device_added(device_node)
         elif action == "remove":
             logger.debug(f"RuntimeMonitor: Removed input => {device_node}")
-            self._relay_controller.schedule_remove_device(device_node)
+            self._relay_controller.notify_device_removed(device_node)
