@@ -413,6 +413,10 @@ class HidDispatchTest(unittest.TestCase):
 
 
 class DeviceIdentifierTest(unittest.TestCase):
+    def test_blank_identifier_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not be blank"):
+            DeviceIdentifier(" \t ")
+
     def test_mac_identifier_matches_hyphenated_device_uniq(self) -> None:
         identifier = DeviceIdentifier("aa:bb:cc:dd:ee:ff")
         device = SimpleNamespace(
@@ -1384,6 +1388,27 @@ class RelayControllerHotplugTest(unittest.TestCase):
         controller.notify_device_removed("/dev/input/event7")
 
         self.assertEqual(controller._pending_add_paths, set())
+
+    def test_notify_device_removed_cancels_active_relay_during_startup(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+            device_identifiers=[],
+        )
+        task = _FakeTaskHandle()
+        controller._state = _ControllerState.STARTING
+        controller._loop = _FakeLoop()
+        controller._active_relays["/dev/input/event7"] = _ActiveRelay(
+            _FakeInputHandle(),
+            task,
+        )
+
+        controller.notify_device_removed("/dev/input/event7")
+
+        self.assertEqual(len(controller._loop.soon_threadsafe_calls), 1)
+        callback, args = controller._loop.soon_threadsafe_calls[0]
+        self.assertIs(callback.__func__, controller._cancel_active_relay.__func__)
+        self.assertEqual(args, ("/dev/input/event7",))
 
     def test_notify_device_added_ignores_after_shutdown_requested(self) -> None:
         controller = RelayController(

@@ -303,13 +303,24 @@ class RelayController:
         self._start_open_device(device)
 
     def notify_device_removed(self, device_path: str) -> None:
-        if self._state in (_ControllerState.NEW, _ControllerState.STARTING):
+        if self._state is _ControllerState.NEW:
             if self._discard_pending_add(device_path):
                 logger.debug(
                     "Dropped queued add for %s because the device was removed before startup completed.",
                     device_path,
                 )
             return
+
+        if self._state is _ControllerState.STARTING:
+            if self._discard_pending_add(device_path):
+                logger.debug(
+                    "Dropped queued add for %s because the device was removed before startup completed.",
+                    device_path,
+                )
+                return
+            if device_path not in self._active_relays:
+                return
+
         if self._state in (_ControllerState.SHUTTING_DOWN, _ControllerState.STOPPED):
             logger.debug(
                 "Ignoring remove for %s; controller is shutting down.",

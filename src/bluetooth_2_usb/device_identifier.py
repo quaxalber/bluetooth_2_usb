@@ -15,7 +15,9 @@ class DeviceIdentifier:
         """
         :param device_identifier: Path, MAC, or name fragment
         """
-        self._value = device_identifier
+        self._value = device_identifier.strip()
+        if not self._value:
+            raise ValueError("device_identifier must not be blank")
         self._kind = self._determine_identifier_kind()
         self._normalized_value = self._normalize_identifier()
 
