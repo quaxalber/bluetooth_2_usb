@@ -37,6 +37,6 @@ def add_file_handler(log_path: str) -> None:
             existing = getattr(handler, "baseFilename", None)
             if existing and str(Path(existing).resolve()) == resolved:
                 return
-    file_handler = logging.FileHandler(log_path)
+    file_handler = logging.FileHandler(resolved)
     file_handler.setFormatter(_formatter)
     logger.addHandler(file_handler)

@@ -291,6 +291,12 @@ class RelayController:
 
         :param device_path: The absolute path to the input device (e.g., /dev/input/event5)
         """
+        if self._shutdown_requested():
+            logger.debug(
+                "Ignoring add for %s; controller is shutting down.", device_path
+            )
+            return
+
         if not Path(device_path).exists():
             logger.debug(f"{device_path} does not exist.")
             return

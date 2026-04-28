@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import usb_hid
 
+from bluetooth_2_usb.device_identifier import DeviceIdentifier
 from bluetooth_2_usb.device_relay import DeviceRelay
 from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
@@ -377,6 +378,18 @@ class HidDispatchTest(unittest.TestCase):
         self.assertEqual(gadget_manager.mouse.releases, [])
 
 
+class DeviceIdentifierTest(unittest.TestCase):
+    def test_mac_identifier_matches_hyphenated_device_uniq(self) -> None:
+        identifier = DeviceIdentifier("aa:bb:cc:dd:ee:ff")
+        device = SimpleNamespace(
+            path="/dev/input/event7",
+            uniq="AA-BB-CC-DD-EE-FF",
+            name="keyboard",
+        )
+
+        self.assertTrue(identifier.matches(device))
+
+
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         event_state = asyncio.Event()
@@ -466,6 +479,30 @@ class RuntimeMonitorTest(unittest.TestCase):
 
         with patch("builtins.open", side_effect=OSError("transient")):
             self.assertEqual(monitor._read_udc_state(), "not_attached")
+
+
+class RuntimeMonitorLifecycleTest(unittest.IsolatedAsyncioTestCase):
+    async def test_runtime_monitor_resets_cached_state_on_enter(self) -> None:
+        monitor = RuntimeMonitor.__new__(RuntimeMonitor)
+        monitor._stop_event = asyncio.Event()
+        monitor._observer = _FakeObserver(None, None)
+        monitor._task = None
+        monitor._last_state = "configured"
+
+        async def poll_state() -> None:
+            await monitor._stop_event.wait()
+
+        monitor._poll_state = poll_state
+
+        await monitor.__aenter__()
+
+        self.assertIsNone(monitor._last_state)
+        self.assertTrue(monitor._observer.started)
+
+        await monitor.__aexit__(None, None, None)
+
+        self.assertFalse(monitor._observer.started)
+        self.assertIsNone(monitor._task)
 
 
 class GadgetManagerLayoutTest(unittest.TestCase):
@@ -1302,6 +1339,19 @@ class RelayControllerHotplugTest(unittest.TestCase):
         controller.schedule_remove_device("/dev/input/event7")
 
         self.assertEqual(controller._pending_add_paths, [])
+
+    def test_add_device_ignores_direct_add_after_shutdown_requested(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+            device_identifiers=[],
+        )
+        controller.request_shutdown()
+
+        with patch("bluetooth_2_usb.relay_controller.Path.exists") as exists:
+            controller.add_device("/dev/input/event7")
+
+        exists.assert_not_called()
 
     def test_request_shutdown_cancels_active_tasks_and_closes_devices(self) -> None:
         relaying_active = asyncio.Event()

@@ -1,8 +1,10 @@
 import importlib
 import logging
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import bluetooth_2_usb.logging as bt_logging
 
@@ -52,6 +54,25 @@ class LoggingConfigurationTest(unittest.TestCase):
             ]
 
         self.assertEqual(len(file_handlers), 1)
+
+    def test_add_file_handler_expands_user_path_before_opening(self) -> None:
+        bt_logging.get_logger("bluetooth_2_usb.device_relay")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"HOME": tmp}):
+                bt_logging.add_file_handler("~/relay.log")
+
+            file_handlers = [
+                handler
+                for handler in self.package_logger.handlers
+                if isinstance(handler, logging.FileHandler)
+            ]
+
+            self.assertEqual(len(file_handlers), 1)
+            self.assertEqual(
+                Path(file_handlers[0].baseFilename),
+                (Path(tmp) / "relay.log").resolve(),
+            )
 
 
 class RelayModuleBoundaryTest(unittest.TestCase):

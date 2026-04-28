@@ -75,6 +75,7 @@ class RuntimeMonitor:
 
     async def __aenter__(self):
         self._stop_event.clear()
+        self._last_state = None
         self._observer.start()
         self._task = asyncio.create_task(self._poll_state())
         logger.debug("RuntimeMonitor started.")
@@ -86,6 +87,7 @@ class RuntimeMonitor:
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
+            self._task = None
         logger.debug("RuntimeMonitor stopped.")
         return False
 

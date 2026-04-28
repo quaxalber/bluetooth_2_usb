@@ -47,5 +47,6 @@ class DeviceIdentifier:
         if self._kind == "path":
             return self._value == device.path
         if self._kind == "mac":
-            return self._normalized_value == (device.uniq or "").lower()
+            device_uniq = (device.uniq or "").lower().replace("-", ":")
+            return self._normalized_value == device_uniq
         return self._normalized_value in (device.name or "").lower()
