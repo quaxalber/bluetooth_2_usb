@@ -53,7 +53,10 @@ class LoggingConfigurationTest(unittest.TestCase):
                 if isinstance(handler, logging.FileHandler)
             ]
 
-        self.assertEqual(len(file_handlers), 1)
+            self.assertEqual(len(file_handlers), 1)
+            for handler in file_handlers:
+                self.package_logger.removeHandler(handler)
+                handler.close()
 
     def test_add_file_handler_expands_user_path_before_opening(self) -> None:
         bt_logging.get_logger("bluetooth_2_usb.device_relay")
@@ -73,6 +76,9 @@ class LoggingConfigurationTest(unittest.TestCase):
                 Path(file_handlers[0].baseFilename),
                 (Path(tmp) / "relay.log").resolve(),
             )
+            for handler in file_handlers:
+                self.package_logger.removeHandler(handler)
+                handler.close()
 
 
 class RelayModuleBoundaryTest(unittest.TestCase):

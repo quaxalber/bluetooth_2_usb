@@ -60,11 +60,17 @@ EVENT_TYPE_NAMES = {
 
 
 def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
-    return {
-        getattr(ecodes, attribute): attribute
-        for attribute in dir(ecodes)
-        if attribute.startswith(prefixes)
-    }
+    names: dict[int, str] = {}
+    for attribute in sorted(dir(ecodes)):
+        if not attribute.startswith(prefixes):
+            continue
+        if attribute.endswith(("_MIN", "_MAX", "_CNT")):
+            continue
+        value = getattr(ecodes, attribute)
+        if not isinstance(value, int):
+            continue
+        names.setdefault(value, attribute)
+    return names
 
 
 EVENT_CODE_NAMES = {

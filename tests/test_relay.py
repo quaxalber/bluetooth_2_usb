@@ -389,6 +389,16 @@ class DeviceIdentifierTest(unittest.TestCase):
 
         self.assertTrue(identifier.matches(device))
 
+    def test_event_like_name_without_numeric_suffix_matches_by_name(self) -> None:
+        identifier = DeviceIdentifier("/dev/input/eventual")
+        device = SimpleNamespace(
+            path="/dev/input/event7",
+            uniq="",
+            name="prefix /dev/input/eventual suffix",
+        )
+
+        self.assertTrue(identifier.matches(device))
+
 
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
@@ -1384,7 +1394,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
         self.assertIs(controller._active_tasks["/dev/input/event7"], task)
         self.assertIs(controller._active_devices["/dev/input/event7"], device)
 
-    def test_remove_device_closes_handle_after_task_is_done(self) -> None:
+    def test_remove_device_removes_done_task_without_closing_handle(self) -> None:
         controller = RelayController(
             gadget_manager=_FakeGadgetManager(),
             device_identifiers=[],
@@ -1398,7 +1408,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
         controller.remove_device("/dev/input/event7")
 
         self.assertEqual(task.cancel_calls, 0)
-        self.assertEqual(device.close_calls, 1)
+        self.assertEqual(device.close_calls, 0)
         self.assertNotIn("/dev/input/event7", controller._active_devices)
 
 
@@ -1437,7 +1447,7 @@ class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.errno, errno.EIO)
         self.assertNotIn(device.path, controller._active_tasks)
         self.assertNotIn(device.path, controller._active_devices)
-        device.close.assert_called_once()
+        device.close.assert_not_called()
 
     async def test_device_relay_disconnect_os_errors_are_not_reraised(self) -> None:
         class FailingDeviceRelay:
@@ -1471,7 +1481,7 @@ class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn(device.path, controller._active_tasks)
         self.assertNotIn(device.path, controller._active_devices)
-        device.close.assert_called_once()
+        device.close.assert_not_called()
 
     async def test_unexpected_device_relay_failures_are_reraised(self) -> None:
         class FailingDeviceRelay:
@@ -1506,7 +1516,7 @@ class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn(device.path, controller._active_tasks)
         self.assertNotIn(device.path, controller._active_devices)
-        device.close.assert_called_once()
+        device.close.assert_not_called()
 
     async def test_task_group_failures_are_reraised_after_logging(self) -> None:
         controller = RelayController(

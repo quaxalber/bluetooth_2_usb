@@ -23,7 +23,7 @@ class DeviceIdentifier:
         return f'{self._kind} "{self._value}"'
 
     def _determine_identifier_kind(self) -> str:
-        if re.match(r"^/dev/input/event.*$", self._value):
+        if re.match(r"^/dev/input/event\d+$", self._value):
             return "path"
         if re.match(r"^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})$", self._value):
             return "mac"

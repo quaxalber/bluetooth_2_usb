@@ -352,14 +352,8 @@ class RelayController:
             return
 
         self._active_tasks.pop(device_path, None)
-        device = self._active_devices.pop(device_path, None)
+        self._active_devices.pop(device_path, None)
         logger.debug(f"No active task found for {device_path} to remove.")
-        if device is None:
-            return
-        try:
-            device.close()
-        except Exception:
-            logger.debug("Ignoring close failure for %s during removal.", device_path)
 
     async def _async_relay_events(self, device: InputDevice) -> None:
         """
