@@ -169,3 +169,23 @@ class GadgetManager:
         :rtype: ConsumerControl | None
         """
         return self._gadgets["consumer"]
+
+    def release_all_gadgets(self) -> None:
+        """
+        Best-effort release of any pressed/active state on all HID gadgets.
+
+        Shared gadget state is owned by the manager rather than individual
+        device relays, so global shutdown can clear host-visible state once.
+        """
+        seen: set[int] = set()
+        for name, gadget in self._gadgets.items():
+            if gadget is None or id(gadget) in seen:
+                continue
+            seen.add(id(gadget))
+            try:
+                if hasattr(gadget, "release_all"):
+                    gadget.release_all()
+                elif hasattr(gadget, "release"):
+                    gadget.release()
+            except Exception:
+                logger.debug("Ignoring %s gadget release failure", name)

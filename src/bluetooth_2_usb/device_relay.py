@@ -102,10 +102,6 @@ class DeviceRelay:
                         "Unable to ungrab %s: %s", self._input_device.path, ex
                     )
         try:
-            self._release_gadget_states()
-        except Exception:
-            logger.debug("Ignoring gadget state release failure for %s", self)
-        try:
             self._input_device.close()
         except Exception:
             logger.debug("Ignoring close failure for %s", self._input_device.path)
@@ -113,17 +109,6 @@ class DeviceRelay:
 
     def _should_ignore_ungrab_error(self, ex: Exception) -> bool:
         return isinstance(ex, OSError) and ex.errno in (errno.ENODEV, errno.EBADF)
-
-    def _release_gadget_states(self) -> None:
-        keyboard = self._gadget_manager.get_keyboard()
-        mouse = self._gadget_manager.get_mouse()
-        consumer = self._gadget_manager.get_consumer()
-        if keyboard is not None:
-            keyboard.release_all()
-        if mouse is not None:
-            mouse.release_all()
-        if consumer is not None:
-            consumer.release()
 
     def _update_grab_state(self, active: bool) -> None:
         if self._grab_device and active and not self._currently_grabbed:
@@ -173,6 +158,10 @@ class DeviceRelay:
 
                 if self._shortcut_toggler and isinstance(event, KeyEvent):
                     if self._shortcut_toggler.handle_key_event(event):
+                        active = self._relaying_active.is_set()
+                        self._update_grab_state(active)
+                        if not active:
+                            self._discard_pending_mouse_state()
                         continue
 
                 active = self._relaying_active.is_set()

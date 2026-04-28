@@ -110,6 +110,7 @@ class RelayController:
             logger.exception(
                 "RelayController: Exception in TaskGroup", exc_info=exc_grp
             )
+            raise
         finally:
             self._hotplug_ready = False
             self._task_group = None
@@ -131,6 +132,7 @@ class RelayController:
         self._pop_pending_adds()
 
         self._relaying_active.clear()
+        self._gadget_manager.release_all_gadgets()
 
         def _begin_shutdown() -> None:
             for device_path in list(self._active_tasks):

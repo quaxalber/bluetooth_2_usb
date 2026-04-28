@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import usb_hid
 
@@ -73,6 +73,7 @@ class _FakeGadgetManager:
         self.keyboard = _FakeKeyboard()
         self.mouse = _FakeMouse()
         self.consumer = _FakeConsumer()
+        self.release_all_gadgets_calls = 0
 
     def get_keyboard(self):
         return self.keyboard
@@ -82,6 +83,12 @@ class _FakeGadgetManager:
 
     def get_consumer(self):
         return self.consumer
+
+    def release_all_gadgets(self) -> None:
+        self.release_all_gadgets_calls += 1
+        self.keyboard.release_all()
+        self.mouse.release_all()
+        self.consumer.release()
 
 
 class _FakeRelayController:
@@ -145,12 +152,13 @@ class _FakeInputHandle:
 
 
 class _FakeGrabInputDevice:
-    def __init__(self, *, ungrab_errno: int | None = None) -> None:
+    def __init__(self, events=None, *, ungrab_errno: int | None = None) -> None:
         self.path = "/dev/input/event-grab"
         self.name = "grab-test-device"
         self.close_calls = 0
         self.grab_calls = 0
         self.ungrab_calls = 0
+        self._events = list(events or [])
         self._ungrab_errno = ungrab_errno
 
     def grab(self) -> None:
@@ -160,6 +168,10 @@ class _FakeGrabInputDevice:
         self.ungrab_calls += 1
         if self._ungrab_errno is not None:
             raise OSError(self._ungrab_errno, "Bad file descriptor")
+
+    async def async_read_loop(self):
+        for event in self._events:
+            yield event
 
     def close(self) -> None:
         self.close_calls += 1
@@ -466,6 +478,20 @@ class GadgetManagerLayoutTest(unittest.TestCase):
             devices = GadgetManager()._requested_devices()
 
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
+
+    def test_release_all_gadgets_releases_keyboard_mouse_and_consumer(self) -> None:
+        manager = GadgetManager()
+        manager._gadgets = {
+            "keyboard": _FakeKeyboard(),
+            "mouse": _FakeMouse(),
+            "consumer": _FakeConsumer(),
+        }
+
+        manager.release_all_gadgets()
+
+        self.assertEqual(manager._gadgets["keyboard"].release_all_calls, 1)
+        self.assertEqual(manager._gadgets["mouse"].release_all_calls, 1)
+        self.assertEqual(manager._gadgets["consumer"].release_calls, 1)
 
     def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
         devices = (
@@ -789,6 +815,61 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(input_device.grab_calls, 0)
         self.assertEqual(input_device.ungrab_calls, 0)
         self.assertEqual(input_device.close_calls, 1)
+
+    async def test_aexit_does_not_release_shared_gadget_state(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        gadget_manager = _FakeGadgetManager()
+        relay = DeviceRelay(
+            _FakeGrabInputDevice(),
+            gadget_manager,
+            relaying_active=relaying_active,
+        )
+
+        async with relay:
+            pass
+
+        self.assertEqual(gadget_manager.keyboard.release_all_calls, 0)
+        self.assertEqual(gadget_manager.mouse.release_all_calls, 0)
+        self.assertEqual(gadget_manager.consumer.release_calls, 0)
+
+    async def test_handled_shortcut_runs_pause_cleanup_before_continue(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        gadget_manager = _FakeGadgetManager()
+        toggler = ShortcutToggler(
+            shortcut_keys={"KEY_F12"},
+            relaying_active=relaying_active,
+            gadget_manager=gadget_manager,
+        )
+        input_device = _FakeGrabInputDevice(
+            [
+                _TestRelEvent(ecodes.REL_X, 5),
+                _TestKeyEvent(88, _TestKeyEvent.key_down),
+                _TestSynEvent(),
+            ]
+        )
+        relay = DeviceRelay(
+            input_device,
+            gadget_manager,
+            grab_device=True,
+            relaying_active=relaying_active,
+            shortcut_toggler=toggler,
+        )
+
+        with patch("bluetooth_2_usb.device_relay.KeyEvent", _TestKeyEvent):
+            with patch("bluetooth_2_usb.device_relay.RelEvent", _TestRelEvent):
+                with patch(
+                    "bluetooth_2_usb.device_relay.categorize",
+                    side_effect=lambda event: event,
+                ):
+                    async with relay:
+                        await relay.async_relay_events_loop()
+
+        self.assertFalse(relaying_active.is_set())
+        self.assertEqual(input_device.grab_calls, 1)
+        self.assertEqual(input_device.ungrab_calls, 1)
+        self.assertEqual(gadget_manager.mouse.moves, [])
 
     async def test_input_device_removal_stops_reader_without_failing_task_group(
         self,
@@ -1158,8 +1239,9 @@ class RelayControllerHotplugTest(unittest.TestCase):
     def test_request_shutdown_cancels_active_tasks_and_closes_devices(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
+        gadget_manager = _FakeGadgetManager()
         controller = RelayController(
-            gadget_manager=_FakeGadgetManager(),
+            gadget_manager=gadget_manager,
             device_identifiers=[],
             relaying_active=relaying_active,
         )
@@ -1175,6 +1257,10 @@ class RelayControllerHotplugTest(unittest.TestCase):
         self.assertTrue(controller._shutdown_event.is_set())
         self.assertFalse(controller._hotplug_ready)
         self.assertFalse(relaying_active.is_set())
+        self.assertEqual(gadget_manager.release_all_gadgets_calls, 1)
+        self.assertEqual(gadget_manager.keyboard.release_all_calls, 1)
+        self.assertEqual(gadget_manager.mouse.release_all_calls, 1)
+        self.assertEqual(gadget_manager.consumer.release_calls, 1)
         self.assertEqual(controller._pending_add_paths, [])
         self.assertEqual(task.cancel_calls, 1)
         self.assertEqual(device.close_calls, 0)
@@ -1197,3 +1283,26 @@ class RelayControllerHotplugTest(unittest.TestCase):
         self.assertEqual(task.cancel_calls, 0)
         self.assertEqual(device.close_calls, 1)
         self.assertNotIn("/dev/input/event7", controller._active_devices)
+
+
+class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
+    async def test_task_group_failures_are_reraised_after_logging(self) -> None:
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+            device_identifiers=[],
+        )
+
+        with patch(
+            "bluetooth_2_usb.relay_controller.list_input_devices", return_value=[]
+        ):
+            with patch.object(
+                controller._shutdown_event,
+                "wait",
+                new=AsyncMock(side_effect=RuntimeError("boom")),
+            ):
+                with self.assertRaises(ExceptionGroup) as raised:
+                    await controller.async_relay_devices()
+
+        self.assertIsInstance(raised.exception.exceptions[0], RuntimeError)
+        self.assertEqual(str(raised.exception.exceptions[0]), "boom")
