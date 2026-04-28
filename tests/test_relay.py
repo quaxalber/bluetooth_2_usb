@@ -905,6 +905,43 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(seen, [(183, 1), (183, 0)])
 
+    async def test_input_device_removal_ignores_final_flush_enodev(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice([], removal_errno=errno.ENODEV)
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        with patch.object(
+            relay,
+            "_flush_pending_mouse_movement",
+            side_effect=OSError(errno.ENODEV, "No such device"),
+        ):
+            async with relay:
+                await relay.async_relay_events_loop()
+
+    async def test_final_flush_enodev_without_input_removal_still_raises(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        input_device = _TestInputDevice([])
+        relay = DeviceRelay(
+            input_device,
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+
+        with patch.object(
+            relay,
+            "_flush_pending_mouse_movement",
+            side_effect=OSError(errno.ENODEV, "No such device"),
+        ):
+            async with relay:
+                with self.assertRaises(OSError):
+                    await relay.async_relay_events_loop()
+
     async def test_broken_pipe_clears_relaying_active_when_hid_write_fails(
         self,
     ) -> None:

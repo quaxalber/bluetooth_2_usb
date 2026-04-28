@@ -332,7 +332,6 @@ class RelayController:
         :param device_path: The path of the device to remove
         """
         task = self._active_tasks.get(device_path)
-        device = self._active_devices.get(device_path)
         try:
             current_task = asyncio.current_task()
         except RuntimeError:

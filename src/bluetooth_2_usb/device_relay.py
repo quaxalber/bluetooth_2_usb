@@ -140,6 +140,7 @@ class DeviceRelay:
 
         :return: None
         """
+        input_disappeared = False
         try:
             async for input_event in self._input_device.async_read_loop():
                 event = categorize(input_event)
@@ -185,12 +186,23 @@ class DeviceRelay:
         except OSError as ex:
             if ex.errno != errno.ENODEV:
                 raise
+            input_disappeared = True
             logger.debug(
                 "Stopping relay loop for %s because the input device disappeared.",
                 self._input_device.path,
             )
             self._discard_pending_mouse_state()
-        await self._flush_pending_mouse_movement()
+        try:
+            await self._flush_pending_mouse_movement()
+        except OSError as ex:
+            if not input_disappeared or ex.errno != errno.ENODEV:
+                raise
+            logger.debug(
+                "Ignoring pending mouse flush failure for %s after input device "
+                "disappeared: %s",
+                self._input_device.path,
+                ex,
+            )
         logger.debug(
             "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
             self._input_device.path,
