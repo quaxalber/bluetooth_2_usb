@@ -74,16 +74,7 @@ class ShortcutToggler:
         Toggle the global relaying state: if it was on, turn it off, otherwise turn it on.
         """
         if self._relaying_active.is_set():
-            keyboard = self._gadget_manager.keyboard
-            mouse = self._gadget_manager.mouse
-            consumer = self._gadget_manager.consumer
-            if keyboard:
-                keyboard.release_all()
-            if mouse:
-                mouse.release_all()
-            if consumer:
-                consumer.release()
-
+            self._gadget_manager.release_all_gadgets()
             self._relaying_active.clear()
             logger.info("ShortcutToggler: Relaying is now OFF.")
         else:

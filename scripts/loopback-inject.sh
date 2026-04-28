@@ -31,6 +31,11 @@ esac
 
 [[ -x "${PYTHON_BIN}" ]] || fail "Managed Python not found: ${PYTHON_BIN}"
 
+if [[ ! "${SERVICE_SETTLE_SEC}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  warn "Ignoring invalid B2U_LOOPBACK_SERVICE_SETTLE_SEC=${SERVICE_SETTLE_SEC}; using default 10"
+  SERVICE_SETTLE_SEC=10
+fi
+
 wait_for_service_settle() {
   local active_since_us
   local now_us

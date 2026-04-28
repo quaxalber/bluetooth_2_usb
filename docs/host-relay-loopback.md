@@ -129,7 +129,8 @@ sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario combo
 When `bluetooth_2_usb.service` is active, the injector waits up to the default
 service-settle window before emitting events. This avoids racing a freshly
 re-enumerated USB HID gadget before the host has started draining reports. Set
-`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that harness-only wait.
+`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that harness-only wait. Invalid
+values are ignored and the default settle window is used.
 
 The injector creates temporary virtual devices named:
 

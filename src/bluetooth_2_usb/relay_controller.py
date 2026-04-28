@@ -373,6 +373,7 @@ class RelayController:
             logger.info(f"Lost connection to {device}.")
         except Exception:
             logger.exception(f"Unhandled exception in relay for {device}.")
+            raise
         finally:
             self.remove_device(device.path)
 

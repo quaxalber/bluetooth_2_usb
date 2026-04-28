@@ -416,6 +416,7 @@ class ShortcutTogglerTest(unittest.TestCase):
         toggler.toggle_relaying()
 
         self.assertFalse(event_state.is_set())
+        self.assertEqual(gadget_manager.release_all_gadgets_calls, 1)
         self.assertEqual(gadget_manager.keyboard.release_all_calls, 1)
         self.assertEqual(gadget_manager.mouse.release_all_calls, 1)
         self.assertEqual(gadget_manager.consumer.release_calls, 1)
@@ -458,6 +459,13 @@ class RuntimeMonitorTest(unittest.TestCase):
 
         self.assertEqual(relay_controller.added, ["/dev/input/event7"])
         self.assertEqual(relay_controller.removed, ["/dev/input/event7"])
+
+    def test_runtime_monitor_treats_udc_read_errors_as_not_attached(self) -> None:
+        monitor = RuntimeMonitor.__new__(RuntimeMonitor)
+        monitor._udc_path = Path("/tmp/b2u-udc-state")
+
+        with patch("builtins.open", side_effect=OSError("transient")):
+            self.assertEqual(monitor._read_udc_state(), "not_attached")
 
 
 class GadgetManagerLayoutTest(unittest.TestCase):
@@ -1308,6 +1316,41 @@ class RelayControllerHotplugTest(unittest.TestCase):
 
 
 class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
+    async def test_unexpected_device_relay_failures_are_reraised(self) -> None:
+        class FailingDeviceRelay:
+            def __init__(self, *_args, **_kwargs) -> None:
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                raise RuntimeError("boom")
+
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+            device_identifiers=[],
+        )
+        device = SimpleNamespace(
+            path="/dev/input/event7",
+            name="failure device",
+            close=Mock(),
+        )
+        controller._active_tasks[device.path] = asyncio.current_task()
+        controller._active_devices[device.path] = device
+
+        with patch("bluetooth_2_usb.relay_controller.DeviceRelay", FailingDeviceRelay):
+            with self.assertRaisesRegex(RuntimeError, "boom"):
+                await controller._async_relay_events(device)
+
+        self.assertNotIn(device.path, controller._active_tasks)
+        self.assertNotIn(device.path, controller._active_devices)
+        device.close.assert_called_once()
+
     async def test_task_group_failures_are_reraised_after_logging(self) -> None:
         controller = RelayController(
             gadget_manager=_FakeGadgetManager(),

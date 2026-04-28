@@ -107,7 +107,8 @@ class RuntimeMonitor:
         try:
             with open(self._udc_path, encoding="utf-8") as handle:
                 return handle.read().strip()
-        except FileNotFoundError:
+        except OSError:
+            logger.debug("Unable to read UDC state from %s", self._udc_path)
             return "not_attached"
 
     def _handle_state_change(self, new_state: str):
