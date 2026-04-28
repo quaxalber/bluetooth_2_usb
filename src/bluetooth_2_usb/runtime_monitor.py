@@ -50,7 +50,7 @@ class RuntimeMonitor:
         self,
         relay_controller: RelayController,
         relaying_active: asyncio.Event,
-        udc_path: Path,
+        udc_path: Path | None,
         poll_interval: float = 0.5,
     ) -> None:
         self._relay_controller = relay_controller
@@ -67,7 +67,11 @@ class RuntimeMonitor:
         monitor.filter_by("input")
         self._observer = pyudev.MonitorObserver(monitor, self._udev_event_callback)
 
-        if not self._udc_path.is_file():
+        if self._udc_path is None:
+            logger.warning(
+                "UDC state file not found. Cable monitoring may be unavailable.",
+            )
+        elif not self._udc_path.is_file():
             logger.warning(
                 "UDC state file %s not found. Cable monitoring may be unavailable.",
                 self._udc_path,
@@ -106,6 +110,9 @@ class RuntimeMonitor:
                 pass
 
     def _read_udc_state(self) -> str:
+        if self._udc_path is None:
+            return "not_attached"
+
         try:
             with open(self._udc_path, encoding="utf-8") as handle:
                 return handle.read().strip()

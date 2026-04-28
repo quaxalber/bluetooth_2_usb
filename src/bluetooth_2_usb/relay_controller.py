@@ -89,6 +89,7 @@ class RelayController:
         self._task_group: TaskGroup | None = None
 
         self._active_relays: dict[str, _ActiveRelay] = {}
+        self._pending_probe_handles: dict[str, list[asyncio.TimerHandle]] = {}
         self._pending_add_paths: set[str] = set()
         self._pending_add_lock = threading.Lock()
 
@@ -156,6 +157,7 @@ class RelayController:
             self._task_group = None
             self._loop = None
             self._pop_pending_adds()
+            self._cancel_all_pending_probes()
             for device_path, active_relay in list(self._active_relays.items()):
                 self._relay_task_done(device_path, active_relay.task)
             logger.debug("RelayController: TaskGroup exited.")
@@ -173,13 +175,15 @@ class RelayController:
         self._state = _ControllerState.SHUTTING_DOWN
         self._shutdown_event.set()
         self._pop_pending_adds()
+        self._cancel_all_pending_probes()
 
         self._relaying_active.clear()
-        self._gadget_manager.release_all_gadgets()
 
         def _begin_shutdown() -> None:
+            tasks = [active_relay.task for active_relay in self._active_relays.values()]
             for device_path in list(self._active_relays):
                 self._cancel_active_relay(device_path)
+            self._release_gadgets_after_relay_tasks_stop(tasks)
 
         loop = self._loop
         if loop is not None:
@@ -252,6 +256,7 @@ class RelayController:
                 f"Ignoring remove for {device_path}; event loop is unavailable."
             )
             return
+        self._cancel_pending_probe(device_path)
         try:
             loop.call_soon_threadsafe(self._cancel_active_relay, device_path)
         except RuntimeError:
@@ -291,6 +296,51 @@ class RelayController:
                 self._schedule_probe, device_path, self.HOTPLUG_ADD_MAX_RETRIES
             )
 
+    def _cancel_pending_probe(self, device_path: str) -> None:
+        for handle in self._pending_probe_handles.pop(device_path, []):
+            handle.cancel()
+
+    def _cancel_all_pending_probes(self) -> None:
+        for device_path in list(self._pending_probe_handles):
+            self._cancel_pending_probe(device_path)
+
+    def _discard_probe_handle(
+        self,
+        device_path: str,
+        handle: asyncio.TimerHandle,
+    ) -> None:
+        handles = self._pending_probe_handles.get(device_path)
+        if handles is None:
+            return
+        try:
+            handles.remove(handle)
+        except ValueError:
+            return
+        if not handles:
+            self._pending_probe_handles.pop(device_path, None)
+
+    def _schedule_probe_retry(
+        self,
+        device_path: str,
+        retries_remaining: int,
+    ) -> None:
+        loop = self._loop
+        if loop is None:
+            return
+
+        handle: asyncio.TimerHandle | None = None
+
+        def _retry_probe() -> None:
+            if handle is not None:
+                self._discard_probe_handle(device_path, handle)
+            self._schedule_probe(device_path, retries_remaining)
+
+        handle = loop.call_later(
+            self.HOTPLUG_ADD_RETRY_DELAY_SEC,
+            _retry_probe,
+        )
+        self._pending_probe_handles.setdefault(device_path, []).append(handle)
+
     def _schedule_probe(self, device_path: str, retries_remaining: int) -> None:
         loop = self._loop
         if (
@@ -311,12 +361,7 @@ class RelayController:
                     device_path,
                     retries_remaining,
                 )
-                loop.call_later(
-                    self.HOTPLUG_ADD_RETRY_DELAY_SEC,
-                    self._schedule_probe,
-                    device_path,
-                    retries_remaining - 1,
-                )
+                self._schedule_probe_retry(device_path, retries_remaining - 1)
             else:
                 logger.debug(f"{device_path} vanished before hotplug filtering.")
             return
@@ -328,12 +373,7 @@ class RelayController:
                     device,
                     retries_remaining,
                 )
-                loop.call_later(
-                    self.HOTPLUG_ADD_RETRY_DELAY_SEC,
-                    self._schedule_probe,
-                    device_path,
-                    retries_remaining - 1,
-                )
+                self._schedule_probe_retry(device_path, retries_remaining - 1)
             else:
                 logger.debug(
                     "Skipping hotplugged device %s because it does not match relay filters.",
@@ -390,6 +430,23 @@ class RelayController:
         else:
             active_relay.task.cancel()
             logger.debug(f"Cancelled relay for {device_path}.")
+
+    def _release_gadgets_after_relay_tasks_stop(
+        self,
+        tasks: list[asyncio.Task[None]],
+    ) -> None:
+        pending_tasks = {task for task in tasks if not task.done()}
+        if not pending_tasks:
+            self._gadget_manager.release_all_gadgets()
+            return
+
+        def _release_when_last_task_stops(done_task: asyncio.Task[None]) -> None:
+            pending_tasks.discard(done_task)
+            if not pending_tasks:
+                self._gadget_manager.release_all_gadgets()
+
+        for task in pending_tasks:
+            task.add_done_callback(_release_when_last_task_stops)
 
     def _relay_task_done(
         self,
