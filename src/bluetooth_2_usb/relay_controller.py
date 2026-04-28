@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import threading
 from asyncio import Task, TaskGroup
 from pathlib import Path
@@ -19,6 +20,8 @@ from .logging import get_logger
 from .shortcut_toggler import ShortcutToggler
 
 logger = get_logger(__name__)
+
+DEVICE_DISCONNECT_ERRNOS = {errno.EBADF, errno.ENODEV, errno.ENOENT}
 
 
 class RelayController:
@@ -368,8 +371,11 @@ class RelayController:
             ) as relay:
                 logger.info(f"Activated {relay}")
                 await relay.async_relay_events_loop()
-        except (OSError, FileNotFoundError):
-            logger.info(f"Lost connection to {device}.")
+        except OSError as exc:
+            if exc.errno not in DEVICE_DISCONNECT_ERRNOS:
+                logger.exception("Unhandled OS error in relay for %s.", device)
+                raise
+            logger.info("Lost connection to %s: %s", device, exc)
         except Exception:
             logger.exception(f"Unhandled exception in relay for {device}.")
             raise

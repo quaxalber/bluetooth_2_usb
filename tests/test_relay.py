@@ -1353,6 +1353,76 @@ class RelayControllerHotplugTest(unittest.TestCase):
 
 
 class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):
+    async def test_unexpected_device_relay_os_errors_are_reraised(self) -> None:
+        class FailingDeviceRelay:
+            def __init__(self, *_args, **_kwargs) -> None:
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                raise OSError(errno.EIO, "I/O error")
+
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+            device_identifiers=[],
+        )
+        device = SimpleNamespace(
+            path="/dev/input/event7",
+            name="failure device",
+            close=Mock(),
+        )
+        controller._active_tasks[device.path] = asyncio.current_task()
+        controller._active_devices[device.path] = device
+
+        with patch("bluetooth_2_usb.relay_controller.DeviceRelay", FailingDeviceRelay):
+            with self.assertRaises(OSError) as raised:
+                await controller._async_relay_events(device)
+
+        self.assertEqual(raised.exception.errno, errno.EIO)
+        self.assertNotIn(device.path, controller._active_tasks)
+        self.assertNotIn(device.path, controller._active_devices)
+        device.close.assert_called_once()
+
+    async def test_device_relay_disconnect_os_errors_are_not_reraised(self) -> None:
+        class FailingDeviceRelay:
+            def __init__(self, *_args, **_kwargs) -> None:
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                raise OSError(errno.ENODEV, "No such device")
+
+        controller = RelayController(
+            gadget_manager=_FakeGadgetManager(),
+            relaying_active=asyncio.Event(),
+            device_identifiers=[],
+        )
+        device = SimpleNamespace(
+            path="/dev/input/event7",
+            name="removed device",
+            close=Mock(),
+        )
+        controller._active_tasks[device.path] = asyncio.current_task()
+        controller._active_devices[device.path] = device
+
+        with patch("bluetooth_2_usb.relay_controller.DeviceRelay", FailingDeviceRelay):
+            await controller._async_relay_events(device)
+
+        self.assertNotIn(device.path, controller._active_tasks)
+        self.assertNotIn(device.path, controller._active_devices)
+        device.close.assert_called_once()
+
     async def test_unexpected_device_relay_failures_are_reraised(self) -> None:
         class FailingDeviceRelay:
             def __init__(self, *_args, **_kwargs) -> None:
