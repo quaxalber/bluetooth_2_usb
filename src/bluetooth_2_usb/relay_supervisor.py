@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 from .device_identifier import DeviceIdentifier
-from .device_relay import DeviceRelay
 from .evdev_compat import InputDevice
 from .gadget_manager import GadgetManager
+from .input_relay import InputRelay
 from .inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
@@ -17,6 +17,13 @@ from .inventory import (
     list_input_devices,
 )
 from .logging import get_logger
+from .runtime_events import (
+    DeviceAdded,
+    DeviceRemoved,
+    RuntimeEvent,
+    ShutdownRequested,
+    UdcStateChanged,
+)
 from .shortcut_toggler import ShortcutToggler
 
 logger = get_logger(__name__)
@@ -24,7 +31,7 @@ logger = get_logger(__name__)
 DEVICE_DISCONNECT_ERRNOS = {errno.EBADF, errno.ENODEV, errno.ENOENT}
 
 
-class _ControllerState(Enum):
+class _SupervisorState(Enum):
     NEW = auto()
     STARTING = auto()
     RUNNING = auto()
@@ -38,10 +45,13 @@ class _ActiveRelay:
     task: asyncio.Task[None]
 
 
-class RelayController:
+class RelaySupervisor:
     """
-    Controls the creation and lifecycle of per-device relays.
-    Monitors add/remove events from udev and includes optional auto-discovery.
+    Owns selected input devices and their per-device relay tasks.
+
+    The supervisor consumes runtime events directly. Hotplug, cable state, and
+    shutdown requests therefore stay in the same asyncio task group as the
+    relays they affect.
     """
 
     HOTPLUG_ADD_RETRY_DELAY_SEC = 0.2
@@ -82,7 +92,7 @@ class RelayController:
 
         self._grab_devices = grab_devices
 
-        self._state = _ControllerState.NEW
+        self._state = _SupervisorState.NEW
         self._shutdown_event = asyncio.Event()
         self._gadgets_released = False
         self._task_group: TaskGroup | None = None
@@ -94,7 +104,7 @@ class RelayController:
     def _shutdown_requested(self) -> bool:
         return self._shutdown_event.is_set()
 
-    async def async_relay_devices(self) -> None:
+    async def run(self, events: asyncio.Queue[RuntimeEvent]) -> None:
         """
         Launch a TaskGroup that relays events from all matching devices.
         Dynamically adds or removes tasks when devices appear or disappear.
@@ -102,31 +112,31 @@ class RelayController:
         :return: Never returns unless an unrecoverable exception or cancellation occurs
         :rtype: None
         """
-        if self._state is _ControllerState.STOPPED:
-            raise RuntimeError("RelayController cannot be restarted")
+        if self._state is _SupervisorState.STOPPED:
+            raise RuntimeError("RelaySupervisor cannot be restarted")
         if self._state in (
-            _ControllerState.STARTING,
-            _ControllerState.RUNNING,
+            _SupervisorState.STARTING,
+            _SupervisorState.RUNNING,
         ):
-            raise RuntimeError("RelayController is already running")
-        if self._shutdown_requested() or self._state is _ControllerState.SHUTTING_DOWN:
-            self._state = _ControllerState.STOPPED
+            raise RuntimeError("RelaySupervisor is already running")
+        if self._shutdown_requested() or self._state is _SupervisorState.SHUTTING_DOWN:
+            self._state = _SupervisorState.STOPPED
             return
 
-        self._state = _ControllerState.STARTING
+        self._state = _SupervisorState.STARTING
 
         try:
             try:
                 initial_devices = list_input_devices()
             except DeviceEnumerationError as exc:
                 logger.exception(
-                    "RelayController: Failed enumerating input devices: %s", exc
+                    "RelaySupervisor: Failed enumerating input devices: %s", exc
                 )
                 raise
 
             async with TaskGroup() as task_group:
                 self._task_group = task_group
-                logger.debug("RelayController: TaskGroup started.")
+                logger.debug("RelaySupervisor: TaskGroup started.")
 
                 for device in initial_devices:
                     if self._shutdown_requested():
@@ -138,27 +148,69 @@ class RelayController:
 
                 if (
                     not self._shutdown_requested()
-                    and self._state is _ControllerState.STARTING
+                    and self._state is _SupervisorState.STARTING
                 ):
-                    self._state = _ControllerState.RUNNING
+                    self._state = _SupervisorState.RUNNING
                     self._flush_pending_adds()
 
-                await self._shutdown_event.wait()
+                await self._consume_events(events)
         except* Exception as exc_grp:
             logger.exception(
-                "RelayController: Exception in TaskGroup", exc_info=exc_grp
+                "RelaySupervisor: Exception in TaskGroup", exc_info=exc_grp
             )
             raise
         finally:
-            self._state = _ControllerState.STOPPED
+            self._state = _SupervisorState.STOPPED
             self._task_group = None
             self._pop_pending_adds()
             self._cancel_all_pending_probes()
             for device_path, active_relay in list(self._active_relays.items()):
                 self._relay_task_done(device_path, active_relay.task)
-            self._relaying_active.clear()
+            self._set_relaying_active(False)
             self._release_all_gadgets_once()
-            logger.debug("RelayController: TaskGroup exited.")
+            logger.debug("RelaySupervisor: TaskGroup exited.")
+
+    async def _consume_events(self, events: asyncio.Queue[RuntimeEvent]) -> None:
+        while not self._shutdown_requested():
+            event_task = asyncio.create_task(events.get())
+            shutdown_task = asyncio.create_task(self._shutdown_event.wait())
+            done, pending = await asyncio.wait(
+                {event_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+            if shutdown_task in done:
+                event_task.cancel()
+                await asyncio.gather(event_task, return_exceptions=True)
+                return
+
+            event = event_task.result()
+            self._handle_runtime_event(event)
+
+    def _handle_runtime_event(self, event: RuntimeEvent) -> None:
+        if isinstance(event, DeviceAdded):
+            self._device_added(event.path)
+        elif isinstance(event, DeviceRemoved):
+            self._device_removed(event.path)
+        elif isinstance(event, UdcStateChanged):
+            self._set_relaying_active(event.state == "configured")
+        elif isinstance(event, ShutdownRequested):
+            logger.debug("Runtime shutdown requested: %s", event.reason)
+            self.request_shutdown()
+
+    def _set_relaying_active(self, active: bool) -> None:
+        was_active = self._relaying_active.is_set()
+        if active:
+            self._gadgets_released = False
+            self._relaying_active.set()
+            return
+
+        self._relaying_active.clear()
+        if was_active:
+            self._release_all_gadgets_once()
 
     def request_shutdown(self) -> None:
         """
@@ -167,15 +219,15 @@ class RelayController:
         This is used during service shutdown and profile restarts so we do not
         wait indefinitely for evdev readers to notice cancellation on their own.
         """
-        if self._state in (_ControllerState.SHUTTING_DOWN, _ControllerState.STOPPED):
+        if self._state in (_SupervisorState.SHUTTING_DOWN, _SupervisorState.STOPPED):
             return
 
-        self._state = _ControllerState.SHUTTING_DOWN
+        self._state = _SupervisorState.SHUTTING_DOWN
         self._shutdown_event.set()
         self._pop_pending_adds()
         self._cancel_all_pending_probes()
 
-        self._relaying_active.clear()
+        self._set_relaying_active(False)
 
         def _begin_shutdown() -> None:
             tasks = [active_relay.task for active_relay in self._active_relays.values()]
@@ -185,15 +237,15 @@ class RelayController:
 
         _begin_shutdown()
 
-    def notify_device_added(self, device_path: str) -> None:
-        if self._state in (_ControllerState.NEW, _ControllerState.STARTING):
+    def _device_added(self, device_path: str) -> None:
+        if self._state in (_SupervisorState.NEW, _SupervisorState.STARTING):
             self._queue_pending_add(device_path)
             logger.debug(
-                "Queueing add for %s until the relay controller is ready.",
+                "Queueing add for %s until the relay supervisor is ready.",
                 device_path,
             )
             return
-        if self._state in (_ControllerState.SHUTTING_DOWN, _ControllerState.STOPPED):
+        if self._state in (_SupervisorState.SHUTTING_DOWN, _SupervisorState.STOPPED):
             logger.debug(
                 "Ignoring add for %s; controller is shutting down.", device_path
             )
@@ -205,8 +257,8 @@ class RelayController:
 
         self._schedule_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
 
-    def notify_device_removed(self, device_path: str) -> None:
-        if self._state is _ControllerState.NEW:
+    def _device_removed(self, device_path: str) -> None:
+        if self._state is _SupervisorState.NEW:
             if self._discard_pending_add(device_path):
                 logger.debug(
                     "Dropped queued add for %s because the device was removed before startup completed.",
@@ -214,7 +266,7 @@ class RelayController:
                 )
             return
 
-        if self._state is _ControllerState.STARTING:
+        if self._state is _SupervisorState.STARTING:
             if self._discard_pending_add(device_path):
                 logger.debug(
                     "Dropped queued add for %s because the device was removed before startup completed.",
@@ -224,7 +276,7 @@ class RelayController:
             if device_path not in self._active_relays:
                 return
 
-        if self._state in (_ControllerState.SHUTTING_DOWN, _ControllerState.STOPPED):
+        if self._state in (_SupervisorState.SHUTTING_DOWN, _SupervisorState.STOPPED):
             logger.debug(
                 "Ignoring remove for %s; controller is shutting down.",
                 device_path,
@@ -254,7 +306,7 @@ class RelayController:
 
     def _flush_pending_adds(self) -> None:
         if (
-            self._state is not _ControllerState.RUNNING
+            self._state is not _SupervisorState.RUNNING
             or self._task_group is None
             or self._shutdown_requested()
         ):
@@ -308,7 +360,7 @@ class RelayController:
     def _schedule_probe(self, device_path: str, retries_remaining: int) -> None:
         if (
             self._task_group is None
-            or self._state is not _ControllerState.RUNNING
+            or self._state is not _SupervisorState.RUNNING
             or self._shutdown_requested()
         ):
             logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
@@ -347,7 +399,7 @@ class RelayController:
         self._start_open_device(device)
 
     def _start_open_device(self, device: InputDevice) -> None:
-        if self._state not in (_ControllerState.STARTING, _ControllerState.RUNNING):
+        if self._state not in (_SupervisorState.STARTING, _SupervisorState.RUNNING):
             logger.debug("Ignoring %s; controller is not running.", device)
             device.close()
             return
@@ -364,7 +416,7 @@ class RelayController:
 
         try:
             task = self._task_group.create_task(
-                self._run_device_relay(device), name=device.path
+                self._run_input_relay(device), name=device.path
             )
         except RuntimeError:
             logger.debug("Ignoring %s; TaskGroup is shutting down.", device)
@@ -431,14 +483,14 @@ class RelayController:
         except Exception:
             logger.debug("Ignoring close failure for %s", device_path)
 
-    async def _run_device_relay(self, device: InputDevice) -> None:
+    async def _run_input_relay(self, device: InputDevice) -> None:
         """
-        Create a DeviceRelay context, then read events in a loop until cancellation or error.
+        Create a InputRelay context, then read events in a loop until cancellation or error.
 
         :param device: The evdev InputDevice to relay
         """
         try:
-            async with DeviceRelay(
+            async with InputRelay(
                 device,
                 self._gadget_manager,
                 grab_device=self._grab_devices,

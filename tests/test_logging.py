@@ -31,16 +31,16 @@ class LoggingConfigurationTest(unittest.TestCase):
     def test_get_logger_uses_named_children_with_handlers_only_on_package_root(
         self,
     ) -> None:
-        child = bt_logging.get_logger("bluetooth_2_usb.device_relay")
+        child = bt_logging.get_logger("bluetooth_2_usb.input_relay")
 
-        self.assertEqual(child.name, "bluetooth_2_usb.device_relay")
+        self.assertEqual(child.name, "bluetooth_2_usb.input_relay")
         self.assertEqual(child.handlers, [])
         self.assertTrue(child.propagate)
         self.assertGreater(len(self.package_logger.handlers), 0)
         self.assertFalse(self.package_logger.propagate)
 
     def test_add_file_handler_attaches_to_package_root_once(self) -> None:
-        bt_logging.get_logger("bluetooth_2_usb.device_relay")
+        bt_logging.get_logger("bluetooth_2_usb.input_relay")
 
         with tempfile.TemporaryDirectory() as tmp:
             log_path = str(Path(tmp) / "relay.log")
@@ -59,7 +59,7 @@ class LoggingConfigurationTest(unittest.TestCase):
                 handler.close()
 
     def test_add_file_handler_expands_user_path_before_opening(self) -> None:
-        bt_logging.get_logger("bluetooth_2_usb.device_relay")
+        bt_logging.get_logger("bluetooth_2_usb.input_relay")
 
         with tempfile.TemporaryDirectory() as tmp:
             env = {"HOME": tmp}

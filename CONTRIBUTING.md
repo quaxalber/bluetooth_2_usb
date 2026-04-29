@@ -100,6 +100,7 @@ Use these repo-owned guides when they match the task:
 - [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
 - [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md)
+- [docs/runtime-architecture.md](docs/runtime-architecture.md)
 
 Minimum Pi-side validation after runtime-affecting changes:
 

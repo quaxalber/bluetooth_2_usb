@@ -29,6 +29,7 @@ Repo-owned focused guides:
 - `docs/host-relay-loopback.md`
 - `docs/persistent-readonly.md`
 - `docs/remote-wakeup-kernel.md`
+- `docs/runtime-architecture.md`
 - `docs/doc-consistency-review.md`
 - `docs/release-versioning-policy.md`
 

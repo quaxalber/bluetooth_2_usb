@@ -106,6 +106,20 @@ redacted snapshot and can run a short bounded foreground debug session. If you
 need the next steps after those checks, use
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
+## Runtime behavior
+
+The service runs one asyncio runtime that turns UDC cable state, input hotplug,
+and shutdown signals into typed runtime events. A relay supervisor consumes
+those events and owns all per-device relay tasks.
+
+Relaying starts only when the USB device controller reports `configured`.
+Relaying pauses, and all HID gadget state is released, when the controller
+leaves `configured`. That keeps host-visible keys and buttons from sticking
+across cable disconnects, suspend transitions, and USB resets.
+
+For implementation details, see
+[docs/runtime-architecture.md](docs/runtime-architecture.md).
+
 ## Persistent read-only operation
 
 For the supported appliance-style read-only workflow, use

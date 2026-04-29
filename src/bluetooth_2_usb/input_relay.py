@@ -16,7 +16,7 @@ from .shortcut_toggler import ShortcutToggler
 logger = get_logger(__name__)
 
 
-class DeviceRelay:
+class InputRelay:
     """
     Relay a single InputDevice's events to USB HID gadgets.
 
@@ -66,7 +66,7 @@ class DeviceRelay:
         """
         return self._input_device
 
-    async def __aenter__(self) -> DeviceRelay:
+    async def __aenter__(self) -> InputRelay:
         """
         Async context manager entry. Grabs the device if requested.
 
