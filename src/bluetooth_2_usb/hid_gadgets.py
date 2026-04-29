@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .extended_mouse import ExtendedMouse
-from .gadget_config import rebuild_gadget
-from .hid_layout import build_default_layout
+from .hid_gadget_config import rebuild_gadget
+from .hid_gadget_layout import build_default_layout
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class GadgetManager:
+class HidGadgets:
     """
     Manages enabling, disabling, and references to USB HID gadget devices.
 
@@ -31,7 +31,7 @@ class GadgetManager:
 
     def __init__(self) -> None:
         """
-        Initialize without enabling devices. Call enable_gadgets() to enable them.
+        Initialize without enabling devices. Call enable() to enable them.
         """
         self._clear_gadget_state()
 
@@ -122,7 +122,7 @@ class GadgetManager:
                 )
             time.sleep(poll_interval_sec)
 
-    def enable_gadgets(self) -> None:
+    def enable(self) -> None:
         """
         Disable and re-enable usb_hid devices, then store references
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
@@ -180,7 +180,7 @@ class GadgetManager:
         """
         return self._gadgets["consumer"]
 
-    def release_all_gadgets(self) -> None:
+    def release_all(self) -> None:
         """
         Best-effort release of any pressed/active state on all HID gadgets.
 

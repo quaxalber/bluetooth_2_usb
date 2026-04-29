@@ -92,6 +92,16 @@ class LoggingConfigurationTest(unittest.TestCase):
 
 
 class RelayModuleBoundaryTest(unittest.TestCase):
-    def test_old_relay_module_import_is_not_preserved(self) -> None:
-        with self.assertRaises(ModuleNotFoundError):
-            importlib.import_module("bluetooth_2_usb.relay")
+    def test_old_runtime_module_imports_are_not_preserved(self) -> None:
+        for module_name in (
+            "bluetooth_2_usb.device_relay",
+            "bluetooth_2_usb.gadget_config",
+            "bluetooth_2_usb.gadget_manager",
+            "bluetooth_2_usb.hid_layout",
+            "bluetooth_2_usb.relay",
+            "bluetooth_2_usb.relay_controller",
+            "bluetooth_2_usb.runtime_monitor",
+        ):
+            with self.subTest(module_name=module_name):
+                with self.assertRaises(ModuleNotFoundError):
+                    importlib.import_module(module_name)

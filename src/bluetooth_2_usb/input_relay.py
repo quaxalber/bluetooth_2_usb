@@ -7,8 +7,8 @@ from typing import Any
 
 from .evdev import ecodes, get_mouse_movement
 from .evdev_compat import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
-from .gadget_manager import GadgetManager
 from .hid_dispatch import dispatch_event_to_hid
+from .hid_gadgets import HidGadgets
 from .logging import get_logger
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator, iter_mouse_delta_chunks
 from .shortcut_toggler import ShortcutToggler
@@ -30,20 +30,20 @@ class InputRelay:
     def __init__(
         self,
         input_device: InputDevice,
-        gadget_manager: GadgetManager,
+        hid_gadgets: HidGadgets,
         relaying_active: asyncio.Event,
         grab_device: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
         :param input_device: The evdev input device
-        :param gadget_manager: Provides references to Keyboard, Mouse, ConsumerControl
+        :param hid_gadgets: Provides references to Keyboard, Mouse, ConsumerControl
         :param grab_device: Whether to grab the device for exclusive access
         :param relaying_active: asyncio.Event that indicates relaying is on/off
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
         """
         self._input_device = input_device
-        self._gadget_manager = gadget_manager
+        self._hid_gadgets = hid_gadgets
         self._grab_device = grab_device
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
@@ -232,7 +232,7 @@ class InputRelay:
         for partial in iter_mouse_delta_chunks(delta):
 
             def move_mouse(partial=partial) -> None:
-                mouse = self._gadget_manager.mouse
+                mouse = self._hid_gadgets.mouse
                 if mouse is None:
                     raise RuntimeError(
                         "Mouse gadget not initialized or manager not enabled."
@@ -252,7 +252,7 @@ class InputRelay:
         :param event: The InputEvent to process
         """
         await self._process_hid_action_with_retry(
-            lambda: dispatch_event_to_hid(event, self._gadget_manager),
+            lambda: dispatch_event_to_hid(event, self._hid_gadgets),
             f"{event}",
         )
 

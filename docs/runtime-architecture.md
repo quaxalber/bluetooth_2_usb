@@ -9,6 +9,8 @@ The service runtime is intentionally centered on one asyncio event flow:
   tasks.
 - `InputRelay` reads one evdev device and writes HID reports to the shared USB
   gadget objects.
+- `HidGadgets` owns the configured keyboard, mouse, and consumer-control HID
+  handles created from `hid_gadget_config.py` and `hid_gadget_layout.py`.
 
 Runtime events are plain value objects from `runtime_events.py`:
 

@@ -10,7 +10,7 @@ from .evdev import (
 )
 from .evdev_compat import InputEvent, KeyEvent, RelEvent
 from .extended_mouse import ExtendedMouse
-from .gadget_manager import GadgetManager
+from .hid_gadgets import HidGadgets
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -20,36 +20,36 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def dispatch_event_to_hid(event: InputEvent, gadget_manager: GadgetManager) -> None:
+def dispatch_event_to_hid(event: InputEvent, hid_gadgets: HidGadgets) -> None:
     """
     Relay the given event to the appropriate USB HID device.
 
     :param event: The evdev InputEvent
-    :param gadget_manager: GadgetManager with references to HID devices
+    :param hid_gadgets: HidGadgets with references to HID devices
     :raises BlockingIOError: If HID device write is blocked
     """
     if isinstance(event, RelEvent):
-        mouse = gadget_manager.mouse
+        mouse = hid_gadgets.mouse
         if mouse is None:
             raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
         mouse.move(*get_mouse_movement(event))
     elif isinstance(event, KeyEvent):
-        dispatch_key_event_to_hid(event, gadget_manager)
+        dispatch_key_event_to_hid(event, hid_gadgets)
 
 
-def dispatch_key_event_to_hid(event: KeyEvent, gadget_manager: GadgetManager) -> None:
+def dispatch_key_event_to_hid(event: KeyEvent, hid_gadgets: HidGadgets) -> None:
     """
     Relay a key event (press/release) to the appropriate HID gadget.
 
     :param event: The KeyEvent to process
-    :param gadget_manager: GadgetManager with references to the HID devices
+    :param hid_gadgets: HidGadgets with references to the HID devices
     :raises RuntimeError: If no appropriate HID gadget is available
     """
     key_id, key_name = evdev_to_usb_hid(event)
     if key_id is None or key_name is None:
         return
 
-    output_gadget = select_hid_gadget(event, gadget_manager)
+    output_gadget = select_hid_gadget(event, hid_gadgets)
     if output_gadget is None:
         raise RuntimeError("No appropriate USB gadget found (manager not enabled?).")
 
@@ -65,17 +65,17 @@ def dispatch_key_event_to_hid(event: KeyEvent, gadget_manager: GadgetManager) ->
 
 
 def select_hid_gadget(
-    event: KeyEvent, gadget_manager: GadgetManager
+    event: KeyEvent, hid_gadgets: HidGadgets
 ) -> ConsumerControl | Keyboard | ExtendedMouse | None:
     """
     Determine which HID gadget to target for the given key event.
 
     :param event: The KeyEvent to process
-    :param gadget_manager: GadgetManager for HID references
+    :param hid_gadgets: HidGadgets for HID references
     :return: A ConsumerControl, Mouse, or Keyboard object, or None if not found
     """
     if is_consumer_key(event):
-        return gadget_manager.consumer
+        return hid_gadgets.consumer
     if is_mouse_button(event):
-        return gadget_manager.mouse
-    return gadget_manager.keyboard
+        return hid_gadgets.mouse
+    return hid_gadgets.keyboard

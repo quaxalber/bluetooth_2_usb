@@ -4,7 +4,7 @@ import asyncio
 import signal
 from dataclasses import dataclass
 
-from .gadget_manager import GadgetManager
+from .hid_gadgets import HidGadgets
 from .logging import get_logger
 from .relay_supervisor import RelaySupervisor
 from .runtime_config import RuntimeConfig
@@ -42,15 +42,15 @@ class Runtime:
 
     async def run(self) -> None:
         relaying_active = asyncio.Event()
-        gadget_manager = GadgetManager()
-        gadget_manager.enable_gadgets()
+        hid_gadgets = HidGadgets()
+        hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(
             relaying_active,
-            gadget_manager,
+            hid_gadgets,
         )
         self._supervisor = RelaySupervisor(
-            gadget_manager=gadget_manager,
+            hid_gadgets=hid_gadgets,
             device_identifiers=list(self._config.device_ids),
             auto_discover=self._config.auto_discover,
             grab_devices=self._config.grab_devices,
@@ -71,7 +71,7 @@ class Runtime:
     def _build_shortcut_toggler(
         self,
         relaying_active: asyncio.Event,
-        gadget_manager: GadgetManager,
+        hid_gadgets: HidGadgets,
     ) -> ShortcutToggler | None:
         if not self._config.interrupt_shortcut:
             return None
@@ -81,7 +81,7 @@ class Runtime:
         return ShortcutToggler(
             shortcut_keys=shortcut_keys,
             relaying_active=relaying_active,
-            gadget_manager=gadget_manager,
+            hid_gadgets=hid_gadgets,
         )
 
     async def _run_tasks(

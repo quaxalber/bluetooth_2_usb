@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 from .device_identifier import DeviceIdentifier
 from .evdev_compat import InputDevice
-from .gadget_manager import GadgetManager
+from .hid_gadgets import HidGadgets
 from .input_relay import InputRelay
 from .inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
@@ -59,7 +59,7 @@ class RelaySupervisor:
 
     def __init__(
         self,
-        gadget_manager: GadgetManager,
+        hid_gadgets: HidGadgets,
         relaying_active: asyncio.Event,
         device_identifiers: list[str] | None = None,
         auto_discover: bool = False,
@@ -68,7 +68,7 @@ class RelaySupervisor:
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
-        :param gadget_manager: Provides the USB HID gadget devices
+        :param hid_gadgets: Provides the USB HID gadget devices
         :param device_identifiers: A list of path, MAC, or name fragments to identify devices to relay
         :param auto_discover: If True, relays all valid input devices except those skipped
         :param skip_name_prefixes: A list of device.name prefixes to skip if auto_discover is True
@@ -76,7 +76,7 @@ class RelaySupervisor:
         :param relaying_active: asyncio.Event to indicate if relaying is active
         :param shortcut_toggler: ShortcutToggler to allow toggling relaying globally
         """
-        self._gadget_manager = gadget_manager
+        self._hid_gadgets = hid_gadgets
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
 
@@ -167,7 +167,7 @@ class RelaySupervisor:
             for device_path, active_relay in list(self._active_relays.items()):
                 self._relay_task_done(device_path, active_relay.task)
             self._set_relaying_active(False)
-            self._release_all_gadgets_once()
+            self._release_all_once()
             logger.debug("RelaySupervisor: TaskGroup exited.")
 
     async def _consume_events(self, events: asyncio.Queue[RuntimeEvent]) -> None:
@@ -210,7 +210,7 @@ class RelaySupervisor:
 
         self._relaying_active.clear()
         if was_active:
-            self._release_all_gadgets_once()
+            self._release_all_once()
 
     def request_shutdown(self) -> None:
         """
@@ -451,22 +451,22 @@ class RelaySupervisor:
     ) -> None:
         pending_tasks = {task for task in tasks if not task.done()}
         if not pending_tasks:
-            self._release_all_gadgets_once()
+            self._release_all_once()
             return
 
         def _release_when_last_task_stops(done_task: asyncio.Task[None]) -> None:
             pending_tasks.discard(done_task)
             if not pending_tasks:
-                self._release_all_gadgets_once()
+                self._release_all_once()
 
         for task in pending_tasks:
             task.add_done_callback(_release_when_last_task_stops)
 
-    def _release_all_gadgets_once(self) -> None:
+    def _release_all_once(self) -> None:
         if self._gadgets_released:
             return
         self._gadgets_released = True
-        self._gadget_manager.release_all_gadgets()
+        self._hid_gadgets.release_all()
 
     def _relay_task_done(
         self,
@@ -492,7 +492,7 @@ class RelaySupervisor:
         try:
             async with InputRelay(
                 device,
-                self._gadget_manager,
+                self._hid_gadgets,
                 grab_device=self._grab_devices,
                 relaying_active=self._relaying_active,
                 shortcut_toggler=self._shortcut_toggler,
