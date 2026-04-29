@@ -201,9 +201,9 @@ sudo systemctl restart bluetooth_2_usb.service
 
 ## Operational command reference
 
-Managed deployment commands are implemented by `bluetooth_2_usb.ops`. During
-the initial source-tree install, run the module with `PYTHONPATH` pointed at
-the checkout. After installation, use the managed console command at
+Managed deployment commands use the same `bluetooth_2_usb` CLI as the runtime.
+During the initial source-tree install, run the module with `PYTHONPATH`
+pointed at the checkout. After installation, use the managed console command at
 `/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb`.
 
 ### `install`

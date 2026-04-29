@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 from .device_identifier import DeviceIdentifier
-from .evdev_compat import InputDevice
+from .evdev_types import InputDevice
 from .hid_gadgets import HidGadgets
 from .input_relay import InputRelay
 from .inventory import (

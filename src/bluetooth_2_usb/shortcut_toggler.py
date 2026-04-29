@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from .evdev import find_key_name
-from .evdev_compat import KeyEvent
+from .evdev_types import KeyEvent
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
 

@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from .evdev import ecodes, get_mouse_movement
-from .evdev_compat import RelEvent
+from .evdev_types import RelEvent
 from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 
 

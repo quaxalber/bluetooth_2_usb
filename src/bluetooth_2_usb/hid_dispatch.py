@@ -8,7 +8,7 @@ from .evdev import (
     is_consumer_key,
     is_mouse_button,
 )
-from .evdev_compat import InputEvent, KeyEvent, RelEvent
+from .evdev_types import InputEvent, KeyEvent, RelEvent
 from .extended_mouse import ExtendedMouse
 from .hid_gadgets import HidGadgets
 from .logging import get_logger

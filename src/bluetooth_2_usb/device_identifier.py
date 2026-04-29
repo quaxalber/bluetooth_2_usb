@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from .evdev_compat import InputDevice
+from .evdev_types import InputDevice
 
 
 class DeviceIdentifier:

@@ -1,8 +1,8 @@
 from functools import lru_cache
 from importlib import import_module
 
-from .evdev_compat import InputEvent, KeyEvent, RelEvent
 from .evdev_ecodes import ecodes
+from .evdev_types import InputEvent, KeyEvent, RelEvent
 from .extended_mouse import ExtendedMouse
 from .logging import get_logger
 

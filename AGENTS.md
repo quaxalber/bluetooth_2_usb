@@ -41,6 +41,7 @@ Repo-owned focused guides:
   validation paths do not fail early.
 - Keep changes focused. Update docs when behavior, commands, paths, defaults, or
   validation guidance change.
+- Follow the compatibility policy in `CONTRIBUTING.md`.
 - Do not push directly to `main`. Use `staging` as the integration branch for
   normal work.
 - Open normal PRs against `staging` and squash-merge them there. Small
@@ -55,14 +56,14 @@ Repo-owned focused guides:
 
 Use the baseline checks from [CONTRIBUTING.md](CONTRIBUTING.md).
 
-If you change installer, diagnostics, or read-only logic, recursive shell
-validation is mandatory.
+If you change installer, diagnostics, or read-only logic, run the full
+operational CLI validation path.
 
 For runtime-affecting changes, validate on real Pi hardware when feasible.
 Minimum Pi-side checks:
 
-- `sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose`
-- `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
+- `sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose`
+- `sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10`
 - `sudo bluetoothctl show`
 - `sudo btmgmt info`
 

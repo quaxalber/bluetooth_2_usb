@@ -56,6 +56,14 @@ Please keep code and docs aligned with the supported deployment model:
 - fail early on invalid input
 - keep CLI behavior and help text stable unless intentionally changed
 
+### Compatibility Policy
+
+- keep docs, tests, and code aligned with the current supported product surface
+- do not keep legacy aliases, shell wrappers, removed config keys, deprecated
+  entrypoints, or compatibility shims
+- when an interface changes, update callers and docs to the new interface
+  directly instead of preserving old paths
+
 ### Documentation
 
 - prefer operational accuracy over marketing language
@@ -171,7 +179,7 @@ Thanks for taking the time to report a problem. If you can, please include:
 
 - target host type
 - whether persistent read-only mode is enabled
-- exact commands or scripts used
+- exact commands used
 - output from `bluetooth_2_usb smoketest --verbose`
 - output from `bluetooth_2_usb debug --duration 10`
 - clear reproduction steps

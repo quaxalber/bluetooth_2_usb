@@ -11,7 +11,7 @@ from bluetooth_2_usb.service_settings import (
 
 from . import boot_config
 from .bluetooth import clear_bluetooth_rfkill_soft_blocks
-from .commands import backup_file, fail, info, ok, output, require_commands, run, warn
+from .commands import fail, info, ok, output, require_commands, run, warn
 from .paths import PATHS
 from .readonly import (
     load_readonly_config,
@@ -52,21 +52,6 @@ def write_default_env_file() -> None:
     if not PATHS.env_file.exists():
         PATHS.env_file.write_text(DEFAULT_ENV_TEXT, encoding="utf-8")
         PATHS.env_file.chmod(0o644)
-
-
-def normalize_runtime_env_file() -> None:
-    if not PATHS.env_file.is_file():
-        return
-    text = PATHS.env_file.read_text(encoding="utf-8")
-    if not any(line.strip().startswith("B2U_HID_PROFILE=") for line in text.splitlines()):
-        return
-    backup_file(PATHS.env_file)
-    lines = [line for line in text.splitlines() if not line.strip().startswith("B2U_HID_PROFILE=")]
-    PATHS.env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    PATHS.env_file.chmod(0o644)
-    warn(
-        f"Removed legacy B2U_HID_PROFILE from {PATHS.env_file}; the runtime exposes a single fixed USB HID layout."
-    )
 
 
 def install_cli_links() -> None:
@@ -204,7 +189,6 @@ def install(repo_root: Path) -> None:
 
     install_service_unit(repo_root)
     write_default_env_file()
-    normalize_runtime_env_file()
     if not canonicalize_service_settings_bools(DEFAULT_ENV_FILE):
         pass
     run(

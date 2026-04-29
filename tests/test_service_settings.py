@@ -109,18 +109,18 @@ class ServiceSettingsTest(unittest.TestCase):
         self.assertIn("/tmp/debug log.txt", argv)
         self.assertIn("'MX Keys'", command)
 
-    def test_legacy_hid_profile_key_is_rejected(self) -> None:
+    def test_unknown_runtime_setting_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
-                "B2U_HID_PROFILE=boot_keyboard\n",
+                "B2U_UNKNOWN_SETTING=1\n",
                 encoding="utf-8",
             )
 
             with self.assertRaises(ServiceSettingsError):
                 load_service_settings(env_file)
 
-    def test_defaults_do_not_emit_removed_hid_profile_flag(self) -> None:
+    def test_defaults_do_not_emit_hid_profile_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "missing"
 

@@ -3,11 +3,11 @@
 Most troubleshooting sessions should start with the two built-in diagnostics:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
 ```
 
-The `smoketest` is the quick health gate. `debug.sh` gives you the fuller redacted
+The `smoketest` is the quick health gate. `debug` gives you the fuller redacted
 snapshot when you need to understand what the runtime actually sees.
 
 If you want an end-to-end relay check without depending on a paired Bluetooth

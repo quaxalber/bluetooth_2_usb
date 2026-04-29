@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .evdev import ecodes, get_mouse_movement
-from .evdev_compat import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
+from .evdev_types import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
 from .hid_dispatch import dispatch_event_to_hid
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
