@@ -46,12 +46,12 @@ Compare the docs against the current `--help` output of the supported
 operational commands:
 
 ```bash
-./venv/bin/python -m bluetooth_2_usb.ops --help
+./venv/bin/python -m bluetooth_2_usb --help
 for command in install update uninstall smoketest debug \
   readonly-setup readonly-enable readonly-disable \
   install-hid-udev-rule loopback-inject loopback-capture; do
   echo "==== $command"
-  ./venv/bin/python -m bluetooth_2_usb.ops "$command" --help
+  ./venv/bin/python -m bluetooth_2_usb "$command" --help
   echo
 done
 
@@ -106,7 +106,7 @@ rm -rf "$tmpdir"
 ### 6. Drift search for commands, flags, and paths
 
 ```bash
-rg -n '(bluetooth_2_usb_ops|python -m bluetooth_2_usb.ops|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
+rg -n '(bluetooth_2_usb|python -m bluetooth_2_usb|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
 ```
 
 Flag anything that is documented but no longer present, or anything that exists

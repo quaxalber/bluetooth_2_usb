@@ -99,8 +99,8 @@ Use these repo-owned guides when they match the task:
 Minimum Pi-side validation after runtime-affecting changes:
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
 sudo bluetoothctl show
 sudo btmgmt info
 ```
@@ -172,8 +172,8 @@ Thanks for taking the time to report a problem. If you can, please include:
 - target host type
 - whether persistent read-only mode is enabled
 - exact commands or scripts used
-- output from `bluetooth_2_usb_ops smoketest --verbose`
-- output from `bluetooth_2_usb_ops debug --duration 10`
+- output from `bluetooth_2_usb smoketest --verbose`
+- output from `bluetooth_2_usb debug --duration 10`
 - clear reproduction steps
 
 ## Community expectations

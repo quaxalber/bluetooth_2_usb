@@ -46,7 +46,6 @@ Issues = "https://github.com/quaxalber/bluetooth_2_usb/issues"
 
 [project.scripts]
 bluetooth_2_usb = "bluetooth_2_usb.cli:run"
-bluetooth_2_usb_ops = "bluetooth_2_usb.ops.cli:run"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

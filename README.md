@@ -28,7 +28,7 @@ sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2
 ### 2. Install
 
 ```bash
-cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb.ops install
+cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb install
 ```
 
 ### 3. Reboot
@@ -57,7 +57,7 @@ exit
 ### 5. Run the smoketest
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest
 ```
 
 ### 6. Connect the Pi to the target host
@@ -83,13 +83,13 @@ sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest
 ## Updating
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops update
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb update
 ```
 
 ## Uninstalling
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops uninstall
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb uninstall
 ```
 
 ## Diagnostics
@@ -97,8 +97,8 @@ sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops uninstall
 For most issues, start with the two built-in diagnostics:
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
 ```
 
 The `smoketest` is the quick health gate. `debug` collects a fuller
@@ -204,7 +204,7 @@ sudo systemctl restart bluetooth_2_usb.service
 Managed deployment commands are implemented by `bluetooth_2_usb.ops`. During
 the initial source-tree install, run the module with `PYTHONPATH` pointed at
 the checkout. After installation, use the managed console command at
-`/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops`.
+`/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb`.
 
 ### `install`
 

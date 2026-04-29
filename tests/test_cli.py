@@ -25,6 +25,13 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, cli.EXIT_ENVIRONMENT)
 
+    def test_operational_command_delegates_to_operational_cli(self) -> None:
+        with patch("bluetooth_2_usb.ops.cli.main", return_value=17) as operational_main:
+            exit_code = cli.run(["smoketest", "--verbose"])
+
+        self.assertEqual(exit_code, 17)
+        operational_main.assert_called_once_with(["smoketest", "--verbose"], prog="bluetooth_2_usb")
+
     def test_validate_env_json_output(self) -> None:
         stdout = io.StringIO()
         status = cli.EnvironmentStatus(configfs=True, udc_present=True, udc_path=None)

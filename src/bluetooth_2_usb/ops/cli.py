@@ -16,22 +16,38 @@ from .readonly import (
     setup_persistent_bluetooth_state,
 )
 
+OPERATIONAL_COMMANDS = frozenset(
+    {
+        "install",
+        "update",
+        "uninstall",
+        "smoketest",
+        "debug",
+        "readonly-setup",
+        "readonly-enable",
+        "readonly-disable",
+        "install-hid-udev-rule",
+        "loopback-inject",
+        "loopback-capture",
+    }
+)
+
 
 def run() -> None:
     raise SystemExit(main())
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, prog: str = "bluetooth_2_usb") -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     try:
-        return _main(args)
+        return _main(args, prog=prog)
     except OpsError as exc:
         print(f"[x] {exc}", file=sys.stderr)
         return exc.exit_code
 
 
-def _main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="python -m bluetooth_2_usb.ops")
+def _main(argv: list[str], *, prog: str) -> int:
+    parser = argparse.ArgumentParser(prog=prog)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _command_parser(subparsers, "install", "Apply the managed system install.")
@@ -101,7 +117,7 @@ def _main(argv: list[str]) -> int:
         ensure_root()
         install_hid_udev_rule(repo_root)
     else:
-        fail(f"Unhandled ops command: {namespace.command}")
+        fail(f"Unhandled operational command: {namespace.command}")
     return 0
 
 

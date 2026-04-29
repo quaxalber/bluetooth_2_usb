@@ -72,10 +72,9 @@ def normalize_runtime_env_file() -> None:
 def install_cli_links() -> None:
     local_bin = Path("/usr/local/bin")
     local_bin.mkdir(parents=True, exist_ok=True)
-    for name in ["bluetooth_2_usb", "bluetooth_2_usb_ops"]:
-        link = local_bin / name
-        link.unlink(missing_ok=True)
-        link.symlink_to(PATHS.install_dir / "venv" / "bin" / name)
+    link = local_bin / "bluetooth_2_usb"
+    link.unlink(missing_ok=True)
+    link.symlink_to(PATHS.install_dir / "venv" / "bin" / "bluetooth_2_usb")
 
 
 def recreate_venv(venv_dir: Path) -> None:
@@ -230,10 +229,10 @@ def install(repo_root: Path) -> None:
 Next steps
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb_ops smoketest
+   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb smoketest
 3. If you want persistent read-only operation afterwards, run:
-   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb_ops readonly-setup --device /dev/YOUR-PARTITION
-   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb_ops readonly-enable
+   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb readonly-setup --device /dev/YOUR-PARTITION
+   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb readonly-enable
 """)
 
 
@@ -298,7 +297,6 @@ def uninstall() -> None:
     PATHS.env_file.unlink(missing_ok=True)
     PATHS.readonly_env_file.unlink(missing_ok=True)
     Path("/usr/local/bin/bluetooth_2_usb").unlink(missing_ok=True)
-    Path("/usr/local/bin/bluetooth_2_usb_ops").unlink(missing_ok=True)
     remove_bluetooth_persist_dropin()
     remove_bluetooth_bind_mount_unit()
     remove_persist_mount_unit(config.persist_mount)
@@ -325,10 +323,6 @@ def uninstall() -> None:
     _assert_absent(
         Path("/usr/local/bin/bluetooth_2_usb"),
         "bluetooth_2_usb CLI link still exists after uninstall",
-    )
-    _assert_absent(
-        Path("/usr/local/bin/bluetooth_2_usb_ops"),
-        "bluetooth_2_usb_ops CLI link still exists after uninstall",
     )
     _assert_absent(
         PATHS.bluetooth_bind_mount_unit,

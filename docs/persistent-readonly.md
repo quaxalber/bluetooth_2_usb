@@ -62,15 +62,15 @@ recovery.
 Run:
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-setup --device <persist-partition>
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-enable
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-setup --device <persist-partition>
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-enable
 sudo reboot
 ```
 
 After reboot:
 
 ```bash
-sudo env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
+sudo env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 sudo /opt/bluetooth_2_usb/venv/bin/python - <<'PY'
 from bluetooth_2_usb.ops.boot_config import boot_initramfs_target_path
@@ -91,7 +91,7 @@ state before rebooting:
 ```bash
 sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
 sudo dpkg --configure -a
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-enable
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-enable
 ```
 
 That failure mode has been observed on current Raspberry Pi OS releases when
@@ -113,7 +113,7 @@ instead of leaving you with a half-configured read-only boot path.
 ## Disable read-only mode
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-disable
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-disable
 sudo reboot
 ```
 

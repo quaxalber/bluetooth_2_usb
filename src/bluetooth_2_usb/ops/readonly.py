@@ -384,12 +384,10 @@ def enable_readonly() -> None:
             "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
         )
     if not config.persist_spec:
-        fail(
-            "Run bluetooth_2_usb_ops readonly-setup --device /dev/... before enabling read-only mode."
-        )
+        fail("Run bluetooth_2_usb readonly-setup --device /dev/... before enabling read-only mode.")
     if not bluetooth_state_persistent(config):
         fail(
-            "Persistent Bluetooth state is not active. Run bluetooth_2_usb_ops readonly-setup --device /dev/... first."
+            "Persistent Bluetooth state is not active. Run bluetooth_2_usb readonly-setup --device /dev/... first."
         )
     if not readonly_stack_packages_bootstrap_safe():
         warn("OverlayFS package state is incomplete:")
@@ -444,7 +442,7 @@ def enable_readonly() -> None:
     ok("OverlayFS has been enabled")
     warn("Boot partition read-only mode is intentionally not changed by this command.")
     warn(
-        "Persistent read-only mode is configured. Reboot, then run bluetooth_2_usb_ops smoketest --verbose and verify reconnect behavior."
+        "Persistent read-only mode is configured. Reboot, then run bluetooth_2_usb smoketest --verbose and verify reconnect behavior."
     )
 
 

@@ -273,8 +273,8 @@ sudo -n grep -H . /sys/kernel/config/usb_gadget/*/functions/hid.*/wakeup_on_writ
 4. the normal Bluetooth-2-USB checks still pass
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
 ```
 
 5. a real host suspend and wake test succeeds through normal keyboard input

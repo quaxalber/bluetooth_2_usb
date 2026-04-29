@@ -171,10 +171,17 @@ async def async_run(args: Arguments) -> int:
 
 
 def run(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    from .ops.cli import OPERATIONAL_COMMANDS
+    from .ops.cli import main as operational_main
+
+    if raw_args[:1] and raw_args[0] in OPERATIONAL_COMMANDS:
+        return operational_main(raw_args, prog="bluetooth_2_usb")
+
     from .args import parse_args
 
     try:
-        args = parse_args(argv)
+        args = parse_args(raw_args)
     except SystemExit as exc:
         return int(exc.code) if exc.code is not None else EXIT_OK
 
