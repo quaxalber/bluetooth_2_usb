@@ -63,7 +63,10 @@ class GadgetManager:
             if stat.S_ISCHR(mode) and not remove_character_devices:
                 continue
             logger.warning("Removing stale HID gadget path %s", path)
-            path.unlink()
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue
 
     def _collect_invalid_hidg_nodes(self) -> list[str]:
         invalid_paths: list[str] = []

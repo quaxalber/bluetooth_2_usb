@@ -727,6 +727,15 @@ class GadgetManagerLayoutTest(unittest.TestCase):
                 manager._prune_stale_hidg_nodes()
             self.assertFalse(stale.exists())
 
+    def test_prune_stale_hidg_nodes_ignores_unlink_race(self) -> None:
+        manager = GadgetManager()
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = Path(tmp) / "hidg1"
+            stale.write_text("stale", encoding="utf-8")
+            with patch.object(manager, "_expected_hidg_paths", return_value=(stale,)):
+                with patch.object(Path, "unlink", side_effect=FileNotFoundError):
+                    manager._prune_stale_hidg_nodes()
+
     def test_validate_hidg_nodes_rejects_regular_files(self) -> None:
         manager = GadgetManager()
         with tempfile.TemporaryDirectory() as tmp:

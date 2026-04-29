@@ -10,7 +10,8 @@ source "${SCRIPTS_DIR}/lib/common.sh"
 source "${SCRIPTS_DIR}/lib/paths.sh"
 
 PYTHON_BIN="${B2U_INSTALL_DIR}/venv/bin/python"
-SERVICE_SETTLE_SEC="${B2U_LOOPBACK_SERVICE_SETTLE_SEC:-10}"
+DEFAULT_SERVICE_SETTLE_SEC="10"
+SERVICE_SETTLE_SEC="${B2U_LOOPBACK_SERVICE_SETTLE_SEC:-${DEFAULT_SERVICE_SETTLE_SEC}}"
 
 usage() {
   cat <<EOF
@@ -32,8 +33,8 @@ esac
 [[ -x "${PYTHON_BIN}" ]] || fail "Managed Python not found: ${PYTHON_BIN}"
 
 if [[ ! "${SERVICE_SETTLE_SEC}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-  warn "Ignoring invalid B2U_LOOPBACK_SERVICE_SETTLE_SEC=${SERVICE_SETTLE_SEC}; using default 10"
-  SERVICE_SETTLE_SEC=10
+  warn "Ignoring invalid B2U_LOOPBACK_SERVICE_SETTLE_SEC=${SERVICE_SETTLE_SEC}; using default ${DEFAULT_SERVICE_SETTLE_SEC}"
+  SERVICE_SETTLE_SEC="${DEFAULT_SERVICE_SETTLE_SEC}"
 fi
 
 wait_for_service_settle() {
