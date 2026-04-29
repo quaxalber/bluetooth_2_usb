@@ -72,7 +72,16 @@ After reboot:
 ```bash
 sudo env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
 findmnt -no FSTYPE,SOURCE /
-sudo bash -lc '. /opt/bluetooth_2_usb/scripts/lib/boot.sh; p="$(boot_initramfs_target_path || true)"; [ -s "$p" ] && printf "boot initramfs: %s\n" "$p"'
+sudo /opt/bluetooth_2_usb/venv/bin/python - <<'PY'
+from bluetooth_2_usb.ops.boot_config import boot_initramfs_target_path
+
+try:
+    path = boot_initramfs_target_path()
+except Exception as exc:
+    print(f"boot initramfs: unavailable ({exc})")
+else:
+    print(f"boot initramfs: {path}")
+PY
 ```
 
 If `readonly-enable.sh` fails while `overlayroot` is being installed and the

@@ -52,7 +52,7 @@ side effects; audit any new script for early side effects before adding it to
 
 ```bash
 mapfile -d '' shell_scripts < <(
-  find scripts -maxdepth 2 -type f -name '*.sh' ! -path 'scripts/lib/*' -print0 | sort -z
+  find scripts -maxdepth 1 -type f -name '*.sh' -print0 | sort -z
 )
 for s in "${shell_scripts[@]}"; do
   echo "==== $s"
@@ -78,10 +78,9 @@ sed -n '1,220p' src/bluetooth_2_usb/args.py
 ### 4. Managed paths and service assumptions
 
 ```bash
-for f in scripts/lib/*.sh; do
-  echo "==== $f"
-  sed -n '1,220p' "$f"
-done
+sed -n '1,220p' src/bluetooth_2_usb/ops/paths.py
+sed -n '1,260p' src/bluetooth_2_usb/ops/service_install.py
+sed -n '1,260p' src/bluetooth_2_usb/ops/readonly.py
 sed -n '1,120p' bluetooth_2_usb.service
 ```
 
@@ -134,7 +133,7 @@ At the end of the review, answer these questions explicitly:
 1. Do the remaining repo docs match the current script interfaces?
 2. Do they match the current Python CLI surface?
 3. Do the documented managed paths and defaults still match
-   `scripts/lib/paths.sh` and the service unit?
+   `bluetooth_2_usb.ops.paths` and the service unit?
 4. Are there any stale commands, removed flags, outdated entrypoints, or
    unnecessary lab-specific assumptions left?
 5. Did you make doc fixes, or is the current documentation already consistent?

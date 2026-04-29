@@ -46,3 +46,15 @@ retry window because udev can report an input node before all metadata is ready.
 
 Startup enumeration and later hotplug use the same filter path, so
 auto-discovery and explicit device identifiers behave consistently.
+
+## Operational Commands
+
+Managed install, update, uninstall, smoketest, debug, read-only setup, and
+loopback entrypoints are owned by `bluetooth_2_usb.ops`. The files in
+`scripts/` only locate the checkout Python environment, set `PYTHONPATH` for
+source-tree execution, and dispatch to `python -m bluetooth_2_usb.ops`.
+
+Keeping operational behavior in Python removes the old shell-library boundary:
+boot config parsing, rfkill cleanup, read-only state files, systemd unit
+generation, diagnostics, and loopback handoff can now share constants,
+validation helpers, formatters, linting, and focused unit tests.

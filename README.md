@@ -202,7 +202,10 @@ sudo systemctl restart bluetooth_2_usb.service
 ## Script reference
 
 Managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
-installation.
+installation. They are intentionally thin wrappers around
+`python -m bluetooth_2_usb.ops ...`; the operational logic lives in the Python
+package so install, diagnostics, read-only, and loopback behavior share the same
+review and test path as the runtime.
 
 ### `install.sh`
 

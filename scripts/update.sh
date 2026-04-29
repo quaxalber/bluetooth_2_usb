@@ -1,59 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
-# shellcheck source=./lib/paths.sh
-source "${SCRIPT_DIR}/lib/paths.sh"
-# shellcheck source=./lib/common.sh
-source "${SCRIPT_DIR}/lib/common.sh"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+PYTHON_BIN="${REPO_ROOT}/venv/bin/python"
+[[ -x "$PYTHON_BIN" ]] || PYTHON_BIN="python3"
 
-usage() {
-  cat <<EOF
-Usage: sudo ./scripts/update.sh
-
-Fast-forward the current managed checkout in ${B2U_INSTALL_DIR}. If the checkout
-changes, reapply the managed install via ${B2U_INSTALL_DIR}/scripts/install.sh.
-EOF
-}
-
-case "${1:-}" in
-  "") ;;
-  -h | --help)
-    usage
-    exit 0
-    ;;
-  *)
-    fail "Unknown option: $1"
-    ;;
-esac
-
-ensure_root
-prepare_log "update"
-require_commands git
-
-[[ "$B2U_REPO_ROOT" == "$B2U_INSTALL_DIR" ]] || fail "Clone this repository to ${B2U_INSTALL_DIR} and run ./scripts/update.sh from there."
-[[ -d "${B2U_INSTALL_DIR}/.git" ]] || fail "Expected a git checkout at ${B2U_INSTALL_DIR}."
-
-if [[ -n "$(git -C "${B2U_INSTALL_DIR}" status --porcelain --untracked-files=all)" ]]; then
-  fail "Refusing to update a dirty managed checkout at ${B2U_INSTALL_DIR}. Commit, stash, or remove local changes first."
-fi
-
-CURRENT_BRANCH="$(git -C "${B2U_INSTALL_DIR}" symbolic-ref --quiet --short HEAD)" \
-  || fail "Refusing to update a detached HEAD in ${B2U_INSTALL_DIR}."
-BEFORE_HEAD="$(git -C "${B2U_INSTALL_DIR}" rev-parse HEAD)"
-
-info "Fetching origin for branch ${CURRENT_BRANCH}"
-git -C "${B2U_INSTALL_DIR}" fetch --tags --prune origin
-
-info "Fast-forwarding ${CURRENT_BRANCH}"
-git -C "${B2U_INSTALL_DIR}" pull --ff-only origin "${CURRENT_BRANCH}"
-AFTER_HEAD="$(git -C "${B2U_INSTALL_DIR}" rev-parse HEAD)"
-
-if [[ "$BEFORE_HEAD" == "$AFTER_HEAD" ]]; then
-  ok "Managed checkout is already up to date; skipping reinstall."
-  exit 0
-fi
-
-info "Reapplying managed install"
-"${B2U_INSTALL_DIR}/scripts/install.sh"
+export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+exec "$PYTHON_BIN" -m bluetooth_2_usb.ops update --repo-root "$REPO_ROOT" "$@"

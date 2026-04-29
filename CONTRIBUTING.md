@@ -53,10 +53,11 @@ Please keep code and docs aligned with the supported deployment model:
 - write for `bash`
 - quote variables consistently
 - fail early on invalid input
-- keep shared helpers in `scripts/lib/common.sh` genuinely generic
-- keep managed paths and service constants out of `common.sh`
-- keep workflow-specific logic in dedicated shell libs
-- treat install, diagnostics, and read-only flows as production code
+- keep scripts as thin wrappers around Python modules in
+  `bluetooth_2_usb.ops`
+- keep install, diagnostics, read-only, and managed path logic in Python where
+  it can be unit-tested and linted with the rest of the project
+- treat wrapper argument forwarding as part of the public script interface
 
 ### Documentation
 
