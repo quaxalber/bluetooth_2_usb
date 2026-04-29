@@ -2,17 +2,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bluetooth_2_usb.service_config import (
-    ServiceConfigError,
-    build_cli_argv,
-    build_shell_command,
-    canonicalize_service_config_bools,
-    load_service_config,
+from bluetooth_2_usb.service_settings import (
+    ServiceSettingsError,
+    build_runtime_argv,
+    build_runtime_shell_command,
+    canonicalize_service_settings_bools,
+    load_service_settings,
 )
 
 
-class ServiceConfigTest(unittest.TestCase):
-    def test_loads_structured_runtime_config(self) -> None:
+class ServiceSettingsTest(unittest.TestCase):
+    def test_loads_structured_runtime_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
@@ -32,15 +32,15 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            config = load_service_config(env_file)
+            settings = load_service_settings(env_file)
 
-        self.assertFalse(config.auto_discover)
-        self.assertTrue(config.grab_devices)
-        self.assertTrue(config.log_to_file)
-        self.assertEqual(config.log_path, "/tmp/custom log.txt")
-        self.assertTrue(config.debug)
-        self.assertEqual(config.device_ids, ["mouse", "keyboard"])
-        self.assertEqual(config.udc_path, "/tmp/udc")
+        self.assertFalse(settings.auto_discover)
+        self.assertTrue(settings.grab_devices)
+        self.assertTrue(settings.log_to_file)
+        self.assertEqual(settings.log_path, "/tmp/custom log.txt")
+        self.assertTrue(settings.debug)
+        self.assertEqual(settings.device_ids, ["mouse", "keyboard"])
+        self.assertEqual(settings.udc_path, "/tmp/udc")
 
     def test_loads_multiple_boolean_spellings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -62,22 +62,22 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            config = load_service_config(env_file)
+            settings = load_service_settings(env_file)
 
-        self.assertFalse(config.auto_discover)
-        self.assertTrue(config.grab_devices)
-        self.assertTrue(config.log_to_file)
-        self.assertFalse(config.debug)
+        self.assertFalse(settings.auto_discover)
+        self.assertTrue(settings.grab_devices)
+        self.assertTrue(settings.log_to_file)
+        self.assertFalse(settings.debug)
 
     def test_unknown_key_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text("NOPE=1\n", encoding="utf-8")
 
-            with self.assertRaises(ServiceConfigError):
-                load_service_config(env_file)
+            with self.assertRaises(ServiceSettingsError):
+                load_service_settings(env_file)
 
-    def test_builds_cli_argv_and_shell_command(self) -> None:
+    def test_builds_runtime_argv_and_shell_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
@@ -97,10 +97,10 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            config = load_service_config(env_file)
-            argv = build_cli_argv(config, append_debug=True)
-            command = build_shell_command(
-                "python -m bluetooth_2_usb", config=config, append_debug=True
+            settings = load_service_settings(env_file)
+            argv = build_runtime_argv(settings, append_debug=True)
+            command = build_runtime_shell_command(
+                "python -m bluetooth_2_usb", settings=settings, append_debug=True
             )
 
         self.assertIn("--auto_discover", argv)
@@ -117,25 +117,25 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaises(ServiceConfigError):
-                load_service_config(env_file)
+            with self.assertRaises(ServiceSettingsError):
+                load_service_settings(env_file)
 
     def test_defaults_do_not_emit_removed_hid_profile_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "missing"
 
-            config = load_service_config(env_file)
-            argv = build_cli_argv(config)
+            settings = load_service_settings(env_file)
+            argv = build_runtime_argv(settings)
 
         self.assertNotIn("--hid-profile", argv)
 
-    def test_canonicalize_service_config_bools_rewrites_bool_values(self) -> None:
+    def test_canonicalize_service_settings_bools_rewrites_bool_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
                 "\n".join(
                     [
-                        "# Managed runtime config",
+                        "# Managed runtime settings",
                         "B2U_AUTO_DISCOVER=1",
                         "",
                         "B2U_GRAB_DEVICES=yes",
@@ -148,14 +148,14 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            changed = canonicalize_service_config_bools(env_file)
+            changed = canonicalize_service_settings_bools(env_file)
 
             self.assertTrue(changed)
             self.assertEqual(
                 env_file.read_text(encoding="utf-8"),
                 "\n".join(
                     [
-                        "# Managed runtime config",
+                        "# Managed runtime settings",
                         "B2U_AUTO_DISCOVER=true",
                         "B2U_DEVICE_IDS='MX Keys'",
                         "B2U_GRAB_DEVICES=true",
@@ -169,7 +169,7 @@ class ServiceConfigTest(unittest.TestCase):
                 + "\n",
             )
 
-    def test_canonicalize_service_config_bools_preserves_canonical_file(self) -> None:
+    def test_canonicalize_service_settings_bools_preserves_canonical_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
@@ -189,6 +189,6 @@ class ServiceConfigTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            changed = canonicalize_service_config_bools(env_file)
+            changed = canonicalize_service_settings_bools(env_file)
 
         self.assertFalse(changed)

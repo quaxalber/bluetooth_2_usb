@@ -171,7 +171,7 @@ Meaning:
 - `B2U_UDC_PATH` is optional and only needed when you must pin UDC detection on
   a system with multiple gadget-capable controllers.
 
-After editing the runtime config:
+After editing the runtime settings:
 
 ```bash
 sudo systemctl restart bluetooth_2_usb.service
@@ -281,7 +281,7 @@ Bluetooth-state configuration available.
 | --- | --- |
 | `/opt/bluetooth_2_usb` | Managed installation root |
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
-| `/etc/default/bluetooth_2_usb` | Structured runtime configuration |
+| `/etc/default/bluetooth_2_usb` | Structured runtime settings |
 | `/etc/default/bluetooth_2_usb_readonly` | Persistent read-only configuration |
 | `/var/log/bluetooth_2_usb` | Script and report output |
 | `/mnt/b2u-persist` | Default persistent mount target |

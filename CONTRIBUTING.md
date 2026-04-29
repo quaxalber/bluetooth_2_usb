@@ -36,7 +36,7 @@ Please keep code and docs aligned with the supported deployment model:
 
 - install root: `/opt/bluetooth_2_usb`
 - service unit: `bluetooth_2_usb.service`
-- runtime config: `/etc/default/bluetooth_2_usb`
+- runtime settings: `/etc/default/bluetooth_2_usb`
 
 ## Quality expectations
 

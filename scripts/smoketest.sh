@@ -69,9 +69,9 @@ VALIDATE_LOG="$(mktemp)"
 LIST_DEVICES_JSON="$(mktemp)"
 BLUETOOTH_SHOW_LOG="$(mktemp)"
 BTMGMT_INFO_LOG="$(mktemp)"
-SERVICE_CONFIG_LOG="$(mktemp)"
+SERVICE_SETTINGS_LOG="$(mktemp)"
 RFKILL_LOG="$(mktemp)"
-trap 'rm -f "$VALIDATE_LOG" "$LIST_DEVICES_JSON" "$BLUETOOTH_SHOW_LOG" "$BTMGMT_INFO_LOG" "$SERVICE_CONFIG_LOG" "$RFKILL_LOG"' EXIT
+trap 'rm -f "$VALIDATE_LOG" "$LIST_DEVICES_JSON" "$BLUETOOTH_SHOW_LOG" "$BTMGMT_INFO_LOG" "$SERVICE_SETTINGS_LOG" "$RFKILL_LOG"' EXIT
 
 MODULES_LOAD_VALUE="$(grep -oE 'modules-load=[^ ]+' "$CMDLINE_TXT" 2>/dev/null | head -n1 || true)"
 UDC_LIST="$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
@@ -253,11 +253,11 @@ if [[ -n "$UDC_STATE_PATH" && -f "$UDC_STATE_PATH" ]]; then
   fi
 fi
 
-if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_config --check >"$SERVICE_CONFIG_LOG" 2>&1; then
-  ok "Runtime config is valid"
+if [[ -x "${VENV_DIR}/bin/python" ]] && "${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_settings --check >"$SERVICE_SETTINGS_LOG" 2>&1; then
+  ok "Runtime settings are valid"
 else
-  warn "Runtime config validation failed"
-  sed -n '1,20p' "$SERVICE_CONFIG_LOG" || true
+  warn "Runtime settings validation failed"
+  sed -n '1,20p' "$SERVICE_SETTINGS_LOG" || true
   EXIT_CODE=1
 fi
 
@@ -513,8 +513,8 @@ if [[ $VERBOSE -eq 1 ]]; then
   echo "Non-fatal warning count: ${SOFT_WARNINGS}"
   print_verbose_section_header "CLI validate-env output"
   cat "$VALIDATE_LOG"
-  print_verbose_section_header "Service config check"
-  cat "$SERVICE_CONFIG_LOG"
+  print_verbose_section_header "Service settings check"
+  cat "$SERVICE_SETTINGS_LOG"
   print_verbose_section_header "bluetoothctl show"
   cat "$BLUETOOTH_SHOW_LOG"
   print_verbose_section_header "btmgmt info"

@@ -88,7 +88,7 @@ sed -n '1,120p' bluetooth_2_usb.service
 Pay attention to:
 
 - install root
-- runtime config path
+- runtime settings path
 - read-only config path
 - log directory
 - persistent Bluetooth-state paths

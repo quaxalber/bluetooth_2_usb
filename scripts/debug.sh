@@ -327,8 +327,8 @@ fi
 DEBUG_CMD=""
 CONFIG_SUMMARY_JSON=""
 if [[ -x "${VENV_DIR}/bin/python" ]]; then
-  DEBUG_CMD="$("${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_config --print-shell-command --append-debug 2>/dev/null || true)"
-  CONFIG_SUMMARY_JSON="$("${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_config --print-summary-json 2>/dev/null || true)"
+  DEBUG_CMD="$("${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_settings --print-shell-command --append-debug 2>/dev/null || true)"
+  CONFIG_SUMMARY_JSON="$("${VENV_DIR}/bin/python" -m bluetooth_2_usb.service_settings --print-summary-json 2>/dev/null || true)"
 fi
 
 readonly_mode_summary="readonly_mode=<config parse error>"
@@ -371,7 +371,7 @@ write_command_block "rfkill bluetooth state" 8 "rfkill list bluetooth 2>/dev/nul
 if [[ -x "${VENV_DIR}/bin/python" ]]; then
   write_command_block "CLI version" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --version"
   write_command_block "CLI environment validation" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --validate-env"
-  write_command_block "Service config summary" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb.service_config --print-summary-json"
+  write_command_block "Service settings summary" 5 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb.service_settings --print-summary-json"
   write_command_block "Device inventory (json)" 8 "'${VENV_DIR}/bin/python' -m bluetooth_2_usb --list_devices --output json"
 
   stop_service_for_debug
@@ -386,7 +386,7 @@ if [[ -x "${VENV_DIR}/bin/python" ]]; then
   if [[ -n "$DEBUG_CMD" ]]; then
     run_live_debug_block "${DEBUG_CMD}" || LIVE_DEBUG_STATUS=$?
   else
-    write_text_block "Live Bluetooth-2-USB debug output" "Could not build debug command from structured runtime config."
+    write_text_block "Live Bluetooth-2-USB debug output" "Could not build debug command from structured runtime settings."
     LIVE_DEBUG_STATUS=1
   fi
 else

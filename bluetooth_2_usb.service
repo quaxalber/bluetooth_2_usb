@@ -11,7 +11,7 @@ Group=root
 WorkingDirectory=/opt/bluetooth_2_usb
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=-/etc/default/bluetooth_2_usb
-ExecStart=/opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb.service_runner
+ExecStart=/opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb.service_entrypoint
 Restart=on-failure
 RestartSec=2s
 TimeoutStopSec=5s

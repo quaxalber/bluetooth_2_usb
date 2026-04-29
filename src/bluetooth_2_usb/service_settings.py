@@ -33,12 +33,12 @@ ALLOWED_KEYS = BOOL_KEYS | {
 }
 
 
-class ServiceConfigError(ValueError):
+class ServiceSettingsError(ValueError):
     pass
 
 
 @dataclass(slots=True)
-class ServiceConfig:
+class ServiceSettings:
     auto_discover: bool = True
     device_ids: list[str] = field(default_factory=list)
     grab_devices: bool = True
@@ -58,7 +58,7 @@ def _parse_bool(raw_value: str, key: str) -> bool:
         return True
     if normalized in {"0", "false", "no", "off"}:
         return False
-    raise ServiceConfigError(f"Invalid boolean value for {key}: {raw_value!r}")
+    raise ServiceSettingsError(f"Invalid boolean value for {key}: {raw_value!r}")
 
 
 def _parse_value(raw_value: str) -> str:
@@ -69,10 +69,12 @@ def _parse_value(raw_value: str) -> str:
     try:
         parts = shlex.split(raw_value, posix=True)
     except ValueError as exc:
-        raise ServiceConfigError(f"Invalid config value: {raw_value!r}") from exc
+        raise ServiceSettingsError(f"Invalid settings value: {raw_value!r}") from exc
 
     if len(parts) != 1:
-        raise ServiceConfigError(f"Expected a single config value, got: {raw_value!r}")
+        raise ServiceSettingsError(
+            f"Expected a single settings value, got: {raw_value!r}"
+        )
     return parts[0]
 
 
@@ -90,30 +92,30 @@ def _quote_if_needed(value: str) -> str:
     return shlex.join([value]) if value else ""
 
 
-def _canonical_value_for_key(key: str, config: ServiceConfig) -> str:
+def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
     if key == "B2U_AUTO_DISCOVER":
-        return _canonical_bool(config.auto_discover)
+        return _canonical_bool(settings.auto_discover)
     if key == "B2U_DEVICE_IDS":
-        return _quote_if_needed(", ".join(config.device_ids))
+        return _quote_if_needed(", ".join(settings.device_ids))
     if key == "B2U_GRAB_DEVICES":
-        return _canonical_bool(config.grab_devices)
+        return _canonical_bool(settings.grab_devices)
     if key == "B2U_INTERRUPT_SHORTCUT":
-        return config.interrupt_shortcut
+        return settings.interrupt_shortcut
     if key == "B2U_LOG_TO_FILE":
-        return _canonical_bool(config.log_to_file)
+        return _canonical_bool(settings.log_to_file)
     if key == "B2U_LOG_PATH":
-        return _quote_if_needed(config.log_path)
+        return _quote_if_needed(settings.log_path)
     if key == "B2U_DEBUG":
-        return _canonical_bool(config.debug)
+        return _canonical_bool(settings.debug)
     if key == "B2U_UDC_PATH":
-        return _quote_if_needed(config.udc_path)
-    raise ServiceConfigError(f"Unexpected runtime config key: {key!r}")
+        return _quote_if_needed(settings.udc_path)
+    raise ServiceSettingsError(f"Unexpected runtime settings key: {key!r}")
 
 
-def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
-    config = ServiceConfig()
+def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
+    settings = ServiceSettings()
     if not env_file.exists():
-        return config
+        return settings
 
     for line_number, raw_line in enumerate(
         env_file.read_text(encoding="utf-8").splitlines(), start=1
@@ -123,44 +125,44 @@ def load_service_config(env_file: Path = DEFAULT_ENV_FILE) -> ServiceConfig:
             continue
 
         if "=" not in raw_line:
-            raise ServiceConfigError(
+            raise ServiceSettingsError(
                 f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}"
             )
 
         key, raw_value = raw_line.split("=", 1)
         key = key.strip()
         if key not in ALLOWED_KEYS:
-            raise ServiceConfigError(
-                f"{env_file}:{line_number}: unexpected key {key!r} in runtime config"
+            raise ServiceSettingsError(
+                f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings"
             )
 
         value = _parse_value(raw_value)
         if key == "B2U_AUTO_DISCOVER":
-            config.auto_discover = _parse_bool(value, key)
+            settings.auto_discover = _parse_bool(value, key)
         elif key == "B2U_GRAB_DEVICES":
-            config.grab_devices = _parse_bool(value, key)
+            settings.grab_devices = _parse_bool(value, key)
         elif key == "B2U_INTERRUPT_SHORTCUT":
-            config.interrupt_shortcut = value
+            settings.interrupt_shortcut = value
         elif key == "B2U_LOG_TO_FILE":
-            config.log_to_file = _parse_bool(value, key)
+            settings.log_to_file = _parse_bool(value, key)
         elif key == "B2U_LOG_PATH":
-            config.log_path = value
+            settings.log_path = value
         elif key == "B2U_DEBUG":
-            config.debug = _parse_bool(value, key)
+            settings.debug = _parse_bool(value, key)
         elif key == "B2U_DEVICE_IDS":
-            config.device_ids = _parse_device_ids(value)
+            settings.device_ids = _parse_device_ids(value)
         elif key == "B2U_UDC_PATH":
-            config.udc_path = value
+            settings.udc_path = value
 
-    return config
+    return settings
 
 
-def canonicalize_service_config_bools(env_file: Path = DEFAULT_ENV_FILE) -> bool:
+def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bool:
     if not env_file.exists():
         return False
 
     original_text = env_file.read_text(encoding="utf-8")
-    config = load_service_config(env_file)
+    settings = load_service_settings(env_file)
     leading_lines: list[str] = []
     trailing_lines: list[str] = []
     seen_key = False
@@ -180,22 +182,22 @@ def canonicalize_service_config_bools(env_file: Path = DEFAULT_ENV_FILE) -> bool
             continue
 
         if "=" not in raw_line:
-            raise ServiceConfigError(
+            raise ServiceSettingsError(
                 f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}"
             )
 
         key, raw_value = raw_line.split("=", 1)
         key = key.strip()
         if key not in ALLOWED_KEYS:
-            raise ServiceConfigError(
-                f"{env_file}:{line_number}: unexpected key {key!r} in runtime config"
+            raise ServiceSettingsError(
+                f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings"
             )
         seen_key = True
 
     updated_lines = [
         *leading_lines,
         *[
-            f"{key}={_canonical_value_for_key(key, config)}"
+            f"{key}={_canonical_value_for_key(key, settings)}"
             for key in RUNTIME_ENV_KEY_ORDER
         ],
         *trailing_lines,
@@ -211,45 +213,51 @@ def canonicalize_service_config_bools(env_file: Path = DEFAULT_ENV_FILE) -> bool
     return True
 
 
-def build_cli_argv(config: ServiceConfig, *, append_debug: bool = False) -> list[str]:
+def build_runtime_argv(
+    settings: ServiceSettings, *, append_debug: bool = False
+) -> list[str]:
     argv: list[str] = []
-    if config.auto_discover:
+    if settings.auto_discover:
         argv.append("--auto_discover")
-    if config.device_ids:
-        argv.extend(["--device_ids", ",".join(config.device_ids)])
-    if config.grab_devices:
+    if settings.device_ids:
+        argv.extend(["--device_ids", ",".join(settings.device_ids)])
+    if settings.grab_devices:
         argv.append("--grab_devices")
-    if config.interrupt_shortcut:
-        argv.extend(["--interrupt_shortcut", config.interrupt_shortcut])
-    if config.log_to_file:
+    if settings.interrupt_shortcut:
+        argv.extend(["--interrupt_shortcut", settings.interrupt_shortcut])
+    if settings.log_to_file:
         argv.append("--log_to_file")
-    if config.log_path:
-        argv.extend(["--log_path", config.log_path])
-    if config.debug or append_debug:
+    if settings.log_path:
+        argv.extend(["--log_path", settings.log_path])
+    if settings.debug or append_debug:
         argv.append("--debug")
     return argv
 
 
-def build_shell_command(
+def build_runtime_shell_command(
     executable: str,
     *,
-    config: ServiceConfig | None = None,
+    settings: ServiceSettings | None = None,
     env_file: Path = DEFAULT_ENV_FILE,
     append_debug: bool = False,
 ) -> str:
-    resolved_config = load_service_config(env_file) if config is None else config
-    command = shlex.split(executable) + build_cli_argv(
-        resolved_config, append_debug=append_debug
+    resolved_settings = (
+        load_service_settings(env_file) if settings is None else settings
+    )
+    command = shlex.split(executable) + build_runtime_argv(
+        resolved_settings, append_debug=append_debug
     )
     return shlex.join(command)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Inspect bluetooth_2_usb service config."
+        description="Inspect bluetooth_2_usb service settings."
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--check", action="store_true", help="Validate the config file.")
+    group.add_argument(
+        "--check", action="store_true", help="Validate the settings file."
+    )
     group.add_argument(
         "--print-shell-command",
         action="store_true",
@@ -258,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument(
         "--print-summary-json",
         action="store_true",
-        help="Print the parsed config as JSON.",
+        help="Print the parsed settings as JSON.",
     )
     group.add_argument(
         "--canonicalize-bools",
@@ -278,8 +286,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        config = load_service_config()
-    except ServiceConfigError as exc:
+        settings = load_service_settings()
+    except ServiceSettingsError as exc:
         print(exc, file=sys.stderr)
         return 1
 
@@ -287,19 +295,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.print_shell_command:
         print(
-            build_shell_command(
+            build_runtime_shell_command(
                 args.executable,
-                config=config,
+                settings=settings,
                 append_debug=args.append_debug,
                 env_file=DEFAULT_ENV_FILE,
             )
         )
         return 0
     if args.print_summary_json:
-        print(json.dumps(config.to_dict(), sort_keys=True))
+        print(json.dumps(settings.to_dict(), sort_keys=True))
         return 0
     if args.canonicalize_bools:
-        canonicalize_service_config_bools()
+        canonicalize_service_settings_bools()
         return 0
 
     return 1

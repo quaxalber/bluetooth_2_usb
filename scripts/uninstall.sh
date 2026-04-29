@@ -110,7 +110,7 @@ fi
 systemctl daemon-reload || fail "Failed to reload systemd after cleanup"
 
 [[ ! -f "/etc/systemd/system/${B2U_SERVICE_UNIT}" ]] || fail "Service unit file still exists after uninstall"
-[[ ! -f "$B2U_ENV_FILE" ]] || fail "Runtime config file still exists after uninstall"
+[[ ! -f "$B2U_ENV_FILE" ]] || fail "Runtime settings file still exists after uninstall"
 [[ ! -f "$B2U_READONLY_ENV_FILE" ]] || fail "Read-only config file still exists after uninstall"
 [[ ! -f /usr/local/bin/bluetooth_2_usb ]] || fail "CLI wrapper still exists after uninstall"
 [[ ! -e "$B2U_BLUETOOTH_BIND_MOUNT_UNIT" ]] || fail "Bluetooth bind-mount unit still exists after uninstall"

@@ -101,6 +101,8 @@ class RelayModuleBoundaryTest(unittest.TestCase):
             "bluetooth_2_usb.relay",
             "bluetooth_2_usb.relay_controller",
             "bluetooth_2_usb.runtime_monitor",
+            "bluetooth_2_usb.service_config",
+            "bluetooth_2_usb.service_runner",
         ):
             with self.subTest(module_name=module_name):
                 with self.assertRaises(ModuleNotFoundError):
