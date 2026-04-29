@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from .cli import main
+from .cli import run
 
-raise SystemExit(main())
+run()

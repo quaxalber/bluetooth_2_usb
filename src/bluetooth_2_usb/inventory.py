@@ -103,9 +103,7 @@ def list_input_devices() -> list[InputDevice]:
         try:
             devices.append(InputDevice(path))
         except (OSError, FileNotFoundError) as exc:
-            raise DeviceEnumerationError(
-                f"failed opening input device {path}: {exc}"
-            ) from exc
+            raise DeviceEnumerationError(f"failed opening input device {path}: {exc}") from exc
     return devices
 
 
@@ -124,9 +122,7 @@ def describe_input_devices(
             capabilities = []
             exclusion_reason = f"failed to read capabilities ({exc})"
         else:
-            exclusion_reason = auto_discover_exclusion_reason(
-                device, skip_name_prefixes
-            )
+            exclusion_reason = auto_discover_exclusion_reason(device, skip_name_prefixes)
 
         metadata.append(
             InputDeviceMetadata(

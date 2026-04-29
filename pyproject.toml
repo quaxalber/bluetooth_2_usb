@@ -46,6 +46,7 @@ Issues = "https://github.com/quaxalber/bluetooth_2_usb/issues"
 
 [project.scripts]
 bluetooth_2_usb = "bluetooth_2_usb.cli:run"
+bluetooth_2_usb_ops = "bluetooth_2_usb.ops.cli:run"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -60,11 +61,11 @@ version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
 
 [tool.black]
-line-length = 88
+line-length = 100
 target-version = ["py311"]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]

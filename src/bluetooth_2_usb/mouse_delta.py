@@ -53,9 +53,7 @@ class MouseDeltaAccumulator:
     def flush(self) -> MouseDelta | None:
         x = self._x
         y = self._y
-        pending_wheel = (
-            self._wheel_hi_res if self._wheel_hi_res_seen else self._wheel_low_res
-        )
+        pending_wheel = self._wheel_hi_res if self._wheel_hi_res_seen else self._wheel_low_res
         wheel_total = self._wheel_remainder + pending_wheel
         wheel = int(wheel_total)
         self._wheel_remainder = wheel_total - wheel

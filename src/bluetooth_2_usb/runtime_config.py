@@ -20,9 +20,7 @@ class RuntimeConfig:
     udc_path: Path | None
 
 
-def runtime_config_from_args(
-    args: Arguments, *, udc_path: Path | None
-) -> RuntimeConfig:
+def runtime_config_from_args(args: Arguments, *, udc_path: Path | None) -> RuntimeConfig:
     return RuntimeConfig(
         device_ids=tuple(args.device_ids or ()),
         auto_discover=args.auto_discover,

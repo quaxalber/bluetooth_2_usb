@@ -269,9 +269,7 @@ class _UnsupportedWin32DLL:
         self._dll_name = dll_name
 
     def __getattr__(self, function_name: str):
-        raise RuntimeError(
-            f"{self._dll_name}.{function_name} is only available on Windows"
-        )
+        raise RuntimeError(f"{self._dll_name}.{function_name} is only available on Windows")
 
 
 if IS_WINDOWS:
@@ -408,9 +406,7 @@ class _RawInputDebug:
 
     def note_device(self, device_name: str) -> None:
         assert self.device_names_seen is not None
-        self.device_names_seen[device_name] = (
-            self.device_names_seen.get(device_name, 0) + 1
-        )
+        self.device_names_seen[device_name] = self.device_names_seen.get(device_name, 0) + 1
 
     def note_event(
         self,
@@ -644,10 +640,7 @@ def _get_raw_input_device_info(hdevice: int) -> dict[str, object]:
 def _list_raw_input_devices() -> list[dict[str, object]]:
     count = wintypes.UINT(0)
     entry_size = ctypes.sizeof(RAWINPUTDEVICELIST)
-    if (
-        user32.GetRawInputDeviceList(None, ctypes.byref(count), entry_size)
-        == 0xFFFFFFFF
-    ):
+    if user32.GetRawInputDeviceList(None, ctypes.byref(count), entry_size) == 0xFFFFFFFF:
         raise OSError("GetRawInputDeviceList failed while sizing device list")
     if count.value == 0:
         return []
@@ -698,9 +691,7 @@ def _register_raw_input(hwnd: int) -> None:
             hwndTarget=hwnd,
         ),
     )
-    if not user32.RegisterRawInputDevices(
-        devices, len(devices), ctypes.sizeof(RAWINPUTDEVICE)
-    ):
+    if not user32.RegisterRawInputDevices(devices, len(devices), ctypes.sizeof(RAWINPUTDEVICE)):
         raise OSError("RegisterRawInputDevices failed")
 
 
@@ -821,9 +812,7 @@ def _pump_raw_input(
         _RawInputCandidate(
             "mouse",
             mouse_candidate_identities,
-            MouseSequenceMatcher.create(
-                scenario.mouse_rel_steps, scenario.mouse_button_steps
-            ),
+            MouseSequenceMatcher.create(scenario.mouse_rel_steps, scenario.mouse_button_steps),
         )
         if scenario.mouse_enabled
         else None
@@ -916,9 +905,7 @@ def _pump_raw_input(
                                 role="consumer",
                                 device_name=device_name,
                                 device_identity=device_identity,
-                                candidate_identities=(
-                                    consumer_candidate.candidate_identities
-                                ),
+                                candidate_identities=(consumer_candidate.candidate_identities),
                                 matched=matched,
                                 report=report,
                             )
@@ -937,15 +924,9 @@ def _pump_raw_input(
                 and (consumer_candidate is None or consumer_candidate.complete)
             ):
                 nodes = GadgetNodes(
-                    keyboard_node=(
-                        keyboard_candidate.matched_name if keyboard_candidate else None
-                    ),
-                    mouse_node=(
-                        mouse_candidate.matched_name if mouse_candidate else None
-                    ),
-                    consumer_node=(
-                        consumer_candidate.matched_name if consumer_candidate else None
-                    ),
+                    keyboard_node=(keyboard_candidate.matched_name if keyboard_candidate else None),
+                    mouse_node=(mouse_candidate.matched_name if mouse_candidate else None),
+                    consumer_node=(consumer_candidate.matched_name if consumer_candidate else None),
                 )
                 details: dict[str, object] = {
                     "capture_backend": "raw_input",
@@ -955,22 +936,14 @@ def _pump_raw_input(
                 }
                 if keyboard_candidate is not None:
                     details["keyboard_steps_seen"] = keyboard_candidate.matcher.index
-                    details["keyboard_reports_seen"] = list(
-                        keyboard_candidate.matched_reports
-                    )
+                    details["keyboard_reports_seen"] = list(keyboard_candidate.matched_reports)
                 if mouse_candidate is not None:
                     details["mouse_rel_steps_seen"] = mouse_candidate.matcher.rel_index
-                    details["mouse_button_steps_seen"] = (
-                        mouse_candidate.matcher.button_index
-                    )
-                    details["mouse_reports_seen"] = list(
-                        mouse_candidate.matched_reports
-                    )
+                    details["mouse_button_steps_seen"] = mouse_candidate.matcher.button_index
+                    details["mouse_reports_seen"] = list(mouse_candidate.matched_reports)
                 if consumer_candidate is not None:
                     details["consumer_steps_seen"] = consumer_candidate.matcher.index
-                    details["consumer_reports_seen"] = list(
-                        consumer_candidate.matched_reports
-                    )
+                    details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
                 return HarnessResult(
                     command="capture",
                     scenario=scenario.name,
@@ -1025,8 +998,7 @@ def run_windows_raw_input_capture(
     unsupported_mouse_buttons = _unsupported_windows_mouse_button_codes(scenario)
     if unsupported_mouse_buttons:
         unsupported_names = [
-            EVENT_CODE_NAMES[EV_KEY].get(code, str(code))
-            for code in unsupported_mouse_buttons
+            EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in unsupported_mouse_buttons
         ]
         return HarnessResult(
             command="capture",

@@ -42,10 +42,7 @@ def install_service_unit(repo_root: Path) -> None:
 
 def activate_service_unit() -> None:
     was_active = (
-        run(
-            ["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False
-        ).returncode
-        == 0
+        run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     )
     run(["systemctl", "enable", PATHS.service_unit])
     run(["systemctl", "restart" if was_active else "start", PATHS.service_unit])
@@ -61,16 +58,10 @@ def normalize_runtime_env_file() -> None:
     if not PATHS.env_file.is_file():
         return
     text = PATHS.env_file.read_text(encoding="utf-8")
-    if not any(
-        line.strip().startswith("B2U_HID_PROFILE=") for line in text.splitlines()
-    ):
+    if not any(line.strip().startswith("B2U_HID_PROFILE=") for line in text.splitlines()):
         return
     backup_file(PATHS.env_file)
-    lines = [
-        line
-        for line in text.splitlines()
-        if not line.strip().startswith("B2U_HID_PROFILE=")
-    ]
+    lines = [line for line in text.splitlines() if not line.strip().startswith("B2U_HID_PROFILE=")]
     PATHS.env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
     PATHS.env_file.chmod(0o644)
     warn(
@@ -78,15 +69,13 @@ def normalize_runtime_env_file() -> None:
     )
 
 
-def install_cli_wrapper() -> None:
-    wrapper = Path("/usr/local/bin/bluetooth_2_usb")
-    wrapper.write_text(
-        f"""#!/usr/bin/env bash
-exec "{PATHS.venv_python}" -m bluetooth_2_usb "$@"
-""",
-        encoding="utf-8",
-    )
-    wrapper.chmod(0o755)
+def install_cli_links() -> None:
+    local_bin = Path("/usr/local/bin")
+    local_bin.mkdir(parents=True, exist_ok=True)
+    for name in ["bluetooth_2_usb", "bluetooth_2_usb_ops"]:
+        link = local_bin / name
+        link.unlink(missing_ok=True)
+        link.symlink_to(PATHS.install_dir / "venv" / "bin" / name)
 
 
 def recreate_venv(venv_dir: Path) -> None:
@@ -167,13 +156,9 @@ def service_installed() -> bool | None:
 
 
 def install(repo_root: Path) -> None:
-    require_commands(
-        ["apt-get", "awk", "grep", "git", "install", "python3", "sed", "systemctl"]
-    )
+    require_commands(["apt-get", "awk", "grep", "git", "install", "python3", "sed", "systemctl"])
     if repo_root != PATHS.install_dir:
-        fail(
-            f"Clone this repository to {PATHS.install_dir} and run ./scripts/install.sh from there."
-        )
+        fail(f"Clone this repository to {PATHS.install_dir} and rerun install from there.")
     if not (PATHS.install_dir / ".git").is_dir():
         fail(f"Expected a git checkout at {PATHS.install_dir}.")
 
@@ -211,15 +196,8 @@ def install(repo_root: Path) -> None:
             f"Could not determine whether dwc2 is built-in or modular; modules-load was set conservatively to {modules}."
         )
 
-    if (
-        run(
-            ["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False
-        ).returncode
-        == 0
-    ):
-        info(
-            f"Stopping {PATHS.service_unit} before rebuilding the managed installation"
-        )
+    if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
+        info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
         run(["systemctl", "stop", PATHS.service_unit])
     info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
     rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir)
@@ -234,41 +212,35 @@ def install(repo_root: Path) -> None:
         [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"],
         capture=True,
     )
-    install_cli_wrapper()
+    install_cli_links()
     run(["systemctl", "daemon-reload"])
     activate_service_unit()
     ok(f"Service {PATHS.service_unit} enabled and started")
     run([PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], capture=True)
     ok("CLI version check succeeded")
 
-    validate = run(
-        [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], check=False
-    )
+    validate = run([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], check=False)
     if validate.returncode == 0:
         ok("Environment validation passed")
     elif validate.returncode == 3:
-        warn(
-            "Environment validation reports missing runtime prerequisites until after reboot"
-        )
+        warn("Environment validation reports missing runtime prerequisites until after reboot")
     else:
         fail(f"Environment validation failed with exit code {validate.returncode}")
     print(f"""
 Next steps
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo {PATHS.install_dir}/scripts/smoketest.sh
+   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb_ops smoketest
 3. If you want persistent read-only operation afterwards, run:
-   sudo {PATHS.install_dir}/scripts/readonly-setup.sh --device /dev/YOUR-PARTITION
-   sudo {PATHS.install_dir}/scripts/readonly-enable.sh
+   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb_ops readonly-setup --device /dev/YOUR-PARTITION
+   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb_ops readonly-enable
 """)
 
 
 def update(repo_root: Path) -> None:
     require_commands(["git"])
     if repo_root != PATHS.install_dir:
-        fail(
-            f"Clone this repository to {PATHS.install_dir} and run ./scripts/update.sh from there."
-        )
+        fail(f"Clone this repository to {PATHS.install_dir} and rerun update from there.")
     if not (PATHS.install_dir / ".git").is_dir():
         fail(f"Expected a git checkout at {PATHS.install_dir}.")
     if output(
@@ -284,9 +256,7 @@ def update(repo_root: Path) -> None:
         fail(
             f"Refusing to update a dirty managed checkout at {PATHS.install_dir}. Commit, stash, or remove local changes first."
         )
-    branch = output(
-        ["git", "-C", PATHS.install_dir, "symbolic-ref", "--quiet", "--short", "HEAD"]
-    )
+    branch = output(["git", "-C", PATHS.install_dir, "symbolic-ref", "--quiet", "--short", "HEAD"])
     before = output(["git", "-C", PATHS.install_dir, "rev-parse", "HEAD"])
     info(f"Fetching origin for branch {branch}")
     run(["git", "-C", PATHS.install_dir, "fetch", "--tags", "--prune", "origin"])
@@ -317,9 +287,7 @@ def uninstall() -> None:
     if manage_b2u_service:
         run(["systemctl", "stop", PATHS.service_unit])
         if (
-            run(
-                ["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False
-            ).returncode
+            run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode
             == 0
         ):
             run(["systemctl", "kill", "--kill-who=all", PATHS.service_unit])
@@ -330,42 +298,21 @@ def uninstall() -> None:
     PATHS.env_file.unlink(missing_ok=True)
     PATHS.readonly_env_file.unlink(missing_ok=True)
     Path("/usr/local/bin/bluetooth_2_usb").unlink(missing_ok=True)
+    Path("/usr/local/bin/bluetooth_2_usb_ops").unlink(missing_ok=True)
     remove_bluetooth_persist_dropin()
     remove_bluetooth_bind_mount_unit()
     remove_persist_mount_unit(config.persist_mount)
     run(["systemctl", "daemon-reload"])
     run(["systemctl", "disable", "--now", "var-lib-bluetooth.mount"], check=False)
 
-    if (
-        run(
-            ["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True
-        ).returncode
-        == 0
-    ):
+    if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
         run(["systemctl", "stop", "bluetooth.service"])
-        if (
-            run(
-                ["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True
-            ).returncode
-            == 0
-        ):
+        if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
             run(["umount", "/var/lib/bluetooth"])
-    if (
-        run(
-            ["findmnt", "-rn", config.persist_mount], check=False, capture=True
-        ).returncode
-        == 0
-    ):
-        unit = output(
-            ["systemd-escape", "--path", "--suffix=mount", config.persist_mount]
-        )
+    if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
+        unit = output(["systemd-escape", "--path", "--suffix=mount", config.persist_mount])
         run(["systemctl", "disable", "--now", unit], check=False)
-        if (
-            run(
-                ["findmnt", "-rn", config.persist_mount], check=False, capture=True
-            ).returncode
-            == 0
-        ):
+        if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
             run(["umount", config.persist_mount])
     _remove_gadgets()
     run(["systemctl", "daemon-reload"])
@@ -374,12 +321,14 @@ def uninstall() -> None:
         "Service unit file still exists after uninstall",
     )
     _assert_absent(PATHS.env_file, "Runtime settings file still exists after uninstall")
-    _assert_absent(
-        PATHS.readonly_env_file, "Read-only config file still exists after uninstall"
-    )
+    _assert_absent(PATHS.readonly_env_file, "Read-only config file still exists after uninstall")
     _assert_absent(
         Path("/usr/local/bin/bluetooth_2_usb"),
-        "CLI wrapper still exists after uninstall",
+        "bluetooth_2_usb CLI link still exists after uninstall",
+    )
+    _assert_absent(
+        Path("/usr/local/bin/bluetooth_2_usb_ops"),
+        "bluetooth_2_usb_ops CLI link still exists after uninstall",
     )
     _assert_absent(
         PATHS.bluetooth_bind_mount_unit,
@@ -390,9 +339,7 @@ def uninstall() -> None:
         "bluetooth.service drop-in still exists after uninstall",
     )
     if (
-        run(
-            ["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True
-        ).returncode
+        run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode
         == 0
     ):
         fail(f"{PATHS.service_unit} is still enabled after uninstall")

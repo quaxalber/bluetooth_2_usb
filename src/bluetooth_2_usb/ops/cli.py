@@ -8,12 +8,17 @@ from .commands import OpsError, ensure_root, fail, prepare_log
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .loopback import loopback_capture, loopback_inject
+from .paths import PATHS
 from .readonly import (
     disable_readonly,
     enable_readonly,
     setup_persistent_bluetooth_state,
 )
 from .service_install import install, uninstall, update
+
+
+def run() -> None:
+    raise SystemExit(main())
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,42 +34,32 @@ def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="python -m bluetooth_2_usb.ops")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    _script_parser(subparsers, "install", "Apply the managed system install.")
-    _script_parser(
+    _command_parser(subparsers, "install", "Apply the managed system install.")
+    _command_parser(
         subparsers,
         "update",
         "Fast-forward and reapply the managed install when changed.",
     )
-    _script_parser(subparsers, "uninstall", "Remove the managed system integration.")
-    smoketest_parser = _script_parser(
-        subparsers, "smoketest", "Run deployment health checks."
-    )
+    _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
+    smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
     smoketest_parser.add_argument("--allow-non-pi", action="store_true")
-    debug_parser = _script_parser(
-        subparsers, "debug", "Collect a redacted diagnostics report."
-    )
+    debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
-    setup_parser = _script_parser(
+    setup_parser = _command_parser(
         subparsers, "readonly-setup", "Prepare persistent Bluetooth state."
     )
     setup_parser.add_argument("--device", required=True)
-    _script_parser(subparsers, "readonly-enable", "Enable persistent read-only mode.")
-    _script_parser(subparsers, "readonly-disable", "Disable OverlayFS.")
-    _script_parser(
-        subparsers, "install-hid-udev-rule", "Install the host-side hidapi udev rule."
-    )
-    _passthrough_parser(
-        subparsers, "loopback-inject", "Run the Pi-side loopback injector."
-    )
-    _passthrough_parser(
-        subparsers, "loopback-capture", "Run the host-side loopback capture."
-    )
+    _command_parser(subparsers, "readonly-enable", "Enable persistent read-only mode.")
+    _command_parser(subparsers, "readonly-disable", "Disable OverlayFS.")
+    _command_parser(subparsers, "install-hid-udev-rule", "Install the host-side hidapi udev rule.")
+    _passthrough_parser(subparsers, "loopback-inject", "Run the Pi-side loopback injector.")
+    _passthrough_parser(subparsers, "loopback-capture", "Run the host-side loopback capture.")
 
     namespace, remainder = parser.parse_known_args(argv)
-    repo_root = (
-        Path(namespace.repo_root).resolve() if namespace.repo_root else Path.cwd()
-    )
+    repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else PATHS.install_dir
+    if namespace.command == "loopback-capture" and namespace.repo_root is None:
+        repo_root = Path.cwd()
 
     if namespace.command == "loopback-inject":
         return loopback_inject(remainder)
@@ -93,9 +88,7 @@ def _main(argv: list[str]) -> int:
     elif namespace.command == "uninstall":
         uninstall()
     elif namespace.command == "smoketest":
-        return SmokeTest(
-            verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi
-        ).run()
+        return SmokeTest(verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi).run()
     elif namespace.command == "debug":
         return debug_report(namespace.duration)
     elif namespace.command == "readonly-setup":
@@ -112,7 +105,7 @@ def _main(argv: list[str]) -> int:
     return 0
 
 
-def _script_parser(
+def _command_parser(
     subparsers: argparse._SubParsersAction,
     name: str,
     help_text: str,
@@ -127,7 +120,7 @@ def _script_parser(
 def _passthrough_parser(
     subparsers: argparse._SubParsersAction, name: str, help_text: str
 ) -> argparse.ArgumentParser:
-    return _script_parser(subparsers, name, help_text, add_help=False)
+    return _command_parser(subparsers, name, help_text, add_help=False)
 
 
 def _positive_int(raw: str) -> int:

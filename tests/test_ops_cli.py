@@ -6,9 +6,7 @@ from bluetooth_2_usb.ops import cli
 
 class OpsCliTest(unittest.TestCase):
     def test_loopback_capture_forwards_unknown_harness_args_with_values(self) -> None:
-        with patch(
-            "bluetooth_2_usb.ops.cli.loopback_capture", return_value=0
-        ) as capture:
+        with patch("bluetooth_2_usb.ops.cli.loopback_capture", return_value=0) as capture:
             exit_code = cli.main(
                 [
                     "loopback-capture",

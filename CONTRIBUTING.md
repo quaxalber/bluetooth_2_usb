@@ -23,7 +23,7 @@ cd bluetooth_2_usb
 python3 -m venv venv
 source venv/bin/activate
 pip install -U pip setuptools wheel
-pip install -e . black ruff yamllint shfmt-py shellcheck-py build
+pip install -e . black ruff yamllint build
 ```
 
 If you prefer to work from a fork, replace the clone URL with your fork.
@@ -48,22 +48,19 @@ Please keep code and docs aligned with the supported deployment model:
 - prefer small, direct control flow over clever abstractions
 - keep CLI behavior and help text stable unless intentionally changed
 
-### Shell
+### Operational Commands
 
-- write for `bash`
-- quote variables consistently
+- keep install, diagnostics, read-only, managed path, and loopback logic in
+  Python under `bluetooth_2_usb.ops`
+- expose operator workflows through Python CLIs, not shell wrappers
 - fail early on invalid input
-- keep scripts as thin wrappers around Python modules in
-  `bluetooth_2_usb.ops`
-- keep install, diagnostics, read-only, and managed path logic in Python where
-  it can be unit-tested and linted with the rest of the project
-- treat wrapper argument forwarding as part of the public script interface
+- keep CLI behavior and help text stable unless intentionally changed
 
 ### Documentation
 
 - prefer operational accuracy over marketing language
 - prefer readable examples over shell-heavy indirection
-- keep docs aligned with current script interfaces and managed paths
+- keep docs aligned with current CLI interfaces and managed paths
 - avoid documenting lab-specific host policy as product behavior
 
 ## Baseline local checks
@@ -78,10 +75,6 @@ python -m unittest discover -s tests -v
 python -m bluetooth_2_usb --help
 python -m bluetooth_2_usb --version
 python -m bluetooth_2_usb --validate-env || test $? -eq 3
-mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
-shfmt -d -i 2 -ci -bn "${shell_scripts[@]}"
-shellcheck -x "${shell_scripts[@]}"
-bash -n "${shell_scripts[@]}"
 yamllint .github/workflows/ci.yml
 python -m build
 ```
@@ -106,8 +99,8 @@ Use these repo-owned guides when they match the task:
 Minimum Pi-side validation after runtime-affecting changes:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 10
 sudo bluetoothctl show
 sudo btmgmt info
 ```
@@ -179,8 +172,8 @@ Thanks for taking the time to report a problem. If you can, please include:
 - target host type
 - whether persistent read-only mode is enabled
 - exact commands or scripts used
-- output from `smoketest.sh --verbose`
-- output from `debug.sh --duration 10`
+- output from `bluetooth_2_usb_ops smoketest --verbose`
+- output from `bluetooth_2_usb_ops debug --duration 10`
 - clear reproduction steps
 
 ## Community expectations

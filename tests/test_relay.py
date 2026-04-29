@@ -528,9 +528,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         layout = build_default_layout()
 
         self.assertEqual(len(layout.devices), 3)
-        self.assertEqual(
-            bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR
-        )
+        self.assertEqual(bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR)
         self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
         self.assertEqual(DEFAULT_MOUSE_DESCRIPTOR.count(bytes((0x09, 0x48))), 2)
         self.assertEqual(tuple(layout.devices[1].report_ids), (0,))
@@ -632,9 +630,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                     return_value=0,
                     create=True,
                 ):
-                    with patch(
-                        "bluetooth_2_usb.hid_gadgets.os.O_NONBLOCK", 0, create=True
-                    ):
+                    with patch("bluetooth_2_usb.hid_gadgets.os.O_NONBLOCK", 0, create=True):
                         with patch(
                             "bluetooth_2_usb.hid_gadgets.os.open",
                             side_effect=OSError(errno.ENODEV, "No such device"),
@@ -656,15 +652,11 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                         rebuild_gadget(layout)
 
             self.assertEqual(
-                (gadget_root / "strings/0x409/product")
-                .read_text(encoding="utf-8")
-                .strip(),
+                (gadget_root / "strings/0x409/product").read_text(encoding="utf-8").strip(),
                 "USB Combo Device",
             )
             self.assertEqual(
-                (gadget_root / "strings/0x409/serialnumber")
-                .read_text(encoding="utf-8")
-                .strip(),
+                (gadget_root / "strings/0x409/serialnumber").read_text(encoding="utf-8").strip(),
                 "213374badcafe",
             )
             self.assertEqual(
@@ -672,15 +664,11 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                 "0x0205",
             )
             self.assertEqual(
-                (gadget_root / "configs/c.1/MaxPower")
-                .read_text(encoding="utf-8")
-                .strip(),
+                (gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(),
                 "100",
             )
             self.assertEqual(
-                (gadget_root / "configs/c.1/bmAttributes")
-                .read_text(encoding="utf-8")
-                .strip(),
+                (gadget_root / "configs/c.1/bmAttributes").read_text(encoding="utf-8").strip(),
                 "0xa0",
             )
             self.assertEqual(
@@ -743,9 +731,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                 mouse_wakeup.read_text(encoding="utf-8").strip(),
                 "0",
             )
-            self.assertFalse(
-                (gadget_root / "functions/hid.usb2/wakeup_on_write").exists()
-            )
+            self.assertFalse((gadget_root / "functions/hid.usb2/wakeup_on_write").exists())
 
     def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
         base_device = GadgetHidDevice.from_existing(
@@ -797,9 +783,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 "bluetooth_2_usb.input_relay.categorize",
                 side_effect=lambda event: event,
             ):
-                with patch.object(
-                    relay, "_process_event_with_retry", side_effect=_slow_process
-                ):
+                with patch.object(relay, "_process_event_with_retry", side_effect=_slow_process):
                     async with relay:
                         await relay.async_relay_events_loop()
 
@@ -923,9 +907,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 "bluetooth_2_usb.input_relay.categorize",
                 side_effect=lambda event: event,
             ):
-                with patch.object(
-                    relay, "_process_event_with_retry", side_effect=_record_process
-                ):
+                with patch.object(relay, "_process_event_with_retry", side_effect=_record_process):
                     async with relay:
                         await relay.async_relay_events_loop()
 
@@ -1094,9 +1076,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                     "bluetooth_2_usb.input_relay.categorize",
                     side_effect=lambda event: event,
                 ):
-                    with patch.object(
-                        relay, "_process_event_with_retry", side_effect=_record_key
-                    ):
+                    with patch.object(relay, "_process_event_with_retry", side_effect=_record_key):
                         async with relay:
                             await relay.async_relay_events_loop()
 
@@ -1191,9 +1171,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
             relaying_active=relaying_active,
         )
 
-        await relay._process_mouse_delta_with_retry(
-            MouseDelta(40000, -40000, 200, -200)
-        )
+        await relay._process_mouse_delta_with_retry(MouseDelta(40000, -40000, 200, -200))
 
         manager.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
         self.assertEqual(relay._hid_write_failures, 1)
@@ -1331,9 +1309,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                     "bluetooth_2_usb.input_relay.categorize",
                     side_effect=lambda event: event,
                 ):
-                    with patch.object(
-                        relay, "_process_event_with_retry", side_effect=deactivate
-                    ):
+                    with patch.object(relay, "_process_event_with_retry", side_effect=deactivate):
                         async with relay:
                             await relay.async_relay_events_loop()
 
@@ -1644,9 +1620,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         )
         controller.request_shutdown()
 
-        with patch(
-            "bluetooth_2_usb.relay_supervisor.list_input_devices"
-        ) as list_devices:
+        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices") as list_devices:
             await controller.run(asyncio.Queue())
 
         list_devices.assert_not_called()
@@ -1767,13 +1741,9 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             device_identifiers=[],
         )
 
-        with patch(
-            "bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[]
-        ):
+        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[]):
             with self.assertRaises(ExceptionGroup) as raised:
-                controller._handle_runtime_event = Mock(
-                    side_effect=RuntimeError("boom")
-                )
+                controller._handle_runtime_event = Mock(side_effect=RuntimeError("boom"))
                 events: asyncio.Queue = asyncio.Queue()
                 await events.put(DeviceAdded("/dev/input/event7"))
                 await controller.run(events)

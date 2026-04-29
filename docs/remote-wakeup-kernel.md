@@ -167,7 +167,7 @@ Notes for the LLVM fallback:
 ## Additional unvalidated targets
 
 These build paths are unvalidated for this project. They are included so you
-can build and deploy the matching custom kernel and let `readonly-enable.sh`
+can build and deploy the matching custom kernel and let `readonly-enable`
 install the corresponding boot initramfs automatically when you later enable
 persistent read-only mode. Use the target matrix above for the expected image
 and initramfs filenames.
@@ -230,7 +230,7 @@ With `auto_initramfs=1`, Raspberry Pi firmware derives the boot initramfs name
 from the kernel image name. Use the matching boot initramfs target from the
 same matrix when checking or troubleshooting boot artifacts.
 
-When you later enable persistent read-only mode, `readonly-enable.sh` ensures a
+When you later enable persistent read-only mode, `readonly-enable` ensures a
 bootable initramfs exists for the running kernel and installs or reuses the
 matching boot initramfs file automatically. That path depends on the running
 kernel being fully installed on the Pi, so do not treat
@@ -242,7 +242,7 @@ kernel being fully installed on the Pi, so do not treat
 - keep the custom kernel image selected in `config.txt` consistent with the
   running release
 
-If those artifacts are missing, `readonly-enable.sh` aborts instead of trying
+If those artifacts are missing, `readonly-enable` aborts instead of trying
 to guess a bootable initramfs layout from documentation alone.
 
 Keep the stock kernel entry available so rollback is trivial.
@@ -273,8 +273,8 @@ sudo -n grep -H . /sys/kernel/config/usb_gadget/*/functions/hid.*/wakeup_on_writ
 4. the normal Bluetooth-2-USB checks still pass
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 10
 ```
 
 5. a real host suspend and wake test succeeds through normal keyboard input

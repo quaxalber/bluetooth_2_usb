@@ -129,9 +129,7 @@ class RelaySupervisor:
             try:
                 initial_devices = list_input_devices()
             except DeviceEnumerationError as exc:
-                logger.exception(
-                    "RelaySupervisor: Failed enumerating input devices: %s", exc
-                )
+                logger.exception("RelaySupervisor: Failed enumerating input devices: %s", exc)
                 raise
 
             async with TaskGroup() as task_group:
@@ -146,18 +144,13 @@ class RelaySupervisor:
                     else:
                         device.close()
 
-                if (
-                    not self._shutdown_requested()
-                    and self._state is _SupervisorState.STARTING
-                ):
+                if not self._shutdown_requested() and self._state is _SupervisorState.STARTING:
                     self._state = _SupervisorState.RUNNING
                     self._flush_pending_adds()
 
                 await self._consume_events(events)
         except* Exception as exc_grp:
-            logger.exception(
-                "RelaySupervisor: Exception in TaskGroup", exc_info=exc_grp
-            )
+            logger.exception("RelaySupervisor: Exception in TaskGroup", exc_info=exc_grp)
             raise
         finally:
             self._state = _SupervisorState.STOPPED
@@ -246,9 +239,7 @@ class RelaySupervisor:
             )
             return
         if self._state in (_SupervisorState.SHUTTING_DOWN, _SupervisorState.STOPPED):
-            logger.debug(
-                "Ignoring add for %s; controller is shutting down.", device_path
-            )
+            logger.debug("Ignoring add for %s; controller is shutting down.", device_path)
             return
 
         if self._task_group is None:
@@ -283,9 +274,7 @@ class RelaySupervisor:
             )
             return
         if self._shutdown_requested():
-            logger.debug(
-                f"Ignoring remove for {device_path}; event loop is unavailable."
-            )
+            logger.debug(f"Ignoring remove for {device_path}; event loop is unavailable.")
             return
         self._cancel_pending_probe(device_path)
         self._cancel_active_relay(device_path)
@@ -352,9 +341,7 @@ class RelaySupervisor:
         )
         self._pending_probe_tasks.setdefault(device_path, set()).add(task)
         task.add_done_callback(
-            lambda done_task, path=device_path: self._discard_probe_task(
-                path, done_task
-            )
+            lambda done_task, path=device_path: self._discard_probe_task(path, done_task)
         )
 
     def _schedule_probe(self, device_path: str, retries_remaining: int) -> None:
@@ -415,9 +402,7 @@ class RelaySupervisor:
             return
 
         try:
-            task = self._task_group.create_task(
-                self._run_input_relay(device), name=device.path
-            )
+            task = self._task_group.create_task(self._run_input_relay(device), name=device.path)
         except RuntimeError:
             logger.debug("Ignoring %s; TaskGroup is shutting down.", device)
             device.close()
@@ -518,9 +503,7 @@ class RelaySupervisor:
         :rtype: bool
         """
         if self._auto_discover:
-            exclusion_reason = auto_discover_exclusion_reason(
-                device, self._skip_name_prefixes
-            )
+            exclusion_reason = auto_discover_exclusion_reason(device, self._skip_name_prefixes)
             if exclusion_reason is not None:
                 logger.debug(
                     "Skipping %s during auto-discovery: %s",
@@ -530,6 +513,4 @@ class RelaySupervisor:
                 return False
             return True
 
-        return any(
-            identifier.matches(device) for identifier in self._device_identifiers
-        )
+        return any(identifier.matches(device) for identifier in self._device_identifiers)

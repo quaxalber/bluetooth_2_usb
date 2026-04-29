@@ -46,9 +46,7 @@ def overlay_status() -> str:
 def overlay_configured_status() -> str:
     if shutil.which("raspi-config") is None:
         return "unknown"
-    completed = run(
-        ["raspi-config", "nonint", "get_overlay_conf"], check=False, capture=True
-    )
+    completed = run(["raspi-config", "nonint", "get_overlay_conf"], check=False, capture=True)
     if completed.returncode != 0:
         return "unknown"
     return _overlay_state_from_code(completed.stdout.strip())
@@ -73,24 +71,17 @@ def package_status(package: str) -> str:
 
 
 def readonly_stack_packages_healthy() -> bool:
-    return all(
-        package_status(package) == "install ok installed"
-        for package in READONLY_PACKAGES
-    )
+    return all(package_status(package) == "install ok installed" for package in READONLY_PACKAGES)
 
 
 def readonly_stack_packages_bootstrap_safe() -> bool:
     return all(
-        package_status(package) in {"", "install ok installed"}
-        for package in READONLY_PACKAGES
+        package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES
     )
 
 
 def readonly_stack_packages_missing() -> bool:
-    return any(
-        package_status(package) != "install ok installed"
-        for package in READONLY_PACKAGES
-    )
+    return any(package_status(package) != "install ok installed" for package in READONLY_PACKAGES)
 
 
 def readonly_stack_package_report() -> str:
@@ -105,9 +96,7 @@ def machine_id_valid() -> bool:
     machine_id = Path("/etc/machine-id")
     return (
         machine_id.is_file()
-        and re.fullmatch(
-            r"[0-9a-f]{32}", machine_id.read_text(encoding="utf-8").strip()
-        )
+        and re.fullmatch(r"[0-9a-f]{32}", machine_id.read_text(encoding="utf-8").strip())
         is not None
     )
 
@@ -125,9 +114,7 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         "B2U_PERSIST_DEVICE",
     }
     values: dict[str, str] = {}
-    for line_number, raw_line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(), start=1
-    ):
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -145,18 +132,14 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         mode=values.get("B2U_READONLY_MODE", "disabled"),
         persist_mount=Path(values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount))),
         persist_bluetooth_dir=Path(
-            values.get(
-                "B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.default_persist_bluetooth_dir)
-            )
+            values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.default_persist_bluetooth_dir))
         ),
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),
         persist_device=values.get("B2U_PERSIST_DEVICE", ""),
     )
 
 
-def write_readonly_config(
-    config: ReadonlyConfig, path: Path = PATHS.readonly_env_file
-) -> None:
+def write_readonly_config(config: ReadonlyConfig, path: Path = PATHS.readonly_env_file) -> None:
     path.write_text(
         "\n".join(
             [
@@ -195,9 +178,7 @@ def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
     ).stdout.strip()
     if not persist_mount_source:
         return False
-    relative = "/" + str(
-        resolved.persist_bluetooth_dir.relative_to(resolved.persist_mount)
-    )
+    relative = "/" + str(resolved.persist_bluetooth_dir.relative_to(resolved.persist_mount))
     return mount_source == f"{persist_mount_source}[{relative}]"
 
 
@@ -218,10 +199,7 @@ def persist_mount_unit_name(mount_path: Path) -> str:
 def write_persist_mount_unit(persist_spec: str, mount_path: Path, fs_type: str) -> str:
     if not persist_spec:
         fail("Persistent mount spec must not be empty.")
-    if (
-        "\n" in persist_spec
-        or re.fullmatch(r"[A-Za-z0-9_./:=-]+", persist_spec) is None
-    ):
+    if "\n" in persist_spec or re.fullmatch(r"[A-Za-z0-9_./:=-]+", persist_spec) is None:
         fail(f"Persistent mount spec contains unsupported characters: {persist_spec}")
     unit_name = persist_mount_unit_name(mount_path)
     unit_path = Path("/etc/systemd/system") / unit_name
@@ -311,9 +289,7 @@ def persist_spec_from_device(device: str) -> str:
 
 
 def setup_persistent_bluetooth_state(device: str) -> None:
-    require_commands(
-        ["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"]
-    )
+    require_commands(["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"])
     if not machine_id_valid():
         fail(
             "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
@@ -358,18 +334,14 @@ def setup_persistent_bluetooth_state(device: str) -> None:
     _seed_bluetooth_state(persist_bluetooth_dir)
 
     if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode == 0:
-        current_source = output(
-            ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"]
-        )
+        current_source = output(["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"])
         if current_source != str(persist_bluetooth_dir):
             run(["umount", "/var/lib/bluetooth"])
     Path("/var/lib/bluetooth").mkdir(parents=True, exist_ok=True)
     run(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"])
     run(["systemctl", "start", "bluetooth.service"])
     if not _systemctl_active("bluetooth.service"):
-        fail(
-            "bluetooth.service did not come back up after enabling the persistent bind mount"
-        )
+        fail("bluetooth.service did not come back up after enabling the persistent bind mount")
     _restart_b2u_if_installed("after enabling the persistent bind mount")
     ok(f"Persistent Bluetooth state is active at {persist_bluetooth_dir}")
 
@@ -392,9 +364,7 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
             for child in source.iterdir():
                 destination = persist_bluetooth_dir / child.name
                 if child.is_dir():
-                    shutil.copytree(
-                        child, destination, symlinks=True, dirs_exist_ok=True
-                    )
+                    shutil.copytree(child, destination, symlinks=True, dirs_exist_ok=True)
                 else:
                     shutil.copy2(child, destination)
             marker.touch()
@@ -414,10 +384,12 @@ def enable_readonly() -> None:
             "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
         )
     if not config.persist_spec:
-        fail("Run readonly-setup.sh --device /dev/... before enabling read-only mode.")
+        fail(
+            "Run bluetooth_2_usb_ops readonly-setup --device /dev/... before enabling read-only mode."
+        )
     if not bluetooth_state_persistent(config):
         fail(
-            "Persistent Bluetooth state is not active. Run readonly-setup.sh --device /dev/... first."
+            "Persistent Bluetooth state is not active. Run bluetooth_2_usb_ops readonly-setup --device /dev/... first."
         )
     if not readonly_stack_packages_bootstrap_safe():
         warn("OverlayFS package state is incomplete:")
@@ -433,10 +405,7 @@ def enable_readonly() -> None:
     info(f"Expected boot initramfs file: {expected_boot_initramfs_file() or '<none>'}")
     info(
         "Versioned initramfs candidates: "
-        + (
-            " ".join(str(path) for path in versioned_initrd_candidates(kernel_release))
-            or "<none>"
-        )
+        + (" ".join(str(path) for path in versioned_initrd_candidates(kernel_release)) or "<none>")
     )
 
     if overlay_status() != "enabled":
@@ -475,7 +444,7 @@ def enable_readonly() -> None:
     ok("OverlayFS has been enabled")
     warn("Boot partition read-only mode is intentionally not changed by this command.")
     warn(
-        "Persistent read-only mode is configured. Reboot, then run smoketest.sh --verbose and verify reconnect behavior."
+        "Persistent read-only mode is configured. Reboot, then run bluetooth_2_usb_ops smoketest --verbose and verify reconnect behavior."
     )
 
 

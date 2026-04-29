@@ -154,9 +154,7 @@ async def async_run(args: Arguments) -> int:
 
     if not env_status.ok:
         if not env_status.configfs:
-            logger.error(
-                "configfs gadget path is missing: /sys/kernel/config/usb_gadget"
-            )
+            logger.error("configfs gadget path is missing: /sys/kernel/config/usb_gadget")
         if not env_status.udc_present:
             logger.error("No UDC detected! USB gadget mode may not be enabled.")
         return EXIT_ENVIRONMENT

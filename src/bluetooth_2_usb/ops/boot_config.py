@@ -91,9 +91,7 @@ def boot_config_assignment_value(
         return ""
 
     allowed = {"", "all"}
-    allowed.update(
-        section.lower() for section in (model_filters or boot_config_model_filters())
-    )
+    allowed.update(section.lower() for section in (model_filters or boot_config_model_filters()))
     value = ""
     current_section = ""
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -195,11 +193,7 @@ def auto_initramfs_enabled(config_file: Path | None = None) -> bool:
 def expected_auto_initramfs_name(kernel_image: str | None = None) -> str:
     resolved = configured_kernel_image() if not kernel_image else kernel_image
     base_name = Path(resolved).name.rsplit(".", 1)[0]
-    return (
-        f"initramfs{base_name.removeprefix('kernel')}"
-        if base_name.startswith("kernel")
-        else ""
-    )
+    return f"initramfs{base_name.removeprefix('kernel')}" if base_name.startswith("kernel") else ""
 
 
 def expected_boot_initramfs_file(config_file: Path | None = None) -> str:
@@ -245,19 +239,14 @@ def find_versioned_initramfs_image(kernel_release: str | None = None) -> Path | 
 def ensure_initramfs_tools_ready() -> None:
     require_commands(["install", "python3", "update-initramfs"])
     if not any(
-        Path(path, "mkinitramfs").exists()
-        for path in os.environ.get("PATH", "").split(os.pathsep)
+        Path(path, "mkinitramfs").exists() for path in os.environ.get("PATH", "").split(os.pathsep)
     ):
-        fail(
-            "mkinitramfs is missing. Install initramfs-tools before enabling read-only mode."
-        )
+        fail("mkinitramfs is missing. Install initramfs-tools before enabling read-only mode.")
 
 
 def ensure_kernel_artifacts_present_for_initramfs(kernel_release: str) -> None:
     if not Path(f"/lib/modules/{kernel_release}").is_dir():
-        fail(
-            f"Kernel modules for {kernel_release} are missing at /lib/modules/{kernel_release}."
-        )
+        fail(f"Kernel modules for {kernel_release} are missing at /lib/modules/{kernel_release}.")
     if (
         not Path(f"/boot/config-{kernel_release}").is_file()
         and not Path("/proc/config.gz").is_file()
@@ -268,9 +257,7 @@ def ensure_kernel_artifacts_present_for_initramfs(kernel_release: str) -> None:
 
 
 def run_update_initramfs(action: str, kernel_release: str) -> bool:
-    completed = run(
-        ["update-initramfs", action, "-k", kernel_release], check=False, capture=True
-    )
+    completed = run(["update-initramfs", action, "-k", kernel_release], check=False, capture=True)
     filtered = [
         line
         for line in (completed.stdout + completed.stderr).splitlines()
@@ -281,9 +268,7 @@ def run_update_initramfs(action: str, kernel_release: str) -> bool:
     return completed.returncode == 0
 
 
-def build_or_refresh_initramfs_for_running_kernel(
-    kernel_release: str, target_path: Path
-) -> Path:
+def build_or_refresh_initramfs_for_running_kernel(kernel_release: str, target_path: Path) -> Path:
     existing = find_versioned_initramfs_image(kernel_release)
     if existing and existing == target_path and target_path.is_file():
         backup_file(target_path)
@@ -326,9 +311,7 @@ def ensure_bootable_initramfs_for_current_kernel() -> Path:
             )
         return target_path
     if overlay_state != "no":
-        fail(
-            "Unable to determine live root overlay state; aborting initramfs operations."
-        )
+        fail("Unable to determine live root overlay state; aborting initramfs operations.")
     ensure_initramfs_tools_ready()
     ensure_kernel_artifacts_present_for_initramfs(kernel_release)
     image = build_or_refresh_initramfs_for_running_kernel(kernel_release, target_path)
@@ -340,9 +323,7 @@ def kernel_config_snippet() -> str:
     if kernel_config.is_file():
         text = kernel_config.read_text(encoding="utf-8", errors="replace")
     elif Path("/proc/config.gz").is_file():
-        text = gzip.decompress(Path("/proc/config.gz").read_bytes()).decode(
-            "utf-8", "replace"
-        )
+        text = gzip.decompress(Path("/proc/config.gz").read_bytes()).decode("utf-8", "replace")
     else:
         return ""
     return "\n".join(
@@ -386,9 +367,7 @@ def normalize_dwc2_overlay(config_file: Path, overlay_line: str) -> None:
         fail(f"Boot config file is not writable: {config_file}")
     backup_file(config_file)
     lines = config_file.read_text(encoding="utf-8", errors="replace").splitlines()
-    filtered = [
-        line for line in lines if not line.lstrip().startswith("dtoverlay=dwc2")
-    ]
+    filtered = [line for line in lines if not line.lstrip().startswith("dtoverlay=dwc2")]
     result: list[str] = []
     inserted = False
     for line in filtered:
@@ -413,9 +392,7 @@ def normalize_modules_load(cmdline_file: Path, modules: str) -> None:
     existing: list[str] = []
     for token in tokens:
         if token.startswith("modules-load="):
-            existing.extend(
-                value for value in token.split("=", 1)[1].split(",") if value
-            )
+            existing.extend(value for value in token.split("=", 1)[1].split(",") if value)
     merged: list[str] = []
     for value in [*existing, *modules.split(",")]:
         if value and value not in merged:

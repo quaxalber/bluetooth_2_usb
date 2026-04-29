@@ -140,9 +140,7 @@ class KeyboardSequenceMatcher:
         if payload is None:
             if _is_ignorable_empty_report(report):
                 return
-            raise CaptureMismatchError(
-                f"Unexpected keyboard report format: {report.hex(sep=' ')}"
-            )
+            raise CaptureMismatchError(f"Unexpected keyboard report format: {report.hex(sep=' ')}")
         if self.index >= len(self.expected_steps):
             return
 
@@ -172,9 +170,7 @@ class KeyboardSequenceMatcher:
             if modifier:
                 self._modifier_state &= ~modifier
             else:
-                self._pressed_keys = tuple(
-                    key for key in self._pressed_keys if key != hid_code
-                )
+                self._pressed_keys = tuple(key for key in self._pressed_keys if key != hid_code)
 
         keys = list(self._pressed_keys[:6])
         keys.extend([0] * (6 - len(keys)))
@@ -195,9 +191,7 @@ class MouseSequenceMatcher:
     _pending_rel_remaining: list[list[int]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._pending_rel_remaining = [
-            [step.code, step.value] for step in self.expected_rel_steps
-        ]
+        self._pending_rel_remaining = [[step.code, step.value] for step in self.expected_rel_steps]
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
@@ -211,9 +205,7 @@ class MouseSequenceMatcher:
         if parsed is None:
             if _is_ignorable_empty_report(report):
                 return
-            raise CaptureMismatchError(
-                f"Unexpected mouse report format: {report.hex(sep=' ')}"
-            )
+            raise CaptureMismatchError(f"Unexpected mouse report format: {report.hex(sep=' ')}")
         buttons, rel_x, rel_y, wheel, pan = parsed
         self._apply_button_report(buttons, report)
 
@@ -267,9 +259,7 @@ class MouseSequenceMatcher:
     def _apply_rel(self, code: int, value: int, report_codes: set[int]) -> None:
         pending_index = self._find_pending_rel_index(code, report_codes)
         if pending_index is None:
-            expected = (
-                self._pending_rel_remaining[0] if self._pending_rel_remaining else None
-            )
+            expected = self._pending_rel_remaining[0] if self._pending_rel_remaining else None
             expected_label = (
                 f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}"
                 if expected
@@ -316,9 +306,7 @@ class MouseSequenceMatcher:
 
     @property
     def complete(self) -> bool:
-        return self.rel_complete and self.button_index >= len(
-            self.expected_button_steps
-        )
+        return self.rel_complete and self.button_index >= len(self.expected_button_steps)
 
 
 def _same_direction(expected: int, observed: int) -> bool:
@@ -337,9 +325,7 @@ class ConsumerSequenceMatcher:
         if usage is None:
             if _is_ignorable_empty_report(report):
                 return
-            raise CaptureMismatchError(
-                f"Unexpected consumer report format: {report.hex(sep=' ')}"
-            )
+            raise CaptureMismatchError(f"Unexpected consumer report format: {report.hex(sep=' ')}")
         if self.index >= len(self.expected_steps):
             return
 
@@ -529,9 +515,7 @@ def discover_gadget_node_candidates(
     if mouse_node is not None:
         mouse_nodes = _filter_explicit_override(infos, mouse_node, "Mouse")
     if consumer_node is not None:
-        consumer_nodes = _filter_explicit_override(
-            infos, consumer_node, "Consumer-control"
-        )
+        consumer_nodes = _filter_explicit_override(infos, consumer_node, "Consumer-control")
 
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
         raise MissingNodeError(
@@ -576,13 +560,9 @@ def discover_gadget_nodes(
         )
 
     return GadgetNodes(
-        keyboard_node=(
-            candidates.keyboard_nodes[0].node if candidates.keyboard_nodes else None
-        ),
+        keyboard_node=(candidates.keyboard_nodes[0].node if candidates.keyboard_nodes else None),
         mouse_node=candidates.mouse_nodes[0].node if candidates.mouse_nodes else None,
-        consumer_node=(
-            candidates.consumer_nodes[0].node if candidates.consumer_nodes else None
-        ),
+        consumer_node=(candidates.consumer_nodes[0].node if candidates.consumer_nodes else None),
     )
 
 
@@ -596,7 +576,7 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
-                "On Linux, run sudo ./scripts/install-hid-udev-rule.sh "
+                "On Linux, run the install-hid-udev-rule ops command from the checkout "
                 "and ensure the user is in the input group."
             ) from exc
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
@@ -616,9 +596,7 @@ def _capture_once(
 
     def _active_candidates(role: str) -> list[_CandidateMatcher]:
         return [
-            candidate
-            for candidate in candidates
-            if candidate.role == role and not candidate.failed
+            candidate for candidate in candidates if candidate.role == role and not candidate.failed
         ]
 
     def _completed_candidate(role: str) -> _CandidateMatcher | None:
@@ -630,9 +608,7 @@ def _capture_once(
     def _register_candidate(
         role: str,
         info: HidDeviceInfo,
-        matcher: (
-            KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
-        ),
+        matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
     ) -> None:
         candidates.append(
             _CandidateMatcher(
@@ -645,15 +621,11 @@ def _capture_once(
 
     def _required_role_done(role: str) -> bool:
         if role == "keyboard":
-            return (
-                not scenario.keyboard_enabled or _completed_candidate(role) is not None
-            )
+            return not scenario.keyboard_enabled or _completed_candidate(role) is not None
         if role == "mouse":
             return not scenario.mouse_enabled or _completed_candidate(role) is not None
         if role == "consumer":
-            return (
-                not scenario.consumer_enabled or _completed_candidate(role) is not None
-            )
+            return not scenario.consumer_enabled or _completed_candidate(role) is not None
         raise AssertionError(f"Unexpected role: {role}")
 
     try:

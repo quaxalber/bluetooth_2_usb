@@ -24,9 +24,7 @@ def loopback_inject(argv: list[str]) -> int:
         if settle < 0:
             raise ValueError
     except ValueError:
-        warn(
-            f"Ignoring invalid B2U_LOOPBACK_SERVICE_SETTLE_SEC={settle_raw}; using default 10"
-        )
+        warn(f"Ignoring invalid B2U_LOOPBACK_SERVICE_SETTLE_SEC={settle_raw}; using default 10")
         settle = 10.0
     _wait_for_service_settle(settle)
     os.execv(
@@ -39,12 +37,7 @@ def loopback_inject(argv: list[str]) -> int:
 def _wait_for_service_settle(settle_seconds: float) -> None:
     if settle_seconds == 0:
         return
-    if (
-        run(
-            ["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False
-        ).returncode
-        != 0
-    ):
+    if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode != 0:
         return
     raw = run(
         [
@@ -75,9 +68,7 @@ def loopback_capture(repo_root: Path, argv: list[str]) -> int:
     python_bin = _host_capture_python(repo_root)
     env = os.environ.copy()
     pythonpath = str(repo_root / "src")
-    env["PYTHONPATH"] = pythonpath + (
-        f":{env['PYTHONPATH']}" if env.get("PYTHONPATH") else ""
-    )
+    env["PYTHONPATH"] = pythonpath + (f":{env['PYTHONPATH']}" if env.get("PYTHONPATH") else "")
     os.execve(
         python_bin,
         [python_bin, "-m", "bluetooth_2_usb.test_harness", "capture", *argv],

@@ -14,9 +14,7 @@ class ManagedPaths:
     readonly_env_file: Path = Path("/etc/default/bluetooth_2_usb_readonly")
     persist_mount: Path = Path("/mnt/b2u-persist")
     persist_bluetooth_subdir: str = "bluetooth"
-    bluetooth_bind_mount_unit: Path = Path(
-        "/etc/systemd/system/var-lib-bluetooth.mount"
-    )
+    bluetooth_bind_mount_unit: Path = Path("/etc/systemd/system/var-lib-bluetooth.mount")
     bluetooth_service_dropin_dir: Path = Path("/etc/systemd/system/bluetooth.service.d")
     bluetooth_service_dropin: Path = Path(
         "/etc/systemd/system/bluetooth.service.d/bluetooth_2_usb_persist.conf"
@@ -32,7 +30,3 @@ class ManagedPaths:
 
 
 PATHS = ManagedPaths()
-
-
-def repo_root_from_script(script_path: Path) -> Path:
-    return script_path.resolve().parents[1]

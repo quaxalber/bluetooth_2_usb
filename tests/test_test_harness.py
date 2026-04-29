@@ -114,9 +114,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.required_nodes, ("mouse",))
         self.assertEqual(scenario.mouse_rel_steps, FAST_MOUSE_REL_STEPS)
         self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
-        self.assertGreater(
-            max(abs(step.value) for step in scenario.mouse_rel_steps), 32767
-        )
+        self.assertGreater(max(abs(step.value) for step in scenario.mouse_rel_steps), 32767)
 
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaises(ValueError) as error:
@@ -157,9 +155,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         self.assertEqual([info.node for info in candidates.keyboard_nodes], ["kbd0"])
         self.assertEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
-        self.assertEqual(
-            [info.node for info in candidates.consumer_nodes], ["consumer0"]
-        )
+        self.assertEqual([info.node for info in candidates.consumer_nodes], ["consumer0"])
 
     def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(
         self,
@@ -254,15 +250,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         candidates = discover_gadget_node_candidates(hid_module=hid_module)
 
-        self.assertEqual(
-            [info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"]
-        )
-        self.assertEqual(
-            [info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"]
-        )
-        self.assertEqual(
-            [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
-        )
+        self.assertEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
+        self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
+        self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
     def test_discovery_maps_default_linux_gadget_interfaces_by_interface_number(
         self,
@@ -304,15 +294,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         candidates = discover_gadget_node_candidates(hid_module=hid_module)
 
-        self.assertEqual(
-            [info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"]
-        )
-        self.assertEqual(
-            [info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"]
-        )
-        self.assertEqual(
-            [info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"]
-        )
+        self.assertEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
+        self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
+        self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
     def test_explicit_override_accepts_default_linux_gadget_interfaces(
         self,
@@ -480,9 +464,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(
         self,
     ) -> None:
-        matcher = MouseSequenceMatcher.create(
-            MOUSE_REL_STEPS[:4], SAFE_MOUSE_BUTTON_STEPS
-        )
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], SAFE_MOUSE_BUTTON_STEPS)
 
         with self.assertRaisesRegex(
             CaptureMismatchError, "Mouse button report arrived before movement"
@@ -694,23 +676,17 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
-            test_harness_capture_windows._keyboard_event_to_report(
-                0x7C, is_key_up=False
-            ),
+            test_harness_capture_windows._keyboard_event_to_report(0x7C, is_key_up=False),
             bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]),
         )
         self.assertEqual(
-            test_harness_capture_windows._keyboard_event_to_report(
-                0x7C, is_key_up=True
-            ),
+            test_harness_capture_windows._keyboard_event_to_report(0x7C, is_key_up=True),
             bytes([0x00] * 8),
         )
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
         self.assertIsNone(
-            test_harness_capture_windows._keyboard_event_to_report(
-                0x41, is_key_up=False
-            )
+            test_harness_capture_windows._keyboard_event_to_report(0x41, is_key_up=False)
         )
 
     def test_mouse_event_to_reports_builds_16_bit_xy_reports(self) -> None:
@@ -917,16 +893,12 @@ class TestHarnessCliTest(unittest.TestCase):
             to_text=lambda: "ignored",
         )
 
-        with patch(
-            "bluetooth_2_usb.test_harness_capture.run_capture", return_value=result
-        ):
+        with patch("bluetooth_2_usb.test_harness_capture.run_capture", return_value=result):
             with redirect_stdout(stdout):
                 exit_code = run_harness(["capture", "--output", "json"])
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(
-            json.loads(stdout.getvalue())["details"]["keyboard_steps_seen"], 6
-        )
+        self.assertEqual(json.loads(stdout.getvalue())["details"]["keyboard_steps_seen"], 6)
 
     def test_capture_missing_nodes_returns_prerequisite_exit(self) -> None:
         stdout = io.StringIO()
@@ -937,9 +909,7 @@ class TestHarnessCliTest(unittest.TestCase):
             return_value=hid_module,
         ):
             with redirect_stdout(stdout):
-                exit_code = run_harness(
-                    ["capture", "--keyboard-node", "/definitely/missing/node"]
-                )
+                exit_code = run_harness(["capture", "--keyboard-node", "/definitely/missing/node"])
 
         self.assertEqual(exit_code, EXIT_PREREQUISITE)
         self.assertIn("Keyboard HID device was not found", stdout.getvalue())
@@ -960,9 +930,7 @@ class TestHarnessCliTest(unittest.TestCase):
 
     def test_harness_reports_interrupt_cleanly(self) -> None:
         stdout = io.StringIO()
-        fake_inject_module = SimpleNamespace(
-            run_inject=Mock(side_effect=KeyboardInterrupt)
-        )
+        fake_inject_module = SimpleNamespace(run_inject=Mock(side_effect=KeyboardInterrupt))
 
         with patch.dict(
             "sys.modules",

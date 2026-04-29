@@ -2,9 +2,7 @@ import argparse
 
 
 def _parse_device_ids(raw_value: str) -> list[str]:
-    device_ids = [
-        device_id.strip() for device_id in raw_value.split(",") if device_id.strip()
-    ]
+    device_ids = [device_id.strip() for device_id in raw_value.split(",") if device_id.strip()]
     if not device_ids:
         raise argparse.ArgumentTypeError("DEVICE_IDS must not be empty.")
     return device_ids

@@ -10,9 +10,7 @@ from bluetooth_2_usb.runtime_events import (
 
 class RuntimeEventTest(unittest.TestCase):
     def test_runtime_events_are_value_objects(self) -> None:
-        self.assertEqual(
-            DeviceAdded("/dev/input/event1"), DeviceAdded("/dev/input/event1")
-        )
+        self.assertEqual(DeviceAdded("/dev/input/event1"), DeviceAdded("/dev/input/event1"))
         self.assertEqual(
             DeviceRemoved("/dev/input/event2"),
             DeviceRemoved("/dev/input/event2"),

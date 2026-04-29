@@ -50,9 +50,9 @@ auto-discovery and explicit device identifiers behave consistently.
 ## Operational Commands
 
 Managed install, update, uninstall, smoketest, debug, read-only setup, and
-loopback entrypoints are owned by `bluetooth_2_usb.ops`. The files in
-`scripts/` only locate the checkout Python environment, set `PYTHONPATH` for
-source-tree execution, and dispatch to `python -m bluetooth_2_usb.ops`.
+loopback entrypoints are owned by `bluetooth_2_usb.ops`. The initial install
+can run directly from the source tree with `PYTHONPATH=src`; after installation
+the managed venv exposes `bluetooth_2_usb_ops`.
 
 Keeping operational behavior in Python removes the old shell-library boundary:
 boot config parsing, rfkill cleanup, read-only state files, systemd unit

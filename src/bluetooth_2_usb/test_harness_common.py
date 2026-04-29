@@ -173,8 +173,7 @@ def harness_session(command: str, scenario: str):
             if sig is not None
         ]
         previous_handlers = {
-            handled_signal: signal.getsignal(handled_signal)
-            for handled_signal in handled_signals
+            handled_signal: signal.getsignal(handled_signal) for handled_signal in handled_signals
         }
 
         def _raise_interrupted(received_signal: int, _frame) -> None:
@@ -467,9 +466,7 @@ class HarnessResult:
         ]
         for key, value in sorted(self.details.items()):
             rendered = (
-                json.dumps(value, sort_keys=True)
-                if isinstance(value, (dict, list))
-                else str(value)
+                json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
             )
             lines.append(f"{key}: {rendered}")
         return "\n".join(lines)
@@ -497,9 +494,7 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
         "name": scenario.name,
         "keyboard_steps": [event_to_dict(step) for step in scenario.keyboard_steps],
         "mouse_rel_steps": [event_to_dict(step) for step in scenario.mouse_rel_steps],
-        "mouse_button_steps": [
-            event_to_dict(step) for step in scenario.mouse_button_steps
-        ],
+        "mouse_button_steps": [event_to_dict(step) for step in scenario.mouse_button_steps],
         "consumer_steps": [event_to_dict(step) for step in scenario.consumer_steps],
         "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
     }

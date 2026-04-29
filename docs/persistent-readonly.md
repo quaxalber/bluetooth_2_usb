@@ -62,15 +62,15 @@ recovery.
 Run:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device <persist-partition>
-sudo /opt/bluetooth_2_usb/scripts/readonly-enable.sh
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-setup --device <persist-partition>
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-enable
 sudo reboot
 ```
 
 After reboot:
 
 ```bash
-sudo env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+sudo env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 sudo /opt/bluetooth_2_usb/venv/bin/python - <<'PY'
 from bluetooth_2_usb.ops.boot_config import boot_initramfs_target_path
@@ -84,20 +84,20 @@ else:
 PY
 ```
 
-If `readonly-enable.sh` fails while `overlayroot` is being installed and the
+If `readonly-enable` fails while `overlayroot` is being installed and the
 log shows `mkinitramfs: failed to determine device for /`, repair the package
 state before rebooting:
 
 ```bash
 sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
 sudo dpkg --configure -a
-sudo /opt/bluetooth_2_usb/scripts/readonly-enable.sh
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-enable
 ```
 
 That failure mode has been observed on current Raspberry Pi OS releases when
 `initramfs-tools` cannot infer the root device during `overlayroot` setup.
 
-When a custom kernel image is selected in `config.txt`, `readonly-enable.sh`
+When a custom kernel image is selected in `config.txt`, `readonly-enable`
 does not just toggle OverlayFS. Before it finalizes read-only mode, it:
 
 - resolves the boot initramfs filename expected for the configured kernel image
@@ -105,15 +105,15 @@ does not just toggle OverlayFS. Before it finalizes read-only mode, it:
 - installs the resulting image at the firmware-visible boot path
 
 That is why custom kernels must stay fully installed on the Pi before you run
-`readonly-enable.sh`. In practice this means the running kernel release needs
+`readonly-enable`. In practice this means the running kernel release needs
 its module tree under `/lib/modules/$(uname -r)` and its config available as
-`/boot/config-$(uname -r)` or `/proc/config.gz`, otherwise the script aborts
+`/boot/config-$(uname -r)` or `/proc/config.gz`, otherwise the command aborts
 instead of leaving you with a half-configured read-only boot path.
 
 ## Disable read-only mode
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/readonly-disable.sh
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops readonly-disable
 sudo reboot
 ```
 

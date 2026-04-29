@@ -32,9 +32,7 @@ def bluetooth_controller_powered() -> bool:
 
 def bluetooth_paired_count() -> int:
     return sum(
-        1
-        for line in bluetoothctl_paired_devices().splitlines()
-        if line.startswith("Device ")
+        1 for line in bluetoothctl_paired_devices().splitlines() if line.startswith("Device ")
     )
 
 
@@ -51,8 +49,7 @@ class RfkillEntry:
 
     def line(self) -> str:
         return (
-            f"{self.name} type=bluetooth soft={self.soft} "
-            f"hard={self.hard} state={self.state}"
+            f"{self.name} type=bluetooth soft={self.soft} " f"hard={self.hard} state={self.state}"
         )
 
 
@@ -62,10 +59,7 @@ def bluetooth_rfkill_entries(root: Path | None = None) -> list[RfkillEntry]:
     for type_file in sorted(base.glob("rfkill*/type")):
         if not type_file.is_file():
             continue
-        if (
-            type_file.read_text(encoding="utf-8", errors="replace").strip()
-            != "bluetooth"
-        ):
+        if type_file.read_text(encoding="utf-8", errors="replace").strip() != "bluetooth":
             continue
         rfkill_dir = type_file.parent
         entries.append(
@@ -102,9 +96,7 @@ def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
 
     for entry in entries:
         if entry.hard == "1":
-            warn(
-                f"Bluetooth rfkill {entry.name} is hard-blocked; leaving it unchanged."
-            )
+            warn(f"Bluetooth rfkill {entry.name} is hard-blocked; leaving it unchanged.")
             continue
         if entry.soft != "1":
             info(
@@ -125,9 +117,7 @@ def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
         if soft == "0":
             ok(f"Cleared Bluetooth rfkill soft block for {entry.name} (state={state}).")
         else:
-            warn(
-                f"Attempted to clear Bluetooth rfkill {entry.name}, but soft={soft} afterwards."
-            )
+            warn(f"Attempted to clear Bluetooth rfkill {entry.name}, but soft={soft} afterwards.")
 
 
 def rfkill_list_bluetooth() -> str:

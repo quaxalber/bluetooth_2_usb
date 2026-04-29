@@ -49,11 +49,7 @@ def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
 
 def _keyboard_capabilities() -> dict[int, list[int]]:
     keyboard_codes = sorted(
-        {
-            step.code
-            for scenario in SCENARIOS.values()
-            for step in scenario.keyboard_steps
-        }
+        {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
     )
     return {
         ecodes.EV_KEY: keyboard_codes,
@@ -62,11 +58,7 @@ def _keyboard_capabilities() -> dict[int, list[int]]:
 
 def _mouse_capabilities() -> dict[int, list[int]]:
     scenario_button_codes = sorted(
-        {
-            step.code
-            for scenario in SCENARIOS.values()
-            for step in scenario.mouse_button_steps
-        }
+        {step.code for scenario in SCENARIOS.values() for step in scenario.mouse_button_steps}
     )
     return {
         ecodes.EV_KEY: scenario_button_codes,

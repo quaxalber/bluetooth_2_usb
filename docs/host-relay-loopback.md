@@ -43,14 +43,14 @@ python3 -m pip install -r requirements-host-capture.txt
 On Linux, install the udev rule once:
 
 ```bash
-sudo ./scripts/install-hid-udev-rule.sh
+sudo venv/bin/bluetooth_2_usb_ops install-hid-udev-rule --repo-root "$PWD"
 ```
 
 Recommended baseline checks on the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 5
 ```
 
 ## 1. Confirm host-side enumeration
@@ -58,18 +58,19 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 On Linux:
 
 ```bash
-./scripts/loopback-capture.sh --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario keyboard --timeout-sec 1 --output json
 ```
 
 Experimental: macOS
 
 ```bash
-./scripts/loopback-capture.sh --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario keyboard --timeout-sec 1 --output json
 ```
 
 > [!NOTE]
 > Experimental - unvalidated on real macOS hosts. The macOS variant uses the
-> same shell wrapper, but it has not yet been validated on real macOS hardware.
+> same capture command, but it has not yet been validated on real macOS
+> hardware.
 
 On Windows:
 
@@ -87,7 +88,7 @@ discovery step, not the primary event backend.
 From the repository checkout on the host:
 
 ```bash
-./scripts/loopback-capture.sh --scenario combo
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario combo
 ```
 
 Default behavior:
@@ -102,7 +103,7 @@ Default behavior:
 If automatic detection is ambiguous, pin the nodes explicitly:
 
 ```bash
-./scripts/loopback-capture.sh \
+venv/bin/bluetooth_2_usb_ops loopback-capture \
   --scenario combo \
   --keyboard-node '<candidate keyboard path>' \
   --mouse-node '<candidate mouse path>'
@@ -123,7 +124,7 @@ layout or USB identity:
 On the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario combo
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops loopback-inject --scenario combo
 ```
 
 When `bluetooth_2_usb.service` is active, the injector waits up to the default
@@ -154,8 +155,8 @@ wheel and horizontal pan deltas that require multiple USB HID reports. Use it to
 stress high-speed mouse movement and scrolling forwarding:
 
 ```bash
-./scripts/loopback-capture.sh --scenario mouse_fast
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_fast
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario mouse_fast
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops loopback-inject --scenario mouse_fast
 ```
 
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
@@ -164,8 +165,8 @@ signed 8-bit vertical wheel and horizontal pan.
 To validate all eight button bits, run the explicit intrusive button scenario:
 
 ```bash
-./scripts/loopback-capture.sh --scenario mouse_buttons_intrusive
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_buttons_intrusive
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario mouse_buttons_intrusive
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops loopback-inject --scenario mouse_buttons_intrusive
 ```
 
 On Windows, the current Raw Input capture backend only maps mouse button bits
@@ -188,22 +189,22 @@ sequence through `/dev/uinput`.
 Keyboard-only:
 
 ```bash
-./scripts/loopback-capture.sh --scenario keyboard
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario keyboard
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario keyboard
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops loopback-inject --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-./scripts/loopback-capture.sh --scenario mouse
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario mouse
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops loopback-inject --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
-./scripts/loopback-capture.sh --scenario consumer
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario consumer
+venv/bin/bluetooth_2_usb_ops loopback-capture --scenario consumer
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops loopback-inject --scenario consumer
 ```
 
 ## 6. Failure interpretation
@@ -233,7 +234,7 @@ ls -l /dev/bus/usb/*/*
 If needed:
 
 ```bash
-sudo ./scripts/install-hid-udev-rule.sh
+sudo venv/bin/bluetooth_2_usb_ops install-hid-udev-rule --repo-root "$PWD"
 ```
 
 ### Host capture times out

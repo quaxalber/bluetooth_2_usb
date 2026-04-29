@@ -79,6 +79,4 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_readonly_config_defaults_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            self.assertEqual(
-                load_readonly_config(Path(tmpdir) / "missing").mode, "disabled"
-            )
+            self.assertEqual(load_readonly_config(Path(tmpdir) / "missing").mode, "disabled")

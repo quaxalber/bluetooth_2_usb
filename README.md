@@ -28,7 +28,7 @@ sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2
 ### 2. Install
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/install.sh
+cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb.ops install
 ```
 
 ### 3. Reboot
@@ -57,7 +57,7 @@ exit
 ### 5. Run the smoketest
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest
 ```
 
 ### 6. Connect the Pi to the target host
@@ -83,13 +83,13 @@ sudo /opt/bluetooth_2_usb/scripts/smoketest.sh
 ## Updating
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/update.sh
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops update
 ```
 
 ## Uninstalling
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops uninstall
 ```
 
 ## Diagnostics
@@ -97,11 +97,11 @@ sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
 For most issues, start with the two built-in diagnostics:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops smoketest --verbose
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops debug --duration 10
 ```
 
-The `smoketest` is the quick health gate. `debug.sh` collects a fuller
+The `smoketest` is the quick health gate. `debug` collects a fuller
 redacted snapshot and can run a short bounded foreground debug session. If you
 need the next steps after those checks, use
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
@@ -199,30 +199,30 @@ sudo systemctl restart bluetooth_2_usb.service
 | `--output {text,json}` | Choose the output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
 | `--help, -h` | Show built-in CLI help and exit. |
 
-## Script reference
+## Operational command reference
 
-Managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
-installation. They are intentionally thin wrappers around
-`python -m bluetooth_2_usb.ops ...`; the operational logic lives in the Python
-package so install, diagnostics, read-only, and loopback behavior share the same
-review and test path as the runtime.
+Managed deployment commands are implemented by `bluetooth_2_usb.ops`. During
+the initial source-tree install, run the module with `PYTHONPATH` pointed at
+the checkout. After installation, use the managed console command at
+`/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb_ops`.
 
-### `install.sh`
+### `install`
 
 Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
 Use this after cloning into the supported install path.
 
-### `update.sh`
+### `update`
 
-Fast-forward the managed checkout and call `install.sh` only when the checkout
+Fast-forward the managed checkout and call `install` only when the checkout
 actually changed. This is the normal update path for an installed system.
 
-### `uninstall.sh`
+### `uninstall`
 
 Remove the managed system integration while leaving the checkout in place. Use
-this when you want to remove the service and wrapper without deleting the clone.
+this when you want to remove the service and CLI links without deleting the
+clone.
 
-### `smoketest.sh`
+### `smoketest`
 
 Fast health check for the supported managed deployment. Use this first when you
 want to confirm that the service, gadget path, and Bluetooth basics are
@@ -232,7 +232,7 @@ healthy.
 | --- | --- |
 | `--verbose` | Print fuller diagnostics, including the collected summary data. |
 
-### `debug.sh`
+### `debug`
 
 Collect a redacted diagnostics report and optionally run a bounded live
 foreground debug session. Use this when the `smoketest` is not enough or when
@@ -242,13 +242,13 @@ you need a report to share.
 | --- | --- |
 | `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
 
-### `loopback-inject.sh`
+### `loopback-inject`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
 loopback inject/capture harness.
 
-### `loopback-capture.sh`
+### `loopback-capture`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
@@ -256,24 +256,24 @@ harness.
 
 ### `loopback-capture.ps1`
 
-Windows PowerShell wrapper for the same host-capture flow.
+Windows PowerShell launcher for the same host-capture flow.
 
-### `install-hid-udev-rule.sh`
+### `install-hid-udev-rule`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
 gadget device nodes.
 
-### `readonly-setup.sh`
+### `readonly-setup`
 
 Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
 persistent read-only mode.
 
-### `readonly-enable.sh`
+### `readonly-enable`
 
 Switch Raspberry Pi OS into the supported persistent read-only mode while
 keeping Bluetooth state on separate writable storage.
 
-### `readonly-disable.sh`
+### `readonly-disable`
 
 Return the system to normal writable mode while keeping the persistent
 Bluetooth-state configuration available.

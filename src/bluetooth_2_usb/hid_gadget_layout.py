@@ -182,16 +182,10 @@ class GadgetHidDevice(usb_hid.Device):
         wakeup_on_write: bool | None = None,
     ) -> GadgetHidDevice:
         return cls(
-            descriptor=(
-                bytes(base_device.descriptor) if descriptor is None else descriptor
-            ),
+            descriptor=(bytes(base_device.descriptor) if descriptor is None else descriptor),
             usage_page=base_device.usage_page,
             usage=base_device.usage,
-            report_ids=(
-                tuple(base_device.report_ids)
-                if report_ids is None
-                else tuple(report_ids)
-            ),
+            report_ids=(tuple(base_device.report_ids) if report_ids is None else tuple(report_ids)),
             in_report_lengths=(
                 tuple(base_device.in_report_lengths)
                 if in_report_lengths is None
@@ -219,9 +213,7 @@ class GadgetHidDevice(usb_hid.Device):
         )
 
     def get_device_path(self, _report_id=None):
-        function_root = (
-            Path(usb_hid.gadget_root) / f"functions/hid.usb{self.function_index}"
-        )
+        function_root = Path(usb_hid.gadget_root) / f"functions/hid.usb{self.function_index}"
         device = function_root.joinpath("dev").read_text(encoding="utf-8").strip()
         return f"/dev/hidg{device.split(':')[1]}"
 

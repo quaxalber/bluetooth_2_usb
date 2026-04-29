@@ -72,16 +72,12 @@ def _parse_value(raw_value: str) -> str:
         raise ServiceSettingsError(f"Invalid settings value: {raw_value!r}") from exc
 
     if len(parts) != 1:
-        raise ServiceSettingsError(
-            f"Expected a single settings value, got: {raw_value!r}"
-        )
+        raise ServiceSettingsError(f"Expected a single settings value, got: {raw_value!r}")
     return parts[0]
 
 
 def _parse_device_ids(raw_value: str) -> list[str]:
-    return [
-        device_id.strip() for device_id in raw_value.split(",") if device_id.strip()
-    ]
+    return [device_id.strip() for device_id in raw_value.split(",") if device_id.strip()]
 
 
 def _canonical_bool(value: bool) -> str:
@@ -196,10 +192,7 @@ def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bo
 
     updated_lines = [
         *leading_lines,
-        *[
-            f"{key}={_canonical_value_for_key(key, settings)}"
-            for key in RUNTIME_ENV_KEY_ORDER
-        ],
+        *[f"{key}={_canonical_value_for_key(key, settings)}" for key in RUNTIME_ENV_KEY_ORDER],
         *trailing_lines,
     ]
     updated_text = "\n".join(updated_lines)
@@ -213,9 +206,7 @@ def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bo
     return True
 
 
-def build_runtime_argv(
-    settings: ServiceSettings, *, append_debug: bool = False
-) -> list[str]:
+def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False) -> list[str]:
     argv: list[str] = []
     if settings.auto_discover:
         argv.append("--auto_discover")
@@ -241,9 +232,7 @@ def build_runtime_shell_command(
     env_file: Path = DEFAULT_ENV_FILE,
     append_debug: bool = False,
 ) -> str:
-    resolved_settings = (
-        load_service_settings(env_file) if settings is None else settings
-    )
+    resolved_settings = load_service_settings(env_file) if settings is None else settings
     command = shlex.split(executable) + build_runtime_argv(
         resolved_settings, append_debug=append_debug
     )
@@ -251,13 +240,9 @@ def build_runtime_shell_command(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Inspect bluetooth_2_usb service settings."
-    )
+    parser = argparse.ArgumentParser(description="Inspect bluetooth_2_usb service settings.")
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--check", action="store_true", help="Validate the settings file."
-    )
+    group.add_argument("--check", action="store_true", help="Validate the settings file.")
     group.add_argument(
         "--print-shell-command",
         action="store_true",

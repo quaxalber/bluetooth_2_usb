@@ -48,13 +48,10 @@ class HidGadgets:
 
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(
-            Path(f"/dev/hidg{device.function_index}")
-            for device in self._requested_devices()
+            Path(f"/dev/hidg{device.function_index}") for device in self._requested_devices()
         )
 
-    def _prune_stale_hidg_nodes(
-        self, *, remove_character_devices: bool = False
-    ) -> None:
+    def _prune_stale_hidg_nodes(self, *, remove_character_devices: bool = False) -> None:
         for path in self._expected_hidg_paths():
             try:
                 mode = path.stat().st_mode
@@ -102,13 +99,9 @@ class HidGadgets:
         timeout_sec: float | None = None,
         poll_interval_sec: float | None = None,
     ) -> None:
-        timeout_sec = (
-            self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
-        )
+        timeout_sec = self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
         poll_interval_sec = (
-            self.HIDG_NODE_POLL_INTERVAL_SEC
-            if poll_interval_sec is None
-            else poll_interval_sec
+            self.HIDG_NODE_POLL_INTERVAL_SEC if poll_interval_sec is None else poll_interval_sec
         )
         deadline = time.monotonic() + max(timeout_sec, 0.0)
 
@@ -133,9 +126,7 @@ class HidGadgets:
         try:
             self._validate_hidg_nodes()
         except RuntimeError:
-            logger.warning(
-                "Retrying HID gadget initialization after stale node validation failure"
-            )
+            logger.warning("Retrying HID gadget initialization after stale node validation failure")
             self._prune_stale_hidg_nodes(remove_character_devices=True)
             enabled_devices = list(rebuild_gadget(build_default_layout()))
             self._validate_hidg_nodes()

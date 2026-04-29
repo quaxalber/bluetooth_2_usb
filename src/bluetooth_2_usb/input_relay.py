@@ -98,9 +98,7 @@ class InputRelay:
                         self._input_device.path,
                     )
                 else:
-                    logger.warning(
-                        "Unable to ungrab %s: %s", self._input_device.path, ex
-                    )
+                    logger.warning("Unable to ungrab %s: %s", self._input_device.path, ex)
         return False
 
     def _should_ignore_ungrab_error(self, ex: Exception) -> bool:
@@ -194,8 +192,7 @@ class InputRelay:
             if not input_disappeared or ex.errno != errno.ENODEV:
                 raise
             logger.debug(
-                "Ignoring pending mouse flush failure for %s after input device "
-                "disappeared: %s",
+                "Ignoring pending mouse flush failure for %s after input device " "disappeared: %s",
                 self._input_device.path,
                 ex,
             )
@@ -234,14 +231,10 @@ class InputRelay:
             def move_mouse(partial=partial) -> None:
                 mouse = self._hid_gadgets.mouse
                 if mouse is None:
-                    raise RuntimeError(
-                        "Mouse gadget not initialized or manager not enabled."
-                    )
+                    raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
                 mouse.move(*partial)
 
-            if not await self._process_hid_action_with_retry(
-                move_mouse, "mouse movement"
-            ):
+            if not await self._process_hid_action_with_retry(move_mouse, "mouse movement"):
                 return
 
     async def _process_event_with_retry(self, event: InputEvent) -> None:

@@ -84,9 +84,7 @@ class SmokeTest:
             "Virtualenv interpreter is present",
             "Virtualenv interpreter is missing",
         )
-        validate_log = self._capture(
-            [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"]
-        )
+        validate_log = self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"])
         self._bool(
             validate_log[0] == 0,
             "CLI environment validation passed",
@@ -115,9 +113,7 @@ class SmokeTest:
             bt_show[1],
         )
         btmgmt = self._capture(["btmgmt", "info"])
-        self._bool(
-            btmgmt[0] == 0, "btmgmt info succeeded", "btmgmt info failed", btmgmt[1]
-        )
+        self._bool(btmgmt[0] == 0, "btmgmt info succeeded", "btmgmt info failed", btmgmt[1])
         entries = bluetooth_rfkill_entries()
         if entries:
             if bluetooth_rfkill_blocked():
@@ -145,9 +141,7 @@ class SmokeTest:
             "Bluetooth state directory is missing",
         )
         self._check_overlay_runtime(overlay, root_overlay_active, post_reboot)
-        self._check_initramfs(
-            overlay, root_overlay_active, readonly, expected_initramfs_path
-        )
+        self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
         self._check_readonly(
             readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot
         )
@@ -159,8 +153,7 @@ class SmokeTest:
             "required modules": ",".join(required_modules),
             "expected overlay line": expected_overlay or "<unknown>",
             "configured kernel image": boot_config.configured_kernel_image(),
-            "configured initramfs file": boot_config.configured_initramfs_file()
-            or "<none>",
+            "configured initramfs file": boot_config.configured_initramfs_file() or "<none>",
             "expected boot initramfs file": expected_initramfs_file or "<none>",
             "expected boot initramfs path": expected_initramfs_path or "<none>",
             "UDC controllers": udc_list or "<none>",
@@ -174,15 +167,9 @@ class SmokeTest:
             "Non-fatal warning count": str(self.soft_warnings),
         }
         if self.verbose:
-            self._print_verbose(
-                validate_log, service_settings_log, bt_show, btmgmt, inventory
-            )
+            self._print_verbose(validate_log, service_settings_log, bt_show, btmgmt, inventory)
         if self.exit_code == 0:
-            ok(
-                "Smoke test PASSED (with warnings)"
-                if self.soft_warnings
-                else "Smoke test PASSED"
-            )
+            ok("Smoke test PASSED (with warnings)" if self.soft_warnings else "Smoke test PASSED")
         else:
             fail("Smoke test FAILED")
         return self.exit_code
@@ -192,9 +179,7 @@ class SmokeTest:
             (
                 self.soft_warn("Could not determine expected Raspberry Pi overlay line")
                 if self.allow_non_pi
-                else self.warn_fail(
-                    "Could not determine expected Raspberry Pi overlay line"
-                )
+                else self.warn_fail("Could not determine expected Raspberry Pi overlay line")
             )
             return
         if (
@@ -204,9 +189,7 @@ class SmokeTest:
         ):
             ok(f"config.txt contains expected overlay ({expected_overlay})")
         else:
-            self.warn_fail(
-                f"config.txt is missing expected overlay ({expected_overlay})"
-            )
+            self.warn_fail(f"config.txt is missing expected overlay ({expected_overlay})")
 
     def _check_modules(self, token: str, required: list[str]) -> None:
         normalized = f",{token.removeprefix('modules-load=')},"
@@ -235,9 +218,7 @@ class SmokeTest:
             (
                 self.soft_warn("Could not determine whether the root overlay is active")
                 if self.allow_non_pi or (overlay == "enabled" and not post_reboot)
-                else self.warn_fail(
-                    "Could not determine whether the root overlay is active"
-                )
+                else self.warn_fail("Could not determine whether the root overlay is active")
             )
             report = boot_config.root_overlay_report()
             if report:
@@ -246,9 +227,7 @@ class SmokeTest:
             (
                 self.warn_fail("Root overlay is not active")
                 if post_reboot
-                else self.soft_warn(
-                    "Root overlay is not active; reboot may still be pending"
-                )
+                else self.soft_warn("Root overlay is not active; reboot may still be pending")
             )
         else:
             ok("Root overlay is inactive")
@@ -257,9 +236,7 @@ class SmokeTest:
         self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str
     ) -> None:
         should_require = (
-            overlay == "enabled"
-            or root_overlay_active == "yes"
-            or readonly == "persistent"
+            overlay == "enabled" or root_overlay_active == "yes" or readonly == "persistent"
         )
         if not expected_path:
             if should_require:
@@ -343,13 +320,9 @@ class SmokeTest:
         self._bool(path.exists(), success, failure)
 
     def _command_ok(self, command: list[str], success: str, failure: str) -> None:
-        self._bool(
-            run(command, check=False, capture=True).returncode == 0, success, failure
-        )
+        self._bool(run(command, check=False, capture=True).returncode == 0, success, failure)
 
-    def _bool(
-        self, condition: bool, success: str, failure: str, detail: str = ""
-    ) -> None:
+    def _bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
         if condition:
             ok(success)
         else:
@@ -384,10 +357,7 @@ class SmokeTest:
             print(f"\n## {title}")
             print(text or "<no output>")
         print("\n## rfkill bluetooth")
-        print(
-            "\n".join(entry.line() for entry in bluetooth_rfkill_entries())
-            or "<no output>"
-        )
+        print("\n".join(entry.line() for entry in bluetooth_rfkill_entries()) or "<no output>")
         print("\n## Mount details")
         run(["findmnt", "-n", "-T", "/"], check=False)
         run(["findmnt", "-n", "-T", "/var/lib/bluetooth"], check=False)
@@ -444,17 +414,9 @@ def debug_report(duration: int | None) -> int:
                 else f"\n[command exited with status {completed.returncode}]"
             )
         except subprocess.TimeoutExpired as exc:
-            text = (
-                ((exc.stdout or "") + (exc.stderr or ""))
-                if isinstance(exc.stdout, str)
-                else ""
-            )
+            text = ((exc.stdout or "") + (exc.stderr or "")) if isinstance(exc.stdout, str) else ""
             suffix = f"\n[timed out after {timeout}s]"
-        body.append(
-            "```console\n"
-            + redact((text or "<no output>") + suffix, hostname)
-            + "\n```\n"
-        )
+        body.append("```console\n" + redact((text or "<no output>") + suffix, hostname) + "\n```\n")
 
     text_block(
         "System summary",
@@ -495,9 +457,7 @@ def debug_report(duration: int | None) -> int:
     command_block("cmdline.txt", ["cat", boot_config.boot_cmdline_path()], 5)
     command_block("UDC controllers", ["ls", "/sys/class/udc"], 5)
     command_block("Overlay and tmpfs mounts", ["findmnt", "-t", "overlay,tmpfs"], 5)
-    command_block(
-        "Bluetooth state mount", ["findmnt", "-n", "-T", "/var/lib/bluetooth"], 5
-    )
+    command_block("Bluetooth state mount", ["findmnt", "-n", "-T", "/var/lib/bluetooth"], 5)
     command_block("Persistent mount target", ["findmnt", "-n", config.persist_mount], 5)
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
@@ -530,9 +490,7 @@ def debug_report(duration: int | None) -> int:
     command_block("btmgmt info", ["btmgmt", "info"], 8)
     text_block("rfkill bluetooth state", rfkill_list_bluetooth())
     if PATHS.venv_python.exists():
-        command_block(
-            "CLI version", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], 5
-        )
+        command_block("CLI version", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], 5)
         command_block(
             "CLI environment validation",
             [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"],
@@ -585,8 +543,7 @@ def debug_report(duration: int | None) -> int:
 
     report_file.write_text(
         "# bluetooth_2_usb debug report\n\n"
-        f"_Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}_\n\n"
-        + "\n".join(body),
+        f"_Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}_\n\n" + "\n".join(body),
         encoding="utf-8",
     )
     ok(f"Wrote: {report_file}")
@@ -595,12 +552,7 @@ def debug_report(duration: int | None) -> int:
 
 def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
     stopped_service = False
-    if (
-        run(
-            ["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False
-        ).returncode
-        == 0
-    ):
+    if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
         run(["systemctl", "stop", PATHS.service_unit], check=False)
         stopped_service = True
     try:
@@ -646,11 +598,7 @@ def redact(text: str, hostname: str) -> str:
     ]
     redacted = text
     if hostname:
-        redacted = re.sub(
-            rf"\b{re.escape(hostname)}\b", "<<REDACTED_HOSTNAME>>", redacted
-        )
+        redacted = re.sub(rf"\b{re.escape(hostname)}\b", "<<REDACTED_HOSTNAME>>", redacted)
     for pattern, replacement in patterns:
-        redacted = re.sub(
-            pattern, replacement, redacted, flags=re.IGNORECASE | re.MULTILINE
-        )
+        redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE | re.MULTILINE)
     return redacted
