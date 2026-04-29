@@ -74,7 +74,7 @@ sed -n '1,220p' src/bluetooth_2_usb/args.py
 
 ```bash
 sed -n '1,220p' src/bluetooth_2_usb/ops/paths.py
-sed -n '1,260p' src/bluetooth_2_usb/ops/service_install.py
+sed -n '1,260p' src/bluetooth_2_usb/ops/deployment.py
 sed -n '1,260p' src/bluetooth_2_usb/ops/readonly.py
 sed -n '1,120p' bluetooth_2_usb.service
 ```

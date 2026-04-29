@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from .commands import OpsError, ensure_root, fail, prepare_log
+from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .loopback import loopback_capture, loopback_inject
@@ -14,7 +15,6 @@ from .readonly import (
     enable_readonly,
     setup_persistent_bluetooth_state,
 )
-from .service_install import install, uninstall, update
 
 
 def run() -> None:

@@ -465,7 +465,7 @@ def _systemctl_active(unit: str) -> bool:
 
 
 def _stop_b2u_if_installed(context: str) -> None:
-    from .service_install import service_installed
+    from .deployment import service_installed
 
     state = service_installed()
     if state is None:
@@ -475,7 +475,7 @@ def _stop_b2u_if_installed(context: str) -> None:
 
 
 def _restart_b2u_if_installed(context: str) -> None:
-    from .service_install import service_installed
+    from .deployment import service_installed
 
     state = service_installed()
     if state is None:
