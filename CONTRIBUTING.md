@@ -2,10 +2,86 @@
 
 Thanks for your interest in contributing.
 
-This guide covers the repo-specific workflow that keeps changes easy to review,
-validate, and maintain.
+This guide covers the repo-specific workflow that keeps issues actionable,
+changes easy to review, and validation grounded in the supported Raspberry Pi
+deployment model.
 
-## Development environment
+## Reporting Issues
+
+Thanks for taking the time to report a problem. If you can, please include:
+
+- target host type
+- Raspberry Pi model and Raspberry Pi OS version
+- whether persistent read-only mode is enabled
+- exact commands used
+- output from `bluetooth_2_usb smoketest --verbose`
+- output from `bluetooth_2_usb debug --duration 10`
+- clear reproduction steps
+
+If the problem involves pairing, relay behavior, suspend/wake, service startup,
+or persistent read-only mode, also mention what changed recently and whether the
+Pi is connected to the target host through the OTG-capable data port.
+
+## Pull Requests
+
+This repository uses `staging` as its integration branch.
+
+Please:
+
+- keep scope focused
+- prefer one logical feature, fix, refactor, or documentation change per PR
+- explain what changed and why
+- describe how you tested it
+- update docs when behavior, commands, paths, or defaults change
+- target `staging` for normal work
+- do not target `main` directly for normal project work
+
+Use a normal PR into `staging` for features, fixes, refactors, and other
+non-trivial changes. Small follow-up review fixes may be pushed directly to
+`staging` when that is the least disruptive way to finish an in-flight review.
+
+Branch and commit naming:
+
+- use descriptive branch prefixes such as `feat/`, `fix/`, `docs/`, `refactor/`,
+  `test/`, `chore/`
+- use matching conventional commit prefixes such as `feat:`, `fix:`, `docs:`,
+  `refactor:`, `test:`, `chore:`
+- do not push directly to `main`
+
+Merge policy:
+
+- squash-merge normal PRs into `staging`
+- validate the integrated `staging` result before promotion
+- merge `staging` into `main` with a normal merge commit
+
+## Review and CI
+
+- verify review feedback against the current code, not just the historic thread
+  state
+- also check grouped nitpicks and summary comments
+- if you intentionally decline a review suggestion, explain that on the PR
+- if CI fails, inspect the actual failing step and log before guessing
+
+CodeRabbit policy:
+
+- `.coderabbit.yaml` disables automatic review; request CodeRabbit manually when
+  needed, using `@coderabbitai full review` by default
+- treat the first top-level CodeRabbit PR comment as the live status source of
+  truth
+- do not consider review complete until that comment says
+  `no actionable comments` after the latest commit
+- do not use a green `CodeRabbit` check alone as proof that review is finished
+- for the actual findings, inspect the newest review comments and read the
+  section `Prompt for all review comments with AI agents`
+- treat that prompt section as the source of truth for actionable review
+  findings, including nitpicks, outside-diff-range comments, summary comments,
+  and other grouped review items
+- if the first CodeRabbit comment says `review in progress`, wait for completion
+- if it says `paused`, resume the review first (for example, click Resume or
+  post `@coderabbitai resume`) before posting `@coderabbitai full review`
+- if it says `rate limited`, wait and retry `@coderabbitai full review`
+
+## Development Environment
 
 Meaningful runtime validation requires Linux, and changes that affect USB
 gadget behavior should be tested on a real Raspberry Pi with an OTG-capable
@@ -30,7 +106,7 @@ If you prefer to work from a fork, replace the clone URL with your fork.
 
 Use this venv for repo-local validation.
 
-## Supported deployment model
+## Supported Deployment Model
 
 Please keep code and docs aligned with the supported deployment model:
 
@@ -38,7 +114,7 @@ Please keep code and docs aligned with the supported deployment model:
 - service unit: `bluetooth_2_usb.service`
 - runtime settings: `/etc/default/bluetooth_2_usb`
 
-## Quality expectations
+## Quality Expectations
 
 ### Python
 
@@ -71,7 +147,7 @@ Please keep code and docs aligned with the supported deployment model:
 - keep docs aligned with current CLI interfaces and managed paths
 - avoid documenting lab-specific host policy as product behavior
 
-## Baseline local checks
+## Local Checks
 
 Run these from the repo venv:
 
@@ -89,7 +165,7 @@ python -m build
 
 Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
 
-## Hardware validation
+## Hardware Validation
 
 If your change affects runtime behavior, installation, service startup, USB
 gadget setup, diagnostics, relay behavior, or persistent read-only operation,
@@ -116,75 +192,7 @@ sudo btmgmt info
 For relay-path changes, also use the host/Pi loopback inject/capture harness in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
-## Pull request guidelines
-
-This repository uses `staging` as its integration branch.
-
-- keep scope focused
-- prefer one logical feature, fix, refactor, or documentation change per PR
-- explain what changed and why
-- describe how you tested it
-- update docs when behavior, commands, paths, or defaults change
-- target `staging` for normal work
-- use a normal PR into `staging` for features, fixes, refactors, and other
-  non-trivial changes
-- small follow-up review fixes may be pushed directly to `staging` when that is
-  the least disruptive way to finish an in-flight review
-- do not target `main` directly for normal project work
-
-Merge policy:
-
-- squash-merge normal PRs into `staging`
-- validate the integrated `staging` result before promotion
-- merge `staging` into `main` with a normal merge commit
-
-Branch and commit naming:
-
-- use descriptive branch prefixes such as `feat/`, `fix/`, `docs/`, `refactor/`,
-  `test/`, `chore/`
-- use matching conventional commit prefixes such as `feat:`, `fix:`, `docs:`,
-  `refactor:`, `test:`, `chore:`
-- do not push directly to `main`
-
-## Review and CI
-
-- verify review feedback against the current code, not just the historic thread
-  state
-- also check grouped nitpicks and summary comments
-- if you intentionally decline a review suggestion, explain that on the PR
-- if CI fails, inspect the actual failing step and log before guessing
-
-CodeRabbit policy:
-
-- `.coderabbit.yaml` disables automatic review; request CodeRabbit manually when
-  needed, using `@coderabbitai full review` by default
-- treat the first top-level CodeRabbit PR comment as the live status source of
-  truth
-- do not consider review complete until that comment says
-  `no actionable comments` after the latest commit
-- do not use a green `CodeRabbit` check alone as proof that review is finished
-- for the actual findings, inspect the newest review comments and read the
-  section `Prompt for all review comments with AI agents`
-- treat that prompt section as the source of truth for actionable review
-  findings, including nitpicks, outside-diff-range comments, summary comments,
-  and other grouped review items
-- if the first CodeRabbit comment says `review in progress`, wait for completion
-- if it says `paused`, resume the review first (for example, click Resume or
-  post `@coderabbitai resume`) before posting `@coderabbitai full review`
-- if it says `rate limited`, wait and retry `@coderabbitai full review`
-
-## Reporting issues
-
-Thanks for taking the time to report a problem. If you can, please include:
-
-- target host type
-- whether persistent read-only mode is enabled
-- exact commands used
-- output from `bluetooth_2_usb smoketest --verbose`
-- output from `bluetooth_2_usb debug --duration 10`
-- clear reproduction steps
-
-## Community expectations
+## Community Expectations
 
 Thanks for helping keep the project respectful, constructive, and patient for
 everyone involved.
