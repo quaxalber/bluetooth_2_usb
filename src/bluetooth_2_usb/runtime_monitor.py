@@ -29,12 +29,6 @@ except ModuleNotFoundError:
                     "pyudev is required for runtime monitoring on this platform."
                 )
 
-        class MonitorObserver:
-            def __init__(self, *_args, **_kwargs) -> None:
-                raise ModuleNotFoundError(
-                    "pyudev is required for runtime monitoring on this platform."
-                )
-
     pyudev = _MissingPyudevModule()
 
 
@@ -59,14 +53,12 @@ class RuntimeMonitor:
         self._poll_interval = poll_interval
 
         self._stop_event = asyncio.Event()
-        self._task: asyncio.Task | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._last_state: str | None = None
 
         context = pyudev.Context()
-        monitor = pyudev.Monitor.from_netlink(context)
-        monitor.filter_by("input")
-        self._observer = pyudev.MonitorObserver(monitor, self._udev_event_callback)
+        self._monitor = pyudev.Monitor.from_netlink(context)
+        self._monitor.filter_by("input")
 
         if self._udc_path is None:
             logger.warning(
@@ -78,25 +70,30 @@ class RuntimeMonitor:
                 self._udc_path,
             )
 
-    async def __aenter__(self):
+    async def async_monitor_runtime(self) -> None:
+        self._start_monitoring()
+        try:
+            await self._poll_state()
+        finally:
+            self._stop_monitoring()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+
+    def _start_monitoring(self) -> None:
         self._stop_event.clear()
         self._loop = asyncio.get_running_loop()
         self._last_state = None
-        self._observer.start()
-        self._task = asyncio.create_task(self._poll_state())
+        self._monitor.start()
+        self._loop.add_reader(self._monitor.fileno(), self._drain_udev_events)
         logger.debug("RuntimeMonitor started.")
-        return self
 
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+    def _stop_monitoring(self) -> None:
         self._stop_event.set()
-        self._observer.stop()
-        if self._task:
-            self._task.cancel()
-            await asyncio.gather(self._task, return_exceptions=True)
-            self._task = None
+        if self._loop is not None:
+            self._loop.remove_reader(self._monitor.fileno())
         self._loop = None
         logger.debug("RuntimeMonitor stopped.")
-        return False
 
     async def _poll_state(self):
         while not self._stop_event.is_set():
@@ -130,32 +127,26 @@ class RuntimeMonitor:
         else:
             self._relaying_active.clear()
 
-    def _udev_event_callback(self, action: str, device: pyudev.Device) -> None:
+    def _drain_udev_events(self) -> None:
+        while True:
+            try:
+                device = self._monitor.poll(timeout=0)
+            except OSError:
+                logger.debug("Unable to read udev monitor event.", exc_info=True)
+                return
+            if device is None:
+                return
+            self._handle_udev_event(device)
+
+    def _handle_udev_event(self, device: pyudev.Device) -> None:
         device_node = device.device_node
         if not device_node or not device_node.startswith("/dev/input/event"):
             return
 
+        action = getattr(device, "action", None)
         if action == "add":
             logger.debug(f"RuntimeMonitor: Added input => {device_node}")
-            self._notify_relay_controller_threadsafe(
-                self._relay_controller.notify_device_added,
-                device_node,
-            )
+            self._relay_controller.notify_device_added(device_node)
         elif action == "remove":
             logger.debug(f"RuntimeMonitor: Removed input => {device_node}")
-            self._notify_relay_controller_threadsafe(
-                self._relay_controller.notify_device_removed,
-                device_node,
-            )
-
-    def _notify_relay_controller_threadsafe(self, callback, device_node: str) -> None:
-        loop = self._loop
-        if loop is None:
-            logger.debug("Ignoring udev event for %s; monitor is stopped.", device_node)
-            return
-        try:
-            loop.call_soon_threadsafe(callback, device_node)
-        except RuntimeError:
-            logger.debug(
-                "Ignoring udev event for %s; event loop is stopped.", device_node
-            )
+            self._relay_controller.notify_device_removed(device_node)

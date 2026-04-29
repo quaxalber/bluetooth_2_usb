@@ -166,14 +166,16 @@ class CliTest(unittest.TestCase):
                 self.request_shutdown_calls += 1
 
         class _FakeRuntimeMonitor:
+            stopped = False
+
             def __init__(self, **_kwargs) -> None:
                 pass
 
-            async def __aenter__(self):
-                return self
+            async def async_monitor_runtime(self) -> None:
+                await cli.asyncio.Event().wait()
 
-            async def __aexit__(self, *_args):
-                return False
+            def stop(self) -> None:
+                self.stopped = True
 
         args = SimpleNamespace(
             auto_discover=False,

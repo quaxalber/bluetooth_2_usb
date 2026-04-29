@@ -1,5 +1,6 @@
 import asyncio
 import errno
+import os
 import re
 import stat
 import tempfile
@@ -100,54 +101,30 @@ class _FakeRelayController:
 
 
 class _FakeMonitor:
-    def filter_by(self, *_args) -> None:
-        return None
-
-
-class _FakeObserver:
-    def __init__(self, _monitor, _callback) -> None:
+    def __init__(self, events=None) -> None:
+        self.events = list(events or [])
+        self.filtered = []
         self.started = False
+        self._read_fd, self._write_fd = os.pipe()
+
+    def filter_by(self, *_args) -> None:
+        self.filtered.append(_args)
 
     def start(self) -> None:
         self.started = True
 
-    def stop(self) -> None:
-        self.started = False
+    def fileno(self) -> int:
+        return self._read_fd
 
+    def poll(self, timeout=0):
+        del timeout
+        if not self.events:
+            return None
+        return self.events.pop(0)
 
-class _FakeLoop:
-    def __init__(self) -> None:
-        self.soon_threadsafe_calls = []
-        self.soon_calls = []
-        self.later_calls = []
-
-    def call_soon_threadsafe(self, callback, *args) -> None:
-        self.soon_threadsafe_calls.append((callback, args))
-
-    def call_soon(self, callback, *args) -> None:
-        self.soon_calls.append((callback, args))
-
-    def call_later(self, delay, callback, *args):
-        handle = _FakeTimerHandle()
-        self.later_calls.append((delay, callback, args, handle))
-        return handle
-
-
-class _ImmediateLoop:
-    def __init__(self) -> None:
-        self.calls = []
-
-    def call_soon_threadsafe(self, callback, *args) -> None:
-        self.calls.append((callback, args))
-        callback(*args)
-
-
-class _FakeTimerHandle:
-    def __init__(self) -> None:
-        self.cancel_calls = 0
-
-    def cancel(self) -> None:
-        self.cancel_calls += 1
+    def close(self) -> None:
+        os.close(self._read_fd)
+        os.close(self._write_fd)
 
 
 class _FakeTaskHandle:
@@ -511,32 +488,26 @@ class RuntimeMonitorTest(unittest.TestCase):
     def test_runtime_monitor_routes_hotplug_events(self) -> None:
         relay_controller = _FakeRelayController()
         relaying_active = asyncio.Event()
+        fake_monitor = _FakeMonitor()
 
         with patch(
             "bluetooth_2_usb.runtime_monitor.pyudev.Context", return_value=object()
         ):
             with patch(
                 "bluetooth_2_usb.runtime_monitor.pyudev.Monitor.from_netlink",
-                return_value=_FakeMonitor(),
+                return_value=fake_monitor,
             ):
-                with patch(
-                    "bluetooth_2_usb.runtime_monitor.pyudev.MonitorObserver",
-                    side_effect=lambda monitor, callback: _FakeObserver(
-                        monitor, callback
-                    ),
-                ):
-                    monitor = RuntimeMonitor(
-                        relay_controller=relay_controller,
-                        relaying_active=relaying_active,
-                        udc_path=Path("/tmp/missing-b2u-udc-state"),
-                    )
-        monitor._loop = _ImmediateLoop()
+                monitor = RuntimeMonitor(
+                    relay_controller=relay_controller,
+                    relaying_active=relaying_active,
+                    udc_path=Path("/tmp/missing-b2u-udc-state"),
+                )
 
-        monitor._udev_event_callback(
-            "add", SimpleNamespace(device_node="/dev/input/event7")
+        monitor._handle_udev_event(
+            SimpleNamespace(action="add", device_node="/dev/input/event7")
         )
-        monitor._udev_event_callback(
-            "remove", SimpleNamespace(device_node="/dev/input/event7")
+        monitor._handle_udev_event(
+            SimpleNamespace(action="remove", device_node="/dev/input/event7")
         )
         monitor._handle_state_change("configured")
         self.assertTrue(relaying_active.is_set())
@@ -545,7 +516,7 @@ class RuntimeMonitorTest(unittest.TestCase):
 
         self.assertEqual(relay_controller.added, ["/dev/input/event7"])
         self.assertEqual(relay_controller.removed, ["/dev/input/event7"])
-        self.assertEqual(len(monitor._loop.calls), 2)
+        fake_monitor.close()
 
     def test_runtime_monitor_treats_udc_read_errors_as_not_attached(self) -> None:
         monitor = RuntimeMonitor.__new__(RuntimeMonitor)
@@ -557,53 +528,56 @@ class RuntimeMonitorTest(unittest.TestCase):
     def test_runtime_monitor_treats_missing_udc_path_as_not_attached(self) -> None:
         relay_controller = _FakeRelayController()
         relaying_active = asyncio.Event()
+        fake_monitor = _FakeMonitor()
 
         with patch(
             "bluetooth_2_usb.runtime_monitor.pyudev.Context", return_value=object()
         ):
             with patch(
                 "bluetooth_2_usb.runtime_monitor.pyudev.Monitor.from_netlink",
-                return_value=_FakeMonitor(),
+                return_value=fake_monitor,
             ):
-                with patch(
-                    "bluetooth_2_usb.runtime_monitor.pyudev.MonitorObserver",
-                    side_effect=lambda monitor, callback: _FakeObserver(
-                        monitor, callback
-                    ),
-                ):
-                    monitor = RuntimeMonitor(
-                        relay_controller=relay_controller,
-                        relaying_active=relaying_active,
-                        udc_path=None,
-                    )
+                monitor = RuntimeMonitor(
+                    relay_controller=relay_controller,
+                    relaying_active=relaying_active,
+                    udc_path=None,
+                )
 
         self.assertEqual(monitor._read_udc_state(), "not_attached")
+        fake_monitor.close()
 
 
 class RuntimeMonitorLifecycleTest(unittest.IsolatedAsyncioTestCase):
-    async def test_runtime_monitor_resets_cached_state_on_enter(self) -> None:
-        monitor = RuntimeMonitor.__new__(RuntimeMonitor)
-        monitor._stop_event = asyncio.Event()
-        monitor._observer = _FakeObserver(None, None)
-        monitor._task = None
+    async def test_runtime_monitor_resets_cached_state_on_start(self) -> None:
+        relay_controller = _FakeRelayController()
+        relaying_active = asyncio.Event()
+        fake_monitor = _FakeMonitor()
+        with patch(
+            "bluetooth_2_usb.runtime_monitor.pyudev.Context", return_value=object()
+        ):
+            with patch(
+                "bluetooth_2_usb.runtime_monitor.pyudev.Monitor.from_netlink",
+                return_value=fake_monitor,
+            ):
+                monitor = RuntimeMonitor(
+                    relay_controller=relay_controller,
+                    relaying_active=relaying_active,
+                    udc_path=None,
+                )
         monitor._last_state = "configured"
 
-        async def poll_state() -> None:
-            await monitor._stop_event.wait()
+        task = asyncio.create_task(monitor.async_monitor_runtime())
+        await asyncio.sleep(0)
 
-        monitor._poll_state = poll_state
-
-        await monitor.__aenter__()
-
-        self.assertIsNone(monitor._last_state)
-        self.assertTrue(monitor._observer.started)
+        self.assertEqual(monitor._last_state, "not_attached")
+        self.assertTrue(fake_monitor.started)
         self.assertIsNotNone(monitor._loop)
 
-        await monitor.__aexit__(None, None, None)
+        monitor.stop()
+        await asyncio.wait_for(task, timeout=1)
 
-        self.assertFalse(monitor._observer.started)
-        self.assertIsNone(monitor._task)
         self.assertIsNone(monitor._loop)
+        fake_monitor.close()
 
 
 class GadgetManagerLayoutTest(unittest.TestCase):
@@ -629,6 +603,24 @@ class GadgetManagerLayoutTest(unittest.TestCase):
         self.assertEqual(manager._gadgets["keyboard"].release_all_calls, 1)
         self.assertEqual(manager._gadgets["mouse"].release_all_calls, 1)
         self.assertEqual(manager._gadgets["consumer"].release_calls, 1)
+
+    def test_release_all_gadgets_continues_when_one_raises(self) -> None:
+        manager = GadgetManager()
+        keyboard = _FakeKeyboard()
+        mouse = _FakeMouse()
+        consumer = _FakeConsumer()
+        keyboard.release_all = Mock(side_effect=RuntimeError("keyboard stuck"))
+        manager._gadgets = {
+            "keyboard": keyboard,
+            "mouse": mouse,
+            "consumer": consumer,
+        }
+
+        manager.release_all_gadgets()
+
+        keyboard.release_all.assert_called_once_with()
+        self.assertEqual(mouse.release_all_calls, 1)
+        self.assertEqual(consumer.release_calls, 1)
 
     def test_enable_gadgets_clears_published_refs_before_rebuild(self) -> None:
         manager = GadgetManager()
@@ -1139,6 +1131,31 @@ class DeviceRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(relaying_active.is_set())
         self.assertEqual(relay._hid_write_failures, 1)
 
+    async def test_blocked_hid_retry_stops_after_relaying_is_cleared(self) -> None:
+        relaying_active = asyncio.Event()
+        relaying_active.set()
+        relay = DeviceRelay(
+            _TestInputDevice([]),
+            _FakeGadgetManager(),
+            relaying_active=relaying_active,
+        )
+        action = Mock(side_effect=BlockingIOError())
+
+        async def clear_relaying(_delay) -> None:
+            relaying_active.clear()
+
+        with patch(
+            "bluetooth_2_usb.device_relay.asyncio.sleep",
+            new=AsyncMock(side_effect=clear_relaying),
+        ) as sleep:
+            processed = await relay._process_hid_action_with_retry(action, "test write")
+
+        self.assertFalse(processed)
+        action.assert_called_once_with()
+        sleep.assert_awaited_once_with(relay.HID_WRITE_RETRY_DELAY_SEC)
+        self.assertEqual(relay._hid_write_retries, 1)
+        self.assertEqual(relay._hid_write_failures, 0)
+
     async def test_unexpected_dispatch_error_propagates(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
@@ -1472,20 +1489,16 @@ class RelayControllerHotplugTest(unittest.TestCase):
 
         self.assertEqual(controller._pending_add_paths, {"/dev/input/event7"})
 
-        fake_loop = _FakeLoop()
-        controller._loop = fake_loop
         controller._task_group = object()
         controller._state = _ControllerState.RUNNING
+        controller._schedule_probe = Mock()
 
         controller._flush_pending_adds()
 
         self.assertEqual(controller._pending_add_paths, set())
-        self.assertEqual(len(fake_loop.soon_calls), 1)
-        callback, args = fake_loop.soon_calls[0]
-        self.assertIs(callback.__func__, controller._schedule_probe.__func__)
-        self.assertEqual(
-            args,
-            ("/dev/input/event7", controller.HOTPLUG_ADD_MAX_RETRIES),
+        controller._schedule_probe.assert_called_once_with(
+            "/dev/input/event7",
+            controller.HOTPLUG_ADD_MAX_RETRIES,
         )
 
     def test_notify_device_removed_drops_queued_startup_add(self) -> None:
@@ -1508,7 +1521,6 @@ class RelayControllerHotplugTest(unittest.TestCase):
         )
         task = _FakeTaskHandle()
         controller._state = _ControllerState.STARTING
-        controller._loop = _FakeLoop()
         controller._active_relays["/dev/input/event7"] = _ActiveRelay(
             _FakeInputHandle(),
             task,
@@ -1516,10 +1528,7 @@ class RelayControllerHotplugTest(unittest.TestCase):
 
         controller.notify_device_removed("/dev/input/event7")
 
-        self.assertEqual(len(controller._loop.soon_threadsafe_calls), 1)
-        callback, args = controller._loop.soon_threadsafe_calls[0]
-        self.assertIs(callback.__func__, controller._cancel_active_relay.__func__)
-        self.assertEqual(args, ("/dev/input/event7",))
+        self.assertEqual(task.cancel_calls, 1)
 
     def test_notify_device_added_ignores_after_shutdown_requested(self) -> None:
         controller = RelayController(
@@ -1632,7 +1641,6 @@ class RelayControllerHotplugTest(unittest.TestCase):
         task = _FakeTaskHandle()
         task_group = _FakeTaskGroup(task)
         controller._state = _ControllerState.RUNNING
-        controller._loop = _FakeLoop()
         controller._task_group = task_group
         device = _FakeInputHandle()
 
@@ -1654,10 +1662,9 @@ class RelayControllerHotplugTest(unittest.TestCase):
             device_identifiers=["target"],
             relaying_active=asyncio.Event(),
         )
-        loop = _FakeLoop()
         controller._state = _ControllerState.RUNNING
-        controller._loop = loop
-        controller._task_group = _FakeTaskGroup()
+        task_group = _FakeTaskGroup()
+        controller._task_group = task_group
         device = _FakeInputHandle(name="not ready")
 
         with patch(
@@ -1667,12 +1674,10 @@ class RelayControllerHotplugTest(unittest.TestCase):
             controller._schedule_probe("/dev/input/event7", retries_remaining=2)
 
         self.assertEqual(device.close_calls, 1)
-        self.assertEqual(len(loop.later_calls), 1)
-        delay, callback, args, _handle = loop.later_calls[0]
-        self.assertEqual(delay, controller.HOTPLUG_ADD_RETRY_DELAY_SEC)
-        self.assertEqual(callback.__name__, "_retry_probe")
-        self.assertEqual(args, ())
-        self.assertIn("/dev/input/event7", controller._pending_probe_handles)
+        self.assertEqual(len(task_group.created), 1)
+        _coroutine, task_name = task_group.created[0]
+        self.assertEqual(task_name, "hotplug probe retry /dev/input/event7")
+        self.assertIn("/dev/input/event7", controller._pending_probe_tasks)
         self.assertEqual(controller._active_relays, {})
 
     def test_notify_device_removed_cancels_delayed_hotplug_probe(self) -> None:
@@ -1681,10 +1686,9 @@ class RelayControllerHotplugTest(unittest.TestCase):
             device_identifiers=["target"],
             relaying_active=asyncio.Event(),
         )
-        loop = _FakeLoop()
         controller._state = _ControllerState.RUNNING
-        controller._loop = loop
-        controller._task_group = _FakeTaskGroup()
+        task_group = _FakeTaskGroup()
+        controller._task_group = task_group
         device = _FakeInputHandle(name="not ready")
 
         with patch(
@@ -1693,12 +1697,10 @@ class RelayControllerHotplugTest(unittest.TestCase):
         ):
             controller._schedule_probe("/dev/input/event7", retries_remaining=2)
 
-        handle = loop.later_calls[0][3]
-
         controller.notify_device_removed("/dev/input/event7")
 
-        self.assertEqual(handle.cancel_calls, 1)
-        self.assertNotIn("/dev/input/event7", controller._pending_probe_handles)
+        self.assertEqual(task_group.task.cancel_calls, 1)
+        self.assertNotIn("/dev/input/event7", controller._pending_probe_tasks)
 
 
 class RelayControllerTaskGroupTest(unittest.IsolatedAsyncioTestCase):

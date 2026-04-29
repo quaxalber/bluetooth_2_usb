@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import errno
-import threading
 from asyncio import TaskGroup
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -86,13 +85,11 @@ class RelayController:
         self._state = _ControllerState.NEW
         self._shutdown_event = asyncio.Event()
         self._gadgets_released = False
-        self._loop: asyncio.AbstractEventLoop | None = None
         self._task_group: TaskGroup | None = None
 
         self._active_relays: dict[str, _ActiveRelay] = {}
-        self._pending_probe_handles: dict[str, list[asyncio.TimerHandle]] = {}
+        self._pending_probe_tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._pending_add_paths: set[str] = set()
-        self._pending_add_lock = threading.Lock()
 
     def _shutdown_requested(self) -> bool:
         return self._shutdown_event.is_set()
@@ -129,7 +126,6 @@ class RelayController:
 
             async with TaskGroup() as task_group:
                 self._task_group = task_group
-                self._loop = asyncio.get_running_loop()
                 logger.debug("RelayController: TaskGroup started.")
 
                 for device in initial_devices:
@@ -156,7 +152,6 @@ class RelayController:
         finally:
             self._state = _ControllerState.STOPPED
             self._task_group = None
-            self._loop = None
             self._pop_pending_adds()
             self._cancel_all_pending_probes()
             for device_path, active_relay in list(self._active_relays.items()):
@@ -188,13 +183,6 @@ class RelayController:
                 self._cancel_active_relay(device_path)
             self._release_gadgets_after_relay_tasks_stop(tasks)
 
-        loop = self._loop
-        if loop is not None:
-            try:
-                loop.call_soon_threadsafe(_begin_shutdown)
-                return
-            except RuntimeError:
-                pass
         _begin_shutdown()
 
     def notify_device_added(self, device_path: str) -> None:
@@ -211,22 +199,11 @@ class RelayController:
             )
             return
 
-        loop = self._loop
-        if loop is None or self._task_group is None:
+        if self._task_group is None:
             logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
             return
 
-        try:
-            loop.call_soon_threadsafe(
-                self._schedule_probe,
-                device_path,
-                self.HOTPLUG_ADD_MAX_RETRIES,
-            )
-        except RuntimeError:
-            logger.debug(
-                "Ignoring add for %s; controller is shutting down.",
-                device_path,
-            )
+        self._schedule_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
 
     def notify_device_removed(self, device_path: str) -> None:
         if self._state is _ControllerState.NEW:
@@ -253,102 +230,84 @@ class RelayController:
                 device_path,
             )
             return
-        loop = self._loop
-        if loop is None or self._shutdown_requested():
+        if self._shutdown_requested():
             logger.debug(
                 f"Ignoring remove for {device_path}; event loop is unavailable."
             )
             return
         self._cancel_pending_probe(device_path)
-        try:
-            loop.call_soon_threadsafe(self._cancel_active_relay, device_path)
-        except RuntimeError:
-            logger.debug(
-                "Ignoring remove for %s; controller is shutting down.",
-                device_path,
-            )
+        self._cancel_active_relay(device_path)
 
     def _queue_pending_add(self, device_path: str) -> None:
-        with self._pending_add_lock:
-            self._pending_add_paths.add(device_path)
+        self._pending_add_paths.add(device_path)
 
     def _discard_pending_add(self, device_path: str) -> bool:
-        with self._pending_add_lock:
-            if device_path not in self._pending_add_paths:
-                return False
-            self._pending_add_paths.remove(device_path)
-            return True
+        if device_path not in self._pending_add_paths:
+            return False
+        self._pending_add_paths.remove(device_path)
+        return True
 
     def _pop_pending_adds(self) -> list[str]:
-        with self._pending_add_lock:
-            pending = sorted(self._pending_add_paths)
-            self._pending_add_paths.clear()
+        pending = sorted(self._pending_add_paths)
+        self._pending_add_paths.clear()
         return pending
 
     def _flush_pending_adds(self) -> None:
-        loop = self._loop
         if (
             self._state is not _ControllerState.RUNNING
-            or loop is None
             or self._task_group is None
             or self._shutdown_requested()
         ):
             return
         for device_path in self._pop_pending_adds():
-            loop.call_soon(
-                self._schedule_probe, device_path, self.HOTPLUG_ADD_MAX_RETRIES
-            )
+            self._schedule_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
 
     def _cancel_pending_probe(self, device_path: str) -> None:
-        for handle in self._pending_probe_handles.pop(device_path, []):
-            handle.cancel()
+        for task in self._pending_probe_tasks.pop(device_path, set()):
+            task.cancel()
 
     def _cancel_all_pending_probes(self) -> None:
-        for device_path in list(self._pending_probe_handles):
+        for device_path in list(self._pending_probe_tasks):
             self._cancel_pending_probe(device_path)
 
-    def _discard_probe_handle(
+    def _discard_probe_task(
         self,
         device_path: str,
-        handle: asyncio.TimerHandle,
+        task: asyncio.Task[None],
     ) -> None:
-        handles = self._pending_probe_handles.get(device_path)
-        if handles is None:
+        tasks = self._pending_probe_tasks.get(device_path)
+        if tasks is None:
             return
-        try:
-            handles.remove(handle)
-        except ValueError:
-            return
-        if not handles:
-            self._pending_probe_handles.pop(device_path, None)
+        tasks.discard(task)
+        if not tasks:
+            self._pending_probe_tasks.pop(device_path, None)
 
     def _schedule_probe_retry(
         self,
         device_path: str,
         retries_remaining: int,
     ) -> None:
-        loop = self._loop
-        if loop is None:
+        if self._task_group is None:
             return
 
-        handle: asyncio.TimerHandle | None = None
-
-        def _retry_probe() -> None:
-            if handle is not None:
-                self._discard_probe_handle(device_path, handle)
+        async def _retry_probe() -> None:
+            await asyncio.sleep(self.HOTPLUG_ADD_RETRY_DELAY_SEC)
             self._schedule_probe(device_path, retries_remaining)
 
-        handle = loop.call_later(
-            self.HOTPLUG_ADD_RETRY_DELAY_SEC,
-            _retry_probe,
+        task = self._task_group.create_task(
+            _retry_probe(),
+            name=f"hotplug probe retry {device_path}",
         )
-        self._pending_probe_handles.setdefault(device_path, []).append(handle)
+        self._pending_probe_tasks.setdefault(device_path, set()).add(task)
+        task.add_done_callback(
+            lambda done_task, path=device_path: self._discard_probe_task(
+                path, done_task
+            )
+        )
 
     def _schedule_probe(self, device_path: str, retries_remaining: int) -> None:
-        loop = self._loop
         if (
-            loop is None
-            or self._task_group is None
+            self._task_group is None
             or self._state is not _ControllerState.RUNNING
             or self._shutdown_requested()
         ):

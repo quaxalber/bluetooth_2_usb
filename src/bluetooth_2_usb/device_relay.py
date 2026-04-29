@@ -270,14 +270,22 @@ class DeviceRelay:
         max_tries = self.HID_WRITE_MAX_TRIES
         retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
         for attempt in range(1, max_tries + 1):
+            if not self._relaying_active.is_set():
+                return False
             try:
                 action()
                 return True
             except BlockingIOError:
+                if not self._relaying_active.is_set():
+                    return False
                 if attempt < max_tries:
                     self._hid_write_retries += 1
                     logger.debug("HID write blocked (%s/%s)", attempt, max_tries)
+                    if not self._relaying_active.is_set():
+                        return False
                     await asyncio.sleep(retry_delay)
+                    if not self._relaying_active.is_set():
+                        return False
                 else:
                     self._hid_write_failures += 1
                     logger.warning("HID write blocked (%s/%s)", attempt, max_tries)

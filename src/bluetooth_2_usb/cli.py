@@ -44,6 +44,12 @@ class EnvironmentStatus:
         }
 
 
+@dataclass(slots=True)
+class _ServiceTaskResult:
+    source: str
+    exception: Exception | None = None
+
+
 def get_udc_path() -> Path | None:
     override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
     if override_path:
@@ -187,6 +193,26 @@ def _restore_signal_handlers(
         signal.signal(handled_signal, previous_handler)
 
 
+async def _watch_shutdown_event(
+    shutdown_event: asyncio.Event,
+    results: asyncio.Queue[_ServiceTaskResult],
+) -> None:
+    await shutdown_event.wait()
+    await results.put(_ServiceTaskResult("shutdown"))
+
+
+async def _run_relay_controller(
+    relay_controller,
+    results: asyncio.Queue[_ServiceTaskResult],
+) -> None:
+    try:
+        await relay_controller.async_relay_devices()
+    except Exception as exc:
+        await results.put(_ServiceTaskResult("relay", exc))
+    else:
+        await results.put(_ServiceTaskResult("relay"))
+
+
 async def async_run(args: Arguments) -> int:
     if args.version:
         return print_version()
@@ -265,20 +291,30 @@ async def async_run(args: Arguments) -> int:
     )
 
     try:
-        async with RuntimeMonitor(
+        runtime_monitor = RuntimeMonitor(
             relay_controller=relay_controller,
             relaying_active=relaying_active,
             udc_path=env_status.udc_path,
-        ):
-            relay_task = asyncio.create_task(relay_controller.async_relay_devices())
-            shutdown_task = asyncio.create_task(shutdown_event.wait())
-            done, _ = await asyncio.wait(
-                {relay_task, shutdown_task},
-                return_when=asyncio.FIRST_COMPLETED,
+        )
+        results: asyncio.Queue[_ServiceTaskResult] = asyncio.Queue()
+        async with asyncio.TaskGroup() as task_group:
+            monitor_task = task_group.create_task(
+                runtime_monitor.async_monitor_runtime(),
+                name="runtime monitor",
+            )
+            relay_task = task_group.create_task(
+                _run_relay_controller(relay_controller, results),
+                name="relay controller",
+            )
+            shutdown_task = task_group.create_task(
+                _watch_shutdown_event(shutdown_event, results),
+                name="shutdown watcher",
             )
 
-            if shutdown_task in done:
-                logger.debug("Shutdown event triggered. Cancelling relay task...")
+            result = await results.get()
+            if result.source == "shutdown" or shutdown_event.is_set():
+                logger.debug("Shutdown event triggered. Stopping runtime tasks...")
+                runtime_monitor.stop()
                 relay_controller.request_shutdown()
                 shutdown_task.cancel()
                 try:
@@ -292,31 +328,31 @@ async def async_run(args: Arguments) -> int:
                         GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
                     )
                     relay_task.cancel()
-                    await asyncio.gather(relay_task, return_exceptions=True)
-                await asyncio.gather(shutdown_task, return_exceptions=True)
+                await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
+                monitor_task.cancel()
+                await asyncio.gather(monitor_task, return_exceptions=True)
                 return EXIT_OK
 
-            if relay_task in done:
-                relay_controller.request_shutdown()
-                if relay_task.cancelled():
-                    logger.error(
-                        "Relay task was cancelled before shutdown was requested."
-                    )
-                else:
-                    relay_exc = relay_task.exception()
-                    if relay_exc is None:
-                        logger.error(
-                            "Relay task exited unexpectedly before shutdown was requested."
-                        )
-                    else:
-                        logger.error(
-                            "Relay task exited unexpectedly before shutdown was requested: %s",
-                            relay_exc,
-                        )
-                if not shutdown_task.done():
-                    shutdown_task.cancel()
-                await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
-                return EXIT_RUNTIME
+            relay_controller.request_shutdown()
+            runtime_monitor.stop()
+            shutdown_task.cancel()
+            monitor_task.cancel()
+            await asyncio.gather(
+                relay_task,
+                shutdown_task,
+                monitor_task,
+                return_exceptions=True,
+            )
+            if result.exception is None:
+                logger.error(
+                    "Relay task exited unexpectedly before shutdown was requested."
+                )
+            else:
+                logger.error(
+                    "Relay task exited unexpectedly before shutdown was requested: %s",
+                    result.exception,
+                )
+            return EXIT_RUNTIME
     finally:
         _restore_signal_handlers(
             previous_handlers,
