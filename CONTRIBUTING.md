@@ -189,7 +189,7 @@ sudo bluetoothctl show
 sudo btmgmt info
 ```
 
-For relay-path changes, also use the host/Pi loopback inject/capture harness in
+For relay-path changes, also use the host/Pi loopback inject/capture validation in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ## Community Expectations

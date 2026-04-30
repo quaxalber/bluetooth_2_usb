@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
-from .harness_common import (
+from .loopback_common import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
     DEFAULT_KEYBOARD_NAME,
@@ -14,7 +14,7 @@ from .harness_common import (
     EXIT_OK,
     EXIT_PREREQUISITE,
     SCENARIOS,
-    HarnessResult,
+    LoopbackResult,
     get_scenario,
     scenario_to_dict,
 )
@@ -82,11 +82,11 @@ def run_inject(
     keyboard_name: str = DEFAULT_KEYBOARD_NAME,
     mouse_name: str = DEFAULT_MOUSE_NAME,
     consumer_name: str = DEFAULT_CONSUMER_NAME,
-) -> HarnessResult:
+) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
 
     if not UINPUT_PATH.exists():
-        return HarnessResult(
+        return LoopbackResult(
             command="inject",
             scenario=scenario.name,
             success=False,
@@ -96,7 +96,7 @@ def run_inject(
         )
 
     if not keyboard_name.strip() or not mouse_name.strip() or not consumer_name.strip():
-        return HarnessResult(
+        return LoopbackResult(
             command="inject",
             scenario=scenario.name,
             success=False,
@@ -116,7 +116,7 @@ def run_inject(
         if scenario.consumer_enabled:
             consumer = UInput(_consumer_capabilities(), name=consumer_name)
     except PermissionError as exc:
-        return HarnessResult(
+        return LoopbackResult(
             command="inject",
             scenario=scenario.name,
             success=False,
@@ -125,7 +125,7 @@ def run_inject(
             details={"uinput_path": str(UINPUT_PATH)},
         )
     except OSError as exc:
-        return HarnessResult(
+        return LoopbackResult(
             command="inject",
             scenario=scenario.name,
             success=False,
@@ -167,7 +167,7 @@ def run_inject(
                 _send_step(consumer, step_event, event_gap_ms)
 
     except OSError as exc:
-        return HarnessResult(
+        return LoopbackResult(
             command="inject",
             scenario=scenario.name,
             success=False,
@@ -191,7 +191,7 @@ def run_inject(
     injected_events = len(scenario.keyboard_steps) + len(scenario.mouse_rel_steps)
     injected_events += len(scenario.mouse_button_steps)
     injected_events += len(scenario.consumer_steps)
-    return HarnessResult(
+    return LoopbackResult(
         command="inject",
         scenario=scenario.name,
         success=True,

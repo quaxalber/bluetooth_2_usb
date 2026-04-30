@@ -6,18 +6,18 @@ import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
 
-from .harness_capture import (
+from .loopback_capture import (
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
     GadgetNodeCandidates,
     GadgetNodes,
-    HarnessResult,
     KeyboardSequenceMatcher,
+    LoopbackResult,
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .harness_common import (
+from .loopback_common import (
     BTN_EXTRA,
     BTN_LEFT,
     BTN_MIDDLE,
@@ -738,7 +738,7 @@ def _pump_raw_input(
     mouse_candidate_identities: tuple[str, ...],
     consumer_candidate_identities: tuple[str, ...],
     scenario_name: str,
-) -> HarnessResult:
+) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     _reset_mouse_button_state()
     keyboard_candidate = (
@@ -882,7 +882,7 @@ def _pump_raw_input(
                 if consumer_candidate is not None:
                     details["consumer_steps_seen"] = consumer_candidate.matcher.index
                     details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
-                return HarnessResult(
+                return LoopbackResult(
                     command="capture",
                     scenario=scenario.name,
                     success=True,
@@ -893,7 +893,7 @@ def _pump_raw_input(
 
             time.sleep(0.01)
     except CaptureMismatchError as exc:
-        return HarnessResult(
+        return LoopbackResult(
             command="capture",
             scenario=scenario.name,
             success=False,
@@ -909,7 +909,7 @@ def _pump_raw_input(
     finally:
         user32.DestroyWindow(hwnd)
 
-    return HarnessResult(
+    return LoopbackResult(
         command="capture",
         scenario=scenario.name,
         success=False,
@@ -926,7 +926,7 @@ def _pump_raw_input(
 
 def run_windows_raw_input_capture(
     scenario_name: str, timeout_sec: float, candidate_nodes: GadgetNodeCandidates
-) -> HarnessResult:
+) -> LoopbackResult:
     if not IS_WINDOWS:
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
@@ -936,7 +936,7 @@ def run_windows_raw_input_capture(
         unsupported_names = [
             EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in unsupported_mouse_buttons
         ]
-        return HarnessResult(
+        return LoopbackResult(
             command="capture",
             scenario=scenario.name,
             success=False,

@@ -246,13 +246,13 @@ you need a report to share.
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
-loopback inject/capture harness.
+loopback inject/capture validation.
 
 ### `loopback-capture`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
-harness.
+validation.
 
 ### `loopback-capture.ps1`
 
@@ -295,7 +295,7 @@ Bluetooth-state configuration available.
 
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Pi validation flow: [docs/cli-service-test.md](docs/cli-service-test.md)
-- Loopback inject/capture harness: [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
+- Loopback inject/capture validation: [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
 - Persistent read-only workflow: [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - Doc consistency review: [docs/doc-consistency-review.md](docs/doc-consistency-review.md)
 - Release tagging and versioning: [docs/release-versioning-policy.md](docs/release-versioning-policy.md)

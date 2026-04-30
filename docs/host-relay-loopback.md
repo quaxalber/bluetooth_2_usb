@@ -97,7 +97,7 @@ Default behavior:
 - waits up to `5` seconds for the complete sequence
 - may temporarily claim the gadget HID interfaces while the capture runs, so do
   not assume the local desktop will process the same inputs during that window
-- uses a single harness lock file; do not run multiple inject/capture sessions
+- uses a single loopback lock file; do not run multiple inject/capture sessions
   in parallel against the same host/Pi pair
 
 If automatic detection is ambiguous, pin the nodes explicitly:
@@ -130,7 +130,7 @@ sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario co
 When `bluetooth_2_usb.service` is active, the injector waits up to the default
 service-settle window before emitting events. This avoids racing a freshly
 re-enumerated USB HID gadget before the host has started draining reports. Set
-`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that harness-only wait. Invalid
+`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that loopback-only wait. Invalid
 values are ignored and the default settle window is used.
 
 The injector creates temporary virtual devices named:
@@ -275,16 +275,16 @@ movements so the test remains low-impact if the local desktop does process the
 events, but the capture should be treated as a dedicated verification session
 rather than as a transparent observer.
 
-### Harness says it is already running
+### Loopback says it is already running
 
-The harness uses a single lock file and will reject parallel runs. If no other
+The loopback validator uses a single lock file and will reject parallel runs. If no other
 run is active, clear the stale lock file and retry.
 
 Lock paths:
 
-- host Windows: `%TEMP%\bluetooth_2_usb_harness.lock`
-- host Linux/macOS: `/tmp/bluetooth_2_usb_harness.lock`
-- Pi: `/tmp/bluetooth_2_usb_harness.lock`
+- host Windows: `%TEMP%\bluetooth_2_usb_loopback.lock`
+- host Linux/macOS: `/tmp/bluetooth_2_usb_loopback.lock`
+- Pi: `/tmp/bluetooth_2_usb_loopback.lock`
 
 ## 7. CI scope
 

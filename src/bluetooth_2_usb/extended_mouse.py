@@ -60,14 +60,9 @@ class ExtendedMouse:
             self.report[5:6] = partial_wheel.to_bytes(1, "little", signed=True)
             self.report[6:7] = partial_pan.to_bytes(1, "little", signed=True)
             logger.debug(
-                "Sending mouse movement to gadget: buttons=0x%02x x=%s y=%s "
-                + "wheel=%s pan=%s report=%s",
-                self.report[0],
-                partial_x,
-                partial_y,
-                partial_wheel,
-                partial_pan,
-                self.report.hex(" "),
+                f"Sending mouse movement to gadget: buttons=0x{self.report[0]:02x} "
+                + f"x={partial_x} y={partial_y} wheel={partial_wheel} pan={partial_pan} "
+                + f"report={self.report.hex(' ')}"
             )
             self._mouse_device.send_report(self.report)
             x -= partial_x

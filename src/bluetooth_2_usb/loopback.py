@@ -3,25 +3,25 @@ from __future__ import annotations
 import argparse
 import json
 
-from .harness_common import (
+from .loopback_common import (
     DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
     DEFAULT_MOUSE_NAME,
     EXIT_INTERRUPTED,
     EXIT_USAGE,
-    HARNESS_LOCK_PATH,
+    LOOPBACK_LOCK_PATH,
     SCENARIO_NAMES,
-    HarnessBusyError,
-    HarnessInterrupted,
-    HarnessResult,
-    harness_session,
+    LoopbackBusyError,
+    LoopbackInterrupted,
+    LoopbackResult,
+    loopback_session,
 )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Loopback harness for Bluetooth-2-USB relay testing."
+        description="Loopback validation for Bluetooth-2-USB relay testing."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -99,10 +99,10 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _validate_args(args: argparse.Namespace) -> HarnessResult | None:
+def _validate_args(args: argparse.Namespace) -> LoopbackResult | None:
     if args.command == "inject":
         if args.pre_delay_ms < 0:
-            return HarnessResult(
+            return LoopbackResult(
                 command="inject",
                 scenario=args.scenario,
                 success=False,
@@ -111,7 +111,7 @@ def _validate_args(args: argparse.Namespace) -> HarnessResult | None:
                 details={},
             )
         if args.event_gap_ms < 0:
-            return HarnessResult(
+            return LoopbackResult(
                 command="inject",
                 scenario=args.scenario,
                 success=False,
@@ -121,7 +121,7 @@ def _validate_args(args: argparse.Namespace) -> HarnessResult | None:
             )
 
     if args.command == "capture" and args.timeout_sec <= 0:
-        return HarnessResult(
+        return LoopbackResult(
             command="capture",
             scenario=args.scenario,
             success=False,
@@ -132,7 +132,7 @@ def _validate_args(args: argparse.Namespace) -> HarnessResult | None:
     return None
 
 
-def _print_result(result: HarnessResult, output: str) -> None:
+def _print_result(result: LoopbackResult, output: str) -> None:
     if output == "json":
         print(json.dumps(result.to_dict(), sort_keys=True))
     else:
@@ -149,9 +149,9 @@ def run(argv: list[str] | None = None) -> int:
         return validation_error.exit_code
 
     try:
-        with harness_session(args.command, args.scenario):
+        with loopback_session(args.command, args.scenario):
             if args.command == "inject":
-                from .harness_inject import run_inject
+                from .loopback_inject import run_inject
 
                 result = run_inject(
                     scenario_name=args.scenario,
@@ -162,7 +162,7 @@ def run(argv: list[str] | None = None) -> int:
                     consumer_name=args.consumer_name,
                 )
             else:
-                from .harness_capture import run_capture
+                from .loopback_capture import run_capture
 
                 result = run_capture(
                     scenario_name=args.scenario,
@@ -172,20 +172,20 @@ def run(argv: list[str] | None = None) -> int:
                     mouse_node=args.mouse_node,
                     consumer_node=args.consumer_node,
                 )
-    except HarnessBusyError as exc:
-        result = HarnessResult(
+    except LoopbackBusyError as exc:
+        result = LoopbackResult(
             command=args.command,
             scenario=args.scenario,
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
-            details={"lock_path": str(HARNESS_LOCK_PATH)},
+            details={"lock_path": str(LOOPBACK_LOCK_PATH)},
         )
-    except HarnessInterrupted as exc:
+    except LoopbackInterrupted as exc:
         details = {}
         if exc.signal_name is not None:
             details["signal"] = exc.signal_name
-        result = HarnessResult(
+        result = LoopbackResult(
             command=args.command,
             scenario=args.scenario,
             success=False,
@@ -194,12 +194,12 @@ def run(argv: list[str] | None = None) -> int:
             details=details,
         )
     except KeyboardInterrupt:
-        result = HarnessResult(
+        result = LoopbackResult(
             command=args.command,
             scenario=args.scenario,
             success=False,
             exit_code=EXIT_INTERRUPTED,
-            message="Harness interrupted",
+            message="Loopback interrupted",
             details={},
         )
 

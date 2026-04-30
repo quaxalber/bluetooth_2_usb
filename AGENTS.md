@@ -67,7 +67,7 @@ Minimum Pi-side checks:
 - `sudo bluetoothctl show`
 - `sudo btmgmt info`
 
-For relay-path changes, also use the host/Pi loopback inject/capture harness from
+For relay-path changes, also use the host/Pi loopback inject/capture validation from
 `docs/host-relay-loopback.md`.
 
 If destructive Pi flows were not executed, say so explicitly in the final

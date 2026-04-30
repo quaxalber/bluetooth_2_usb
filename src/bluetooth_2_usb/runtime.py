@@ -69,7 +69,7 @@ class Runtime:
             return None
 
         shortcut_keys = set(self._config.interrupt_shortcut)
-        logger.debug("Configuring global interrupt shortcut: %s", shortcut_keys)
+        logger.debug(f"Configuring global interrupt shortcut: {shortcut_keys}")
         return ShortcutToggler(
             shortcut_keys=shortcut_keys, relaying_active=relaying_active, hid_gadgets=hid_gadgets
         )
@@ -119,8 +119,8 @@ class Runtime:
             )
         except TimeoutError:
             logger.warning(
-                "Runtime shutdown exceeded %.1fs; cancelling remaining tasks.",
-                GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                f"Runtime shutdown exceeded {GRACEFUL_SHUTDOWN_TIMEOUT_SEC:.1f}s; "
+                + "cancelling remaining tasks."
             )
             for task in tasks:
                 task.cancel()
@@ -132,7 +132,7 @@ class Runtime:
         loop_handled_signals: list[int] = []
 
         def _request_shutdown(sig_name: str) -> None:
-            logger.debug("Received signal: %s. Requesting graceful shutdown.", sig_name)
+            logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
             self._events.put_nowait(ShutdownRequested(sig_name))
 
         def _fallback_signal_handler(sig: int, frame) -> None:

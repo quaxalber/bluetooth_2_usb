@@ -146,7 +146,7 @@ Verify:
 
 ## Real relay validation with a paired device
 
-Use this when you want to prove the real user path, not just the harness path.
+Use this when you want to prove the real user path, not just the loopback path.
 
 Steps:
 
@@ -163,7 +163,7 @@ Pass criteria:
 ## Relay loopback inject/capture validation
 
 If the Pi is physically attached to a host through the gadget data path, run the
-end-to-end loopback inject/capture harness from
+end-to-end loopback inject/capture validation from
 [host-relay-loopback.md](host-relay-loopback.md).
 
 ## Persistent read-only validation

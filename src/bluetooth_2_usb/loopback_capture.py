@@ -9,7 +9,7 @@ from typing import Any
 from adafruit_hid.keycode import Keycode
 
 from .evdev import evdev_to_usb_hid
-from .harness_common import (
+from .loopback_common import (
     BTN_BACK,
     BTN_EXTRA,
     BTN_FORWARD,
@@ -31,7 +31,7 @@ from .harness_common import (
     REL_X,
     REL_Y,
     GadgetNodes,
-    HarnessResult,
+    LoopbackResult,
     get_scenario,
 )
 
@@ -574,7 +574,7 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
 
 def _capture_once(
     scenario_name: str, timeout_sec: float, candidate_nodes: GadgetNodeCandidates, hid_module: Any
-) -> HarnessResult:
+) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
 
     candidates: list[_CandidateMatcher] = []
@@ -700,7 +700,7 @@ def _capture_once(
                 time.sleep(POLL_INTERVAL_SEC)
 
     except CaptureError as exc:
-        return HarnessResult(
+        return LoopbackResult(
             command="capture",
             scenario=scenario.name,
             success=False,
@@ -742,7 +742,7 @@ def _capture_once(
     if consumer_matcher is not None:
         details["consumer_steps_seen"] = consumer_matcher.matcher.index
 
-    return HarnessResult(
+    return LoopbackResult(
         command="capture",
         scenario=scenario.name,
         success=True,
@@ -760,7 +760,7 @@ def run_capture(
     mouse_node: str | None = None,
     consumer_node: str | None = None,
     grab_devices: bool = True,
-) -> HarnessResult:
+) -> LoopbackResult:
     # hidapi capture does not offer exclusive-grab semantics; keep the parameter
     # for CLI parity with other backends.
     _ = grab_devices
@@ -776,7 +776,7 @@ def run_capture(
             hid_module=hid_module,
         )
     except CaptureError as exc:
-        return HarnessResult(
+        return LoopbackResult(
             command="capture",
             scenario=scenario.name,
             success=False,
@@ -786,7 +786,7 @@ def run_capture(
         )
 
     if sys.platform == "win32":
-        from .harness_capture_windows import run_windows_raw_input_capture
+        from .loopback_capture_windows import run_windows_raw_input_capture
 
         result = run_windows_raw_input_capture(
             scenario_name=scenario_name, timeout_sec=timeout_sec, candidate_nodes=candidate_nodes

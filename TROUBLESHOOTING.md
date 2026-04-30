@@ -11,7 +11,7 @@ The `smoketest` is the quick health gate. `debug` gives you the fuller redacted
 snapshot when you need to understand what the runtime actually sees.
 
 If you want an end-to-end relay check without depending on a paired Bluetooth
-device, use the loopback inject/capture harness in
+device, use the loopback inject/capture validation in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ## The service does not start
@@ -75,7 +75,7 @@ Interpretation:
 - if the service looks healthy but the host still does not react, confirm the
   physical OTG/data-cable path before assuming the problem is device matching
 
-For a pure relay-path check, use the loopback inject/capture harness in
+For a pure relay-path check, use the loopback inject/capture validation in
 [docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ## Bluetooth pairing or scanning is flaky even though `bluetooth.service` is active

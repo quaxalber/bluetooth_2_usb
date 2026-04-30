@@ -80,7 +80,7 @@ DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
 DEFAULT_CONSUMER_NAME = "B2U Test Consumer"
 COMBO_MOUSE_DELAY_MS = 150
-HARNESS_LOCK_PATH = Path(tempfile.gettempdir()) / "bluetooth_2_usb_harness.lock"
+LOOPBACK_LOCK_PATH = Path(tempfile.gettempdir()) / "bluetooth_2_usb_loopback.lock"
 
 if os.name == "nt":
     import msvcrt
@@ -88,11 +88,11 @@ else:
     import fcntl
 
 
-class HarnessBusyError(RuntimeError):
+class LoopbackBusyError(RuntimeError):
     exit_code = EXIT_ACCESS
 
 
-class HarnessInterrupted(KeyboardInterrupt):
+class LoopbackInterrupted(KeyboardInterrupt):
     exit_code = EXIT_INTERRUPTED
 
     def __init__(self, signum: int | None = None) -> None:
@@ -105,14 +105,14 @@ class HarnessInterrupted(KeyboardInterrupt):
                 signal_name = None
         self.signal_name = signal_name
         message = (
-            f"Harness interrupted by {signal_name}"
+            f"Loopback interrupted by {signal_name}"
             if signal_name is not None
-            else "Harness interrupted"
+            else "Loopback interrupted"
         )
         super().__init__(message)
 
 
-def _lock_harness_file(lock_handle) -> None:
+def _lock_loopback_file(lock_handle) -> None:
     if os.name == "nt":
         lock_handle.seek(0)
         msvcrt.locking(lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
@@ -120,7 +120,7 @@ def _lock_harness_file(lock_handle) -> None:
     fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
-def _unlock_harness_file(lock_handle) -> None:
+def _unlock_loopback_file(lock_handle) -> None:
     if os.name == "nt":
         lock_handle.seek(0)
         try:
@@ -132,18 +132,18 @@ def _unlock_harness_file(lock_handle) -> None:
 
 
 @contextmanager
-def harness_session(command: str, scenario: str):
-    lock_handle = HARNESS_LOCK_PATH.open("a+", encoding="utf-8")
+def loopback_session(command: str, scenario: str):
+    lock_handle = LOOPBACK_LOCK_PATH.open("a+", encoding="utf-8")
     try:
         if lock_handle.tell() == 0:
             lock_handle.write("\n")
             lock_handle.flush()
         try:
-            _lock_harness_file(lock_handle)
+            _lock_loopback_file(lock_handle)
         except OSError as exc:
-            raise HarnessBusyError(
-                "Another Bluetooth-2-USB test harness session is already running "
-                f"(lock: {HARNESS_LOCK_PATH})"
+            raise LoopbackBusyError(
+                "Another Bluetooth-2-USB loopback session is already running "
+                f"(lock: {LOOPBACK_LOCK_PATH})"
             ) from exc
 
         metadata = json.dumps(
@@ -169,7 +169,7 @@ def harness_session(command: str, scenario: str):
         }
 
         def _raise_interrupted(received_signal: int, _frame) -> None:
-            raise HarnessInterrupted(received_signal)
+            raise LoopbackInterrupted(received_signal)
 
         for handled_signal in handled_signals:
             signal.signal(handled_signal, _raise_interrupted)
@@ -181,7 +181,7 @@ def harness_session(command: str, scenario: str):
                 signal.signal(handled_signal, previous_handler)
     finally:
         try:
-            _unlock_harness_file(lock_handle)
+            _unlock_loopback_file(lock_handle)
         finally:
             lock_handle.close()
 
@@ -424,7 +424,7 @@ class GadgetNodes:
 
 
 @dataclass(slots=True)
-class HarnessResult:
+class LoopbackResult:
     command: str
     scenario: str
     success: bool
