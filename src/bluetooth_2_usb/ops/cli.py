@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .commands import OpsError, ensure_root, fail, prepare_log
+from .commands import OpsError, close_log, ensure_root, fail, prepare_log
 from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None, *, prog: str = "bluetooth_2_usb") -> int
     except OpsError as exc:
         print(f"[x] {exc}", file=sys.stderr)
         return exc.exit_code
+    finally:
+        close_log()
 
 
 def _main(argv: list[str], *, prog: str) -> int:

@@ -34,8 +34,8 @@ def overlay_status() -> str:
     if shutil.which("raspi-config") is None:
         return "unknown"
     for command in (
-        ["raspi-config", "nonint", "get_overlay_conf"],
         ["raspi-config", "nonint", "get_overlay_now"],
+        ["raspi-config", "nonint", "get_overlay_conf"],
     ):
         completed = run(command, check=False, capture=True)
         if completed.returncode == 0:

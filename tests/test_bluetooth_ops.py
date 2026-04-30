@@ -1,12 +1,14 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from bluetooth_2_usb.ops.bluetooth import clear_bluetooth_rfkill_soft_blocks
 from bluetooth_2_usb.ops.commands import OpsError
 from bluetooth_2_usb.ops.readonly import (
     ReadonlyConfig,
     load_readonly_config,
+    overlay_status,
     write_readonly_config,
 )
 
@@ -54,6 +56,26 @@ class BluetoothRfkillOpsTest(unittest.TestCase):
 
 
 class ReadonlyConfigTest(unittest.TestCase):
+    def test_overlay_status_prefers_live_state(self) -> None:
+        calls = []
+
+        def fake_run(command, *, check=False, capture=True):
+            calls.append(command)
+
+            class Completed:
+                returncode = 0
+                stdout = "0\n"
+
+            return Completed()
+
+        with patch(
+            "bluetooth_2_usb.ops.readonly.shutil.which", return_value="/usr/bin/raspi-config"
+        ):
+            with patch("bluetooth_2_usb.ops.readonly.run", side_effect=fake_run):
+                self.assertEqual(overlay_status(), "enabled")
+
+        self.assertEqual(calls[0], ["raspi-config", "nonint", "get_overlay_now"])
+
     def test_readonly_config_round_trips_supported_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"

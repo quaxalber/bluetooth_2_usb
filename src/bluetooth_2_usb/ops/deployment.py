@@ -189,8 +189,7 @@ def install(repo_root: Path) -> None:
 
     install_service_unit(repo_root)
     write_default_env_file()
-    if not canonicalize_service_settings_bools(DEFAULT_ENV_FILE):
-        pass
+    canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
     run(
         [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"],
         capture=True,

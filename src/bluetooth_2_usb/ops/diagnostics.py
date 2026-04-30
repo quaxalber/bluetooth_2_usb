@@ -79,27 +79,35 @@ class SmokeTest:
             f"{PATHS.service_unit} is active",
             f"{PATHS.service_unit} is not active",
         )
+        venv_present = PATHS.venv_python.is_file()
         self._path_exists(
             PATHS.venv_python,
             "Virtualenv interpreter is present",
             "Virtualenv interpreter is missing",
         )
-        validate_log = self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"])
-        self._bool(
-            validate_log[0] == 0,
-            "CLI environment validation passed",
-            "CLI environment validation failed",
-            validate_log[1],
-        )
-        service_settings_log = self._capture(
-            [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"]
-        )
-        self._bool(
-            service_settings_log[0] == 0,
-            "Runtime settings are valid",
-            "Runtime settings validation failed",
-            service_settings_log[1],
-        )
+        if venv_present:
+            validate_log = self._capture(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"]
+            )
+            self._bool(
+                validate_log[0] == 0,
+                "CLI environment validation passed",
+                "CLI environment validation failed",
+                validate_log[1],
+            )
+            service_settings_log = self._capture(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"]
+            )
+            self._bool(
+                service_settings_log[0] == 0,
+                "Runtime settings are valid",
+                "Runtime settings validation failed",
+                service_settings_log[1],
+            )
+        else:
+            missing_venv = f"Virtualenv interpreter is missing: {PATHS.venv_python}"
+            validate_log = (127, missing_venv)
+            service_settings_log = (127, missing_venv)
         self._command_ok(
             ["systemctl", "is-active", "bluetooth.service"],
             "bluetooth.service is active",
@@ -123,15 +131,19 @@ class SmokeTest:
                 ok("Bluetooth rfkill state is not blocked")
         else:
             self.soft_warn("No bluetooth rfkill entries found")
-        inventory = self._capture(
-            [
-                PATHS.venv_python,
-                "-m",
-                "bluetooth_2_usb",
-                "--list_devices",
-                "--output",
-                "json",
-            ]
+        inventory = (
+            self._capture(
+                [
+                    PATHS.venv_python,
+                    "-m",
+                    "bluetooth_2_usb",
+                    "--list_devices",
+                    "--output",
+                    "json",
+                ]
+            )
+            if venv_present
+            else (127, missing_venv)
         )
         relayable_count = self._relayable_count(inventory)
         paired_count = self._paired_count()
@@ -339,7 +351,10 @@ class SmokeTest:
         self.exit_code = 1
 
     def _capture(self, command: list[str | Path]) -> tuple[int, str]:
-        completed = run(command, check=False, capture=True)
+        try:
+            completed = run(command, check=False, capture=True)
+        except FileNotFoundError as exc:
+            return 127, str(exc)
         return completed.returncode, (completed.stdout + completed.stderr)
 
     def _print_verbose(self, *logs: tuple[int, str]) -> None:
@@ -359,17 +374,19 @@ class SmokeTest:
         print("\n## rfkill bluetooth")
         print("\n".join(entry.line() for entry in bluetooth_rfkill_entries()) or "<no output>")
         print("\n## Mount details")
-        run(["findmnt", "-n", "-T", "/"], check=False)
-        run(["findmnt", "-n", "-T", "/var/lib/bluetooth"], check=False)
+        print(self._capture(["findmnt", "-n", "-T", "/"])[1] or "<no output>")
+        print(self._capture(["findmnt", "-n", "-T", "/var/lib/bluetooth"])[1] or "<no output>")
         print("\n## Service status")
-        run(
-            ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit],
-            check=False,
+        print(
+            self._capture(["systemctl", "--no-pager", "--full", "status", PATHS.service_unit])[1]
+            or "<no output>"
         )
         print("\n## Journal")
-        run(
-            ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"],
-            check=False,
+        print(
+            self._capture(
+                ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"]
+            )[1]
+            or "<no output>"
         )
 
 

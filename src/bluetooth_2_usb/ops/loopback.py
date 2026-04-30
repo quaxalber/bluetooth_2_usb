@@ -11,9 +11,10 @@ from .paths import PATHS
 
 def loopback_inject(argv: list[str]) -> int:
     if any(arg in {"-h", "--help"} for arg in argv):
+        python = str(PATHS.venv_python if PATHS.venv_python.exists() else sys.executable)
         os.execv(
-            sys.executable,
-            [sys.executable, "-m", "bluetooth_2_usb.test_harness", "inject", *argv],
+            python,
+            [python, "-m", "bluetooth_2_usb.test_harness", "inject", *argv],
         )
         return 127
     if not PATHS.venv_python.exists():

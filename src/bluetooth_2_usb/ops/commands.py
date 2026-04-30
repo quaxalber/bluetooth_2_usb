@@ -10,6 +10,10 @@ from pathlib import Path
 
 from .paths import PATHS
 
+_LOG_FILE = None
+_PREVIOUS_STDOUT = None
+_PREVIOUS_STDERR = None
+
 
 class OpsError(RuntimeError):
     def __init__(self, message: str, exit_code: int = 1) -> None:
@@ -91,13 +95,33 @@ def backup_file(path: Path) -> None:
 
 
 def prepare_log(prefix: str) -> Path:
+    global _LOG_FILE, _PREVIOUS_STDERR, _PREVIOUS_STDOUT
+
+    close_log()
     PATHS.log_dir.mkdir(parents=True, exist_ok=True)
     log_path = PATHS.log_dir / f"{prefix}_{timestamp()}.log"
-    log_file = log_path.open("a", encoding="utf-8")
-    sys.stdout = _Tee(sys.stdout, log_file)  # type: ignore[assignment]
-    sys.stderr = _Tee(sys.stderr, log_file)  # type: ignore[assignment]
+    _LOG_FILE = log_path.open("a", encoding="utf-8")
+    _PREVIOUS_STDOUT = sys.stdout
+    _PREVIOUS_STDERR = sys.stderr
+    sys.stdout = _Tee(_PREVIOUS_STDOUT, _LOG_FILE)  # type: ignore[assignment]
+    sys.stderr = _Tee(_PREVIOUS_STDERR, _LOG_FILE)  # type: ignore[assignment]
     info(f"Logging to {log_path}")
     return log_path
+
+
+def close_log() -> None:
+    global _LOG_FILE, _PREVIOUS_STDERR, _PREVIOUS_STDOUT
+
+    if _LOG_FILE is None:
+        return
+    if _PREVIOUS_STDOUT is not None:
+        sys.stdout = _PREVIOUS_STDOUT
+    if _PREVIOUS_STDERR is not None:
+        sys.stderr = _PREVIOUS_STDERR
+    _LOG_FILE.close()
+    _LOG_FILE = None
+    _PREVIOUS_STDOUT = None
+    _PREVIOUS_STDERR = None
 
 
 class _Tee:

@@ -128,7 +128,7 @@ configuration or other reboot-sensitive behavior.
 Bounded run:
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 5'
+ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10'
 ```
 
 Manual interrupt path:

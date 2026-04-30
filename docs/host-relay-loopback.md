@@ -50,7 +50,7 @@ Recommended baseline checks on the Pi:
 
 ```bash
 sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 5
+sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
 ```
 
 ## 1. Confirm host-side enumeration
