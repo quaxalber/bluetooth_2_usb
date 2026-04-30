@@ -109,16 +109,17 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
 
         runtime = self._runtime()
         event_source = CompletingEventSource()
-        supervisors = []
 
-        def supervisor_factory(task_group: asyncio.TaskGroup) -> WaitingSupervisor:
-            supervisor = WaitingSupervisor(task_group)
-            supervisors.append(supervisor)
-            return supervisor
+        def build_supervisor(_hid_gadgets, _relaying_active, _shortcut_toggler, task_group):
+            return WaitingSupervisor(task_group)
 
-        await asyncio.wait_for(runtime._run_tasks(event_source, supervisor_factory), timeout=1)
+        runtime._build_supervisor = build_supervisor
 
-        supervisor = supervisors[0]
+        await asyncio.wait_for(
+            runtime._run_tasks(event_source, object(), asyncio.Event(), None), timeout=1
+        )
+
+        supervisor = runtime._supervisor
         self.assertIsNotNone(supervisor.task_group)
         self.assertTrue(supervisor.child_task_created)
         self.assertGreaterEqual(event_source.stop_calls, 1)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import signal
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from .hid_gadgets import HidGadgets
@@ -52,10 +51,7 @@ class Runtime:
         handlers = self._install_signal_handlers()
         try:
             await self._run_tasks(
-                self._event_source,
-                lambda task_group: self._build_supervisor(
-                    hid_gadgets, relaying_active, shortcut_toggler, task_group
-                ),
+                self._event_source, hid_gadgets, relaying_active, shortcut_toggler
             )
         finally:
             self._restore_signal_handlers(handlers)
@@ -92,14 +88,18 @@ class Runtime:
     async def _run_tasks(
         self,
         event_source: RuntimeEventSource,
-        supervisor_factory: Callable[[asyncio.TaskGroup], RelaySupervisor],
+        hid_gadgets: HidGadgets,
+        relaying_active: asyncio.Event,
+        shortcut_toggler: ShortcutToggler | None,
     ) -> None:
         event_source_task: asyncio.Task[None] | None = None
         supervisor_task: asyncio.Task[None] | None = None
         supervisor: RelaySupervisor | None = None
         try:
             async with asyncio.TaskGroup() as task_group:
-                supervisor = supervisor_factory(task_group)
+                supervisor = self._build_supervisor(
+                    hid_gadgets, relaying_active, shortcut_toggler, task_group
+                )
                 self._supervisor = supervisor
                 event_source_task = task_group.create_task(
                     event_source.run(), name="runtime event source"

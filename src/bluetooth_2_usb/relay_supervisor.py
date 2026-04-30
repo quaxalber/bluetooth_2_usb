@@ -100,7 +100,7 @@ class RelaySupervisor:
         self._gadgets_released = False
 
         self._active_relays: dict[str, _ActiveRelay] = {}
-        self._pending_hotplug_open_tasks: dict[str, set[asyncio.Task[None]]] = {}
+        self._pending_hotplug_probe_tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._pending_add_paths: set[str] = set()
 
     def _shutdown_requested(self) -> bool:
@@ -138,7 +138,7 @@ class RelaySupervisor:
         finally:
             self._state = _SupervisorState.STOPPED
             self._pop_pending_adds()
-            self._cancel_all_pending_hotplug_opens()
+            self._cancel_all_pending_hotplug_probes()
             for device_path, active_relay in list(self._active_relays.items()):
                 self._relay_task_done(device_path, active_relay.task)
             self._set_relaying_active(False)
@@ -227,7 +227,7 @@ class RelaySupervisor:
         self._state = _SupervisorState.SHUTTING_DOWN
         self._shutdown_event.set()
         self._pop_pending_adds()
-        self._cancel_all_pending_hotplug_opens()
+        self._cancel_all_pending_hotplug_probes()
 
         self._set_relaying_active(False)
 
@@ -248,7 +248,7 @@ class RelaySupervisor:
             logger.debug("Ignoring add for %s; controller is shutting down.", device_path)
             return
 
-        self._schedule_hotplug_open(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
+        self._schedule_hotplug_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
 
     def _device_removed(self, device_path: str) -> None:
         if self._state is _SupervisorState.NEW:
@@ -275,7 +275,7 @@ class RelaySupervisor:
         if self._shutdown_requested():
             logger.debug("Ignoring remove for %s; event loop is unavailable.", device_path)
             return
-        self._cancel_pending_hotplug_open(device_path)
+        self._cancel_pending_hotplug_probe(device_path)
         self._cancel_active_relay(device_path)
 
     def _queue_pending_add(self, device_path: str) -> None:
@@ -296,25 +296,25 @@ class RelaySupervisor:
         if self._state is not _SupervisorState.RUNNING or self._shutdown_requested():
             return
         for device_path in self._pop_pending_adds():
-            self._schedule_hotplug_open(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
+            self._schedule_hotplug_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
 
-    def _cancel_pending_hotplug_open(self, device_path: str) -> None:
-        for task in self._pending_hotplug_open_tasks.pop(device_path, set()):
+    def _cancel_pending_hotplug_probe(self, device_path: str) -> None:
+        for task in self._pending_hotplug_probe_tasks.pop(device_path, set()):
             task.cancel()
 
-    def _cancel_all_pending_hotplug_opens(self) -> None:
-        for device_path in list(self._pending_hotplug_open_tasks):
-            self._cancel_pending_hotplug_open(device_path)
+    def _cancel_all_pending_hotplug_probes(self) -> None:
+        for device_path in list(self._pending_hotplug_probe_tasks):
+            self._cancel_pending_hotplug_probe(device_path)
 
-    def _discard_hotplug_open_task(self, device_path: str, task: asyncio.Task[None]) -> None:
-        tasks = self._pending_hotplug_open_tasks.get(device_path)
+    def _discard_hotplug_probe_task(self, device_path: str, task: asyncio.Task[None]) -> None:
+        tasks = self._pending_hotplug_probe_tasks.get(device_path)
         if tasks is None:
             return
         tasks.discard(task)
         if not tasks:
-            self._pending_hotplug_open_tasks.pop(device_path, None)
+            self._pending_hotplug_probe_tasks.pop(device_path, None)
 
-    def _schedule_hotplug_open(
+    def _schedule_hotplug_probe(
         self, device_path: str, retries_remaining: int, *, delay: bool = False
     ) -> None:
         if self._state is not _SupervisorState.RUNNING or self._shutdown_requested():
@@ -323,16 +323,18 @@ class RelaySupervisor:
 
         if delay:
 
-            async def _delayed_open() -> None:
+            async def _delayed_probe() -> None:
                 await asyncio.sleep(self.HOTPLUG_ADD_RETRY_DELAY_SEC)
-                self._schedule_hotplug_open(device_path, retries_remaining)
+                self._schedule_hotplug_probe(device_path, retries_remaining)
 
             task = self._task_group.create_task(
-                _delayed_open(), name=f"hotplug open retry {device_path}"
+                _delayed_probe(), name=f"hotplug probe retry {device_path}"
             )
-            self._pending_hotplug_open_tasks.setdefault(device_path, set()).add(task)
+            self._pending_hotplug_probe_tasks.setdefault(device_path, set()).add(task)
             task.add_done_callback(
-                lambda done_task, path=device_path: self._discard_hotplug_open_task(path, done_task)
+                lambda done_task, path=device_path: self._discard_hotplug_probe_task(
+                    path, done_task
+                )
             )
             return
 
@@ -345,7 +347,7 @@ class RelaySupervisor:
                     device_path,
                     retries_remaining,
                 )
-                self._schedule_hotplug_open(device_path, retries_remaining - 1, delay=True)
+                self._schedule_hotplug_probe(device_path, retries_remaining - 1, delay=True)
             else:
                 logger.debug("%s vanished before hotplug filtering.", device_path)
             return
@@ -357,7 +359,7 @@ class RelaySupervisor:
                     device,
                     retries_remaining,
                 )
-                self._schedule_hotplug_open(device_path, retries_remaining - 1, delay=True)
+                self._schedule_hotplug_probe(device_path, retries_remaining - 1, delay=True)
             else:
                 logger.debug(
                     "Skipping hotplugged device %s because it does not match relay filters.", device
