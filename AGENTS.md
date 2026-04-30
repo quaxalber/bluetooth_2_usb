@@ -35,6 +35,16 @@ Repo-owned focused guides:
 
 ## Agent deltas
 
+- Constructive criticism, objections, and requests for clarification are
+  welcome and appreciated.
+- When a prompt or part of a prompt seems unclear, risky, internally
+  inconsistent, or worth a second thought, give honest feedback before
+  implementing.
+- Ask concise questions or offer concrete alternatives when clarification would
+  materially improve the result; do not withhold technical concerns to avoid
+  hurting feelings.
+- Treat direct disagreement as normal professional collaboration: surface the
+  concern, explain the tradeoff, and then proceed once the direction is clear.
 - Prefer the repo venv for checks. Do not silently fall back to system Python
   when the venv workflow applies.
 - For remote Pi work, passwordless sudo is strongly recommended so `sudo -n`
