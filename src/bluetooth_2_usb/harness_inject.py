@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
-from .test_harness_common import (
+from .harness_common import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
     DEFAULT_KEYBOARD_NAME,

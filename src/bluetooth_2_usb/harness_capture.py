@@ -9,7 +9,7 @@ from typing import Any
 from adafruit_hid.keycode import Keycode
 
 from .evdev import evdev_to_usb_hid
-from .test_harness_common import (
+from .harness_common import (
     BTN_BACK,
     BTN_EXTRA,
     BTN_FORWARD,
@@ -786,7 +786,7 @@ def run_capture(
         )
 
     if sys.platform == "win32":
-        from .test_harness_capture_windows import run_windows_raw_input_capture
+        from .harness_capture_windows import run_windows_raw_input_capture
 
         result = run_windows_raw_input_capture(
             scenario_name=scenario_name, timeout_sec=timeout_sec, candidate_nodes=candidate_nodes

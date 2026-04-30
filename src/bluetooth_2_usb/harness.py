@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .test_harness_common import (
+from .harness_common import (
     DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
@@ -151,7 +151,7 @@ def run(argv: list[str] | None = None) -> int:
     try:
         with harness_session(args.command, args.scenario):
             if args.command == "inject":
-                from .test_harness_inject import run_inject
+                from .harness_inject import run_inject
 
                 result = run_inject(
                     scenario_name=args.scenario,
@@ -162,7 +162,7 @@ def run(argv: list[str] | None = None) -> int:
                     consumer_name=args.consumer_name,
                 )
             else:
-                from .test_harness_capture import run_capture
+                from .harness_capture import run_capture
 
                 result = run_capture(
                     scenario_name=args.scenario,

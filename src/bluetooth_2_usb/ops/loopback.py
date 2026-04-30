@@ -12,7 +12,7 @@ from .paths import PATHS
 def loopback_inject(argv: list[str]) -> int:
     if any(arg in {"-h", "--help"} for arg in argv):
         python = str(PATHS.venv_python if PATHS.venv_python.exists() else sys.executable)
-        os.execv(python, [python, "-m", "bluetooth_2_usb.test_harness", "inject", *argv])
+        os.execv(python, [python, "-m", "bluetooth_2_usb.harness", "inject", *argv])
         return 127
     if not PATHS.venv_python.exists():
         fail(f"Managed Python not found: {PATHS.venv_python}")
@@ -27,7 +27,7 @@ def loopback_inject(argv: list[str]) -> int:
     _wait_for_service_settle(settle)
     os.execv(
         str(PATHS.venv_python),
-        [str(PATHS.venv_python), "-m", "bluetooth_2_usb.test_harness", "inject", *argv],
+        [str(PATHS.venv_python), "-m", "bluetooth_2_usb.harness", "inject", *argv],
     )
     return 127
 
@@ -67,7 +67,7 @@ def loopback_capture(repo_root: Path, argv: list[str]) -> int:
     env = os.environ.copy()
     pythonpath = str(repo_root / "src")
     env["PYTHONPATH"] = pythonpath + (f":{env['PYTHONPATH']}" if env.get("PYTHONPATH") else "")
-    os.execve(python_bin, [python_bin, "-m", "bluetooth_2_usb.test_harness", "capture", *argv], env)
+    os.execve(python_bin, [python_bin, "-m", "bluetooth_2_usb.harness", "capture", *argv], env)
     return 127
 
 

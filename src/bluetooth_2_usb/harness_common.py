@@ -80,7 +80,7 @@ DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
 DEFAULT_MOUSE_NAME = "B2U Test Mouse"
 DEFAULT_CONSUMER_NAME = "B2U Test Consumer"
 COMBO_MOUSE_DELAY_MS = 150
-HARNESS_LOCK_PATH = Path(tempfile.gettempdir()) / "bluetooth_2_usb_test_harness.lock"
+HARNESS_LOCK_PATH = Path(tempfile.gettempdir()) / "bluetooth_2_usb_harness.lock"
 
 if os.name == "nt":
     import msvcrt

@@ -282,9 +282,9 @@ run is active, clear the stale lock file and retry.
 
 Lock paths:
 
-- host Windows: `%TEMP%\bluetooth_2_usb_test_harness.lock`
-- host Linux/macOS: `/tmp/bluetooth_2_usb_test_harness.lock`
-- Pi: `/tmp/bluetooth_2_usb_test_harness.lock`
+- host Windows: `%TEMP%\bluetooth_2_usb_harness.lock`
+- host Linux/macOS: `/tmp/bluetooth_2_usb_harness.lock`
+- Pi: `/tmp/bluetooth_2_usb_harness.lock`
 
 ## 7. CI scope
 

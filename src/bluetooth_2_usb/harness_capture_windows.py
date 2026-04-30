@@ -6,7 +6,7 @@ import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
 
-from .test_harness_capture import (
+from .harness_capture import (
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
@@ -17,7 +17,7 @@ from .test_harness_capture import (
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .test_harness_common import (
+from .harness_common import (
     BTN_EXTRA,
     BTN_LEFT,
     BTN_MIDDLE,

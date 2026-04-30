@@ -41,9 +41,9 @@ if (-not $PythonBin) {
 $env:PYTHONPATH = "$RepoRoot\src" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
 
 if ($PythonBin -eq "py -3") {
-  & py -3 -m bluetooth_2_usb.test_harness capture @args
+  & py -3 -m bluetooth_2_usb.harness capture @args
 } else {
-  & $PythonBin -m bluetooth_2_usb.test_harness capture @args
+  & $PythonBin -m bluetooth_2_usb.harness capture @args
 }
 
 exit $LASTEXITCODE
