@@ -14,7 +14,7 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
-DEFAULT_SKIP_NAME_PREFIXES = ("vc4-hdmi", "vc4", "gpio", "pwr_button", "raspberrypi-ts")
+DEFAULT_SKIP_NAME_PREFIXES = ("vc4", "gpio", "pwr_button", "raspberrypi-ts")
 
 
 class DeviceEnumerationError(RuntimeError):

@@ -30,8 +30,8 @@ class RuntimeConfigTest(unittest.TestCase):
 
 
 class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
-    async def test_signal_handlers_enqueue_shutdown_events_in_running_loop(self) -> None:
-        runtime = Runtime(
+    def _runtime(self) -> Runtime:
+        return Runtime(
             runtime_config_from_args(
                 SimpleNamespace(
                     auto_discover=False,
@@ -45,6 +45,9 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                 udc_path=None,
             )
         )
+
+    async def test_signal_handlers_enqueue_shutdown_events_in_running_loop(self) -> None:
+        runtime = self._runtime()
 
         handlers = runtime._install_signal_handlers()
         try:
@@ -56,20 +59,7 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
             runtime._restore_signal_handlers(handlers)
 
     async def test_signal_fallback_does_not_require_threadsafe_loop_bridge(self) -> None:
-        runtime = Runtime(
-            runtime_config_from_args(
-                SimpleNamespace(
-                    auto_discover=False,
-                    debug=False,
-                    device_ids=[],
-                    grab_devices=False,
-                    interrupt_shortcut=[],
-                    log_path="",
-                    log_to_file=False,
-                ),
-                udc_path=None,
-            )
-        )
+        runtime = self._runtime()
         registered_handlers = {}
         loop = asyncio.get_running_loop()
 
@@ -91,3 +81,41 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         finally:
             with patch("bluetooth_2_usb.runtime.signal.signal"):
                 runtime._restore_signal_handlers(handlers)
+
+    async def test_runtime_passes_root_task_group_to_supervisor(self) -> None:
+        class CompletingEventSource:
+            def __init__(self) -> None:
+                self.stop_calls = 0
+
+            async def run(self) -> None:
+                return
+
+            def stop(self) -> None:
+                self.stop_calls += 1
+
+        class WaitingSupervisor:
+            def __init__(self) -> None:
+                self.task_group = None
+                self.child_task_created = False
+                self.shutdown_calls = 0
+
+            async def run(self, _events, *, task_group=None) -> None:
+                self.task_group = task_group
+                if task_group is not None:
+                    task_group.create_task(asyncio.sleep(0), name="supervisor child")
+                    self.child_task_created = True
+                await asyncio.Event().wait()
+
+            def request_shutdown(self) -> None:
+                self.shutdown_calls += 1
+
+        runtime = self._runtime()
+        event_source = CompletingEventSource()
+        supervisor = WaitingSupervisor()
+
+        await asyncio.wait_for(runtime._run_tasks(event_source, supervisor), timeout=1)
+
+        self.assertIsNotNone(supervisor.task_group)
+        self.assertTrue(supervisor.child_task_created)
+        self.assertGreaterEqual(event_source.stop_calls, 1)
+        self.assertGreaterEqual(supervisor.shutdown_calls, 1)

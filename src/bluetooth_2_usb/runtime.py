@@ -77,22 +77,29 @@ class Runtime:
     async def _run_tasks(
         self, event_source: RuntimeEventSource, supervisor: RelaySupervisor
     ) -> None:
-        event_source_task = asyncio.create_task(event_source.run(), name="runtime event source")
-        supervisor_task = asyncio.create_task(supervisor.run(self._events), name="relay supervisor")
+        event_source_task: asyncio.Task[None] | None = None
+        supervisor_task: asyncio.Task[None] | None = None
         try:
-            done, pending = await asyncio.wait(
-                {event_source_task, supervisor_task}, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in done:
-                task.result()
+            async with asyncio.TaskGroup() as task_group:
+                event_source_task = task_group.create_task(
+                    event_source.run(), name="runtime event source"
+                )
+                supervisor_task = task_group.create_task(
+                    supervisor.run(self._events, task_group=task_group), name="relay supervisor"
+                )
+                done, pending = await asyncio.wait(
+                    {event_source_task, supervisor_task}, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    task.result()
 
-            for task in pending:
-                if task is event_source_task:
-                    event_source.stop()
-                if task is supervisor_task:
-                    supervisor.request_shutdown()
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
+                for task in pending:
+                    if task is event_source_task:
+                        event_source.stop()
+                    if task is supervisor_task:
+                        supervisor.request_shutdown()
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
         except asyncio.CancelledError:
             raise
         except Exception:

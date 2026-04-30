@@ -1376,10 +1376,13 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             ):
                 with patch("bluetooth_2_usb.relay_supervisor.InputRelay", WaitingInputRelay):
                     events: asyncio.Queue = asyncio.Queue()
-                    relay_task = asyncio.create_task(controller.run(events))
-                    await asyncio.wait_for(relay_ready.wait(), timeout=1)
-                    controller.request_shutdown()
-                    await asyncio.wait_for(relay_task, timeout=1)
+                    async with asyncio.TaskGroup() as task_group:
+                        relay_task = task_group.create_task(
+                            controller.run(events, task_group=task_group)
+                        )
+                        await asyncio.wait_for(relay_ready.wait(), timeout=1)
+                        controller.request_shutdown()
+                        await asyncio.wait_for(relay_task, timeout=1)
 
         self.assertEqual(device.close_calls, 1)
         self.assertEqual(controller._active_relays, {})
@@ -1392,7 +1395,8 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         controller.request_shutdown()
 
         with patch("bluetooth_2_usb.relay_supervisor.list_input_devices") as list_devices:
-            await controller.run(asyncio.Queue())
+            async with asyncio.TaskGroup() as task_group:
+                await controller.run(asyncio.Queue(), task_group=task_group)
 
         list_devices.assert_not_called()
         self.assertIs(controller._state, _SupervisorState.STOPPED)
@@ -1402,10 +1406,11 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), auto_discover=True
         )
         controller.request_shutdown()
-        await controller.run(asyncio.Queue())
+        async with asyncio.TaskGroup() as task_group:
+            await controller.run(asyncio.Queue(), task_group=task_group)
 
         with self.assertRaisesRegex(RuntimeError, "cannot be restarted"):
-            await controller.run(asyncio.Queue())
+            await controller.run(asyncio.Queue(), task_group=asyncio.TaskGroup())
 
     async def test_unexpected_input_relay_os_errors_are_reraised(self) -> None:
         class FailingInputRelay:
@@ -1495,7 +1500,8 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 controller._handle_runtime_event = Mock(side_effect=RuntimeError("boom"))
                 events: asyncio.Queue = asyncio.Queue()
                 await events.put(DeviceAdded("/dev/input/event7"))
-                await controller.run(events)
+                async with asyncio.TaskGroup() as task_group:
+                    await controller.run(events, task_group=task_group)
 
         self.assertIsInstance(raised.exception.exceptions[0], RuntimeError)
         self.assertEqual(str(raised.exception.exceptions[0]), "boom")

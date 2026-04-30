@@ -127,6 +127,27 @@ class ReadonlyConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             self.assertEqual(load_readonly_config(Path(tmpdir) / "missing").mode, "disabled")
 
+    def test_readonly_config_defaults_bluetooth_dir_under_custom_mount(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "readonly.env"
+            path.write_text(
+                "\n".join(
+                    [
+                        'B2U_READONLY_MODE="persistent"',
+                        'B2U_PERSIST_MOUNT="/srv/persist"',
+                        'B2U_PERSIST_SPEC="/dev/sda1"',
+                        'B2U_PERSIST_DEVICE="/dev/sda1"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_readonly_config(path)
+
+        self.assertEqual(config.persist_mount, Path("/srv/persist"))
+        self.assertEqual(config.persist_bluetooth_dir, Path("/srv/persist/bluetooth"))
+
     def test_bluetooth_state_persistent_rejects_bluetooth_dir_outside_persist_mount(self) -> None:
         config = ReadonlyConfig(
             mode="persistent",

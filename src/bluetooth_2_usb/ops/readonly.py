@@ -25,7 +25,7 @@ READONLY_PACKAGES = ("overlayroot", "cryptsetup", "cryptsetup-bin", "initramfs-t
 class ReadonlyConfig:
     mode: str = "disabled"
     persist_mount: Path = PATHS.persist_mount
-    persist_bluetooth_dir: Path = PATHS.default_persist_bluetooth_dir
+    persist_bluetooth_dir: Path = PATHS.persist_bluetooth_dir
     persist_spec: str = ""
     persist_device: str = ""
 
@@ -124,12 +124,17 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
             fail(f"Refusing to load unexpected key from {path}: {key}")
         values[key] = value
 
+    persist_mount = Path(values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount)))
+    persist_bluetooth_dir = Path(
+        values.get(
+            "B2U_PERSIST_BLUETOOTH_DIR", str(persist_mount / PATHS.persist_bluetooth_dir.name)
+        )
+    )
+
     return ReadonlyConfig(
         mode=values.get("B2U_READONLY_MODE", "disabled"),
-        persist_mount=Path(values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount))),
-        persist_bluetooth_dir=Path(
-            values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.default_persist_bluetooth_dir))
-        ),
+        persist_mount=persist_mount,
+        persist_bluetooth_dir=persist_bluetooth_dir,
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),
         persist_device=values.get("B2U_PERSIST_DEVICE", ""),
     )
@@ -305,7 +310,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
 
     current = load_readonly_config()
     persist_mount = current.persist_mount
-    persist_bluetooth_dir = persist_mount / PATHS.persist_bluetooth_subdir
+    persist_bluetooth_dir = current.persist_bluetooth_dir
     persist_spec = persist_spec_from_device(device)
     persist_mount.mkdir(parents=True, exist_ok=True)
     persist_mount_unit = write_persist_mount_unit(persist_spec, persist_mount, "ext4")

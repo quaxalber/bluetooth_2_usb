@@ -13,6 +13,16 @@ from .paths import PATHS
 _LOG_FILE = None
 _PREVIOUS_STDOUT = None
 _PREVIOUS_STDERR = None
+_RESET = "\033[0m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+
+
+def _style(text: str, color: str) -> str:
+    isatty = getattr(sys.stdout, "isatty", None)
+    if isatty is None or not isatty() or os.environ.get("NO_COLOR"):
+        return text
+    return f"{color}{text}{_RESET}"
 
 
 class OpsError(RuntimeError):
@@ -26,15 +36,15 @@ def timestamp() -> str:
 
 
 def info(message: str) -> None:
-    print(f"[i] {message}")
+    print(f"{_style('[i]', _GREEN)} {message}")
 
 
 def ok(message: str) -> None:
-    print(f"[+] {message}")
+    print(f"{_style('[+]', _GREEN)} {message}")
 
 
 def warn(message: str) -> None:
-    print(f"[!] {message}")
+    print(f"{_style('[!]', _YELLOW)} {message}")
 
 
 def fail(message: str, exit_code: int = 1) -> None:

@@ -104,7 +104,7 @@ class RelaySupervisor:
     def _shutdown_requested(self) -> bool:
         return self._shutdown_event.is_set()
 
-    async def run(self, events: asyncio.Queue[RuntimeEvent]) -> None:
+    async def run(self, events: asyncio.Queue[RuntimeEvent], *, task_group: TaskGroup) -> None:
         """
         Launch a TaskGroup that relays events from all matching devices.
         Dynamically adds or removes tasks when devices appear or disappear.
@@ -129,25 +129,9 @@ class RelaySupervisor:
                 logger.exception("RelaySupervisor: Failed enumerating input devices: %s", exc)
                 raise
 
-            async with TaskGroup() as task_group:
-                self._task_group = task_group
-                logger.debug("RelaySupervisor: TaskGroup started.")
-
-                for device in initial_devices:
-                    if self._shutdown_requested():
-                        device.close()
-                    elif self._device_matches_relay_filters(device):
-                        self._start_open_device(device)
-                    else:
-                        device.close()
-
-                if not self._shutdown_requested() and self._state is _SupervisorState.STARTING:
-                    self._state = _SupervisorState.RUNNING
-                    self._flush_pending_adds()
-
-                await self._consume_events(events)
-        except* Exception as exc_grp:
-            logger.exception("RelaySupervisor: Exception in TaskGroup", exc_info=exc_grp)
+            await self._run_with_task_group(events, task_group, initial_devices)
+        except Exception:
+            logger.exception("RelaySupervisor failed.")
             raise
         finally:
             self._state = _SupervisorState.STOPPED
@@ -160,10 +144,38 @@ class RelaySupervisor:
             self._release_all_once()
             logger.debug("RelaySupervisor: TaskGroup exited.")
 
+    async def _run_with_task_group(
+        self,
+        events: asyncio.Queue[RuntimeEvent],
+        task_group: TaskGroup,
+        initial_devices: list[InputDevice],
+    ) -> None:
+        self._task_group = task_group
+        logger.debug("RelaySupervisor: TaskGroup started.")
+
+        for device in initial_devices:
+            if self._shutdown_requested():
+                device.close()
+            elif self._device_matches_relay_filters(device):
+                self._start_open_device(device)
+            else:
+                device.close()
+
+        if not self._shutdown_requested() and self._state is _SupervisorState.STARTING:
+            self._state = _SupervisorState.RUNNING
+            self._flush_pending_adds()
+
+        await self._consume_events(events)
+
     async def _consume_events(self, events: asyncio.Queue[RuntimeEvent]) -> None:
+        if self._task_group is None:
+            raise RuntimeError("RelaySupervisor has no active task group")
+
         while not self._shutdown_requested():
-            event_task = asyncio.create_task(events.get())
-            shutdown_task = asyncio.create_task(self._shutdown_event.wait())
+            event_task = self._task_group.create_task(events.get(), name="runtime event queue wait")
+            shutdown_task = self._task_group.create_task(
+                self._shutdown_event.wait(), name="runtime shutdown wait"
+            )
             try:
                 done, pending = await asyncio.wait(
                     {event_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED
@@ -314,29 +326,30 @@ class RelaySupervisor:
         if not tasks:
             self._pending_probe_tasks.pop(device_path, None)
 
-    def _schedule_probe_retry(self, device_path: str, retries_remaining: int) -> None:
-        if self._task_group is None:
-            return
-
-        async def _retry_probe() -> None:
-            await asyncio.sleep(self.HOTPLUG_ADD_RETRY_DELAY_SEC)
-            self._schedule_probe(device_path, retries_remaining)
-
-        task = self._task_group.create_task(
-            _retry_probe(), name=f"hotplug probe retry {device_path}"
-        )
-        self._pending_probe_tasks.setdefault(device_path, set()).add(task)
-        task.add_done_callback(
-            lambda done_task, path=device_path: self._discard_probe_task(path, done_task)
-        )
-
-    def _schedule_probe(self, device_path: str, retries_remaining: int) -> None:
+    def _schedule_probe(
+        self, device_path: str, retries_remaining: int, *, delay: bool = False
+    ) -> None:
         if (
             self._task_group is None
             or self._state is not _SupervisorState.RUNNING
             or self._shutdown_requested()
         ):
             logger.debug("Ignoring add for %s; event loop is unavailable.", device_path)
+            return
+
+        if delay:
+
+            async def _delayed_probe() -> None:
+                await asyncio.sleep(self.HOTPLUG_ADD_RETRY_DELAY_SEC)
+                self._schedule_probe(device_path, retries_remaining)
+
+            task = self._task_group.create_task(
+                _delayed_probe(), name=f"hotplug probe retry {device_path}"
+            )
+            self._pending_probe_tasks.setdefault(device_path, set()).add(task)
+            task.add_done_callback(
+                lambda done_task, path=device_path: self._discard_probe_task(path, done_task)
+            )
             return
 
         try:
@@ -348,7 +361,7 @@ class RelaySupervisor:
                     device_path,
                     retries_remaining,
                 )
-                self._schedule_probe_retry(device_path, retries_remaining - 1)
+                self._schedule_probe(device_path, retries_remaining - 1, delay=True)
             else:
                 logger.debug("%s vanished before hotplug filtering.", device_path)
             return
@@ -360,7 +373,7 @@ class RelaySupervisor:
                     device,
                     retries_remaining,
                 )
-                self._schedule_probe_retry(device_path, retries_remaining - 1)
+                self._schedule_probe(device_path, retries_remaining - 1, delay=True)
             else:
                 logger.debug(
                     "Skipping hotplugged device %s because it does not match relay filters.", device
