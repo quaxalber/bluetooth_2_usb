@@ -1,9 +1,7 @@
 <!-- omit in toc -->
 # Bluetooth-to-USB HID Bridge for Raspberry Pi
 
-![Bluetooth-to-USB HID bridge overview for Raspberry Pi][overview-image]
-
-[overview-image]: https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png
+![Bluetooth-to-USB HID bridge overview for Raspberry Pi](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
 
 Use Bluetooth keyboards and mice in BIOS and boot menus, installers, kiosks,
 tablets, KVM setups, retro systems, consoles, and other hosts where Bluetooth
@@ -186,31 +184,20 @@ sudo systemctl restart bluetooth_2_usb.service
 
 ## CLI reference
 
-- `--auto_discover, -a`: relay all suitable readable input devices
-  automatically. This is the best default when you want the Pi to behave like a
-  simple appliance.
-- `--device_ids DEVICE_IDS, -i DEVICE_IDS`: pin the runtime to a specific
-  comma-separated list of event paths, Bluetooth MACs, and case-insensitive name
-  fragments.
-- `--grab_devices, -g`: grab the selected input devices so the Pi no longer
-  consumes their local events while they are being relayed.
-- `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT`: define a
-  plus-separated key chord that toggles relaying at runtime. Example:
-  `-s CTRL+SHIFT+F12`.
-- `--list_devices, -l`: list readable input devices and exit. Use this before
-  setting `B2U_DEVICE_IDS` or `--device_ids` if you want to confirm the paths
-  and names the runtime actually sees.
-- `--log_to_file, -f`: add file logging in addition to stdout logging.
-- `--log_path LOG_PATH, -p LOG_PATH`: override the path used with
-  `--log_to_file`.
-- `--debug, -d`: increase log verbosity for manual troubleshooting.
-- `--version, -v`: print the installed version and exit.
-- `--validate-env`: validate gadget runtime prerequisites and exit. On a normal
-  non-gadget workstation this is expected to report missing prerequisites
-  quickly.
-- `--output {text,json}`: choose the output format for `--list_devices` and
-  `--validate-env`. Use `json` for scripting or automation.
-- `--help, -h`: show built-in CLI help and exit.
+| Argument | Explanation |
+| --- | --- |
+| `--auto_discover, -a` | Relay all suitable readable input devices automatically. This is the best default when you want the Pi to behave like a simple appliance. |
+| `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Pin the runtime to a specific comma-separated list of event paths, Bluetooth MACs, and case-insensitive name fragments. |
+| `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events while they are being relayed. |
+| `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Define a plus-separated key chord that toggles relaying at runtime. Example: `-s CTRL+SHIFT+F12`. |
+| `--list_devices, -l` | List readable input devices and exit. Use this before setting `B2U_DEVICE_IDS` or `--device_ids` if you want to confirm the paths and names the runtime actually sees. |
+| `--log_to_file, -f` | Add file logging in addition to stdout logging. |
+| `--log_path LOG_PATH, -p LOG_PATH` | Override the path used with `--log_to_file`. |
+| `--debug, -d` | Increase log verbosity for manual troubleshooting. |
+| `--version, -v` | Print the installed version and exit. |
+| `--validate-env` | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
+| `--output {text,json}` | Choose the output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
+| `--help, -h` | Show built-in CLI help and exit. |
 
 ## Operational command reference
 
@@ -251,8 +238,9 @@ Collect a redacted diagnostics report and optionally run a bounded live
 foreground debug session. Use this when the `smoketest` is not enough or when
 you need a report to share.
 
-- `--duration DURATION_SEC`: limit the live debug run. Omit it to keep the
-  foreground session running until interrupted.
+| Argument | Meaning |
+| --- | --- |
+| `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
 
 ### `loopback-inject`
 

@@ -119,7 +119,7 @@ Please keep code and docs aligned with the supported deployment model:
 ### Python
 
 - Python 3.11+
-- format with Black at the repository line length (`120`)
+- format Python with Black at the repository line length (`120`)
 - lint with Ruff
 - avoid magic trailing commas whose only purpose is to force Black to keep a
   call, literal, or assertion split across multiple lines; keep syntactic
@@ -127,8 +127,6 @@ Please keep code and docs aligned with the supported deployment model:
 - when splitting strings, avoid implicit adjacent string literals because they
   are easy to misread after formatting. Prefer explicit concatenation,
   intermediate variables, or a naturally wrapped data structure.
-- keep direct dependency pins and unavoidable long URLs intact when wrapping
-  would make the command or dependency harder to copy, validate, or parse
 - use positional formatting for logger calls so disabled log levels avoid
   formatting work and log aggregators can group stable message templates
 - prefer small, direct control flow over clever abstractions
@@ -155,6 +153,9 @@ Please keep code and docs aligned with the supported deployment model:
 - prefer operational accuracy over marketing language
 - prefer readable examples over shell-heavy indirection
 - keep docs aligned with current CLI interfaces and managed paths
+- do not enforce Python line-length rules on Markdown, TOML, requirements, or
+  shell snippets; keep tables, direct dependency pins, commands, and URLs intact
+  when wrapping would make them harder to copy, validate, or parse
 - avoid documenting lab-specific host policy as product behavior
 
 ## Local Checks
@@ -175,26 +176,10 @@ python -m build
 
 Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
 
-For broad formatting churn, also scan for accidental style regressions:
+For broad Python formatting churn, also scan for accidental adjacent string
+literals:
 
 ```bash
-python - <<'PY'
-from pathlib import Path
-import subprocess
-
-for raw_path in subprocess.check_output(["git", "ls-files"], text=True).splitlines():
-    path = Path(raw_path)
-    if path.parts and path.parts[0] in {"build", "dist", "venv"}:
-        continue
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except UnicodeDecodeError:
-        continue
-    for line_number, line in enumerate(lines, 1):
-        if len(line) > 120:
-            print(f"{path}:{line_number}:{len(line)}")
-PY
-
 python - <<'PY'
 from pathlib import Path
 import io

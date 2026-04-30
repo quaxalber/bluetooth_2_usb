@@ -75,11 +75,7 @@ venv/bin/bluetooth_2_usb loopback-capture --scenario keyboard --timeout-sec 1 --
 On Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass `
-  -File .\scripts\loopback-capture.ps1 `
-  --scenario keyboard `
-  --timeout-sec 1 `
-  --output json
+powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --timeout-sec 1 --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,

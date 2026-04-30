@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bluetooth_2_usb"
 dynamic = ["dependencies", "version"]
-description = "Bluetooth-to-USB HID bridge for Raspberry Pi using Linux USB gadget mode."
+description = "Bluetooth-to-USB HID bridge for Raspberry Pi. Relay Bluetooth keyboard and mouse input to USB via Linux USB gadget mode."
 authors = [
     { name = "quaxalber", email = "pypi@quaxalber.de" },
 ]

@@ -108,9 +108,7 @@ rm -rf "$tmpdir"
 ### 6. Drift search for commands, flags, and paths
 
 ```bash
-rg -n \
-  '(bluetooth_2_usb|python -m bluetooth_2_usb|--[a-z0-9][a-z0-9_-]*)' \
-  README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
+rg -n '(bluetooth_2_usb|python -m bluetooth_2_usb|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
 ```
 
 Flag anything that is documented but no longer present, or anything that exists
