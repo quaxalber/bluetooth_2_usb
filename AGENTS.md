@@ -72,10 +72,10 @@ operational CLI validation path.
 For runtime-affecting changes, validate on real Pi hardware when feasible.
 Minimum Pi-side checks:
 
-- `sudo bluetooth_2_usb smoketest --verbose`
-- `sudo bluetooth_2_usb debug --duration 10`
-- `sudo bluetoothctl show`
-- `sudo btmgmt info`
+- `sudo -n bluetooth_2_usb smoketest --verbose`
+- `sudo -n bluetooth_2_usb debug --duration 10`
+- `sudo -n bluetoothctl show`
+- `sudo -n btmgmt info`
 
 For relay-path changes, also use the host/Pi loopback inject/capture validation from
 `docs/host-relay-loopback.md`.

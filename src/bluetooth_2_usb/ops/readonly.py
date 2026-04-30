@@ -230,9 +230,9 @@ def remove_persist_mount_unit(mount_path: Path) -> None:
     (Path("/etc/systemd/system") / unit).unlink(missing_ok=True)
 
 
-def write_bluetooth_bind_mount_unit(source_dir: Path) -> None:
+def write_bluetooth_bind_mount_unit(source_dir: Path, persist_mount: Path) -> None:
     Path("/var/lib/bluetooth").mkdir(parents=True, exist_ok=True)
-    parent_unit = persist_mount_unit_name(source_dir.parent)
+    parent_unit = persist_mount_unit_name(persist_mount)
     PATHS.bluetooth_bind_mount_unit.write_text(
         f"""[Unit]
 Description=bluetooth_2_usb persistent Bluetooth state bind mount
@@ -312,7 +312,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
     persist_spec = persist_spec_from_device(device)
     persist_mount.mkdir(parents=True, exist_ok=True)
     persist_mount_unit = write_persist_mount_unit(persist_spec, persist_mount, "ext4")
-    write_bluetooth_bind_mount_unit(persist_bluetooth_dir)
+    write_bluetooth_bind_mount_unit(persist_bluetooth_dir, persist_mount)
     install_bluetooth_persist_dropin()
     write_readonly_config(
         ReadonlyConfig(
@@ -408,38 +408,50 @@ def enable_readonly() -> None:
         + (" ".join(str(path) for path in versioned_initrd_candidates(kernel_release)) or "<none>")
     )
 
-    if overlay_status() != "enabled":
-        if readonly_stack_packages_missing():
-            info(
-                "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
+    overlay_before = overlay_status()
+    overlay_changed = False
+    try:
+        if overlay_before != "enabled":
+            if readonly_stack_packages_missing():
+                info(
+                    "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
+                )
+            run(["raspi-config", "nonint", "enable_overlayfs"])
+            overlay_changed = True
+        if not readonly_stack_packages_healthy():
+            warn("OverlayFS package state is incomplete:")
+            print(readonly_stack_package_report())
+            fail(
+                "OverlayFS package setup did not complete cleanly. "
+                + "Repair the package state before enabling read-only mode."
             )
-        run(["raspi-config", "nonint", "enable_overlayfs"])
-    if not readonly_stack_packages_healthy():
-        warn("OverlayFS package state is incomplete:")
-        print(readonly_stack_package_report())
-        fail(
-            "OverlayFS package setup did not complete cleanly. Repair the package state before enabling read-only mode."
-        )
 
-    target = ensure_bootable_initramfs_for_current_kernel()
-    ok(f"Boot initramfs is ready at {target}")
-    if overlay_status() != "enabled":
-        cmdline = (
-            boot_cmdline_path().read_text(encoding="utf-8", errors="replace")
-            if boot_cmdline_path().is_file()
-            else ""
-        )
-        if overlay_configured_status() == "enabled":
-            warn(
-                "OverlayFS is configured for the next boot, but the live root is still writable until reboot."
+        target = ensure_bootable_initramfs_for_current_kernel()
+        ok(f"Boot initramfs is ready at {target}")
+        if overlay_status() != "enabled":
+            cmdline = (
+                boot_cmdline_path().read_text(encoding="utf-8", errors="replace")
+                if boot_cmdline_path().is_file()
+                else ""
             )
-        elif re.search(r"(^| )overlayroot=tmpfs($| )", cmdline):
-            warn(
-                f"OverlayFS enablement is pending reboot; {boot_cmdline_path()} contains overlayroot=tmpfs "
-                + "even though the live status still reports disabled."
-            )
-        else:
-            fail("OverlayFS is still not configured after raspi-config completed.")
+            if overlay_configured_status() == "enabled":
+                warn(
+                    "OverlayFS is configured for the next boot, but the live root is still writable until reboot."
+                )
+            elif re.search(r"(^| )overlayroot=tmpfs($| )", cmdline):
+                warn(
+                    f"OverlayFS enablement is pending reboot; {boot_cmdline_path()} contains overlayroot=tmpfs "
+                    + "even though the live status still reports disabled."
+                )
+            else:
+                fail("OverlayFS is still not configured after raspi-config completed.")
+    except Exception:
+        if overlay_changed:
+            warn("Rolling back OverlayFS enablement after read-only setup validation failed.")
+            run(["raspi-config", "nonint", "disable_overlayfs"], check=False)
+            config.mode = "disabled"
+            write_readonly_config(config)
+        raise
     config.mode = "persistent"
     write_readonly_config(config)
     ok("OverlayFS has been enabled")

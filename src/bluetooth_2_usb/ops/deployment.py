@@ -164,31 +164,40 @@ def install(repo_root: Path) -> None:
     boot_config.normalize_modules_load(cmdline_txt, modules)
     ok("Boot configuration updated")
 
-    if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
+    was_active = (
+        run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
+    )
+    if was_active:
         info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
         run(["systemctl", "stop", PATHS.service_unit])
-    info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
-    rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir)
-    ok(f"Virtual environment updated at {PATHS.install_dir / 'venv'}")
+    try:
+        info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
+        rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir)
+        ok(f"Virtual environment updated at {PATHS.install_dir / 'venv'}")
 
-    install_service_unit(repo_root)
-    write_default_env_file()
-    canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
-    run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
-    install_cli_links()
-    run(["systemctl", "daemon-reload"])
-    activate_service_unit()
-    ok(f"Service {PATHS.service_unit} enabled and started")
-    run([PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], capture=True)
-    ok("CLI version check succeeded")
+        install_service_unit(repo_root)
+        write_default_env_file()
+        canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
+        run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
+        install_cli_links()
+        run(["systemctl", "daemon-reload"])
+        activate_service_unit()
+        ok(f"Service {PATHS.service_unit} enabled and started")
+        run([PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], capture=True)
+        ok("CLI version check succeeded")
 
-    validate = run([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], check=False)
-    if validate.returncode == 0:
-        ok("Environment validation passed")
-    elif validate.returncode == 3:
-        warn("Environment validation reports missing runtime prerequisites until after reboot")
-    else:
-        fail(f"Environment validation failed with exit code {validate.returncode}")
+        validate = run([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], check=False)
+        if validate.returncode == 0:
+            ok("Environment validation passed")
+        elif validate.returncode == 3:
+            warn("Environment validation reports missing runtime prerequisites until after reboot")
+        else:
+            fail(f"Environment validation failed with exit code {validate.returncode}")
+    except Exception:
+        if was_active:
+            warn(f"Reinstall failed; attempting to restore {PATHS.service_unit}.")
+            run(["systemctl", "start", PATHS.service_unit], check=False)
+        raise
     print(f"""
 Next steps
 1. Reboot the Pi so the updated boot configuration takes effect.

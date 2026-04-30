@@ -42,7 +42,12 @@ class SmokeTest:
         overlay = overlay_status()
         post_reboot = os.environ.get("SMOKETEST_POST_REBOOT", "0") == "1"
         modules_load_value = _first_modules_load(cmdline_txt)
-        required_modules = boot_config.required_boot_modules_csv().split(",")
+        dwc2_mode = _try(boot_config.dwc2_mode, "unknown")
+        required_modules = (
+            boot_config.required_boot_modules_csv(dwc2_mode).split(",")
+            if dwc2_mode != "unknown"
+            else ["libcomposite"]
+        )
         expected_overlay = _try(boot_config.expected_dwc2_overlay_line)
         root_filesystem_type = _try(boot_config.current_root_filesystem_type, "unknown")
         root_overlay_active = "yes" if root_filesystem_type == "overlay" else "no"
@@ -58,7 +63,7 @@ class SmokeTest:
 
         self._check_boot_overlay(config_txt, expected_overlay)
         self._check_modules(modules_load_value, required_modules)
-        if boot_config.dwc2_mode() == "unknown":
+        if dwc2_mode == "unknown":
             self.soft_warn(
                 "Could not determine whether dwc2 is built-in or modular; boot module validation is heuristic"
             )
