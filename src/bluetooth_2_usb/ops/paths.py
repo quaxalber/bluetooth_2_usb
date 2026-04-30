@@ -16,7 +16,9 @@ class ManagedPaths:
     persist_bluetooth_subdir: str = "bluetooth"
     bluetooth_bind_mount_unit: Path = Path("/etc/systemd/system/var-lib-bluetooth.mount")
     bluetooth_service_dropin_dir: Path = Path("/etc/systemd/system/bluetooth.service.d")
-    bluetooth_service_dropin: Path = Path("/etc/systemd/system/bluetooth.service.d/bluetooth_2_usb_persist.conf")
+    bluetooth_service_dropin: Path = Path(
+        "/etc/systemd/system/bluetooth.service.d/bluetooth_2_usb_persist.conf"
+    )
 
     @property
     def venv_python(self) -> Path:

@@ -33,7 +33,10 @@ class ReadonlyConfig:
 def overlay_status() -> str:
     if shutil.which("raspi-config") is None:
         return "unknown"
-    for command in (["raspi-config", "nonint", "get_overlay_now"], ["raspi-config", "nonint", "get_overlay_conf"]):
+    for command in (
+        ["raspi-config", "nonint", "get_overlay_now"],
+        ["raspi-config", "nonint", "get_overlay_conf"],
+    ):
         completed = run(command, check=False, capture=True)
         if completed.returncode == 0:
             return _overlay_state_from_code(completed.stdout.strip())
@@ -68,7 +71,9 @@ def readonly_stack_packages_healthy() -> bool:
 
 
 def readonly_stack_packages_bootstrap_safe() -> bool:
-    return all(package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES)
+    return all(
+        package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES
+    )
 
 
 def readonly_stack_packages_missing() -> bool:
@@ -87,7 +92,8 @@ def machine_id_valid() -> bool:
     machine_id = Path("/etc/machine-id")
     return (
         machine_id.is_file()
-        and re.fullmatch(r"[0-9a-f]{32}", machine_id.read_text(encoding="utf-8").strip()) is not None
+        and re.fullmatch(r"[0-9a-f]{32}", machine_id.read_text(encoding="utf-8").strip())
+        is not None
     )
 
 
@@ -110,7 +116,9 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
             continue
         match = re.fullmatch(r'([A-Za-z_][A-Za-z0-9_]*)="([^"]*)"', line)
         if match is None:
-            fail(f"Refusing to load invalid read-only config line from {path}:{line_number}: {line}")
+            fail(
+                f"Refusing to load invalid read-only config line from {path}:{line_number}: {line}"
+            )
         key, value = match.groups()
         if key not in allowed:
             fail(f"Refusing to load unexpected key from {path}: {key}")
@@ -119,7 +127,9 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
     return ReadonlyConfig(
         mode=values.get("B2U_READONLY_MODE", "disabled"),
         persist_mount=Path(values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount))),
-        persist_bluetooth_dir=Path(values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.default_persist_bluetooth_dir))),
+        persist_bluetooth_dir=Path(
+            values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.default_persist_bluetooth_dir))
+        ),
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),
         persist_device=values.get("B2U_PERSIST_DEVICE", ""),
     )
@@ -150,17 +160,24 @@ def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
         return False
 
     mount_source = run(
-        ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"], check=False, capture=True
+        ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"],
+        check=False,
+        capture=True,
     ).stdout.strip()
     if mount_source == str(resolved.persist_bluetooth_dir):
         return True
 
     persist_mount_source = run(
-        ["findmnt", "-n", "-o", "SOURCE", "--target", resolved.persist_mount], check=False, capture=True
+        ["findmnt", "-n", "-o", "SOURCE", "--target", resolved.persist_mount],
+        check=False,
+        capture=True,
     ).stdout.strip()
     if not persist_mount_source:
         return False
-    relative = "/" + str(resolved.persist_bluetooth_dir.relative_to(resolved.persist_mount))
+    try:
+        relative = "/" + str(resolved.persist_bluetooth_dir.relative_to(resolved.persist_mount))
+    except ValueError:
+        return False
     return mount_source == f"{persist_mount_source}[{relative}]"
 
 
@@ -262,7 +279,9 @@ def remove_bluetooth_persist_dropin() -> None:
 
 
 def persist_spec_from_device(device: str) -> str:
-    uuid = run(["blkid", "-s", "UUID", "-o", "value", device], check=False, capture=True).stdout.strip()
+    uuid = run(
+        ["blkid", "-s", "UUID", "-o", "value", device], check=False, capture=True
+    ).stdout.strip()
     if not uuid:
         fail(f"Could not determine UUID for {device}")
     return f"/dev/disk/by-uuid/{uuid}"
@@ -271,10 +290,16 @@ def persist_spec_from_device(device: str) -> str:
 def setup_persistent_bluetooth_state(device: str) -> None:
     require_commands(["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"])
     if not machine_id_valid():
-        fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
-    detected_type = run(["blkid", "-s", "TYPE", "-o", "value", device], check=False, capture=True).stdout.strip()
+        fail(
+            "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
+        )
+    detected_type = run(
+        ["blkid", "-s", "TYPE", "-o", "value", device], check=False, capture=True
+    ).stdout.strip()
     if not detected_type:
-        fail(f"No filesystem detected on {device}. Create an ext4 filesystem first, then rerun this command.")
+        fail(
+            f"No filesystem detected on {device}. Create an ext4 filesystem first, then rerun this command."
+        )
     if detected_type != "ext4":
         fail(f"Expected ext4 on {device}, got {detected_type}")
 
@@ -296,7 +321,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         )
     )
 
-    _stop_b2u_if_installed("before migrating Bluetooth state")
+    b2u_was_active = _stop_b2u_if_installed("before migrating Bluetooth state")
     run(["systemctl", "stop", "bluetooth.service"])
     run(["systemctl", "daemon-reload"])
     if run(["mountpoint", "-q", persist_mount], check=False).returncode == 0:
@@ -316,7 +341,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
     run(["systemctl", "start", "bluetooth.service"])
     if not _systemctl_active("bluetooth.service"):
         fail("bluetooth.service did not come back up after enabling the persistent bind mount")
-    _restart_b2u_if_installed("after enabling the persistent bind mount")
+    _restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
     ok(f"Persistent Bluetooth state is active at {persist_bluetooth_dir}")
 
 
@@ -332,7 +357,9 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
         fail(f"Failed to acquire seed lock {lock_dir} for {persist_bluetooth_dir}")
     try:
         ignored = {".b2u-seed.lock", ".b2u-seeded", ".b2u-persistent-state"}
-        if not marker.exists() and not any(child.name not in ignored for child in persist_bluetooth_dir.iterdir()):
+        if not marker.exists() and not any(
+            child.name not in ignored for child in persist_bluetooth_dir.iterdir()
+        ):
             for child in source.iterdir():
                 destination = persist_bluetooth_dir / child.name
                 if child.is_dir():
@@ -352,11 +379,15 @@ def enable_readonly() -> None:
     require_commands(["dpkg-query", "raspi-config"])
     config = load_readonly_config()
     if not machine_id_valid():
-        fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
+        fail(
+            "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
+        )
     if not config.persist_spec:
         fail("Run bluetooth_2_usb readonly-setup --device /dev/... before enabling read-only mode.")
     if not bluetooth_state_persistent(config):
-        fail("Persistent Bluetooth state is not active. Run bluetooth_2_usb readonly-setup --device /dev/... first.")
+        fail(
+            "Persistent Bluetooth state is not active. Run bluetooth_2_usb readonly-setup --device /dev/... first."
+        )
     if not readonly_stack_packages_bootstrap_safe():
         warn("OverlayFS package state is incomplete:")
         print(readonly_stack_package_report())
@@ -376,7 +407,9 @@ def enable_readonly() -> None:
 
     if overlay_status() != "enabled":
         if readonly_stack_packages_missing():
-            info("OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now.")
+            info(
+                "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
+            )
         run(["raspi-config", "nonint", "enable_overlayfs"])
     if not readonly_stack_packages_healthy():
         warn("OverlayFS package state is incomplete:")
@@ -389,10 +422,14 @@ def enable_readonly() -> None:
     ok(f"Boot initramfs is ready at {target}")
     if overlay_status() != "enabled":
         cmdline = (
-            boot_cmdline_path().read_text(encoding="utf-8", errors="replace") if boot_cmdline_path().is_file() else ""
+            boot_cmdline_path().read_text(encoding="utf-8", errors="replace")
+            if boot_cmdline_path().is_file()
+            else ""
         )
         if overlay_configured_status() == "enabled":
-            warn("OverlayFS is configured for the next boot, but the live root is still writable until reboot.")
+            warn(
+                "OverlayFS is configured for the next boot, but the live root is still writable until reboot."
+            )
         elif re.search(r"(^| )overlayroot=tmpfs($| )", cmdline):
             warn(
                 f"OverlayFS enablement is pending reboot; {boot_cmdline_path()} contains overlayroot=tmpfs "
@@ -417,30 +454,34 @@ def disable_readonly() -> None:
     config.mode = "disabled"
     write_readonly_config(config)
     ok("OverlayFS has been disabled")
-    warn("Persistent Bluetooth mount configuration was kept. Reboot to return to a writable root filesystem.")
+    warn(
+        "Persistent Bluetooth mount configuration was kept. Reboot to return to a writable root filesystem."
+    )
 
 
 def _systemctl_active(unit: str) -> bool:
     return run(["systemctl", "is-active", "--quiet", unit], check=False).returncode == 0
 
 
-def _stop_b2u_if_installed(context: str) -> None:
+def _stop_b2u_if_installed(context: str) -> bool:
     from .deployment import service_installed
 
     state = service_installed()
     if state is None:
         fail(f"Unable to query systemd for {PATHS.service_unit} {context}")
-    if state:
+    was_active = state and _systemctl_active(PATHS.service_unit)
+    if was_active:
         run(["systemctl", "stop", PATHS.service_unit])
+    return bool(was_active)
 
 
-def _restart_b2u_if_installed(context: str) -> None:
+def _restart_b2u_if_installed(was_active: bool, context: str) -> None:
     from .deployment import service_installed
 
     state = service_installed()
     if state is None:
         fail(f"Unable to query systemd for {PATHS.service_unit} {context}")
-    if state:
+    if was_active and state:
         run(["systemctl", "restart", PATHS.service_unit])
         if not _systemctl_active(PATHS.service_unit):
             fail(f"{PATHS.service_unit} did not come back up {context}")

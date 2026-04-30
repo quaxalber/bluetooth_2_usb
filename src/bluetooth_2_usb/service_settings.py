@@ -20,7 +20,12 @@ RUNTIME_ENV_KEY_ORDER = (
     "B2U_DEBUG",
     "B2U_UDC_PATH",
 )
-ALLOWED_KEYS = BOOL_KEYS | {"B2U_INTERRUPT_SHORTCUT", "B2U_LOG_PATH", "B2U_DEVICE_IDS", "B2U_UDC_PATH"}
+ALLOWED_KEYS = BOOL_KEYS | {
+    "B2U_INTERRUPT_SHORTCUT",
+    "B2U_LOG_PATH",
+    "B2U_DEVICE_IDS",
+    "B2U_UDC_PATH",
+}
 
 
 class ServiceSettingsError(ValueError):
@@ -86,7 +91,7 @@ def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
     if key == "B2U_GRAB_DEVICES":
         return _canonical_bool(settings.grab_devices)
     if key == "B2U_INTERRUPT_SHORTCUT":
-        return settings.interrupt_shortcut
+        return _quote_if_needed(settings.interrupt_shortcut)
     if key == "B2U_LOG_TO_FILE":
         return _canonical_bool(settings.log_to_file)
     if key == "B2U_LOG_PATH":
@@ -103,18 +108,24 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
     if not env_file.exists():
         return settings
 
-    for line_number, raw_line in enumerate(env_file.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_number, raw_line in enumerate(
+        env_file.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
 
         if "=" not in raw_line:
-            raise ServiceSettingsError(f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}")
+            raise ServiceSettingsError(
+                f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}"
+            )
 
         key, raw_value = raw_line.split("=", 1)
         key = key.strip()
         if key not in ALLOWED_KEYS:
-            raise ServiceSettingsError(f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings")
+            raise ServiceSettingsError(
+                f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings"
+            )
 
         value = _parse_value(raw_value)
         if key == "B2U_AUTO_DISCOVER":
@@ -162,12 +173,16 @@ def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bo
             continue
 
         if "=" not in raw_line:
-            raise ServiceSettingsError(f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}")
+            raise ServiceSettingsError(
+                f"{env_file}:{line_number}: expected KEY=value, got {raw_line!r}"
+            )
 
         key, raw_value = raw_line.split("=", 1)
         key = key.strip()
         if key not in ALLOWED_KEYS:
-            raise ServiceSettingsError(f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings")
+            raise ServiceSettingsError(
+                f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings"
+            )
         seen_key = True
 
     updated_lines = [
@@ -215,7 +230,9 @@ def build_runtime_shell_command(
     append_debug: bool = False,
 ) -> str:
     resolved_settings = load_service_settings(env_file) if settings is None else settings
-    command = shlex.split(executable) + build_runtime_argv(resolved_settings, append_debug=append_debug)
+    command = shlex.split(executable) + build_runtime_argv(
+        resolved_settings, append_debug=append_debug
+    )
     return shlex.join(command)
 
 
@@ -224,9 +241,13 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true", help="Validate the settings file.")
     group.add_argument(
-        "--print-shell-command", action="store_true", help="Print a shell-quoted command for the configured runtime."
+        "--print-shell-command",
+        action="store_true",
+        help="Print a shell-quoted command for the configured runtime.",
     )
-    group.add_argument("--print-summary-json", action="store_true", help="Print the parsed settings as JSON.")
+    group.add_argument(
+        "--print-summary-json", action="store_true", help="Print the parsed settings as JSON."
+    )
     group.add_argument(
         "--canonicalize-bools",
         action="store_true",
@@ -237,7 +258,11 @@ def main(argv: list[str] | None = None) -> int:
         default=f"{sys.executable} -m bluetooth_2_usb",
         help="Executable command to use with --print-shell-command.",
     )
-    parser.add_argument("--append-debug", action="store_true", help="Append --debug to the generated runtime command.")
+    parser.add_argument(
+        "--append-debug",
+        action="store_true",
+        help="Append --debug to the generated runtime command.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -251,7 +276,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_shell_command:
         print(
             build_runtime_shell_command(
-                args.executable, settings=settings, append_debug=args.append_debug, env_file=DEFAULT_ENV_FILE
+                args.executable,
+                settings=settings,
+                append_debug=args.append_debug,
+                env_file=DEFAULT_ENV_FILE,
             )
         )
         return 0

@@ -15,7 +15,9 @@ class ShortcutToggler:
     Tracks a user-defined shortcut and toggles relaying on/off when the shortcut is pressed.
     """
 
-    def __init__(self, shortcut_keys: set[str], relaying_active: asyncio.Event, hid_gadgets: HidGadgets) -> None:
+    def __init__(
+        self, shortcut_keys: set[str], relaying_active: asyncio.Event, hid_gadgets: HidGadgets
+    ) -> None:
         """
         :param shortcut_keys: A set of evdev-style key names to detect
         :param relaying_active: An asyncio.Event controlling whether relaying is active
@@ -52,7 +54,11 @@ class ShortcutToggler:
             if self._shortcut_keys and key_name in self._shortcut_keys:
                 self._shortcut_armed = True
 
-        if self._shortcut_armed and self._shortcut_keys and self._shortcut_keys.issubset(self._currently_pressed):
+        if (
+            self._shortcut_armed
+            and self._shortcut_keys
+            and self._shortcut_keys.issubset(self._currently_pressed)
+        ):
             self._shortcut_armed = False
             self._suppressed_keys.update(self._shortcut_keys)
             self.toggle_relaying()

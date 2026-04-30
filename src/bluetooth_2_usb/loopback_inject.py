@@ -28,7 +28,10 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
     time.sleep(event_gap_ms / 1000.0)
 
 
-_HI_RES_REL_CODES = {ecodes.REL_WHEEL: ecodes.REL_WHEEL_HI_RES, ecodes.REL_HWHEEL: ecodes.REL_HWHEEL_HI_RES}
+_HI_RES_REL_CODES = {
+    ecodes.REL_WHEEL: ecodes.REL_WHEEL_HI_RES,
+    ecodes.REL_HWHEEL: ecodes.REL_HWHEEL_HI_RES,
+}
 
 
 def _write_mouse_rel_step(device: UInput, step_event) -> None:
@@ -45,7 +48,9 @@ def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
 
 
 def _keyboard_capabilities() -> dict[int, list[int]]:
-    keyboard_codes = sorted({step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps})
+    keyboard_codes = sorted(
+        {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
+    )
     return {ecodes.EV_KEY: keyboard_codes}
 
 

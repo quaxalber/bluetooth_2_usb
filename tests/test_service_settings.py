@@ -100,7 +100,9 @@ class ServiceSettingsTest(unittest.TestCase):
 
             settings = load_service_settings(env_file)
             argv = build_runtime_argv(settings, append_debug=True)
-            command = build_runtime_shell_command("python -m bluetooth_2_usb", settings=settings, append_debug=True)
+            command = build_runtime_shell_command(
+                "python -m bluetooth_2_usb", settings=settings, append_debug=True
+            )
 
         self.assertIn("--auto_discover", argv)
         self.assertIn("--grab_devices", argv)
@@ -130,6 +132,27 @@ class ServiceSettingsTest(unittest.TestCase):
 
         self.assertIn("--udc_path", argv)
         self.assertIn("/tmp/udc-state", argv)
+
+    def test_canonicalize_service_settings_quotes_interrupt_shortcut_when_needed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "B2U_INTERRUPT_SHORTCUT='CTRL + SHIFT + F12'",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            changed = canonicalize_service_settings_bools(env_file)
+
+            self.assertTrue(changed)
+            self.assertIn(
+                "B2U_INTERRUPT_SHORTCUT='CTRL + SHIFT + F12'",
+                env_file.read_text(encoding="utf-8"),
+            )
 
     def test_canonicalize_service_settings_bools_rewrites_bool_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

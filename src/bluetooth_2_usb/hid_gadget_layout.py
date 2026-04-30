@@ -183,10 +183,14 @@ class GadgetHidDevice(usb_hid.Device):
             usage=base_device.usage,
             report_ids=(tuple(base_device.report_ids) if report_ids is None else tuple(report_ids)),
             in_report_lengths=(
-                tuple(base_device.in_report_lengths) if in_report_lengths is None else tuple(in_report_lengths)
+                tuple(base_device.in_report_lengths)
+                if in_report_lengths is None
+                else tuple(in_report_lengths)
             ),
             out_report_lengths=(
-                tuple(base_device.out_report_lengths) if out_report_lengths is None else tuple(out_report_lengths)
+                tuple(base_device.out_report_lengths)
+                if out_report_lengths is None
+                else tuple(out_report_lengths)
             ),
             name=base_device.name if name is None else name,
             function_index=function_index,
@@ -198,7 +202,9 @@ class GadgetHidDevice(usb_hid.Device):
                 else configfs_report_length
             ),
             wakeup_on_write=(
-                getattr(base_device, "wakeup_on_write", False) if wakeup_on_write is None else wakeup_on_write
+                getattr(base_device, "wakeup_on_write", False)
+                if wakeup_on_write is None
+                else wakeup_on_write
             ),
         )
 
@@ -247,7 +253,9 @@ def build_default_layout() -> GadgetLayout:
                 # every full-size mouse report.
                 configfs_report_length=8,
             ),
-            GadgetHidDevice.from_existing(usb_hid.Device.CONSUMER_CONTROL, function_index=2, protocol=0, subclass=0),
+            GadgetHidDevice.from_existing(
+                usb_hid.Device.CONSUMER_CONTROL, function_index=2, protocol=0, subclass=0
+            ),
         ),
         bcd_device="0x0205",
         product_name="USB Combo Device",

@@ -67,7 +67,12 @@ def run(
     command = " ".join(command_args)
     try:
         completed = subprocess.run(
-            command_args, check=False, capture_output=capture, text=text, input=input_text, timeout=timeout
+            command_args,
+            check=False,
+            capture_output=capture,
+            text=text,
+            input=input_text,
+            timeout=timeout,
         )
     except FileNotFoundError as exc:
         missing = exc.filename or command_args[0]

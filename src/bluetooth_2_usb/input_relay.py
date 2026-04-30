@@ -94,7 +94,8 @@ class InputRelay:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
                     logger.debug(
-                        "Skipping ungrab for %s because the device is no longer available.", self._input_device.path
+                        "Skipping ungrab for %s because the device is no longer available.",
+                        self._input_device.path,
                     )
                 else:
                     logger.warning("Unable to ungrab %s: %s", self._input_device.path, ex)
@@ -120,7 +121,8 @@ class InputRelay:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
                     logger.debug(
-                        "Skipping ungrab for %s because the device is no longer available.", self._input_device.path
+                        "Skipping ungrab for %s because the device is no longer available.",
+                        self._input_device.path,
                     )
                 else:
                     logger.warning("Could not ungrab %s: %s", self._input_device, ex)
@@ -142,7 +144,12 @@ class InputRelay:
                 )
 
                 if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
-                    logger.debug("Received %s from %s (%s)", event, self._input_device.name, self._input_device.path)
+                    logger.debug(
+                        "Received %s from %s (%s)",
+                        event,
+                        self._input_device.name,
+                        self._input_device.path,
+                    )
 
                 if self._shortcut_toggler and isinstance(event, KeyEvent):
                     if self._shortcut_toggler.handle_key_event(event):
@@ -174,7 +181,10 @@ class InputRelay:
             if ex.errno != errno.ENODEV:
                 raise
             input_disappeared = True
-            logger.debug("Stopping relay loop for %s because the input device disappeared.", self._input_device.path)
+            logger.debug(
+                "Stopping relay loop for %s because the input device disappeared.",
+                self._input_device.path,
+            )
             self._discard_pending_mouse_state()
         try:
             await self._flush_pending_mouse_movement()
@@ -234,9 +244,13 @@ class InputRelay:
 
         :param event: The InputEvent to process
         """
-        await self._process_hid_action_with_retry(lambda: dispatch_event_to_hid(event, self._hid_gadgets), f"{event}")
+        await self._process_hid_action_with_retry(
+            lambda: dispatch_event_to_hid(event, self._hid_gadgets), f"{event}"
+        )
 
-    async def _process_hid_action_with_retry(self, action: Callable[[], Any], action_name: str) -> bool:
+    async def _process_hid_action_with_retry(
+        self, action: Callable[[], Any], action_name: str
+    ) -> bool:
         """
         Attempt to relay one HID action and retry transient write blocking.
 

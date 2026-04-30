@@ -194,7 +194,9 @@ def evdev_to_usb_hid(event: KeyEvent) -> tuple[int | None, str | None]:
 def find_key_name(event: KeyEvent) -> str | None:
     scancode: int = event.scancode
     for attribute in _cached_dir(ecodes):
-        if _cached_getattr(ecodes, attribute) == scancode and attribute.startswith(("KEY_", "BTN_")):
+        if _cached_getattr(ecodes, attribute) == scancode and attribute.startswith(
+            ("KEY_", "BTN_")
+        ):
             return attribute
     return None
 

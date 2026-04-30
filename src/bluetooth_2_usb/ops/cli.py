@@ -49,14 +49,18 @@ def _main(argv: list[str], *, prog: str) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _command_parser(subparsers, "install", "Apply the managed system install.")
-    _command_parser(subparsers, "update", "Fast-forward and reapply the managed install when changed.")
+    _command_parser(
+        subparsers, "update", "Fast-forward and reapply the managed install when changed."
+    )
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
     smoketest_parser.add_argument("--allow-non-pi", action="store_true")
     debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
-    setup_parser = _command_parser(subparsers, "readonly-setup", "Prepare persistent Bluetooth state.")
+    setup_parser = _command_parser(
+        subparsers, "readonly-setup", "Prepare persistent Bluetooth state."
+    )
     setup_parser.add_argument("--device", required=True)
     _command_parser(subparsers, "readonly-enable", "Enable persistent read-only mode.")
     _command_parser(subparsers, "readonly-disable", "Disable OverlayFS.")
@@ -123,7 +127,9 @@ def _command_parser(
     return parser
 
 
-def _passthrough_parser(subparsers: argparse._SubParsersAction, name: str, help_text: str) -> argparse.ArgumentParser:
+def _passthrough_parser(
+    subparsers: argparse._SubParsersAction, name: str, help_text: str
+) -> argparse.ArgumentParser:
     return _command_parser(subparsers, name, help_text, add_help=False)
 
 

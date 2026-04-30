@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from .commands import info, ok, output, run, warn
+from .commands import OpsError, info, ok, output, run, warn
 
 
 def bluetoothctl_show() -> str:
@@ -31,7 +31,9 @@ def bluetooth_controller_powered() -> bool:
 
 
 def bluetooth_paired_count() -> int:
-    return sum(1 for line in bluetoothctl_paired_devices().splitlines() if line.startswith("Device "))
+    return sum(
+        1 for line in bluetoothctl_paired_devices().splitlines() if line.startswith("Device ")
+    )
 
 
 def rfkill_root() -> Path:
@@ -46,7 +48,7 @@ class RfkillEntry:
     state: str
 
     def line(self) -> str:
-        return f"{self.name} type=bluetooth soft={self.soft} " f"hard={self.hard} state={self.state}"
+        return f"{self.name} type=bluetooth soft={self.soft} hard={self.hard} state={self.state}"
 
 
 def bluetooth_rfkill_entries(root: Path | None = None) -> list[RfkillEntry]:
@@ -77,7 +79,10 @@ def _read_optional(path: Path) -> str:
 
 
 def bluetooth_rfkill_blocked(root: Path | None = None) -> bool:
-    return any(entry.soft == "1" or entry.hard == "1" or entry.state == "0" for entry in bluetooth_rfkill_entries(root))
+    return any(
+        entry.soft == "1" or entry.hard == "1" or entry.state == "0"
+        for entry in bluetooth_rfkill_entries(root)
+    )
 
 
 def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
@@ -92,7 +97,9 @@ def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
             warn(f"Bluetooth rfkill {entry.name} is hard-blocked; leaving it unchanged.")
             continue
         if entry.soft != "1":
-            info(f"Bluetooth rfkill {entry.name} is already unblocked " f"(soft={entry.soft} state={entry.state}).")
+            info(
+                f"Bluetooth rfkill {entry.name} is already unblocked (soft={entry.soft} state={entry.state})."
+            )
             continue
 
         soft_file = base / entry.name / "soft"
@@ -111,7 +118,11 @@ def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
 
 
 def rfkill_list_bluetooth() -> str:
-    completed = run(["rfkill", "list", "bluetooth"], check=False, capture=True)
-    lines = [completed.stdout.rstrip()]
+    try:
+        completed = run(["rfkill", "list", "bluetooth"], check=False, capture=True)
+        header = completed.stdout.rstrip() or completed.stderr.rstrip()
+    except (FileNotFoundError, OpsError) as exc:
+        header = str(exc)
+    lines = [header]
     lines.extend(entry.line() for entry in bluetooth_rfkill_entries())
     return "\n".join(line for line in lines if line)

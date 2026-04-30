@@ -43,7 +43,9 @@ class HidGadgets:
         return list(build_default_layout().devices)
 
     def _expected_hidg_paths(self) -> tuple[Path, ...]:
-        return tuple(Path(f"/dev/hidg{device.function_index}") for device in self._requested_devices())
+        return tuple(
+            Path(f"/dev/hidg{device.function_index}") for device in self._requested_devices()
+        )
 
     def _prune_stale_hidg_nodes(self, *, remove_character_devices: bool = False) -> None:
         for path in self._expected_hidg_paths():
@@ -61,7 +63,9 @@ class HidGadgets:
 
     def _collect_invalid_hidg_nodes(self) -> list[str]:
         invalid_paths: list[str] = []
-        for device, path in zip(self._requested_devices(), self._expected_hidg_paths(), strict=False):
+        for device, path in zip(
+            self._requested_devices(), self._expected_hidg_paths(), strict=False
+        ):
             try:
                 stats = path.stat()
             except FileNotFoundError:
@@ -73,7 +77,9 @@ class HidGadgets:
                 continue
             expected_minor = device.function_index
             if os.minor(stats.st_rdev) != expected_minor:
-                invalid_paths.append(f"{path} (minor={os.minor(stats.st_rdev)}, expected={expected_minor})")
+                invalid_paths.append(
+                    f"{path} (minor={os.minor(stats.st_rdev)}, expected={expected_minor})"
+                )
                 continue
             try:
                 fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
@@ -84,9 +90,13 @@ class HidGadgets:
             os.close(fd)
         return invalid_paths
 
-    def _validate_hidg_nodes(self, timeout_sec: float | None = None, poll_interval_sec: float | None = None) -> None:
+    def _validate_hidg_nodes(
+        self, timeout_sec: float | None = None, poll_interval_sec: float | None = None
+    ) -> None:
         timeout_sec = self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
-        poll_interval_sec = self.HIDG_NODE_POLL_INTERVAL_SEC if poll_interval_sec is None else poll_interval_sec
+        poll_interval_sec = (
+            self.HIDG_NODE_POLL_INTERVAL_SEC if poll_interval_sec is None else poll_interval_sec
+        )
         deadline = time.monotonic() + max(timeout_sec, 0.0)
 
         while True:
@@ -94,7 +104,9 @@ class HidGadgets:
             if not invalid_paths:
                 return
             if time.monotonic() >= deadline:
-                raise RuntimeError("USB HID gadget nodes are not healthy: " + ", ".join(invalid_paths))
+                raise RuntimeError(
+                    "USB HID gadget nodes are not healthy: " + ", ".join(invalid_paths)
+                )
             time.sleep(poll_interval_sec)
 
     def enable(self) -> None:

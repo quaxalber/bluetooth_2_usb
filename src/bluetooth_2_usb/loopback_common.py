@@ -70,7 +70,10 @@ def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
     return names
 
 
-EVENT_CODE_NAMES = {EV_KEY: _event_code_names(("KEY_", "BTN_")), EV_REL: _event_code_names(("REL_",))}
+EVENT_CODE_NAMES = {
+    EV_KEY: _event_code_names(("KEY_", "BTN_")),
+    EV_REL: _event_code_names(("REL_",)),
+}
 
 DEFAULT_DEVICE_SUBSTRING = "USB_Combo_Device"
 DEFAULT_KEYBOARD_NAME = "B2U Test Keyboard"
@@ -101,7 +104,11 @@ class LoopbackInterrupted(KeyboardInterrupt):
             except ValueError:
                 signal_name = None
         self.signal_name = signal_name
-        message = f"Loopback interrupted by {signal_name}" if signal_name is not None else "Loopback interrupted"
+        message = (
+            f"Loopback interrupted by {signal_name}"
+            if signal_name is not None
+            else "Loopback interrupted"
+        )
         super().__init__(message)
 
 
@@ -135,10 +142,13 @@ def loopback_session(command: str, scenario: str):
             _lock_loopback_file(lock_handle)
         except OSError as exc:
             raise LoopbackBusyError(
-                "Another Bluetooth-2-USB loopback session is already running " f"(lock: {LOOPBACK_LOCK_PATH})"
+                "Another Bluetooth-2-USB loopback session is already running "
+                f"(lock: {LOOPBACK_LOCK_PATH})"
             ) from exc
 
-        metadata = json.dumps({"pid": os.getpid(), "command": command, "scenario": scenario}, sort_keys=True)
+        metadata = json.dumps(
+            {"pid": os.getpid(), "command": command, "scenario": scenario}, sort_keys=True
+        )
         lock_handle.seek(0)
         lock_handle.truncate()
         lock_handle.write(metadata)
@@ -154,7 +164,9 @@ def loopback_session(command: str, scenario: str):
             )
             if sig is not None
         ]
-        previous_handlers = {handled_signal: signal.getsignal(handled_signal) for handled_signal in handled_signals}
+        previous_handlers = {
+            handled_signal: signal.getsignal(handled_signal) for handled_signal in handled_signals
+        }
 
         def _raise_interrupted(received_signal: int, _frame) -> None:
             raise LoopbackInterrupted(received_signal)
@@ -342,7 +354,11 @@ TEXT_BURST_STEPS = tuple(_TEXT_BURST_STEPS)
 
 SCENARIOS = {
     "keyboard": ScenarioDefinition(
-        name="keyboard", keyboard_steps=KEYBOARD_STEPS, mouse_rel_steps=(), mouse_button_steps=(), consumer_steps=()
+        name="keyboard",
+        keyboard_steps=KEYBOARD_STEPS,
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=(),
     ),
     "mouse": ScenarioDefinition(
         name="mouse",
@@ -375,10 +391,18 @@ SCENARIOS = {
         mouse_coalesced_tail_count=3,
     ),
     "consumer": ScenarioDefinition(
-        name="consumer", keyboard_steps=(), mouse_rel_steps=(), mouse_button_steps=(), consumer_steps=CONSUMER_STEPS
+        name="consumer",
+        keyboard_steps=(),
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=CONSUMER_STEPS,
     ),
     "text_burst": ScenarioDefinition(
-        name="text_burst", keyboard_steps=TEXT_BURST_STEPS, mouse_rel_steps=(), mouse_button_steps=(), consumer_steps=()
+        name="text_burst",
+        keyboard_steps=TEXT_BURST_STEPS,
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=(),
     ),
 }
 
@@ -392,7 +416,11 @@ class GadgetNodes:
     consumer_node: str | None
 
     def to_dict(self) -> dict[str, str | None]:
-        return {"keyboard_node": self.keyboard_node, "mouse_node": self.mouse_node, "consumer_node": self.consumer_node}
+        return {
+            "keyboard_node": self.keyboard_node,
+            "mouse_node": self.mouse_node,
+            "consumer_node": self.consumer_node,
+        }
 
 
 @dataclass(slots=True)
@@ -416,7 +444,9 @@ class LoopbackResult:
             f"message: {self.message}",
         ]
         for key, value in sorted(self.details.items()):
-            rendered = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+            rendered = (
+                json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+            )
             lines.append(f"{key}: {rendered}")
         return "\n".join(lines)
 
