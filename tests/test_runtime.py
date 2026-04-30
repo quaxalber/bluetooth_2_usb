@@ -82,7 +82,7 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.runtime.signal.signal"):
                 runtime._restore_signal_handlers(handlers)
 
-    async def test_runtime_passes_root_task_group_to_supervisor(self) -> None:
+    async def test_runtime_builds_supervisor_inside_root_task_group(self) -> None:
         class CompletingEventSource:
             def __init__(self) -> None:
                 self.stop_calls = 0
@@ -94,16 +94,14 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                 self.stop_calls += 1
 
         class WaitingSupervisor:
-            def __init__(self) -> None:
-                self.task_group = None
+            def __init__(self, task_group: asyncio.TaskGroup) -> None:
+                self.task_group = task_group
                 self.child_task_created = False
                 self.shutdown_calls = 0
 
-            async def run(self, _events, *, task_group=None) -> None:
-                self.task_group = task_group
-                if task_group is not None:
-                    task_group.create_task(asyncio.sleep(0), name="supervisor child")
-                    self.child_task_created = True
+            async def run(self, _events) -> None:
+                self.task_group.create_task(asyncio.sleep(0), name="supervisor child")
+                self.child_task_created = True
                 await asyncio.Event().wait()
 
             def request_shutdown(self) -> None:
@@ -111,10 +109,16 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
 
         runtime = self._runtime()
         event_source = CompletingEventSource()
-        supervisor = WaitingSupervisor()
+        supervisors = []
 
-        await asyncio.wait_for(runtime._run_tasks(event_source, supervisor), timeout=1)
+        def supervisor_factory(task_group: asyncio.TaskGroup) -> WaitingSupervisor:
+            supervisor = WaitingSupervisor(task_group)
+            supervisors.append(supervisor)
+            return supervisor
 
+        await asyncio.wait_for(runtime._run_tasks(event_source, supervisor_factory), timeout=1)
+
+        supervisor = supervisors[0]
         self.assertIsNotNone(supervisor.task_group)
         self.assertTrue(supervisor.child_task_created)
         self.assertGreaterEqual(event_source.stop_calls, 1)

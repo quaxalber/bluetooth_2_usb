@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .hid_gadgets import HidGadgets
@@ -46,21 +47,35 @@ class Runtime:
         hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(relaying_active, hid_gadgets)
-        self._supervisor = RelaySupervisor(
-            hid_gadgets=hid_gadgets,
-            device_identifiers=list(self._config.device_ids),
-            auto_discover=self._config.auto_discover,
-            grab_devices=self._config.grab_devices,
-            relaying_active=relaying_active,
-            shortcut_toggler=shortcut_toggler,
-        )
         self._event_source = RuntimeEventSource(self._events, udc_path=self._config.udc_path)
 
         handlers = self._install_signal_handlers()
         try:
-            await self._run_tasks(self._event_source, self._supervisor)
+            await self._run_tasks(
+                self._event_source,
+                lambda task_group: self._build_supervisor(
+                    hid_gadgets, relaying_active, shortcut_toggler, task_group
+                ),
+            )
         finally:
             self._restore_signal_handlers(handlers)
+
+    def _build_supervisor(
+        self,
+        hid_gadgets: HidGadgets,
+        relaying_active: asyncio.Event,
+        shortcut_toggler: ShortcutToggler | None,
+        task_group: asyncio.TaskGroup,
+    ) -> RelaySupervisor:
+        return RelaySupervisor(
+            hid_gadgets=hid_gadgets,
+            relaying_active=relaying_active,
+            task_group=task_group,
+            device_identifiers=list(self._config.device_ids),
+            auto_discover=self._config.auto_discover,
+            grab_devices=self._config.grab_devices,
+            shortcut_toggler=shortcut_toggler,
+        )
 
     def _build_shortcut_toggler(
         self, relaying_active: asyncio.Event, hid_gadgets: HidGadgets
@@ -75,17 +90,22 @@ class Runtime:
         )
 
     async def _run_tasks(
-        self, event_source: RuntimeEventSource, supervisor: RelaySupervisor
+        self,
+        event_source: RuntimeEventSource,
+        supervisor_factory: Callable[[asyncio.TaskGroup], RelaySupervisor],
     ) -> None:
         event_source_task: asyncio.Task[None] | None = None
         supervisor_task: asyncio.Task[None] | None = None
+        supervisor: RelaySupervisor | None = None
         try:
             async with asyncio.TaskGroup() as task_group:
+                supervisor = supervisor_factory(task_group)
+                self._supervisor = supervisor
                 event_source_task = task_group.create_task(
                     event_source.run(), name="runtime event source"
                 )
                 supervisor_task = task_group.create_task(
-                    supervisor.run(self._events, task_group=task_group), name="relay supervisor"
+                    supervisor.run(self._events), name="relay supervisor"
                 )
                 done, pending = await asyncio.wait(
                     {event_source_task, supervisor_task}, return_when=asyncio.FIRST_COMPLETED
@@ -107,7 +127,8 @@ class Runtime:
             raise
         finally:
             event_source.stop()
-            supervisor.request_shutdown()
+            if supervisor is not None:
+                supervisor.request_shutdown()
             await self._wait_for_shutdown(supervisor_task, event_source_task)
 
     async def _wait_for_shutdown(

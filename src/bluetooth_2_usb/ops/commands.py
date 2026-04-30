@@ -14,8 +14,10 @@ _LOG_FILE = None
 _PREVIOUS_STDOUT = None
 _PREVIOUS_STDERR = None
 _RESET = "\033[0m"
+_RED = "\033[31m"
 _GREEN = "\033[32m"
 _YELLOW = "\033[33m"
+_LIGHT_BLUE = "\033[94m"
 
 
 def _style(text: str, color: str) -> str:
@@ -36,7 +38,7 @@ def timestamp() -> str:
 
 
 def info(message: str) -> None:
-    print(f"{_style('[i]', _GREEN)} {message}")
+    print(f"{_style('[i]', _LIGHT_BLUE)} {message}")
 
 
 def ok(message: str) -> None:
@@ -48,7 +50,7 @@ def warn(message: str) -> None:
 
 
 def fail(message: str, exit_code: int = 1) -> None:
-    raise OpsError(message, exit_code)
+    raise OpsError(_style(message, _RED), exit_code)
 
 
 def ensure_root() -> None:

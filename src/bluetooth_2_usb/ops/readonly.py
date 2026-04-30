@@ -126,9 +126,7 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
 
     persist_mount = Path(values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount)))
     persist_bluetooth_dir = Path(
-        values.get(
-            "B2U_PERSIST_BLUETOOTH_DIR", str(persist_mount / PATHS.persist_bluetooth_dir.name)
-        )
+        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.persist_bluetooth_dir))
     )
 
     return ReadonlyConfig(
