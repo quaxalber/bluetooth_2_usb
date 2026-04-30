@@ -126,7 +126,7 @@ class RelaySupervisor:
             try:
                 initial_devices = list_input_devices()
             except DeviceEnumerationError as exc:
-                logger.exception(f"RelaySupervisor: Failed enumerating input devices: {exc}")
+                logger.exception("RelaySupervisor: Failed enumerating input devices: %s", exc)
                 raise
 
             async with TaskGroup() as task_group:
@@ -187,7 +187,7 @@ class RelaySupervisor:
         elif isinstance(event, UdcStateChanged):
             self._set_relaying_active(event.state == "configured")
         elif isinstance(event, ShutdownRequested):
-            logger.debug(f"Runtime shutdown requested: {event.reason}")
+            logger.debug("Runtime shutdown requested: %s", event.reason)
             self.request_shutdown()
 
     def _set_relaying_active(self, active: bool) -> None:
@@ -229,14 +229,14 @@ class RelaySupervisor:
     def _device_added(self, device_path: str) -> None:
         if self._state in (_SupervisorState.NEW, _SupervisorState.STARTING):
             self._queue_pending_add(device_path)
-            logger.debug(f"Queueing add for {device_path} until the relay supervisor is ready.")
+            logger.debug("Queueing add for %s until the relay supervisor is ready.", device_path)
             return
         if self._state in (_SupervisorState.SHUTTING_DOWN, _SupervisorState.STOPPED):
-            logger.debug(f"Ignoring add for {device_path}; controller is shutting down.")
+            logger.debug("Ignoring add for %s; controller is shutting down.", device_path)
             return
 
         if self._task_group is None:
-            logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
+            logger.debug("Ignoring add for %s; event loop is unavailable.", device_path)
             return
 
         self._schedule_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
@@ -245,26 +245,26 @@ class RelaySupervisor:
         if self._state is _SupervisorState.NEW:
             if self._discard_pending_add(device_path):
                 logger.debug(
-                    f"Dropped queued add for {device_path} because the device was removed "
-                    + "before startup completed."
+                    "Dropped queued add for %s because the device was removed before startup completed.",
+                    device_path,
                 )
             return
 
         if self._state is _SupervisorState.STARTING:
             if self._discard_pending_add(device_path):
                 logger.debug(
-                    f"Dropped queued add for {device_path} because the device was removed "
-                    + "before startup completed."
+                    "Dropped queued add for %s because the device was removed before startup completed.",
+                    device_path,
                 )
                 return
             if device_path not in self._active_relays:
                 return
 
         if self._state in (_SupervisorState.SHUTTING_DOWN, _SupervisorState.STOPPED):
-            logger.debug(f"Ignoring remove for {device_path}; controller is shutting down.")
+            logger.debug("Ignoring remove for %s; controller is shutting down.", device_path)
             return
         if self._shutdown_requested():
-            logger.debug(f"Ignoring remove for {device_path}; event loop is unavailable.")
+            logger.debug("Ignoring remove for %s; event loop is unavailable.", device_path)
             return
         self._cancel_pending_probe(device_path)
         self._cancel_active_relay(device_path)
@@ -331,7 +331,7 @@ class RelaySupervisor:
             or self._state is not _SupervisorState.RUNNING
             or self._shutdown_requested()
         ):
-            logger.debug(f"Ignoring add for {device_path}; event loop is unavailable.")
+            logger.debug("Ignoring add for %s; event loop is unavailable.", device_path)
             return
 
         try:
@@ -339,24 +339,26 @@ class RelaySupervisor:
         except (OSError, FileNotFoundError):
             if retries_remaining > 0:
                 logger.debug(
-                    f"{device_path} vanished before hotplug filtering; "
-                    + f"retrying ({retries_remaining} left)."
+                    "%s vanished before hotplug filtering; retrying (%s left).",
+                    device_path,
+                    retries_remaining,
                 )
                 self._schedule_probe_retry(device_path, retries_remaining - 1)
             else:
-                logger.debug(f"{device_path} vanished before hotplug filtering.")
+                logger.debug("%s vanished before hotplug filtering.", device_path)
             return
 
         if not self._device_matches_relay_filters(device):
             if retries_remaining > 0:
                 logger.debug(
-                    f"Hotplugged device {device} is not ready for relay filters yet; "
-                    + f"retrying ({retries_remaining} left)."
+                    "Hotplugged device %s is not ready for relay filters yet; retrying (%s left).",
+                    device,
+                    retries_remaining,
                 )
                 self._schedule_probe_retry(device_path, retries_remaining - 1)
             else:
                 logger.debug(
-                    f"Skipping hotplugged device {device} because it does not match relay filters."
+                    "Skipping hotplugged device %s because it does not match relay filters.", device
                 )
             device.close()
             return
@@ -365,36 +367,36 @@ class RelaySupervisor:
 
     def _start_open_device(self, device: InputDevice) -> None:
         if self._state not in (_SupervisorState.STARTING, _SupervisorState.RUNNING):
-            logger.debug(f"Ignoring {device}; controller is not running.")
+            logger.debug("Ignoring %s; controller is not running.", device)
             device.close()
             return
 
         if self._task_group is None:
-            logger.critical(f"No TaskGroup available; ignoring {device}.")
+            logger.critical("No TaskGroup available; ignoring %s.", device)
             device.close()
             return
 
         if device.path in self._active_relays:
-            logger.debug(f"Device {device} is already active.")
+            logger.debug("Device %s is already active.", device)
             device.close()
             return
 
         try:
             task = self._task_group.create_task(self._run_input_relay(device), name=device.path)
         except RuntimeError:
-            logger.debug(f"Ignoring {device}; TaskGroup is shutting down.")
+            logger.debug("Ignoring %s; TaskGroup is shutting down.", device)
             device.close()
             return
         self._active_relays[device.path] = _ActiveRelay(device=device, task=task)
         task.add_done_callback(
             lambda done_task, path=device.path: self._relay_task_done(path, done_task)
         )
-        logger.debug(f"Created task for {device}.")
+        logger.debug("Created task for %s.", device)
 
     def _cancel_active_relay(self, device_path: str) -> None:
         active_relay = self._active_relays.get(device_path)
         if active_relay is None:
-            logger.debug(f"No active task found for {device_path} to remove.")
+            logger.debug("No active task found for %s to remove.", device_path)
             return
 
         try:
@@ -406,7 +408,7 @@ class RelaySupervisor:
             self._relay_task_done(device_path, active_relay.task)
         else:
             active_relay.task.cancel()
-            logger.debug(f"Cancelled relay for {device_path}.")
+            logger.debug("Cancelled relay for %s.", device_path)
 
     def _release_gadgets_after_relay_tasks_stop(self, tasks: list[asyncio.Task[None]]) -> None:
         pending_tasks = {task for task in tasks if not task.done()}
@@ -437,7 +439,7 @@ class RelaySupervisor:
         try:
             active_relay.device.close()
         except Exception:
-            logger.debug(f"Ignoring close failure for {device_path}")
+            logger.debug("Ignoring close failure for %s", device_path)
 
     async def _run_input_relay(self, device: InputDevice) -> None:
         """
@@ -453,15 +455,15 @@ class RelaySupervisor:
                 relaying_active=self._relaying_active,
                 shortcut_toggler=self._shortcut_toggler,
             ) as relay:
-                logger.info(f"Activated {relay}")
+                logger.info("Activated %s", relay)
                 await relay.async_relay_events_loop()
         except OSError as exc:
             if exc.errno not in DEVICE_DISCONNECT_ERRNOS:
-                logger.exception(f"Unhandled OS error in relay for {device}.")
+                logger.exception("Unhandled OS error in relay for %s.", device)
                 raise
-            logger.info(f"Lost connection to {device}: {exc}")
+            logger.info("Lost connection to %s: %s", device, exc)
         except Exception:
-            logger.exception(f"Unhandled exception in relay for {device}.")
+            logger.exception("Unhandled exception in relay for %s.", device)
             raise
 
     def _device_matches_relay_filters(self, device: InputDevice) -> bool:
@@ -476,7 +478,7 @@ class RelaySupervisor:
         if self._auto_discover:
             exclusion_reason = auto_discover_exclusion_reason(device, self._skip_name_prefixes)
             if exclusion_reason is not None:
-                logger.debug(f"Skipping {device} during auto-discovery: {exclusion_reason}")
+                logger.debug("Skipping %s during auto-discovery: %s", device, exclusion_reason)
                 return False
             return True
 

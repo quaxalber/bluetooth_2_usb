@@ -114,7 +114,7 @@ def configure_logging(args: Arguments) -> None:
     if args.log_to_file:
         add_file_handler(args.log_path)
 
-    logger.debug(f"CLI args: {args}")
+    logger.debug("CLI args: %s", args)
 
 
 async def async_run(args: Arguments) -> int:
@@ -144,7 +144,7 @@ async def async_run(args: Arguments) -> int:
 
     configure_logging(args)
 
-    logger.info(f"Launching {get_versioned_name()}")
+    logger.info("Launching %s", get_versioned_name())
 
     if not env_status.ok:
         if not env_status.configfs:
@@ -153,7 +153,7 @@ async def async_run(args: Arguments) -> int:
             logger.error("No UDC detected! USB gadget mode may not be enabled.")
         return EXIT_ENVIRONMENT
 
-    logger.debug(f"Detected UDC state file: {env_status.udc_path}")
+    logger.debug("Detected UDC state file: %s", env_status.udc_path)
 
     from .runtime import Runtime
     from .runtime_config import runtime_config_from_args
@@ -182,7 +182,7 @@ def run(argv: list[str] | None = None) -> int:
     try:
         return asyncio.run(async_run(args))
     except OSError as exc:
-        logger.error(f"Runtime environment error: {exc}")
+        logger.error("Runtime environment error: %s", exc)
         return EXIT_ENVIRONMENT
     except Exception:
         logger.exception("Unhandled exception encountered. Aborting mission.")

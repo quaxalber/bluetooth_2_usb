@@ -77,7 +77,7 @@ class InputRelay:
                 self._input_device.grab()
                 self._currently_grabbed = True
             except Exception as ex:
-                logger.warning(f"Could not grab {self._input_device.path}: {ex}")
+                logger.warning("Could not grab %s: %s", self._input_device.path, ex)
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> bool:
@@ -94,11 +94,11 @@ class InputRelay:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
                     logger.debug(
-                        f"Skipping ungrab for {self._input_device.path} because the device "
-                        + "is no longer available."
+                        "Skipping ungrab for %s because the device is no longer available.",
+                        self._input_device.path,
                     )
                 else:
-                    logger.warning(f"Unable to ungrab {self._input_device.path}: {ex}")
+                    logger.warning("Unable to ungrab %s: %s", self._input_device.path, ex)
         return False
 
     def _should_ignore_ungrab_error(self, ex: Exception) -> bool:
@@ -109,23 +109,23 @@ class InputRelay:
             try:
                 self._input_device.grab()
                 self._currently_grabbed = True
-                logger.debug(f"Grabbed {self._input_device}")
+                logger.debug("Grabbed %s", self._input_device)
             except Exception as ex:
-                logger.warning(f"Could not grab {self._input_device}: {ex}")
+                logger.warning("Could not grab %s: %s", self._input_device, ex)
         elif self._grab_device and not active and self._currently_grabbed:
             try:
                 self._input_device.ungrab()
                 self._currently_grabbed = False
-                logger.debug(f"Ungrabbed {self._input_device}")
+                logger.debug("Ungrabbed %s", self._input_device)
             except Exception as ex:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
                     logger.debug(
-                        f"Skipping ungrab for {self._input_device.path} because the device "
-                        + "is no longer available."
+                        "Skipping ungrab for %s because the device is no longer available.",
+                        self._input_device.path,
                     )
                 else:
-                    logger.warning(f"Could not ungrab {self._input_device}: {ex}")
+                    logger.warning("Could not ungrab %s: %s", self._input_device, ex)
 
     async def async_relay_events_loop(self) -> None:
         """
@@ -145,8 +145,10 @@ class InputRelay:
 
                 if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
                     logger.debug(
-                        f"Received {event} from {self._input_device.name} "
-                        + f"({self._input_device.path})"
+                        "Received %s from %s (%s)",
+                        event,
+                        self._input_device.name,
+                        self._input_device.path,
                     )
 
                 if self._shortcut_toggler and isinstance(event, KeyEvent):
@@ -180,8 +182,8 @@ class InputRelay:
                 raise
             input_disappeared = True
             logger.debug(
-                f"Stopping relay loop for {self._input_device.path} because the input "
-                + "device disappeared."
+                "Stopping relay loop for %s because the input device disappeared.",
+                self._input_device.path,
             )
             self._discard_pending_mouse_state()
         try:
@@ -190,20 +192,27 @@ class InputRelay:
             if not input_disappeared or ex.errno != errno.ENODEV:
                 raise
             logger.debug(
-                f"Ignoring pending mouse flush failure for {self._input_device.path} after "
-                + f"input device disappeared: {ex}"
+                "Ignoring pending mouse flush failure for %s after input device disappeared: %s",
+                self._input_device.path,
+                ex,
             )
         logger.debug(
-            f"Relay stats for {self._input_device.path}: "
-            + f"hid_write_retries={self._hid_write_retries} "
-            + f"hid_write_failures={self._hid_write_failures}"
+            "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
+            self._input_device.path,
+            self._hid_write_retries,
+            self._hid_write_failures,
         )
 
     def _accumulate_mouse_movement(self, event: RelEvent) -> None:
         x, y, wheel, pan = get_mouse_movement(event)
         logger.debug(
-            f"Mouse REL input: code={event.event.code} value={event.event.value} "
-            + f"-> x={x} y={y} wheel={wheel} pan={pan}"
+            "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
+            event.event.code,
+            event.event.value,
+            x,
+            y,
+            wheel,
+            pan,
         )
         self._mouse_delta.add_event(event)
 
@@ -261,7 +270,7 @@ class InputRelay:
                     return False
                 if attempt < max_tries:
                     self._hid_write_retries += 1
-                    logger.debug(f"HID write blocked ({attempt}/{max_tries})")
+                    logger.debug("HID write blocked (%s/%s)", attempt, max_tries)
                     if not self._relaying_active.is_set():
                         return False
                     await asyncio.sleep(retry_delay)
@@ -269,7 +278,7 @@ class InputRelay:
                         return False
                 else:
                     self._hid_write_failures += 1
-                    logger.warning(f"HID write blocked ({attempt}/{max_tries})")
+                    logger.warning("HID write blocked (%s/%s)", attempt, max_tries)
                     return False
             except BrokenPipeError:
                 self._hid_write_failures += 1
@@ -282,6 +291,6 @@ class InputRelay:
                 return False
             except Exception:
                 self._hid_write_failures += 1
-                logger.exception(f"Unexpected error processing {action_name}")
+                logger.exception("Unexpected error processing %s", action_name)
                 raise
         return False

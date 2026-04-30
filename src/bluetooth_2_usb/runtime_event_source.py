@@ -56,7 +56,7 @@ class RuntimeEventSource:
             logger.warning("UDC state file not found. Cable monitoring may be unavailable.")
         elif not self._udc_path.is_file():
             logger.warning(
-                f"UDC state file {self._udc_path} not found. Cable monitoring may be unavailable."
+                "UDC state file %s not found. Cable monitoring may be unavailable.", self._udc_path
             )
 
     async def run(self) -> None:
@@ -103,7 +103,7 @@ class RuntimeEventSource:
             with open(self._udc_path, encoding="utf-8") as handle:
                 return handle.read().strip()
         except OSError:
-            logger.debug(f"Unable to read UDC state from {self._udc_path}")
+            logger.debug("Unable to read UDC state from %s", self._udc_path)
             return "not_attached"
 
     def _drain_udev_events(self) -> None:
@@ -124,8 +124,8 @@ class RuntimeEventSource:
 
         action = getattr(device, "action", None)
         if action == "add":
-            logger.debug(f"RuntimeEventSource: added input => {device_node}")
+            logger.debug("RuntimeEventSource: added input => %s", device_node)
             self._events.put_nowait(DeviceAdded(device_node))
         elif action == "remove":
-            logger.debug(f"RuntimeEventSource: removed input => {device_node}")
+            logger.debug("RuntimeEventSource: removed input => %s", device_node)
             self._events.put_nowait(DeviceRemoved(device_node))

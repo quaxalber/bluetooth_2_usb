@@ -121,6 +121,8 @@ Please keep code and docs aligned with the supported deployment model:
 - Python 3.11+
 - format with Black
 - lint with Ruff
+- use positional formatting for logger calls so disabled log levels avoid
+  formatting work and log aggregators can group stable message templates
 - prefer small, direct control flow over clever abstractions
 - keep CLI behavior and help text stable unless intentionally changed
 

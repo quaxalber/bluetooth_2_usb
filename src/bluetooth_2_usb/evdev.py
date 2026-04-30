@@ -179,10 +179,14 @@ def evdev_to_usb_hid(event: KeyEvent) -> tuple[int | None, str | None]:
     hid_usage_id = _evdev_to_usb_hid_map().get(scancode, None)
     hid_usage_name = find_usage_name(event, hid_usage_id)
     if any(item is None for item in (key_name, hid_usage_id, hid_usage_name)):
-        logger.warning(f"Unsupported key pressed: 0x{scancode:02X}")
+        logger.warning("Unsupported key pressed: 0x%02X", scancode)
     else:
         logger.debug(
-            f"Converted evdev scancode 0x{scancode:02X} ({key_name}) to HID UsageID 0x{hid_usage_id:02X} ({hid_usage_name})"
+            "Converted evdev scancode 0x%02X (%s) to HID UsageID 0x%02X (%s)",
+            scancode,
+            key_name,
+            hid_usage_id,
+            hid_usage_name,
         )
     return hid_usage_id, hid_usage_name
 

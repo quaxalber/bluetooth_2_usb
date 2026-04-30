@@ -49,10 +49,10 @@ def dispatch_key_event_to_hid(event: KeyEvent, hid_gadgets: HidGadgets) -> None:
         raise RuntimeError("No appropriate USB gadget found (manager not enabled?).")
 
     if event.keystate == KeyEvent.key_down:
-        logger.debug(f"Pressing {key_name} (0x{key_id:02X}) via {output_gadget}")
+        logger.debug("Pressing %s (0x%02X) via %s", key_name, key_id, output_gadget)
         output_gadget.press(key_id)
     elif event.keystate == KeyEvent.key_up:
-        logger.debug(f"Releasing {key_name} (0x{key_id:02X}) via {output_gadget}")
+        logger.debug("Releasing %s (0x%02X) via %s", key_name, key_id, output_gadget)
         if is_consumer_key(event):
             output_gadget.release()
         else:

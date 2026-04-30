@@ -55,7 +55,7 @@ class HidGadgets:
                 continue
             if stat.S_ISCHR(mode) and not remove_character_devices:
                 continue
-            logger.warning(f"Removing stale HID gadget path {path}")
+            logger.warning("Removing stale HID gadget path %s", path)
             try:
                 path.unlink()
             except FileNotFoundError:
@@ -133,7 +133,7 @@ class HidGadgets:
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
         self._enabled = True
 
-        logger.debug(f"USB HID gadgets initialized: {enabled_devices}")
+        logger.debug("USB HID gadgets initialized: %s", enabled_devices)
 
     @property
     def keyboard(self) -> Keyboard | None:
@@ -183,4 +183,4 @@ class HidGadgets:
                 elif hasattr(gadget, "release"):
                     gadget.release()
             except Exception:
-                logger.debug(f"Ignoring {name} gadget release failure")
+                logger.debug("Ignoring %s gadget release failure", name)
