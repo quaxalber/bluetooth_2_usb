@@ -36,11 +36,7 @@ class HidGadgets:
         self._clear_gadget_state()
 
     def _clear_gadget_state(self) -> None:
-        self._gadgets = {
-            "keyboard": None,
-            "mouse": None,
-            "consumer": None,
-        }
+        self._gadgets = {"keyboard": None, "mouse": None, "consumer": None}
         self._enabled = False
 
     def _requested_devices(self):
@@ -95,9 +91,7 @@ class HidGadgets:
         return invalid_paths
 
     def _validate_hidg_nodes(
-        self,
-        timeout_sec: float | None = None,
-        poll_interval_sec: float | None = None,
+        self, timeout_sec: float | None = None, poll_interval_sec: float | None = None
     ) -> None:
         timeout_sec = self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
         poll_interval_sec = (

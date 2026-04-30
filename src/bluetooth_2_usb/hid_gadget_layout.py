@@ -150,11 +150,7 @@ class GadgetHidDevice(usb_hid.Device):
             "name": name,
         }
         try:
-            super().__init__(
-                subclass=subclass,
-                protocol=protocol,
-                **init_kwargs,
-            )
+            super().__init__(subclass=subclass, protocol=protocol, **init_kwargs)
         except TypeError as exc:
             if "unexpected keyword argument 'subclass'" not in str(exc):
                 raise
@@ -258,10 +254,7 @@ def build_default_layout() -> GadgetLayout:
                 configfs_report_length=8,
             ),
             GadgetHidDevice.from_existing(
-                usb_hid.Device.CONSUMER_CONTROL,
-                function_index=2,
-                protocol=0,
-                subclass=0,
+                usb_hid.Device.CONSUMER_CONTROL, function_index=2, protocol=0, subclass=0
             ),
         ),
         bcd_device="0x0205",

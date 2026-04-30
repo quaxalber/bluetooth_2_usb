@@ -4,11 +4,7 @@ import os
 import sys
 
 from .cli import EXIT_USAGE, run
-from .service_settings import (
-    ServiceSettingsError,
-    build_runtime_argv,
-    load_service_settings,
-)
+from .service_settings import ServiceSettingsError, build_runtime_argv, load_service_settings
 
 
 def main() -> int:

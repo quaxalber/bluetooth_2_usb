@@ -46,19 +46,12 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         udc_path: Path | None = None,
         poll_interval: float = 0.01,
     ) -> RuntimeEventSource:
-        with patch(
-            "bluetooth_2_usb.runtime_event_source.pyudev.Context",
-            return_value=object(),
-        ):
+        with patch("bluetooth_2_usb.runtime_event_source.pyudev.Context", return_value=object()):
             with patch(
                 "bluetooth_2_usb.runtime_event_source.pyudev.Monitor.from_netlink",
                 return_value=monitor,
             ):
-                return RuntimeEventSource(
-                    events,
-                    udc_path=udc_path,
-                    poll_interval=poll_interval,
-                )
+                return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
 
     async def test_runtime_event_source_emits_udev_hotplug_events(self) -> None:
         queue = asyncio.Queue()
@@ -88,14 +81,12 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
 
             task = asyncio.create_task(source.run())
             self.assertEqual(
-                await asyncio.wait_for(queue.get(), timeout=1),
-                UdcStateChanged("not_attached"),
+                await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached")
             )
 
             udc_path.write_text("configured\n", encoding="utf-8")
             self.assertEqual(
-                await asyncio.wait_for(queue.get(), timeout=1),
-                UdcStateChanged("configured"),
+                await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("configured")
             )
 
             source.stop()
@@ -105,17 +96,14 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(source._loop)
         monitor.close()
 
-    async def test_runtime_event_source_treats_missing_udc_path_as_not_attached(
-        self,
-    ) -> None:
+    async def test_runtime_event_source_treats_missing_udc_path_as_not_attached(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
         source = self._build_source(queue, monitor=monitor, udc_path=None)
 
         task = asyncio.create_task(source.run())
         self.assertEqual(
-            await asyncio.wait_for(queue.get(), timeout=1),
-            UdcStateChanged("not_attached"),
+            await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached")
         )
 
         source.stop()

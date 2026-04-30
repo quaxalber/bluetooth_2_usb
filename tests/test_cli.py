@@ -11,9 +11,7 @@ from bluetooth_2_usb.runtime import GRACEFUL_SHUTDOWN_TIMEOUT_SEC
 
 
 class CliTest(unittest.TestCase):
-    def test_graceful_shutdown_timeout_leaves_room_for_systemd_stop_budget(
-        self,
-    ) -> None:
+    def test_graceful_shutdown_timeout_leaves_room_for_systemd_stop_budget(self) -> None:
         self.assertEqual(GRACEFUL_SHUTDOWN_TIMEOUT_SEC, 4.0)
 
     def test_list_devices_error_returns_environment_exit(self) -> None:
@@ -43,12 +41,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(exit_code, cli.EXIT_OK)
         self.assertEqual(
             json.loads(stdout.getvalue()),
-            {
-                "configfs": True,
-                "ok": True,
-                "udc_path": None,
-                "udc_present": True,
-            },
+            {"configfs": True, "ok": True, "udc_path": None, "udc_present": True},
         )
 
     def test_list_devices_json_output(self) -> None:
@@ -65,10 +58,7 @@ class CliTest(unittest.TestCase):
             )
         ]
 
-        with patch(
-            "bluetooth_2_usb.inventory.describe_input_devices",
-            return_value=devices,
-        ):
+        with patch("bluetooth_2_usb.inventory.describe_input_devices", return_value=devices):
             with redirect_stdout(stdout):
                 exit_code = cli.run(["--list_devices", "--output", "json"])
 
@@ -91,17 +81,10 @@ class CliTest(unittest.TestCase):
             validate_env=False,
             version=False,
         )
-        env_status = cli.EnvironmentStatus(
-            configfs=True,
-            udc_present=True,
-            udc_path=None,
-        )
+        env_status = cli.EnvironmentStatus(configfs=True, udc_present=True, udc_path=None)
 
         with patch("bluetooth_2_usb.cli.validate_environment", return_value=env_status):
-            with patch(
-                "bluetooth_2_usb.runtime.Runtime",
-                return_value=runtime,
-            ) as runtime_cls:
+            with patch("bluetooth_2_usb.runtime.Runtime", return_value=runtime) as runtime_cls:
                 exit_code = cli.asyncio.run(cli.async_run(args))
 
         self.assertEqual(exit_code, cli.EXIT_OK)

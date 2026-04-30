@@ -9,12 +9,7 @@ from pathlib import Path
 
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
 DEFAULT_LOG_PATH = "/var/log/bluetooth_2_usb/bluetooth_2_usb.log"
-BOOL_KEYS = {
-    "B2U_AUTO_DISCOVER",
-    "B2U_GRAB_DEVICES",
-    "B2U_LOG_TO_FILE",
-    "B2U_DEBUG",
-}
+BOOL_KEYS = {"B2U_AUTO_DISCOVER", "B2U_GRAB_DEVICES", "B2U_LOG_TO_FILE", "B2U_DEBUG"}
 RUNTIME_ENV_KEY_ORDER = (
     "B2U_AUTO_DISCOVER",
     "B2U_DEVICE_IDS",
@@ -249,9 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Print a shell-quoted command for the configured runtime.",
     )
     group.add_argument(
-        "--print-summary-json",
-        action="store_true",
-        help="Print the parsed settings as JSON.",
+        "--print-summary-json", action="store_true", help="Print the parsed settings as JSON."
     )
     group.add_argument(
         "--canonicalize-bools",

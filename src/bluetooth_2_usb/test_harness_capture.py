@@ -45,17 +45,9 @@ CONSUMER_USAGE = 0x01
 GADGET_VENDOR_ID = 0x1D6B
 GADGET_PRODUCT_ID = 0x0104
 
-CONSUMER_USAGES = {
-    KEY_VOLUMEUP: 0x00E9,
-    KEY_VOLUMEDOWN: 0x00EA,
-}
+CONSUMER_USAGES = {KEY_VOLUMEUP: 0x00E9, KEY_VOLUMEDOWN: 0x00EA}
 
-REL_NAMES = {
-    REL_X: "REL_X",
-    REL_Y: "REL_Y",
-    REL_HWHEEL: "REL_HWHEEL",
-    REL_WHEEL: "REL_WHEEL",
-}
+REL_NAMES = {REL_X: "REL_X", REL_Y: "REL_Y", REL_HWHEEL: "REL_HWHEEL", REL_WHEEL: "REL_WHEEL"}
 
 MOUSE_BUTTON_BITS = {
     BTN_LEFT: 0x01,
@@ -112,9 +104,7 @@ class GadgetNodeCandidates:
         consumer_node: str | None = None,
     ) -> GadgetNodes:
         return GadgetNodes(
-            keyboard_node=keyboard_node,
-            mouse_node=mouse_node,
-            consumer_node=consumer_node,
+            keyboard_node=keyboard_node, mouse_node=mouse_node, consumer_node=consumer_node
         )
 
     def to_dict(self) -> dict[str, list[str]]:
@@ -196,8 +186,7 @@ class MouseSequenceMatcher:
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
         return cls(
-            expected_rel_steps=expected_rel_steps,
-            expected_button_steps=expected_button_steps,
+            expected_rel_steps=expected_rel_steps, expected_button_steps=expected_button_steps
         )
 
     def handle(self, report: bytes) -> None:
@@ -417,7 +406,7 @@ def _load_hidapi() -> Any:
     except ModuleNotFoundError as exc:
         raise MissingNodeError(
             "Host capture requires the Python package 'hidapi' (import name: hid). "
-            "Install it in the host Python environment."
+            + "Install it in the host Python environment."
         ) from exc
     return hid
 
@@ -469,9 +458,7 @@ def _iter_hid_infos(hid_module: Any) -> list[HidDeviceInfo]:
 
 
 def _filter_explicit_override(
-    infos: list[HidDeviceInfo],
-    override: str | None,
-    label: str,
+    infos: list[HidDeviceInfo], override: str | None, label: str
 ) -> list[HidDeviceInfo]:
     if override is None:
         return infos
@@ -576,9 +563,9 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
-                "On Linux, run `sudo venv/bin/bluetooth_2_usb install-hid-udev-rule "
-                '--repo-root "$PWD"`, reconnect the Pi, and ensure the user is in the '
-                "input group with `sudo usermod -aG input $USER` before starting a new login session."
+                + "On Linux, run `sudo venv/bin/bluetooth_2_usb install-hid-udev-rule "
+                + '--repo-root "$PWD"`, reconnect the Pi, and ensure the user is in the '
+                + "input group with `sudo usermod -aG input $USER` before starting a new login session."
             ) from exc
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
     except Exception as exc:
@@ -586,10 +573,7 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
 
 
 def _capture_once(
-    scenario_name: str,
-    timeout_sec: float,
-    candidate_nodes: GadgetNodeCandidates,
-    hid_module: Any,
+    scenario_name: str, timeout_sec: float, candidate_nodes: GadgetNodeCandidates, hid_module: Any
 ) -> HarnessResult:
     scenario = get_scenario(scenario_name)
 
@@ -613,10 +597,7 @@ def _capture_once(
     ) -> None:
         candidates.append(
             _CandidateMatcher(
-                role=role,
-                info=info,
-                device=_open_hid_device(hid_module, info),
-                matcher=matcher,
+                role=role, info=info, device=_open_hid_device(hid_module, info), matcher=matcher
             )
         )
 
@@ -808,9 +789,7 @@ def run_capture(
         from .test_harness_capture_windows import run_windows_raw_input_capture
 
         result = run_windows_raw_input_capture(
-            scenario_name=scenario_name,
-            timeout_sec=timeout_sec,
-            candidate_nodes=candidate_nodes,
+            scenario_name=scenario_name, timeout_sec=timeout_sec, candidate_nodes=candidate_nodes
         )
         result.details["candidates"] = candidate_nodes.to_dict()
         return result

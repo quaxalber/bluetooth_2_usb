@@ -53,10 +53,7 @@ REL_WHEEL = ecodes.REL_WHEEL
 REL_WHEEL_HI_RES = ecodes.REL_WHEEL_HI_RES
 REL_HWHEEL_HI_RES = ecodes.REL_HWHEEL_HI_RES
 
-EVENT_TYPE_NAMES = {
-    EV_KEY: "EV_KEY",
-    EV_REL: "EV_REL",
-}
+EVENT_TYPE_NAMES = {EV_KEY: "EV_KEY", EV_REL: "EV_REL"}
 
 
 def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
@@ -150,12 +147,7 @@ def harness_session(command: str, scenario: str):
             ) from exc
 
         metadata = json.dumps(
-            {
-                "pid": os.getpid(),
-                "command": command,
-                "scenario": scenario,
-            },
-            sort_keys=True,
+            {"pid": os.getpid(), "command": command, "scenario": scenario}, sort_keys=True
         )
         lock_handle.seek(0)
         lock_handle.truncate()
@@ -328,12 +320,7 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
     }
     for char in text:
         if char == " ":
-            steps.extend(
-                (
-                    ExpectedEvent(EV_KEY, KEY_SPACE, 1),
-                    ExpectedEvent(EV_KEY, KEY_SPACE, 0),
-                )
-            )
+            steps.extend((ExpectedEvent(EV_KEY, KEY_SPACE, 1), ExpectedEvent(EV_KEY, KEY_SPACE, 0)))
             continue
         if char == "_":
             steps.extend(
@@ -358,19 +345,11 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
             )
             continue
 
-        steps.extend(
-            (
-                ExpectedEvent(EV_KEY, key_code, 1),
-                ExpectedEvent(EV_KEY, key_code, 0),
-            )
-        )
+        steps.extend((ExpectedEvent(EV_KEY, key_code, 1), ExpectedEvent(EV_KEY, key_code, 0)))
 
 
 _TEXT_BURST_STEPS: list[ExpectedEvent] = []
-_append_text_steps(
-    _TEXT_BURST_STEPS,
-    "KEYBOARD KEYBOARD keyboard KEYBOARD",
-)
+_append_text_steps(_TEXT_BURST_STEPS, "KEYBOARD KEYBOARD keyboard KEYBOARD")
 TEXT_BURST_STEPS = tuple(_TEXT_BURST_STEPS)
 
 SCENARIOS = {

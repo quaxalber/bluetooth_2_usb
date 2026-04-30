@@ -125,9 +125,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
             f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}",
         )
 
-    def test_text_burst_scenario_is_keyboard_only_and_contains_shifted_steps(
-        self,
-    ) -> None:
+    def test_text_burst_scenario_is_keyboard_only_and_contains_shifted_steps(self) -> None:
         scenario = SCENARIOS["text_burst"]
 
         self.assertEqual(scenario.required_nodes, ("keyboard",))
@@ -142,12 +140,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 _hid_entry("kbd0", usage_page=0x01, usage=0x06),
                 _hid_entry("mouse0", usage_page=0x01, usage=0x02),
                 _hid_entry("consumer0", usage_page=0x0C, usage=0x01),
-                _hid_entry(
-                    "other0",
-                    device_name="some other device",
-                    usage_page=0x0C,
-                    usage=0x01,
-                ),
+                _hid_entry("other0", device_name="some other device", usage_page=0x0C, usage=0x01),
             ]
         )
 
@@ -157,9 +150,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
         self.assertEqual([info.node for info in candidates.consumer_nodes], ["consumer0"])
 
-    def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(
-        self,
-    ) -> None:
+    def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry("consumer-b", usage_page=0x0C, usage=0x01),
@@ -172,8 +163,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertEqual(candidates.keyboard_nodes, ())
         self.assertEqual(candidates.mouse_nodes, ())
         self.assertEqual(
-            [info.node for info in candidates.consumer_nodes],
-            ["consumer-a", "consumer-b"],
+            [info.node for info in candidates.consumer_nodes], ["consumer-a", "consumer-b"]
         )
 
     def test_discovery_rejects_multiple_distinct_keyboard_nodes(self) -> None:
@@ -207,9 +197,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertEqual(nodes.mouse_node, "mouse-a")
         self.assertEqual(nodes.consumer_node, "consumer-a")
 
-    def test_discovery_accepts_linux_gadget_signature_without_product_strings(
-        self,
-    ) -> None:
+    def test_discovery_accepts_linux_gadget_signature_without_product_strings(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
@@ -254,9 +242,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
         self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
-    def test_discovery_maps_default_linux_gadget_interfaces_by_interface_number(
-        self,
-    ) -> None:
+    def test_discovery_maps_default_linux_gadget_interfaces_by_interface_number(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
@@ -298,9 +284,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
         self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
-    def test_explicit_override_accepts_default_linux_gadget_interfaces(
-        self,
-    ) -> None:
+    def test_explicit_override_accepts_default_linux_gadget_interfaces(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
@@ -461,9 +445,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
             matcher.handle(self._extended_mouse_report(buttons=0x02, x=1))
 
-    def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(
-        self,
-    ) -> None:
+    def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], SAFE_MOUSE_BUTTON_STEPS)
 
         with self.assertRaisesRegex(
@@ -477,9 +459,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
             matcher.handle(self._extended_mouse_report(x=-1))
 
-    def test_mouse_matcher_rejects_cross_axis_reordering_between_reports(
-        self,
-    ) -> None:
+    def test_mouse_matcher_rejects_cross_axis_reordering_between_reports(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
@@ -696,9 +676,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
-            [
-                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00]),
-            ],
+            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00])],
         )
 
     def test_mouse_event_to_reports_clamps_xy_to_descriptor_bounds(self) -> None:
@@ -708,9 +686,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
-            [
-                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00]),
-            ],
+            [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00])],
         )
 
     def test_mouse_event_to_reports_builds_horizontal_pan_reports(self) -> None:
@@ -783,9 +759,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
-            [
-                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00]),
-            ],
+            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00])],
         )
 
     def test_mouse_event_to_reports_keeps_pan_and_motion_reports(self) -> None:
@@ -796,9 +770,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             test_harness_capture_windows._mouse_event_to_reports(raw_mouse),
-            [
-                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF]),
-            ],
+            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF])],
         )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
@@ -810,36 +782,27 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 scenario_name="keyboard",
                 timeout_sec=1.0,
                 candidate_nodes=test_harness_capture_windows.GadgetNodeCandidates(
-                    keyboard_nodes=(),
-                    mouse_nodes=(),
-                    consumer_nodes=(),
+                    keyboard_nodes=(), mouse_nodes=(), consumer_nodes=()
                 ),
             )
 
-    def test_windows_backend_reports_unsupported_intrusive_mouse_buttons(
-        self,
-    ) -> None:
+    def test_windows_backend_reports_unsupported_intrusive_mouse_buttons(self) -> None:
         with patch("bluetooth_2_usb.test_harness_capture_windows.IS_WINDOWS", True):
             result = test_harness_capture_windows.run_windows_raw_input_capture(
                 scenario_name="mouse_buttons_intrusive",
                 timeout_sec=1.0,
                 candidate_nodes=test_harness_capture_windows.GadgetNodeCandidates(
-                    keyboard_nodes=(),
-                    mouse_nodes=(),
-                    consumer_nodes=(),
+                    keyboard_nodes=(), mouse_nodes=(), consumer_nodes=()
                 ),
             )
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_PREREQUISITE)
         self.assertEqual(
-            result.details["unsupported_mouse_buttons"],
-            ["BTN_FORWARD", "BTN_BACK", "BTN_TASK"],
+            result.details["unsupported_mouse_buttons"], ["BTN_FORWARD", "BTN_BACK", "BTN_TASK"]
         )
 
-    def test_windows_backend_imports_with_missing_non_windows_handle_aliases(
-        self,
-    ) -> None:
+    def test_windows_backend_imports_with_missing_non_windows_handle_aliases(self) -> None:
         if sys.platform == "win32":
             self.skipTest("Non-Windows import fallback is not exercised on Windows")
 
@@ -904,10 +867,7 @@ class TestHarnessCliTest(unittest.TestCase):
         stdout = io.StringIO()
         hid_module = _FakeHidModule([])
 
-        with patch(
-            "bluetooth_2_usb.test_harness_capture._load_hidapi",
-            return_value=hid_module,
-        ):
+        with patch("bluetooth_2_usb.test_harness_capture._load_hidapi", return_value=hid_module):
             with redirect_stdout(stdout):
                 exit_code = run_harness(["capture", "--keyboard-node", "/definitely/missing/node"])
 
@@ -918,8 +878,7 @@ class TestHarnessCliTest(unittest.TestCase):
         stdout = io.StringIO()
 
         with patch(
-            "bluetooth_2_usb.test_harness.harness_session",
-            side_effect=HarnessBusyError("busy"),
+            "bluetooth_2_usb.test_harness.harness_session", side_effect=HarnessBusyError("busy")
         ):
             with redirect_stdout(stdout):
                 exit_code = run_harness(["capture"])
@@ -932,19 +891,14 @@ class TestHarnessCliTest(unittest.TestCase):
         stdout = io.StringIO()
         fake_inject_module = SimpleNamespace(run_inject=Mock(side_effect=KeyboardInterrupt))
 
-        with patch.dict(
-            "sys.modules",
-            {"bluetooth_2_usb.test_harness_inject": fake_inject_module},
-        ):
+        with patch.dict("sys.modules", {"bluetooth_2_usb.test_harness_inject": fake_inject_module}):
             with redirect_stdout(stdout):
                 exit_code = run_harness(["inject"])
 
         self.assertEqual(exit_code, EXIT_INTERRUPTED)
         self.assertIn("Harness interrupted", stdout.getvalue())
 
-    def test_windows_capture_uses_raw_input_backend_for_non_consumer_scenarios(
-        self,
-    ) -> None:
+    def test_windows_capture_uses_raw_input_backend_for_non_consumer_scenarios(self) -> None:
         candidate_nodes = discover_gadget_node_candidates(
             keyboard_node="kbd0",
             mouse_node="mouse0",
@@ -1010,9 +964,7 @@ class TestHarnessCliTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
 
-    def test_windows_capture_uses_raw_input_backend_for_consumer_scenarios(
-        self,
-    ) -> None:
+    def test_windows_capture_uses_raw_input_backend_for_consumer_scenarios(self) -> None:
         consumer_hid = _FakeHidModule(
             [
                 _hid_entry(
@@ -1022,14 +974,13 @@ class TestHarnessCliTest(unittest.TestCase):
                     interface_number=2,
                     usage_page=0x0C,
                     usage=0x01,
-                ),
+                )
             ]
         )
 
         with patch("bluetooth_2_usb.test_harness_capture.sys.platform", "win32"):
             with patch(
-                "bluetooth_2_usb.test_harness_capture._load_hidapi",
-                return_value=consumer_hid,
+                "bluetooth_2_usb.test_harness_capture._load_hidapi", return_value=consumer_hid
             ):
                 with patch(
                     "bluetooth_2_usb.test_harness_capture_windows.run_windows_raw_input_capture",

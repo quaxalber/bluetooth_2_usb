@@ -4,8 +4,7 @@ from pathlib import Path
 PACKAGE_LOGGER_NAME = "bluetooth_2_usb"
 
 _formatter = logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%y-%m-%d %H:%M:%S",
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%y-%m-%d %H:%M:%S"
 )
 
 

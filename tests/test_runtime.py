@@ -5,10 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.runtime import (
-    Runtime,
-    _handled_shutdown_signals,
-)
+from bluetooth_2_usb.runtime import Runtime, _handled_shutdown_signals
 from bluetooth_2_usb.runtime_config import runtime_config_from_args
 from bluetooth_2_usb.runtime_events import ShutdownRequested
 
@@ -33,9 +30,7 @@ class RuntimeConfigTest(unittest.TestCase):
 
 
 class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
-    async def test_signal_handlers_enqueue_shutdown_events_in_running_loop(
-        self,
-    ) -> None:
+    async def test_signal_handlers_enqueue_shutdown_events_in_running_loop(self) -> None:
         runtime = Runtime(
             runtime_config_from_args(
                 SimpleNamespace(
@@ -56,16 +51,11 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
             for _handled_signal in _handled_shutdown_signals():
                 signal.raise_signal(_handled_signal)
                 event = await asyncio.wait_for(runtime._events.get(), timeout=1)
-                self.assertEqual(
-                    event,
-                    ShutdownRequested(signal.Signals(_handled_signal).name),
-                )
+                self.assertEqual(event, ShutdownRequested(signal.Signals(_handled_signal).name))
         finally:
             runtime._restore_signal_handlers(handlers)
 
-    async def test_signal_fallback_does_not_require_threadsafe_loop_bridge(
-        self,
-    ) -> None:
+    async def test_signal_fallback_does_not_require_threadsafe_loop_bridge(self) -> None:
         runtime = Runtime(
             runtime_config_from_args(
                 SimpleNamespace(
@@ -87,10 +77,7 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.runtime.signal.getsignal", side_effect=str):
                 with patch(
                     "bluetooth_2_usb.runtime.signal.signal",
-                    side_effect=lambda sig, handler: registered_handlers.setdefault(
-                        sig,
-                        handler,
-                    ),
+                    side_effect=lambda sig, handler: registered_handlers.setdefault(sig, handler),
                 ):
                     handlers = runtime._install_signal_handlers()
 

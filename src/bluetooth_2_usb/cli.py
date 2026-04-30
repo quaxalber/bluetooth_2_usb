@@ -84,9 +84,7 @@ def validate_environment() -> EnvironmentStatus:
     configfs_path = Path("/sys/kernel/config/usb_gadget")
     udc_path = get_udc_path()
     return EnvironmentStatus(
-        configfs=configfs_path.is_dir(),
-        udc_present=udc_path is not None,
-        udc_path=udc_path,
+        configfs=configfs_path.is_dir(), udc_present=udc_path is not None, udc_path=udc_path
     )
 
 
@@ -124,11 +122,7 @@ async def async_run(args: Arguments) -> int:
         return print_version()
 
     if args.list_devices:
-        from .inventory import (
-            DeviceEnumerationError,
-            describe_input_devices,
-            inventory_to_text,
-        )
+        from .inventory import DeviceEnumerationError, describe_input_devices, inventory_to_text
 
         try:
             devices = describe_input_devices()

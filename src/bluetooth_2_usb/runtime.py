@@ -45,10 +45,7 @@ class Runtime:
         hid_gadgets = HidGadgets()
         hid_gadgets.enable()
 
-        shortcut_toggler = self._build_shortcut_toggler(
-            relaying_active,
-            hid_gadgets,
-        )
+        shortcut_toggler = self._build_shortcut_toggler(relaying_active, hid_gadgets)
         self._supervisor = RelaySupervisor(
             hid_gadgets=hid_gadgets,
             device_identifiers=list(self._config.device_ids),
@@ -57,10 +54,7 @@ class Runtime:
             relaying_active=relaying_active,
             shortcut_toggler=shortcut_toggler,
         )
-        self._event_source = RuntimeEventSource(
-            self._events,
-            udc_path=self._config.udc_path,
-        )
+        self._event_source = RuntimeEventSource(self._events, udc_path=self._config.udc_path)
 
         handlers = self._install_signal_handlers()
         try:
@@ -69,9 +63,7 @@ class Runtime:
             self._restore_signal_handlers(handlers)
 
     def _build_shortcut_toggler(
-        self,
-        relaying_active: asyncio.Event,
-        hid_gadgets: HidGadgets,
+        self, relaying_active: asyncio.Event, hid_gadgets: HidGadgets
     ) -> ShortcutToggler | None:
         if not self._config.interrupt_shortcut:
             return None
@@ -79,28 +71,17 @@ class Runtime:
         shortcut_keys = set(self._config.interrupt_shortcut)
         logger.debug("Configuring global interrupt shortcut: %s", shortcut_keys)
         return ShortcutToggler(
-            shortcut_keys=shortcut_keys,
-            relaying_active=relaying_active,
-            hid_gadgets=hid_gadgets,
+            shortcut_keys=shortcut_keys, relaying_active=relaying_active, hid_gadgets=hid_gadgets
         )
 
     async def _run_tasks(
-        self,
-        event_source: RuntimeEventSource,
-        supervisor: RelaySupervisor,
+        self, event_source: RuntimeEventSource, supervisor: RelaySupervisor
     ) -> None:
-        event_source_task = asyncio.create_task(
-            event_source.run(),
-            name="runtime event source",
-        )
-        supervisor_task = asyncio.create_task(
-            supervisor.run(self._events),
-            name="relay supervisor",
-        )
+        event_source_task = asyncio.create_task(event_source.run(), name="runtime event source")
+        supervisor_task = asyncio.create_task(supervisor.run(self._events), name="relay supervisor")
         try:
             done, pending = await asyncio.wait(
-                {event_source_task, supervisor_task},
-                return_when=asyncio.FIRST_COMPLETED,
+                {event_source_task, supervisor_task}, return_when=asyncio.FIRST_COMPLETED
             )
             for task in done:
                 task.result()
@@ -163,11 +144,7 @@ class Runtime:
             add_signal_handler = getattr(active_loop, "add_signal_handler", None)
             if add_signal_handler is not None:
                 try:
-                    active_loop.add_signal_handler(
-                        handled_signal,
-                        _request_shutdown,
-                        sig_name,
-                    )
+                    active_loop.add_signal_handler(handled_signal, _request_shutdown, sig_name)
                     loop_handled_signals.append(handled_signal)
                     continue
                 except (NotImplementedError, RuntimeError, ValueError):

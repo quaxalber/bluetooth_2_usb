@@ -24,11 +24,7 @@ from bluetooth_2_usb.hid_gadget_layout import (
 from bluetooth_2_usb.hid_gadgets import HidGadgets
 from bluetooth_2_usb.input_relay import InputRelay
 from bluetooth_2_usb.mouse_delta import MouseDelta
-from bluetooth_2_usb.relay_supervisor import (
-    RelaySupervisor,
-    _ActiveRelay,
-    _SupervisorState,
-)
+from bluetooth_2_usb.relay_supervisor import RelaySupervisor, _ActiveRelay, _SupervisorState
 from bluetooth_2_usb.runtime_events import DeviceAdded, UdcStateChanged
 from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
 
@@ -120,11 +116,7 @@ class _FakeTaskGroup:
 
 
 class _FakeInputHandle:
-    def __init__(
-        self,
-        path: str = "/dev/input/event7",
-        name: str = "Fake Input",
-    ) -> None:
+    def __init__(self, path: str = "/dev/input/event7", name: str = "Fake Input") -> None:
         self.path = path
         self.name = name
         self.uniq = ""
@@ -215,12 +207,7 @@ class ExtendedMouseTest(unittest.TestCase):
             mouse = ExtendedMouse(devices=[])
             mouse.move(x=300, y=-300, wheel=1, pan=-1)
 
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0xFF]),
-            ],
-        )
+        self.assertEqual(device.sent, [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0xFF])])
 
     def test_move_accumulates_fractional_pan_across_calls(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -304,14 +291,14 @@ class ExtendedMouseTest(unittest.TestCase):
         self.assertEqual(len(device.sent), 2)
         self.assertIn(
             "Sending mouse movement to gadget: buttons=0x00 "
-            "x=32767 y=-32767 wheel=127 pan=-127 "
-            "report=00 ff 7f 01 80 7f 81",
+            + "x=32767 y=-32767 wheel=127 pan=-127 "
+            + "report=00 ff 7f 01 80 7f 81",
             logs.output[0],
         )
         self.assertIn(
             "Sending mouse movement to gadget: buttons=0x00 "
-            "x=7233 y=-7233 wheel=73 pan=-73 "
-            "report=00 41 1c bf e3 49 b7",
+            + "x=7233 y=-7233 wheel=73 pan=-73 "
+            + "report=00 41 1c bf e3 49 b7",
             logs.output[1],
         )
 
@@ -365,8 +352,7 @@ class HidDispatchTest(unittest.TestCase):
         hid_gadgets = _FakeHidGadgets()
 
         dispatch_key_event_to_hid(
-            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0),
-            hid_gadgets,
+            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0), hid_gadgets
         )
 
         self.assertEqual(hid_gadgets.consumer.release_calls, 1)
@@ -381,9 +367,7 @@ class DeviceIdentifierTest(unittest.TestCase):
     def test_mac_identifier_matches_hyphenated_device_uniq(self) -> None:
         identifier = DeviceIdentifier("aa:bb:cc:dd:ee:ff")
         device = SimpleNamespace(
-            path="/dev/input/event7",
-            uniq="AA-BB-CC-DD-EE-FF",
-            name="keyboard",
+            path="/dev/input/event7", uniq="AA-BB-CC-DD-EE-FF", name="keyboard"
         )
 
         self.assertTrue(identifier.matches(device))
@@ -391,9 +375,7 @@ class DeviceIdentifierTest(unittest.TestCase):
     def test_event_like_name_without_numeric_suffix_matches_by_name(self) -> None:
         identifier = DeviceIdentifier("/dev/input/eventual")
         device = SimpleNamespace(
-            path="/dev/input/event7",
-            uniq="",
-            name="prefix /dev/input/eventual suffix",
+            path="/dev/input/event7", uniq="", name="prefix /dev/input/eventual suffix"
         )
 
         self.assertTrue(identifier.matches(device))
@@ -474,11 +456,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         mouse = _FakeMouse()
         consumer = _FakeConsumer()
         keyboard.release_all = Mock(side_effect=RuntimeError("keyboard stuck"))
-        manager._gadgets = {
-            "keyboard": keyboard,
-            "mouse": mouse,
-            "consumer": consumer,
-        }
+        manager._gadgets = {"keyboard": keyboard, "mouse": mouse, "consumer": consumer}
 
         manager.release_all()
 
@@ -503,17 +481,11 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "rebuild failed"):
                     manager.enable()
 
-        self.assertEqual(
-            manager._gadgets,
-            {"keyboard": None, "mouse": None, "consumer": None},
-        )
+        self.assertEqual(manager._gadgets, {"keyboard": None, "mouse": None, "consumer": None})
         self.assertFalse(manager._enabled)
 
     def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
-        devices = (
-            SimpleNamespace(function_index=2),
-            SimpleNamespace(function_index=7),
-        )
+        devices = (SimpleNamespace(function_index=2), SimpleNamespace(function_index=7))
         with patch(
             "bluetooth_2_usb.hid_gadgets.build_default_layout",
             return_value=SimpleNamespace(devices=devices),
@@ -522,9 +494,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
 
         self.assertEqual(paths, (Path("/dev/hidg2"), Path("/dev/hidg7")))
 
-    def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(
-        self,
-    ) -> None:
+    def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(self) -> None:
         layout = build_default_layout()
 
         self.assertEqual(len(layout.devices), 3)
@@ -536,8 +506,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
         self.assertEqual(layout.devices[1].configfs_report_length, 8)
         self.assertEqual(
-            bytes(layout.devices[2].descriptor),
-            bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor),
+            bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor)
         )
         self.assertEqual(layout.bcd_device, "0x0205")
         self.assertEqual(layout.product_name, "USB Combo Device")
@@ -557,15 +526,12 @@ class HidGadgetsLayoutTest(unittest.TestCase):
             if "subclass" not in kwargs or "protocol" not in kwargs:
                 raise TypeError(
                     "Device.__init__() missing 2 required keyword-only arguments: "
-                    "'subclass' and 'protocol'"
+                    + "'subclass' and 'protocol'"
                 )
 
         with patch.object(usb_hid.Device, "__init__", fake_device_init):
             GadgetHidDevice.from_existing(
-                usb_hid.Device.BOOT_KEYBOARD,
-                function_index=0,
-                protocol=1,
-                subclass=1,
+                usb_hid.Device.BOOT_KEYBOARD, function_index=0, protocol=1, subclass=1
             )
 
         self.assertEqual(len(init_calls), 1)
@@ -597,18 +563,13 @@ class HidGadgetsLayoutTest(unittest.TestCase):
             bad.write_text("not-a-device", encoding="utf-8")
             with patch.object(manager, "_expected_hidg_paths", return_value=(bad,)):
                 with self.assertRaisesRegex(RuntimeError, re.escape(str(bad))):
-                    manager._validate_hidg_nodes(
-                        timeout_sec=0,
-                        poll_interval_sec=0,
-                    )
+                    manager._validate_hidg_nodes(timeout_sec=0, poll_interval_sec=0)
 
     def test_validate_hidg_nodes_waits_for_delayed_nodes(self) -> None:
         manager = HidGadgets()
 
         with patch.object(
-            manager,
-            "_collect_invalid_hidg_nodes",
-            side_effect=[["/dev/hidg0 (missing)"], []],
+            manager, "_collect_invalid_hidg_nodes", side_effect=[["/dev/hidg0 (missing)"], []]
         ) as collect_invalid:
             with patch("bluetooth_2_usb.hid_gadgets.time.sleep") as sleep:
                 manager._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
@@ -616,20 +577,14 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         self.assertEqual(collect_invalid.call_count, 2)
         sleep.assert_called_once_with(0.01)
 
-    def test_collect_invalid_hidg_nodes_rejects_unopenable_character_devices(
-        self,
-    ) -> None:
+    def test_collect_invalid_hidg_nodes_rejects_unopenable_character_devices(self) -> None:
         manager = HidGadgets()
         path = Path("/dev/hidg0")
         stats = SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=0)
 
         with patch.object(manager, "_expected_hidg_paths", return_value=(path,)):
             with patch.object(Path, "stat", return_value=stats):
-                with patch(
-                    "bluetooth_2_usb.hid_gadgets.os.minor",
-                    return_value=0,
-                    create=True,
-                ):
+                with patch("bluetooth_2_usb.hid_gadgets.os.minor", return_value=0, create=True):
                     with patch("bluetooth_2_usb.hid_gadgets.os.O_NONBLOCK", 0, create=True):
                         with patch(
                             "bluetooth_2_usb.hid_gadgets.os.open",
@@ -645,8 +600,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
             with patch("bluetooth_2_usb.hid_gadget_config.GADGET_ROOT", gadget_root):
                 with patch(
-                    "bluetooth_2_usb.hid_gadget_config._resolve_udc_name",
-                    return_value="dummy.udc",
+                    "bluetooth_2_usb.hid_gadget_config._resolve_udc_name", return_value="dummy.udc"
                 ):
                     with patch.object(usb_hid, "gadget_root", str(gadget_root)):
                         rebuild_gadget(layout)
@@ -660,12 +614,10 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                 "213374badcafe",
             )
             self.assertEqual(
-                (gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(),
-                "0x0205",
+                (gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), "0x0205"
             )
             self.assertEqual(
-                (gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(),
-                "100",
+                (gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(), "100"
             )
             self.assertEqual(
                 (gadget_root / "configs/c.1/bmAttributes").read_text(encoding="utf-8").strip(),
@@ -678,8 +630,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                 "Config 1: HID relay",
             )
             self.assertEqual(
-                (gadget_root / "max_speed").read_text(encoding="utf-8").strip(),
-                "high-speed",
+                (gadget_root / "max_speed").read_text(encoding="utf-8").strip(), "high-speed"
             )
             self.assertEqual(
                 (gadget_root / "functions/hid.usb0/report_length")
@@ -716,21 +667,14 @@ class HidGadgetsLayoutTest(unittest.TestCase):
 
             with patch("bluetooth_2_usb.hid_gadget_config.GADGET_ROOT", gadget_root):
                 with patch(
-                    "bluetooth_2_usb.hid_gadget_config._resolve_udc_name",
-                    return_value="dummy.udc",
+                    "bluetooth_2_usb.hid_gadget_config._resolve_udc_name", return_value="dummy.udc"
                 ):
                     with patch.object(usb_hid, "gadget_root", str(gadget_root)):
                         with patch.object(type(keyboard_wakeup), "exists", fake_exists):
                             rebuild_gadget(layout)
 
-            self.assertEqual(
-                keyboard_wakeup.read_text(encoding="utf-8").strip(),
-                "1",
-            )
-            self.assertEqual(
-                mouse_wakeup.read_text(encoding="utf-8").strip(),
-                "0",
-            )
+            self.assertEqual(keyboard_wakeup.read_text(encoding="utf-8").strip(), "1")
+            self.assertEqual(mouse_wakeup.read_text(encoding="utf-8").strip(), "0")
             self.assertFalse((gadget_root / "functions/hid.usb2/wakeup_on_write").exists())
 
     def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
@@ -745,10 +689,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         )
 
         cloned = GadgetHidDevice.from_existing(
-            base_device,
-            function_index=1,
-            protocol=0,
-            subclass=0,
+            base_device, function_index=1, protocol=0, subclass=0
         )
 
         self.assertTrue(cloned.wakeup_on_write)
@@ -768,21 +709,14 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestKeyEvent(184, _TestKeyEvent.key_up),
             ]
         )
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         async def _slow_process(event) -> None:
             seen.append((event.scancode, event.keystate))
             await asyncio.sleep(0.001)
 
         with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 with patch.object(relay, "_process_event_with_retry", side_effect=_slow_process):
                     async with relay:
                         await relay.async_relay_events_loop()
@@ -794,10 +728,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active.set()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EBADF)
         relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            grab_device=True,
-            relaying_active=relaying_active,
+            input_device, _FakeHidGadgets(), grab_device=True, relaying_active=relaying_active
         )
 
         async with relay:
@@ -812,10 +743,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active = asyncio.Event()
         input_device = _FakeGrabInputDevice()
         relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            grab_device=True,
-            relaying_active=relaying_active,
+            input_device, _FakeHidGadgets(), grab_device=True, relaying_active=relaying_active
         )
 
         async with relay:
@@ -829,11 +757,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active = asyncio.Event()
         relaying_active.set()
         hid_gadgets = _FakeHidGadgets()
-        relay = InputRelay(
-            _FakeGrabInputDevice(),
-            hid_gadgets,
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(_FakeGrabInputDevice(), hid_gadgets, relaying_active=relaying_active)
 
         async with relay:
             pass
@@ -847,9 +771,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active.set()
         hid_gadgets = _FakeHidGadgets()
         toggler = ShortcutToggler(
-            shortcut_keys={"KEY_F12"},
-            relaying_active=relaying_active,
-            hid_gadgets=hid_gadgets,
+            shortcut_keys={"KEY_F12"}, relaying_active=relaying_active, hid_gadgets=hid_gadgets
         )
         input_device = _FakeGrabInputDevice(
             [
@@ -869,8 +791,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
             with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
                 with patch(
-                    "bluetooth_2_usb.input_relay.categorize",
-                    side_effect=lambda event: event,
+                    "bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event
                 ):
                     async with relay:
                         await relay.async_relay_events_loop()
@@ -880,33 +801,21 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(input_device.ungrab_calls, 1)
         self.assertEqual(hid_gadgets.mouse.moves, [])
 
-    async def test_input_device_removal_stops_reader_without_failing_task_group(
-        self,
-    ) -> None:
+    async def test_input_device_removal_stops_reader_without_failing_task_group(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         seen: list[tuple[int, int]] = []
         input_device = _TestInputDevice(
-            [
-                _TestKeyEvent(183, _TestKeyEvent.key_down),
-                _TestKeyEvent(183, _TestKeyEvent.key_up),
-            ],
+            [_TestKeyEvent(183, _TestKeyEvent.key_down), _TestKeyEvent(183, _TestKeyEvent.key_up)],
             removal_errno=errno.ENODEV,
         )
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         async def _record_process(event) -> None:
             seen.append((event.scancode, event.keystate))
 
         with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 with patch.object(relay, "_process_event_with_retry", side_effect=_record_process):
                     async with relay:
                         await relay.async_relay_events_loop()
@@ -917,11 +826,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice([], removal_errno=errno.ENODEV)
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         with patch.object(
             relay,
@@ -935,11 +840,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice([])
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         with patch.object(
             relay,
@@ -950,23 +851,14 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(OSError):
                     await relay.async_relay_events_loop()
 
-    async def test_broken_pipe_clears_relaying_active_when_hid_write_fails(
-        self,
-    ) -> None:
+    async def test_broken_pipe_clears_relaying_active_when_hid_write_fails(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 with patch(
                     "bluetooth_2_usb.input_relay.dispatch_event_to_hid",
                     side_effect=BrokenPipeError(),
@@ -980,19 +872,14 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_blocked_hid_retry_stops_after_relaying_is_cleared(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
-        relay = InputRelay(
-            _TestInputDevice([]),
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(_TestInputDevice([]), _FakeHidGadgets(), relaying_active=relaying_active)
         action = Mock(side_effect=BlockingIOError())
 
         async def clear_relaying(_delay) -> None:
             relaying_active.clear()
 
         with patch(
-            "bluetooth_2_usb.input_relay.asyncio.sleep",
-            new=AsyncMock(side_effect=clear_relaying),
+            "bluetooth_2_usb.input_relay.asyncio.sleep", new=AsyncMock(side_effect=clear_relaying)
         ) as sleep:
             processed = await relay._process_hid_action_with_retry(action, "test write")
 
@@ -1006,17 +893,10 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 with patch(
                     "bluetooth_2_usb.input_relay.dispatch_event_to_hid",
                     side_effect=RuntimeError("dispatch bug"),
@@ -1044,10 +924,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relay = InputRelay(input_device, manager, relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
@@ -1057,10 +934,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice(
-            [
-                _TestRelEvent(ecodes.REL_X, 5),
-                _TestKeyEvent(183, _TestKeyEvent.key_down),
-            ]
+            [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(183, _TestKeyEvent.key_down)]
         )
         manager = _FakeHidGadgets()
         order = []
@@ -1073,8 +947,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
             with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
                 with patch(
-                    "bluetooth_2_usb.input_relay.categorize",
-                    side_effect=lambda event: event,
+                    "bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event
                 ):
                     with patch.object(relay, "_process_event_with_retry", side_effect=_record_key):
                         async with relay:
@@ -1094,38 +967,19 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        relay = InputRelay(
-            input_device,
-            _FakeHidGadgets(),
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(input_device, _FakeHidGadgets(), relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
                     async with relay:
                         await relay.async_relay_events_loop()
 
         output = "\n".join(logs.output)
-        self.assertIn(
-            "Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0.0 pan=0.0",
-            output,
-        )
-        self.assertIn(
-            "Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0.0 pan=0.0",
-            output,
-        )
-        self.assertIn(
-            "Mouse REL input: code=11 value=60 -> x=0 y=0 wheel=0.5 pan=0.0",
-            output,
-        )
-        self.assertIn(
-            "Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0.0 pan=-0.5",
-            output,
-        )
+        self.assertIn("Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0.0 pan=0.0", output)
+        self.assertIn("Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0.0 pan=0.0", output)
+        self.assertIn("Mouse REL input: code=11 value=60 -> x=0 y=0 wheel=0.5 pan=0.0", output)
+        self.assertIn("Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0.0 pan=-0.5", output)
 
     async def test_large_mouse_deltas_are_split_before_retry_boundary(self) -> None:
         relaying_active = asyncio.Event()
@@ -1143,33 +997,18 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relay = InputRelay(input_device, manager, relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(
-            manager.mouse.moves,
-            [
-                (32767, -32767, 127, -127),
-                (7233, -7233, 73, -73),
-            ],
-        )
+        self.assertEqual(manager.mouse.moves, [(32767, -32767, 127, -127), (7233, -7233, 73, -73)])
 
-    async def test_large_mouse_deltas_abort_remaining_chunks_after_write_failure(
-        self,
-    ) -> None:
+    async def test_large_mouse_deltas_abort_remaining_chunks_after_write_failure(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         manager = _FakeHidGadgets()
         manager.mouse.move = Mock(side_effect=BrokenPipeError())
-        relay = InputRelay(
-            _TestInputDevice([]),
-            manager,
-            relaying_active=relaying_active,
-        )
+        relay = InputRelay(_TestInputDevice([]), manager, relaying_active=relaying_active)
 
         await relay._process_mouse_delta_with_retry(MouseDelta(40000, -40000, 200, -200))
 
@@ -1177,9 +1016,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(relay._hid_write_failures, 1)
         self.assertFalse(relaying_active.is_set())
 
-    async def test_high_resolution_horizontal_wheel_accumulates_fractional_steps(
-        self,
-    ) -> None:
+    async def test_high_resolution_horizontal_wheel_accumulates_fractional_steps(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice(
@@ -1194,18 +1031,13 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relay = InputRelay(input_device, manager, relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1)])
 
-    async def test_high_resolution_vertical_wheel_accumulates_fractional_steps(
-        self,
-    ) -> None:
+    async def test_high_resolution_vertical_wheel_accumulates_fractional_steps(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice(
@@ -1220,18 +1052,13 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relay = InputRelay(input_device, manager, relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0)])
 
-    async def test_high_resolution_horizontal_wheel_suppresses_low_res_fallback(
-        self,
-    ) -> None:
+    async def test_high_resolution_horizontal_wheel_suppresses_low_res_fallback(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice(
@@ -1248,18 +1075,13 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relay = InputRelay(input_device, manager, relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
         self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1), (0, 0, 0, -1)])
 
-    async def test_high_resolution_vertical_wheel_suppresses_low_res_fallback(
-        self,
-    ) -> None:
+    async def test_high_resolution_vertical_wheel_suppresses_low_res_fallback(self) -> None:
         relaying_active = asyncio.Event()
         relaying_active.set()
         input_device = _TestInputDevice(
@@ -1276,10 +1098,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         relay = InputRelay(input_device, manager, relaying_active=relaying_active)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch(
-                "bluetooth_2_usb.input_relay.categorize",
-                side_effect=lambda event: event,
-            ):
+            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
@@ -1306,8 +1125,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
                 with patch(
-                    "bluetooth_2_usb.input_relay.categorize",
-                    side_effect=lambda event: event,
+                    "bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event
                 ):
                     with patch.object(relay, "_process_event_with_retry", side_effect=deactivate):
                         async with relay:
@@ -1319,9 +1137,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
 class RelaySupervisorHotplugTest(unittest.TestCase):
     def test_device_added_queues_until_supervisor_is_running(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
 
         controller._device_added("/dev/input/event7")
@@ -1337,15 +1153,12 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
         self.assertEqual(controller._pending_add_paths, set())
         controller._schedule_probe.assert_called_once_with(
-            "/dev/input/event7",
-            controller.HOTPLUG_ADD_MAX_RETRIES,
+            "/dev/input/event7", controller.HOTPLUG_ADD_MAX_RETRIES
         )
 
     def test_device_removed_drops_queued_startup_add(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
 
         controller._device_added("/dev/input/event7")
@@ -1355,16 +1168,11 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
     def test_device_removed_cancels_active_relay_during_startup(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
         task = _FakeTaskHandle()
         controller._state = _SupervisorState.STARTING
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(
-            _FakeInputHandle(),
-            task,
-        )
+        controller._active_relays["/dev/input/event7"] = _ActiveRelay(_FakeInputHandle(), task)
 
         controller._device_removed("/dev/input/event7")
 
@@ -1372,9 +1180,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
     def test_device_added_ignores_after_shutdown_requested(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
         controller.request_shutdown()
 
@@ -1387,9 +1193,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
         relaying_active.set()
         hid_gadgets = _FakeHidGadgets()
         controller = RelaySupervisor(
-            hid_gadgets=hid_gadgets,
-            device_identifiers=[],
-            relaying_active=relaying_active,
+            hid_gadgets=hid_gadgets, device_identifiers=[], relaying_active=relaying_active
         )
         task = _FakeTaskHandle()
         device = _FakeInputHandle()
@@ -1420,9 +1224,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
         relaying_active = asyncio.Event()
         hid_gadgets = _FakeHidGadgets()
         controller = RelaySupervisor(
-            hid_gadgets=hid_gadgets,
-            device_identifiers=[],
-            relaying_active=relaying_active,
+            hid_gadgets=hid_gadgets, device_identifiers=[], relaying_active=relaying_active
         )
 
         controller._handle_runtime_event(UdcStateChanged("configured"))
@@ -1436,9 +1238,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
     def test_cancel_active_relay_removes_done_task_and_closes_handle(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            device_identifiers=[],
-            relaying_active=asyncio.Event(),
+            hid_gadgets=_FakeHidGadgets(), device_identifiers=[], relaying_active=asyncio.Event()
         )
         task = _FakeTaskHandle(done=True)
         device = _FakeInputHandle()
@@ -1452,17 +1252,12 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
     def test_relay_task_done_ignores_stale_task(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            device_identifiers=[],
-            relaying_active=asyncio.Event(),
+            hid_gadgets=_FakeHidGadgets(), device_identifiers=[], relaying_active=asyncio.Event()
         )
         current_task = _FakeTaskHandle(done=True)
         stale_task = _FakeTaskHandle(done=True)
         device = _FakeInputHandle()
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(
-            device,
-            current_task,
-        )
+        controller._active_relays["/dev/input/event7"] = _ActiveRelay(device, current_task)
 
         controller._relay_task_done("/dev/input/event7", stale_task)
 
@@ -1471,17 +1266,14 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
     def test_start_open_device_closes_duplicate_handle(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            device_identifiers=[],
-            relaying_active=asyncio.Event(),
+            hid_gadgets=_FakeHidGadgets(), device_identifiers=[], relaying_active=asyncio.Event()
         )
         controller._state = _SupervisorState.RUNNING
         controller._task_group = _FakeTaskGroup()
         active_device = _FakeInputHandle()
         duplicate_device = _FakeInputHandle()
         controller._active_relays["/dev/input/event7"] = _ActiveRelay(
-            active_device,
-            _FakeTaskHandle(),
+            active_device, _FakeTaskHandle()
         )
 
         controller._start_open_device(duplicate_device)
@@ -1503,8 +1295,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
         device = _FakeInputHandle()
 
         with patch(
-            "bluetooth_2_usb.relay_supervisor.InputDevice",
-            return_value=device,
+            "bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device
         ) as input_device:
             controller._schedule_probe("/dev/input/event7", retries_remaining=0)
 
@@ -1525,10 +1316,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
         controller._task_group = task_group
         device = _FakeInputHandle(name="not ready")
 
-        with patch(
-            "bluetooth_2_usb.relay_supervisor.InputDevice",
-            return_value=device,
-        ):
+        with patch("bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device):
             controller._schedule_probe("/dev/input/event7", retries_remaining=2)
 
         self.assertEqual(device.close_calls, 1)
@@ -1549,10 +1337,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
         controller._task_group = task_group
         device = _FakeInputHandle(name="not ready")
 
-        with patch(
-            "bluetooth_2_usb.relay_supervisor.InputDevice",
-            return_value=device,
-        ):
+        with patch("bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device):
             controller._schedule_probe("/dev/input/event7", retries_remaining=2)
 
         controller._device_removed("/dev/input/event7")
@@ -1562,9 +1347,7 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
 
 
 class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
-    async def test_run_uses_startup_handles_without_reopening(
-        self,
-    ) -> None:
+    async def test_run_uses_startup_handles_without_reopening(self) -> None:
         relay_ready = asyncio.Event()
 
         class WaitingInputRelay:
@@ -1582,24 +1365,16 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 await asyncio.Event().wait()
 
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            auto_discover=True,
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), auto_discover=True
         )
         device = _FakeInputHandle()
 
-        with patch(
-            "bluetooth_2_usb.relay_supervisor.list_input_devices",
-            return_value=[device],
-        ):
+        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[device]):
             with patch(
                 "bluetooth_2_usb.relay_supervisor.InputDevice",
                 side_effect=AssertionError("startup device was reopened"),
             ):
-                with patch(
-                    "bluetooth_2_usb.relay_supervisor.InputRelay",
-                    WaitingInputRelay,
-                ):
+                with patch("bluetooth_2_usb.relay_supervisor.InputRelay", WaitingInputRelay):
                     events: asyncio.Queue = asyncio.Queue()
                     relay_task = asyncio.create_task(controller.run(events))
                     await asyncio.wait_for(relay_ready.wait(), timeout=1)
@@ -1610,13 +1385,9 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(controller._active_relays, {})
         self.assertIs(controller._state, _SupervisorState.STOPPED)
 
-    async def test_run_returns_when_shutdown_requested_before_start(
-        self,
-    ) -> None:
+    async def test_run_returns_when_shutdown_requested_before_start(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            auto_discover=True,
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), auto_discover=True
         )
         controller.request_shutdown()
 
@@ -1628,9 +1399,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_run_cannot_restart_after_stop(self) -> None:
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            auto_discover=True,
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), auto_discover=True
         )
         controller.request_shutdown()
         await controller.run(asyncio.Queue())
@@ -1653,15 +1422,9 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 raise OSError(errno.EIO, "I/O error")
 
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
-        device = SimpleNamespace(
-            path="/dev/input/event7",
-            name="failure device",
-            close=Mock(),
-        )
+        device = SimpleNamespace(path="/dev/input/event7", name="failure device", close=Mock())
 
         with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
             with self.assertRaises(OSError) as raised:
@@ -1685,15 +1448,9 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 raise OSError(errno.ENODEV, "No such device")
 
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
-        device = SimpleNamespace(
-            path="/dev/input/event7",
-            name="removed device",
-            close=Mock(),
-        )
+        device = SimpleNamespace(path="/dev/input/event7", name="removed device", close=Mock())
 
         with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
             await controller._run_input_relay(device)
@@ -1715,15 +1472,9 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 raise RuntimeError("boom")
 
         controller = RelaySupervisor(
-            hid_gadgets=_FakeHidGadgets(),
-            relaying_active=asyncio.Event(),
-            device_identifiers=[],
+            hid_gadgets=_FakeHidGadgets(), relaying_active=asyncio.Event(), device_identifiers=[]
         )
-        device = SimpleNamespace(
-            path="/dev/input/event7",
-            name="failure device",
-            close=Mock(),
-        )
+        device = SimpleNamespace(path="/dev/input/event7", name="failure device", close=Mock())
 
         with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
             with self.assertRaisesRegex(RuntimeError, "boom"):
@@ -1736,9 +1487,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         relaying_active.set()
         hid_gadgets = _FakeHidGadgets()
         controller = RelaySupervisor(
-            hid_gadgets=hid_gadgets,
-            relaying_active=relaying_active,
-            device_identifiers=[],
+            hid_gadgets=hid_gadgets, relaying_active=relaying_active, device_identifiers=[]
         )
 
         with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[]):

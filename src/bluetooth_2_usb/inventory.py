@@ -14,13 +14,7 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
-DEFAULT_SKIP_NAME_PREFIXES = (
-    "vc4-hdmi",
-    "vc4",
-    "gpio",
-    "pwr_button",
-    "raspberrypi-ts",
-)
+DEFAULT_SKIP_NAME_PREFIXES = ("vc4-hdmi", "vc4", "gpio", "pwr_button", "raspberrypi-ts")
 
 
 class DeviceEnumerationError(RuntimeError):
@@ -39,10 +33,7 @@ else:
     _EVDEV_IMPORT_ERROR = None
 
 
-EVENT_TYPE_NAMES = {
-    native_ecodes.EV_KEY: "EV_KEY",
-    native_ecodes.EV_REL: "EV_REL",
-}
+EVENT_TYPE_NAMES = {native_ecodes.EV_KEY: "EV_KEY", native_ecodes.EV_REL: "EV_REL"}
 
 
 @dataclass(slots=True)
@@ -64,8 +55,7 @@ class InputDeviceMetadata:
 
 
 def auto_discover_exclusion_reason(
-    device: InputDevice,
-    skip_name_prefixes: tuple[str, ...] = DEFAULT_SKIP_NAME_PREFIXES,
+    device: InputDevice, skip_name_prefixes: tuple[str, ...] = DEFAULT_SKIP_NAME_PREFIXES
 ) -> str | None:
     name = (device.name or "").strip()
     name_lower = name.lower()
@@ -156,11 +146,7 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
     for device in devices:
         status = "relay" if device.relay_candidate else "skip"
         table.add_row(
-            status,
-            device.name or "-",
-            device.identity,
-            device.path,
-            device.exclusion_reason or "",
+            status, device.name or "-", device.identity, device.path, device.exclusion_reason or ""
         )
 
     output = io.StringIO()

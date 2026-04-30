@@ -82,9 +82,7 @@ def boot_config_model_filters(model: str | None = None) -> list[str]:
 
 
 def boot_config_assignment_value(
-    key: str,
-    config_file: Path | None = None,
-    model_filters: list[str] | None = None,
+    key: str, config_file: Path | None = None, model_filters: list[str] | None = None
 ) -> str:
     path = boot_config_path() if config_file is None else config_file
     if not path.is_file():
@@ -131,12 +129,7 @@ def default_kernel_image(model: str | None = None) -> str:
         return "kernel8.img" if arm_64bit == "1" else "kernel7l.img"
     if any(
         value in resolved_model
-        for value in (
-            "Raspberry Pi 2",
-            "Raspberry Pi 3",
-            "Raspberry Pi Zero 2",
-            "Compute Module 3",
-        )
+        for value in ("Raspberry Pi 2", "Raspberry Pi 3", "Raspberry Pi Zero 2", "Compute Module 3")
     ):
         return "kernel8.img" if arm_64bit == "1" else "kernel7.img"
     if platform.machine() == "aarch64":

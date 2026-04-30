@@ -2,12 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .evdev import (
-    evdev_to_usb_hid,
-    get_mouse_movement,
-    is_consumer_key,
-    is_mouse_button,
-)
+from .evdev import evdev_to_usb_hid, get_mouse_movement, is_consumer_key, is_mouse_button
 from .evdev_types import InputEvent, KeyEvent, RelEvent
 from .extended_mouse import ExtendedMouse
 from .hid_gadgets import HidGadgets

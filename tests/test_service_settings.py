@@ -112,10 +112,7 @@ class ServiceSettingsTest(unittest.TestCase):
     def test_unknown_runtime_setting_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
-            env_file.write_text(
-                "B2U_UNKNOWN_SETTING=1\n",
-                encoding="utf-8",
-            )
+            env_file.write_text("B2U_UNKNOWN_SETTING=1\n", encoding="utf-8")
 
             with self.assertRaises(ServiceSettingsError):
                 load_service_settings(env_file)

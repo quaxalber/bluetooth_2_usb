@@ -192,7 +192,7 @@ class InputRelay:
             if not input_disappeared or ex.errno != errno.ENODEV:
                 raise
             logger.debug(
-                "Ignoring pending mouse flush failure for %s after input device " "disappeared: %s",
+                "Ignoring pending mouse flush failure for %s after input device disappeared: %s",
                 self._input_device.path,
                 ex,
             )
@@ -245,14 +245,11 @@ class InputRelay:
         :param event: The InputEvent to process
         """
         await self._process_hid_action_with_retry(
-            lambda: dispatch_event_to_hid(event, self._hid_gadgets),
-            f"{event}",
+            lambda: dispatch_event_to_hid(event, self._hid_gadgets), f"{event}"
         )
 
     async def _process_hid_action_with_retry(
-        self,
-        action: Callable[[], Any],
-        action_name: str,
+        self, action: Callable[[], Any], action_name: str
     ) -> bool:
         """
         Attempt to relay one HID action and retry transient write blocking.
@@ -287,8 +284,8 @@ class InputRelay:
                 self._hid_write_failures += 1
                 logger.warning(
                     "BrokenPipeError: USB cable likely disconnected or power-only. "
-                    "Pausing relay.\nSee: "
-                    "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
+                    + "Pausing relay.\nSee: "
+                    + "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
                 )
                 self._relaying_active.clear()
                 return False

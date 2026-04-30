@@ -16,10 +16,7 @@ class ShortcutToggler:
     """
 
     def __init__(
-        self,
-        shortcut_keys: set[str],
-        relaying_active: asyncio.Event,
-        hid_gadgets: HidGadgets,
+        self, shortcut_keys: set[str], relaying_active: asyncio.Event, hid_gadgets: HidGadgets
     ) -> None:
         """
         :param shortcut_keys: A set of evdev-style key names to detect

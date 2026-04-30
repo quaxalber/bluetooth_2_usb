@@ -89,10 +89,7 @@ def iter_mouse_delta_chunks(delta: MouseDelta) -> Iterator[MouseDelta]:
     pan = delta.pan
     while x != 0 or y != 0 or wheel != 0 or pan != 0:
         partial = MouseDelta(
-            x=clamp_hid_i16(x),
-            y=clamp_hid_i16(y),
-            wheel=clamp_hid_i8(wheel),
-            pan=clamp_hid_i8(pan),
+            x=clamp_hid_i16(x), y=clamp_hid_i16(y), wheel=clamp_hid_i8(wheel), pan=clamp_hid_i8(pan)
         )
         yield partial
         x -= partial.x

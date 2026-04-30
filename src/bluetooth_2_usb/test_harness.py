@@ -42,10 +42,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Delay after virtual device creation before injection. Default: 1000",
     )
     inject.add_argument(
-        "--event-gap-ms",
-        type=int,
-        default=40,
-        help="Delay between emitted events. Default: 40",
+        "--event-gap-ms", type=int, default=40, help="Delay between emitted events. Default: 40"
     )
     inject.add_argument(
         "--keyboard-name",
@@ -63,15 +60,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Virtual consumer-control device name. Default: {DEFAULT_CONSUMER_NAME}",
     )
     inject.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format. Default: text",
+        "--output", choices=["text", "json"], default="text", help="Output format. Default: text"
     )
 
     capture = subparsers.add_parser(
-        "capture",
-        help="Capture relay reports from the host-side gadget HID devices.",
+        "capture", help="Capture relay reports from the host-side gadget HID devices."
     )
     capture.add_argument(
         "--scenario",
@@ -91,25 +84,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Substring used to detect gadget HID devices. Default: {DEFAULT_DEVICE_SUBSTRING}",
     )
     capture.add_argument(
-        "--keyboard-node",
-        default=None,
-        help="Explicit keyboard HID device path override.",
+        "--keyboard-node", default=None, help="Explicit keyboard HID device path override."
     )
     capture.add_argument(
-        "--mouse-node",
-        default=None,
-        help="Explicit mouse HID device path override.",
+        "--mouse-node", default=None, help="Explicit mouse HID device path override."
     )
     capture.add_argument(
-        "--consumer-node",
-        default=None,
-        help="Explicit consumer-control HID device path override.",
+        "--consumer-node", default=None, help="Explicit consumer-control HID device path override."
     )
     capture.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format. Default: text",
+        "--output", choices=["text", "json"], default="text", help="Output format. Default: text"
     )
 
     return parser

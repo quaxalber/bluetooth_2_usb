@@ -82,8 +82,8 @@ class CustomArgumentParser(argparse.ArgumentParser):
             default=None,
             help=(
                 "A plus-separated list of key names to press simultaneously in order to "
-                "toggle relaying (pause/resume). Example: CTRL+SHIFT+Q\n"
-                "Default: None (feature disabled)"
+                + "toggle relaying (pause/resume). Example: CTRL+SHIFT+Q\n"
+                + "Default: None (feature disabled)"
             ),
         )
         self.add_argument(

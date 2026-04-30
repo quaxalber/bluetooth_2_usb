@@ -4,10 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from bluetooth_2_usb.service_settings import (
-    DEFAULT_ENV_FILE,
-    canonicalize_service_settings_bools,
-)
+from bluetooth_2_usb.service_settings import DEFAULT_ENV_FILE, canonicalize_service_settings_bools
 
 from . import boot_config
 from .bluetooth import clear_bluetooth_rfkill_soft_blocks
@@ -34,8 +31,7 @@ B2U_UDC_PATH=
 
 def install_service_unit(repo_root: Path) -> None:
     shutil.copy2(
-        repo_root / "bluetooth_2_usb.service",
-        Path("/etc/systemd/system") / PATHS.service_unit,
+        repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit
     )
     (Path("/etc/systemd/system") / PATHS.service_unit).chmod(0o644)
 
@@ -90,16 +86,7 @@ def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
     shutil.rmtree(previous_dir, ignore_errors=True)
     try:
         recreate_venv(staging_dir)
-        run(
-            [
-                staging_dir / "bin/pip",
-                "install",
-                "--upgrade",
-                "pip",
-                "setuptools",
-                "wheel",
-            ]
-        )
+        run([staging_dir / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
         run([staging_dir / "bin/pip", "install", "--upgrade", package_dir])
         moved_previous = False
         if venv_dir.exists():
@@ -190,10 +177,7 @@ def install(repo_root: Path) -> None:
     install_service_unit(repo_root)
     write_default_env_file()
     canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
-    run(
-        [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"],
-        capture=True,
-    )
+    run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
     install_cli_links()
     run(["systemctl", "daemon-reload"])
     activate_service_unit()
@@ -225,16 +209,7 @@ def update(repo_root: Path) -> None:
         fail(f"Clone this repository to {PATHS.install_dir} and rerun update from there.")
     if not (PATHS.install_dir / ".git").is_dir():
         fail(f"Expected a git checkout at {PATHS.install_dir}.")
-    if output(
-        [
-            "git",
-            "-C",
-            PATHS.install_dir,
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-        ]
-    ):
+    if output(["git", "-C", PATHS.install_dir, "status", "--porcelain", "--untracked-files=all"]):
         fail(
             f"Refusing to update a dirty managed checkout at {PATHS.install_dir}. Commit, stash, or remove local changes first."
         )
@@ -260,9 +235,7 @@ def uninstall() -> None:
         fail(f"Unable to query systemd for {PATHS.service_unit}")
     if not installed:
         load_state = run(
-            ["systemctl", "show", "-P", "LoadState", PATHS.service_unit],
-            check=False,
-            capture=True,
+            ["systemctl", "show", "-P", "LoadState", PATHS.service_unit], check=False, capture=True
         ).stdout.strip()
         manage_b2u_service = load_state != "not-found"
 
@@ -308,12 +281,10 @@ def uninstall() -> None:
         "bluetooth_2_usb CLI link still exists after uninstall",
     )
     _assert_absent(
-        PATHS.bluetooth_bind_mount_unit,
-        "Bluetooth bind-mount unit still exists after uninstall",
+        PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall"
     )
     _assert_absent(
-        PATHS.bluetooth_service_dropin,
-        "bluetooth.service drop-in still exists after uninstall",
+        PATHS.bluetooth_service_dropin, "bluetooth.service drop-in still exists after uninstall"
     )
     if (
         run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode

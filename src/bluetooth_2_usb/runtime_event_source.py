@@ -38,10 +38,7 @@ class RuntimeEventSource:
     """
 
     def __init__(
-        self,
-        events: asyncio.Queue[RuntimeEvent],
-        udc_path: Path | None,
-        poll_interval: float = 0.5,
+        self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5
     ) -> None:
         self._events = events
         self._udc_path = udc_path
@@ -56,13 +53,10 @@ class RuntimeEventSource:
         self._monitor.filter_by("input")
 
         if self._udc_path is None:
-            logger.warning(
-                "UDC state file not found. Cable monitoring may be unavailable.",
-            )
+            logger.warning("UDC state file not found. Cable monitoring may be unavailable.")
         elif not self._udc_path.is_file():
             logger.warning(
-                "UDC state file %s not found. Cable monitoring may be unavailable.",
-                self._udc_path,
+                "UDC state file %s not found. Cable monitoring may be unavailable.", self._udc_path
             )
 
     async def run(self) -> None:
@@ -97,10 +91,7 @@ class RuntimeEventSource:
                 await self._events.put(UdcStateChanged(new_state))
                 self._last_state = new_state
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._poll_interval,
-                )
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self._poll_interval)
             except TimeoutError:
                 pass
 

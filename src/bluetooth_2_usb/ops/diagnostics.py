@@ -133,14 +133,7 @@ class SmokeTest:
             self.soft_warn("No bluetooth rfkill entries found")
         inventory = (
             self._capture(
-                [
-                    PATHS.venv_python,
-                    "-m",
-                    "bluetooth_2_usb",
-                    "--list_devices",
-                    "--output",
-                    "json",
-                ]
+                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"]
             )
             if venv_present
             else (127, missing_venv)
@@ -450,11 +443,7 @@ def debug_report(duration: int | None) -> int:
     command_block("Kernel", ["uname", "-a"], 5)
     command_block(
         "OS release",
-        [
-            "bash",
-            "-lc",
-            "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release",
-        ],
+        ["bash", "-lc", "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"],
         5,
     )
     command_block(
@@ -479,9 +468,7 @@ def debug_report(duration: int | None) -> int:
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
     command_block(
-        "Service status",
-        ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit],
-        8,
+        "Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8
     )
     command_block(
         "Recent service journal",
@@ -495,11 +482,7 @@ def debug_report(duration: int | None) -> int:
     )
     command_block(
         "Relevant kernel log lines",
-        [
-            "bash",
-            "-lc",
-            "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true",
-        ],
+        ["bash", "-lc", "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"],
         8,
     )
     command_block("bluetoothctl show", ["bluetoothctl", "show"], 8)
@@ -515,24 +498,12 @@ def debug_report(duration: int | None) -> int:
         )
         command_block(
             "Service settings summary",
-            [
-                PATHS.venv_python,
-                "-m",
-                "bluetooth_2_usb.service_settings",
-                "--print-summary-json",
-            ],
+            [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--print-summary-json"],
             5,
         )
         command_block(
             "Device inventory (json)",
-            [
-                PATHS.venv_python,
-                "-m",
-                "bluetooth_2_usb",
-                "--list_devices",
-                "--output",
-                "json",
-            ],
+            [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"],
             8,
         )
         debug_command = run(
@@ -602,14 +573,8 @@ def redact(text: str, hostname: str) -> str:
         (r"PARTUUID=[^\s]+", "PARTUUID=<<REDACTED_PARTUUID>>"),
         (r"UUID=[^\s]+", "UUID=<<REDACTED_UUID>>"),
         (r"/dev/disk/by-uuid/[^\s]+", "/dev/disk/by-uuid/<<REDACTED_UUID>>"),
-        (
-            r"/dev/disk/by-partuuid/[^\s]+",
-            "/dev/disk/by-partuuid/<<REDACTED_PARTUUID>>",
-        ),
-        (
-            r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
-            "<<REDACTED_UUID>>",
-        ),
+        (r"/dev/disk/by-partuuid/[^\s]+", "/dev/disk/by-partuuid/<<REDACTED_PARTUUID>>"),
+        (r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", "<<REDACTED_UUID>>"),
         (r"^(?:[0-9a-f]{32})$", "<<REDACTED_MACHINE_ID>>"),
         (r"\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b", "<<REDACTED_BT_MAC>>"),
     ]

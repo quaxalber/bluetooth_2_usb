@@ -10,11 +10,7 @@ from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .loopback import loopback_capture, loopback_inject
 from .paths import PATHS
-from .readonly import (
-    disable_readonly,
-    enable_readonly,
-    setup_persistent_bluetooth_state,
-)
+from .readonly import disable_readonly, enable_readonly, setup_persistent_bluetooth_state
 
 OPERATIONAL_COMMANDS = frozenset(
     {
@@ -54,9 +50,7 @@ def _main(argv: list[str], *, prog: str) -> int:
 
     _command_parser(subparsers, "install", "Apply the managed system install.")
     _command_parser(
-        subparsers,
-        "update",
-        "Fast-forward and reapply the managed install when changed.",
+        subparsers, "update", "Fast-forward and reapply the managed install when changed."
     )
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
@@ -124,11 +118,7 @@ def _main(argv: list[str], *, prog: str) -> int:
 
 
 def _command_parser(
-    subparsers: argparse._SubParsersAction,
-    name: str,
-    help_text: str,
-    *,
-    add_help: bool = True,
+    subparsers: argparse._SubParsersAction, name: str, help_text: str, *, add_help: bool = True
 ) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(name, help=help_text, add_help=add_help)
     parser.add_argument("--repo-root", default=None, help=argparse.SUPPRESS)

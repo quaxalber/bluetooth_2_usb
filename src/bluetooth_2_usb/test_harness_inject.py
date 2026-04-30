@@ -51,9 +51,7 @@ def _keyboard_capabilities() -> dict[int, list[int]]:
     keyboard_codes = sorted(
         {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
     )
-    return {
-        ecodes.EV_KEY: keyboard_codes,
-    }
+    return {ecodes.EV_KEY: keyboard_codes}
 
 
 def _mouse_capabilities() -> dict[int, list[int]]:
@@ -74,9 +72,7 @@ def _mouse_capabilities() -> dict[int, list[int]]:
 
 
 def _consumer_capabilities() -> dict[int, list[int]]:
-    return {
-        ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN],
-    }
+    return {ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN]}
 
 
 def run_inject(

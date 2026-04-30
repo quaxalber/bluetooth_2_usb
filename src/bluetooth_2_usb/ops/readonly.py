@@ -62,11 +62,7 @@ def _overlay_state_from_code(raw: str) -> str:
 
 
 def package_status(package: str) -> str:
-    completed = run(
-        ["dpkg-query", "-W", "-f=${Status}", package],
-        check=False,
-        capture=True,
-    )
+    completed = run(["dpkg-query", "-W", "-f=${Status}", package], check=False, capture=True)
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 

@@ -211,15 +211,11 @@ def _cached_getattr(class_type, attribute):
 
 
 @lru_cache
-def _cached_dir(
-    class_type: type,
-) -> list[str]:
+def _cached_dir(class_type: type) -> list[str]:
     return dir(class_type)
 
 
-def _get_hid_code_type(
-    event: KeyEvent,
-) -> type:
+def _get_hid_code_type(event: KeyEvent) -> type:
     if is_consumer_key(event):
         return _consumer_control_code_type()
     if is_mouse_button(event):
