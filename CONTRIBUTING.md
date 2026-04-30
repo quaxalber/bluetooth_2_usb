@@ -119,8 +119,16 @@ Please keep code and docs aligned with the supported deployment model:
 ### Python
 
 - Python 3.11+
-- format with Black
+- format with Black at the repository line length (`120`)
 - lint with Ruff
+- avoid magic trailing commas whose only purpose is to force Black to keep a
+  call, literal, or assertion split across multiple lines; keep syntactic
+  trailing commas where Python requires them
+- when splitting strings, avoid implicit adjacent string literals because they
+  are easy to misread after formatting. Prefer explicit concatenation,
+  intermediate variables, or a naturally wrapped data structure.
+- keep direct dependency pins and unavoidable long URLs intact when wrapping
+  would make the command or dependency harder to copy, validate, or parse
 - use positional formatting for logger calls so disabled log levels avoid
   formatting work and log aggregators can group stable message templates
 - prefer small, direct control flow over clever abstractions
@@ -167,6 +175,56 @@ python -m build
 
 Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
 
+For broad formatting churn, also scan for accidental style regressions:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+import subprocess
+
+for raw_path in subprocess.check_output(["git", "ls-files"], text=True).splitlines():
+    path = Path(raw_path)
+    if path.parts and path.parts[0] in {"build", "dist", "venv"}:
+        continue
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError:
+        continue
+    for line_number, line in enumerate(lines, 1):
+        if len(line) > 120:
+            print(f"{path}:{line_number}:{len(line)}")
+PY
+
+python - <<'PY'
+from pathlib import Path
+import io
+import subprocess
+import tokenize
+
+for raw_path in subprocess.check_output(["git", "ls-files", "*.py"], text=True).splitlines():
+    path = Path(raw_path)
+    if path.parts and path.parts[0] in {"build", "dist", "venv"}:
+        continue
+    text = path.read_text(encoding="utf-8")
+    tokens = [
+        token
+        for token in tokenize.generate_tokens(io.StringIO(text).readline)
+        if token.type
+        not in {
+            tokenize.NL,
+            tokenize.NEWLINE,
+            tokenize.INDENT,
+            tokenize.DEDENT,
+            tokenize.COMMENT,
+            tokenize.ENCODING,
+        }
+    ]
+    for previous, current in zip(tokens, tokens[1:]):
+        if previous.type == tokenize.STRING and current.type == tokenize.STRING:
+            print(f"{path}:{previous.start[0]}-{current.start[0]}")
+PY
+```
+
 ## Hardware Validation
 
 If your change affects runtime behavior, installation, service startup, USB
@@ -185,8 +243,8 @@ Use these repo-owned guides when they match the task:
 Minimum Pi-side validation after runtime-affecting changes:
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
+sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb debug --duration 10
 sudo bluetoothctl show
 sudo btmgmt info
 ```

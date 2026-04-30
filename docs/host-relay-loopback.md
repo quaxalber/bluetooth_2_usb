@@ -49,8 +49,8 @@ sudo venv/bin/bluetooth_2_usb install-hid-udev-rule --repo-root "$PWD"
 Recommended baseline checks on the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
+sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb debug --duration 10
 ```
 
 ## 1. Confirm host-side enumeration
@@ -75,7 +75,11 @@ venv/bin/bluetooth_2_usb loopback-capture --scenario keyboard --timeout-sec 1 --
 On Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --timeout-sec 1 --output json
+powershell -ExecutionPolicy Bypass `
+  -File .\scripts\loopback-capture.ps1 `
+  --scenario keyboard `
+  --timeout-sec 1 `
+  --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
@@ -124,7 +128,7 @@ layout or USB identity:
 On the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario combo
+sudo bluetooth_2_usb loopback-inject --scenario combo
 ```
 
 When `bluetooth_2_usb.service` is active, the injector waits up to the default
@@ -156,7 +160,7 @@ stress high-speed mouse movement and scrolling forwarding:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback-capture --scenario mouse_fast
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario mouse_fast
+sudo bluetooth_2_usb loopback-inject --scenario mouse_fast
 ```
 
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
@@ -166,7 +170,7 @@ To validate all eight button bits, run the explicit intrusive button scenario:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback-capture --scenario mouse_buttons_intrusive
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario mouse_buttons_intrusive
+sudo bluetooth_2_usb loopback-inject --scenario mouse_buttons_intrusive
 ```
 
 On Windows, the current Raw Input capture backend only maps mouse button bits
@@ -190,21 +194,21 @@ Keyboard-only:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback-capture --scenario keyboard
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario keyboard
+sudo bluetooth_2_usb loopback-inject --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback-capture --scenario mouse
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario mouse
+sudo bluetooth_2_usb loopback-inject --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback-capture --scenario consumer
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --scenario consumer
+sudo bluetooth_2_usb loopback-inject --scenario consumer
 ```
 
 ## 6. Failure interpretation

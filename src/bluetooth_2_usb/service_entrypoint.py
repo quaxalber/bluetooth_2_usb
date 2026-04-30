@@ -16,6 +16,8 @@ def main() -> int:
 
     if settings.udc_path:
         os.environ["BLUETOOTH_2_USB_UDC_PATH"] = settings.udc_path
+    else:
+        os.environ.pop("BLUETOOTH_2_USB_UDC_PATH", None)
 
     return run(build_runtime_argv(settings))
 

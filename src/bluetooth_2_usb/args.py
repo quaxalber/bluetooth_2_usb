@@ -46,7 +46,10 @@ class CustomArgumentParser(argparse.ArgumentParser):
         super().__init__(
             *args,
             add_help=False,
-            description="Bluetooth-2-USB HID relay. Handles Bluetooth keyboard and mouse events from multiple input devices and translates them to USB using Linux's gadget mode.",
+            description=(
+                "Bluetooth-2-USB HID relay. Handles Bluetooth keyboard and mouse events from multiple "
+                + "input devices and translates them to USB using Linux's gadget mode."
+            ),
             formatter_class=argparse.RawTextHelpFormatter,
             **kwargs,
         )
@@ -59,21 +62,33 @@ class CustomArgumentParser(argparse.ArgumentParser):
             "-a",
             action="store_true",
             default=False,
-            help="Enable auto-discovery mode. All readable input devices will be relayed automatically.\nDefault: disabled",
+            help=(
+                "Enable auto-discovery mode. All readable input devices will be relayed automatically.\n"
+                + "Default: disabled"
+            ),
         )
         self.add_argument(
             "--device_ids",
             "-i",
             type=_parse_device_ids,
             default=None,
-            help="Comma-separated list of identifiers for input devices to be relayed.\nAn identifier is either the input device path, the MAC address or any case-insensitive substring of the device name.\nExample: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\nDefault: None",
+            help=(
+                "Comma-separated list of identifiers for input devices to be relayed.\n"
+                + "An identifier is either the input device path, the MAC address or any "
+                + "case-insensitive substring of the device name.\n"
+                + "Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\n"
+                + "Default: None"
+            ),
         )
         self.add_argument(
             "--grab_devices",
             "-g",
             action="store_true",
             default=False,
-            help="Grab the input devices, i.e., suppress any events on your relay device.\nDevices are not grabbed by default.",
+            help=(
+                "Grab the input devices, i.e., suppress any events on your relay device.\n"
+                + "Devices are not grabbed by default."
+            ),
         )
         self.add_argument(
             "--interrupt_shortcut",
@@ -134,11 +149,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Output format for --list_devices and --validate-env. Default: text",
         )
         self.add_argument(
-            "--help",
-            "-h",
-            action="help",
-            default=argparse.SUPPRESS,
-            help="Show this help message and exit.",
+            "--help", "-h", action="help", default=argparse.SUPPRESS, help="Show this help message and exit."
         )
 
 

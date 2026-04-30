@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from bluetooth_2_usb.service_settings import (
+    ServiceSettings,
     ServiceSettingsError,
     build_runtime_argv,
     build_runtime_shell_command,
@@ -99,9 +100,7 @@ class ServiceSettingsTest(unittest.TestCase):
 
             settings = load_service_settings(env_file)
             argv = build_runtime_argv(settings, append_debug=True)
-            command = build_runtime_shell_command(
-                "python -m bluetooth_2_usb", settings=settings, append_debug=True
-            )
+            command = build_runtime_shell_command("python -m bluetooth_2_usb", settings=settings, append_debug=True)
 
         self.assertIn("--auto_discover", argv)
         self.assertIn("--grab_devices", argv)
@@ -125,6 +124,12 @@ class ServiceSettingsTest(unittest.TestCase):
             argv = build_runtime_argv(settings)
 
         self.assertNotIn("--hid-profile", argv)
+
+    def test_builds_runtime_argv_with_udc_path(self) -> None:
+        argv = build_runtime_argv(ServiceSettings(udc_path="/tmp/udc-state"))
+
+        self.assertIn("--udc_path", argv)
+        self.assertIn("/tmp/udc-state", argv)
 
     def test_canonicalize_service_settings_bools_rewrites_bool_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

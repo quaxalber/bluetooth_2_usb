@@ -67,22 +67,26 @@ ssh <pi-host> '
 
 ```bash
 ssh <pi-host> '
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb install --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb update --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb uninstall --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb loopback-inject --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-enable --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-disable --help >/dev/null
-  /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-setup --help >/dev/null
+  cd /opt/bluetooth_2_usb
+  PYTHONPATH=src python3 -m bluetooth_2_usb install --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb update --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb uninstall --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb smoketest --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb debug --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb loopback-inject --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly-enable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly-disable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly-setup --help >/dev/null
 '
 ```
 
 ## Install validation
 
 ```bash
-ssh <pi-host> 'cd /opt/bluetooth_2_usb && sudo -n env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb install'
+ssh <pi-host> '
+  cd /opt/bluetooth_2_usb
+  sudo -n env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb install
+'
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
@@ -101,7 +105,7 @@ After reboot:
 ```bash
 ssh <pi-host> '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
+  sudo -n bluetooth_2_usb smoketest --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
 '
@@ -114,7 +118,7 @@ present yet, or when the OTG cable is not attached and the UDC state is not
 ## Update validation
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb update'
+ssh <pi-host> 'sudo -n bluetooth_2_usb update'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
@@ -128,13 +132,13 @@ configuration or other reboot-sensitive behavior.
 Bounded run:
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10'
+ssh <pi-host> 'sudo -n bluetooth_2_usb debug --duration 10'
 ```
 
 Manual interrupt path:
 
 ```bash
-ssh -t <pi-host> 'sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug'
+ssh -t <pi-host> 'sudo -n bluetooth_2_usb debug'
 ```
 
 Verify:
@@ -175,8 +179,8 @@ verifying it with `lsblk -f`.
 
 ```bash
 ssh <pi-host> '
-  sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-setup --device <persist-partition>
-  sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-enable
+  sudo -n bluetooth_2_usb readonly-setup --device <persist-partition>
+  sudo -n bluetooth_2_usb readonly-enable
 '
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
@@ -198,7 +202,7 @@ repair `initramfs-tools` before rebooting and rerun the enable step:
 ssh <pi-host> '
   sudo -n sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
   sudo -n dpkg --configure -a
-  sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-enable
+  sudo -n bluetooth_2_usb readonly-enable
 '
 ```
 
@@ -206,7 +210,7 @@ After reboot:
 
 ```bash
 ssh <pi-host> 'bash -s' <<'EOF'
-sudo -n env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
+sudo -n env SMOKETEST_POST_REBOOT=1 bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 findmnt /var/lib/bluetooth
 findmnt /mnt/b2u-persist
@@ -293,7 +297,7 @@ Pass criteria:
 ## Disable read-only mode again
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb readonly-disable'
+ssh <pi-host> 'sudo -n bluetooth_2_usb readonly-disable'
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
@@ -315,7 +319,7 @@ the live root filesystem.
 
 ```bash
 ssh <pi-host> '
-  sudo -n /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb uninstall
+  sudo -n bluetooth_2_usb uninstall
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
   systemctl is-enabled var-lib-bluetooth.mount >/dev/null 2>&1 && echo mount-enabled || echo mount-disabled

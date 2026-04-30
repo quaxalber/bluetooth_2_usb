@@ -39,18 +39,10 @@ class _FakeMonitor:
 
 class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
     def _build_source(
-        self,
-        events: asyncio.Queue,
-        *,
-        monitor: _FakeMonitor,
-        udc_path: Path | None = None,
-        poll_interval: float = 0.01,
+        self, events: asyncio.Queue, *, monitor: _FakeMonitor, udc_path: Path | None = None, poll_interval: float = 0.01
     ) -> RuntimeEventSource:
         with patch("bluetooth_2_usb.runtime_event_source.pyudev.Context", return_value=object()):
-            with patch(
-                "bluetooth_2_usb.runtime_event_source.pyudev.Monitor.from_netlink",
-                return_value=monitor,
-            ):
+            with patch("bluetooth_2_usb.runtime_event_source.pyudev.Monitor.from_netlink", return_value=monitor):
                 return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
 
     async def test_runtime_event_source_emits_udev_hotplug_events(self) -> None:
@@ -80,14 +72,10 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
             source = self._build_source(queue, monitor=monitor, udc_path=udc_path)
 
             task = asyncio.create_task(source.run())
-            self.assertEqual(
-                await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached")
-            )
+            self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached"))
 
             udc_path.write_text("configured\n", encoding="utf-8")
-            self.assertEqual(
-                await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("configured")
-            )
+            self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("configured"))
 
             source.stop()
             await asyncio.wait_for(task, timeout=1)
@@ -102,9 +90,7 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         source = self._build_source(queue, monitor=monitor, udc_path=None)
 
         task = asyncio.create_task(source.run())
-        self.assertEqual(
-            await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached")
-        )
+        self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached"))
 
         source.stop()
         await asyncio.wait_for(task, timeout=1)

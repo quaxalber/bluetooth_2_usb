@@ -63,16 +63,27 @@ def run(
     input_text: str | None = None,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        [str(arg) for arg in args],
-        check=False,
-        capture_output=capture,
-        text=text,
-        input=input_text,
-        timeout=timeout,
-    )
+    command_args = [str(arg) for arg in args]
+    command = " ".join(command_args)
+    try:
+        completed = subprocess.run(
+            command_args, check=False, capture_output=capture, text=text, input=input_text, timeout=timeout
+        )
+    except FileNotFoundError as exc:
+        missing = exc.filename or command_args[0]
+        fail(f"Required command not found: {missing}\n{exc}")
+    except subprocess.TimeoutExpired as exc:
+        details = []
+        if isinstance(exc.stdout, str) and exc.stdout:
+            details.append(exc.stdout.strip())
+        if isinstance(exc.stderr, str) and exc.stderr:
+            details.append(exc.stderr.strip())
+        detail = "\n".join(detail for detail in details if detail)
+        message = f"Command timed out after {timeout}s: {command}"
+        if detail:
+            message = f"{message}\n{detail}"
+        fail(message)
     if check and completed.returncode != 0:
-        command = " ".join(str(arg) for arg in args)
         detail = completed.stderr.strip() if completed.stderr else ""
         if detail:
             fail(f"Command failed ({completed.returncode}): {command}\n{detail}")

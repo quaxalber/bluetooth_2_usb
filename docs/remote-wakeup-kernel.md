@@ -41,10 +41,13 @@ Without the kernel patch, the runtime cannot wake suspended hosts.
 
 ## Patch source
 
-- Raspberry Pi Linux issue `#3977`:
-  https://github.com/raspberrypi/linux/issues/3977
+- Raspberry Pi Linux issue [`#3977`][rpi-3977]
 - PiKVM reference patch:
-  https://github.com/pikvm/packages/blob/6d1fe298d7ad13a82cf9c6d3645866a443cde8f0/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch
+  - repo: `pikvm/packages`
+  - commit: `6d1fe298d7ad13a82cf9c6d3645866a443cde8f0`
+  - path: `packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch`
+
+[rpi-3977]: https://github.com/raspberrypi/linux/issues/3977
 
 ## Build dependencies
 
@@ -83,8 +86,11 @@ git switch -c b2u/rpi-6.12.y-remote-wakeup
 Apply the patch:
 
 ```bash
+patch_url="https://raw.githubusercontent.com/pikvm/packages"
+patch_url="$patch_url/6d1fe298d7ad13a82cf9c6d3645866a443cde8f0"
+patch_url="$patch_url/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch"
 curl -L \
-  https://raw.githubusercontent.com/pikvm/packages/6d1fe298d7ad13a82cf9c6d3645866a443cde8f0/packages/linux-rpi-pikvm/1001-pikvm-hid-remote-wakeup-support.patch \
+  "$patch_url" \
   -o 1001-pikvm-hid-remote-wakeup-support.patch
 patch -p1 < 1001-pikvm-hid-remote-wakeup-support.patch
 ```
@@ -101,14 +107,35 @@ Use this matrix as the source of truth for board-specific build targets, custom
 kernel image names, and the boot initramfs name Raspberry Pi firmware expects
 when `auto_initramfs=1` is enabled.
 
-| Target | Status | Build target | Expected image | Boot initramfs target | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Raspberry Pi 4B | validated | `ARCH=arm64`, `bcm2711_defconfig`, `KERNEL=kernel8`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel8-b2u-wake.img` | `initramfs8-b2u-wake` | Tested on Raspberry Pi 4 Model B Rev 1.4 |
-| Raspberry Pi Zero W | validated | `ARCH=arm`, `bcmrpi_defconfig`, `KERNEL=kernel`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel-b2u-wake.img` | `initramfs-b2u-wake` | GCC path validated; LLVM fallback also validated |
-| Raspberry Pi 5 | unvalidated | `ARCH=arm64`, `bcm2712_defconfig`, `KERNEL=kernel_2712`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel_2712-b2u-wake.img` | `initramfs_2712-b2u-wake` | USB-C gadget path shares the board's USB-C connectivity |
-| Raspberry Pi 4B 32-bit | unvalidated | `ARCH=arm`, `bcm2711_defconfig`, `KERNEL=kernel7l`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel7l-b2u-wake.img` | `initramfs7l-b2u-wake` | Use only for 32-bit Pi OS on Pi 4 |
-| Raspberry Pi Zero 2 W 64-bit | unvalidated | `ARCH=arm64`, `bcm2711_defconfig`, `KERNEL=kernel8`, `CROSS_COMPILE=aarch64-linux-gnu-` | `kernel8-b2u-wake.img` | `initramfs8-b2u-wake` | Shares the Pi 4B 64-bit image/initramfs naming |
-| Raspberry Pi Zero 2 W 32-bit | unvalidated | `ARCH=arm`, `bcm2709_defconfig`, `KERNEL=kernel7`, `CROSS_COMPILE=arm-linux-gnueabihf-` | `kernel7-b2u-wake.img` | `initramfs7-b2u-wake` | 32-bit only |
+- Raspberry Pi 4B: validated with `ARCH=arm64`, `bcm2711_defconfig`,
+  `KERNEL=kernel8`, and `CROSS_COMPILE=aarch64-linux-gnu-`. The expected image
+  is `kernel8-b2u-wake.img`, the boot initramfs target is
+  `initramfs8-b2u-wake`, and testing used a Raspberry Pi 4 Model B Rev 1.4.
+- Raspberry Pi Zero W: validated with `ARCH=arm`, `bcmrpi_defconfig`,
+  `KERNEL=kernel`, and `CROSS_COMPILE=arm-linux-gnueabihf-`. The expected image
+  is `kernel-b2u-wake.img`, the boot initramfs target is
+  `initramfs-b2u-wake`, and the GCC path is validated. The LLVM path is also
+  validated as a fallback.
+- Raspberry Pi 5: unvalidated with `ARCH=arm64`, `bcm2712_defconfig`,
+  `KERNEL=kernel_2712`, and `CROSS_COMPILE=aarch64-linux-gnu-`. The expected
+  image is `kernel_2712-b2u-wake.img`, the boot initramfs target is
+  `initramfs_2712-b2u-wake`, and the USB-C gadget path shares the board's USB-C
+  connectivity.
+- Raspberry Pi 4B 32-bit: unvalidated with `ARCH=arm`,
+  `bcm2711_defconfig`, `KERNEL=kernel7l`, and
+  `CROSS_COMPILE=arm-linux-gnueabihf-`. The expected image is
+  `kernel7l-b2u-wake.img`, the boot initramfs target is
+  `initramfs7l-b2u-wake`, and this target is only for 32-bit Pi OS on Pi 4.
+- Raspberry Pi Zero 2 W 64-bit: unvalidated with `ARCH=arm64`,
+  `bcm2711_defconfig`, `KERNEL=kernel8`, and
+  `CROSS_COMPILE=aarch64-linux-gnu-`. The expected image is
+  `kernel8-b2u-wake.img`, the boot initramfs target is
+  `initramfs8-b2u-wake`, and it shares the Pi 4B 64-bit image/initramfs naming.
+- Raspberry Pi Zero 2 W 32-bit: unvalidated with `ARCH=arm`,
+  `bcm2709_defconfig`, `KERNEL=kernel7`, and
+  `CROSS_COMPILE=arm-linux-gnueabihf-`. The expected image is
+  `kernel7-b2u-wake.img`, the boot initramfs target is
+  `initramfs7-b2u-wake`, and this target is 32-bit only.
 
 ## Validated build paths
 
@@ -273,8 +300,8 @@ sudo -n grep -H . /sys/kernel/config/usb_gadget/*/functions/hid.*/wakeup_on_writ
 4. the normal Bluetooth-2-USB checks still pass
 
 ```bash
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose
-sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10
+sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb debug --duration 10
 ```
 
 5. a real host suspend and wake test succeeds through normal keyboard input

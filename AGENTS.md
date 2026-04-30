@@ -72,8 +72,8 @@ operational CLI validation path.
 For runtime-affecting changes, validate on real Pi hardware when feasible.
 Minimum Pi-side checks:
 
-- `sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb smoketest --verbose`
-- `sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb debug --duration 10`
+- `sudo bluetooth_2_usb smoketest --verbose`
+- `sudo bluetooth_2_usb debug --duration 10`
 - `sudo bluetoothctl show`
 - `sudo btmgmt info`
 

@@ -3,24 +3,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from bluetooth_2_usb.ops import boot_config
 from bluetooth_2_usb.ops.bluetooth import clear_bluetooth_rfkill_soft_blocks
 from bluetooth_2_usb.ops.commands import OpsError
-from bluetooth_2_usb.ops.readonly import (
-    ReadonlyConfig,
-    load_readonly_config,
-    overlay_status,
-    write_readonly_config,
-)
+from bluetooth_2_usb.ops.readonly import ReadonlyConfig, load_readonly_config, overlay_status, write_readonly_config
 
 
 def _write_rfkill_entry(
-    root: Path,
-    index: int,
-    *,
-    type_name: str = "bluetooth",
-    soft: str = "0",
-    hard: str = "0",
-    state: str = "1",
+    root: Path, index: int, *, type_name: str = "bluetooth", soft: str = "0", hard: str = "0", state: str = "1"
 ) -> Path:
     rfkill_dir = root / f"rfkill{index}"
     rfkill_dir.mkdir(parents=True, exist_ok=True)
@@ -55,6 +45,12 @@ class BluetoothRfkillOpsTest(unittest.TestCase):
             clear_bluetooth_rfkill_soft_blocks(Path(tmpdir))
 
 
+class BootConfigOpsTest(unittest.TestCase):
+    def test_required_boot_modules_rejects_unknown_dwc2_mode(self) -> None:
+        with self.assertRaises(OpsError):
+            boot_config.required_boot_modules_csv("unknown")
+
+
 class ReadonlyConfigTest(unittest.TestCase):
     def test_overlay_status_prefers_live_state(self) -> None:
         calls = []
@@ -68,9 +64,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             return Completed()
 
-        with patch(
-            "bluetooth_2_usb.ops.readonly.shutil.which", return_value="/usr/bin/raspi-config"
-        ):
+        with patch("bluetooth_2_usb.ops.readonly.shutil.which", return_value="/usr/bin/raspi-config"):
             with patch("bluetooth_2_usb.ops.readonly.run", side_effect=fake_run):
                 self.assertEqual(overlay_status(), "enabled")
 

@@ -14,7 +14,8 @@ class ecodes:
     """
     Input event codes
 
-    (Converted C header to Python class. See: https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h)
+    (Converted C header to Python class.
+    See: https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h)
     """
 
     # Device properties and quirks

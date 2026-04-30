@@ -17,14 +17,9 @@ from .bluetooth import (
     bluetooth_rfkill_entries,
     rfkill_list_bluetooth,
 )
-from .commands import fail, ok, output, run, timestamp, warn
+from .commands import OpsError, fail, ok, output, run, timestamp, warn
 from .paths import PATHS
-from .readonly import (
-    bluetooth_state_persistent,
-    load_readonly_config,
-    overlay_status,
-    readonly_mode,
-)
+from .readonly import bluetooth_state_persistent, load_readonly_config, overlay_status, readonly_mode
 
 
 class SmokeTest:
@@ -51,9 +46,7 @@ class SmokeTest:
         bluetooth_persistent = bluetooth_state_persistent()
         expected_initramfs_file = boot_config.expected_boot_initramfs_file()
         expected_initramfs_path = (
-            str(boot_config.boot_initramfs_target_path(expected_initramfs_file))
-            if expected_initramfs_file
-            else ""
+            str(boot_config.boot_initramfs_target_path(expected_initramfs_file)) if expected_initramfs_file else ""
         )
 
         self._check_boot_overlay(config_txt, expected_overlay)
@@ -63,9 +56,7 @@ class SmokeTest:
                 "Could not determine whether dwc2 is built-in or modular; boot module validation is heuristic"
             )
         self._path_exists(
-            Path("/sys/kernel/config/usb_gadget"),
-            "configfs gadget path is present",
-            "configfs gadget path is missing",
+            Path("/sys/kernel/config/usb_gadget"), "configfs gadget path is present", "configfs gadget path is missing"
         )
         udc_list = " ".join(path.name for path in Path("/sys/class/udc").glob("*"))
         self._bool(bool(udc_list), f"UDC is present ({udc_list})", "No UDC detected")
@@ -80,15 +71,9 @@ class SmokeTest:
             f"{PATHS.service_unit} is not active",
         )
         venv_present = PATHS.venv_python.is_file()
-        self._path_exists(
-            PATHS.venv_python,
-            "Virtualenv interpreter is present",
-            "Virtualenv interpreter is missing",
-        )
+        self._path_exists(PATHS.venv_python, "Virtualenv interpreter is present", "Virtualenv interpreter is missing")
         if venv_present:
-            validate_log = self._capture(
-                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"]
-            )
+            validate_log = self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"])
             self._bool(
                 validate_log[0] == 0,
                 "CLI environment validation passed",
@@ -132,24 +117,18 @@ class SmokeTest:
         else:
             self.soft_warn("No bluetooth rfkill entries found")
         inventory = (
-            self._capture(
-                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"]
-            )
+            self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"])
             if venv_present
             else (127, missing_venv)
         )
         relayable_count = self._relayable_count(inventory)
         paired_count = self._paired_count()
         self._path_exists(
-            Path("/var/lib/bluetooth"),
-            "Bluetooth state directory exists",
-            "Bluetooth state directory is missing",
+            Path("/var/lib/bluetooth"), "Bluetooth state directory exists", "Bluetooth state directory is missing"
         )
         self._check_overlay_runtime(overlay, root_overlay_active, post_reboot)
         self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
-        self._check_readonly(
-            readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot
-        )
+        self._check_readonly(readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot)
 
         self.summary = {
             "Boot config": str(config_txt),
@@ -189,8 +168,7 @@ class SmokeTest:
             return
         if (
             config_txt.is_file()
-            and expected_overlay
-            in config_txt.read_text(encoding="utf-8", errors="replace").splitlines()
+            and expected_overlay in config_txt.read_text(encoding="utf-8", errors="replace").splitlines()
         ):
             ok(f"config.txt contains expected overlay ({expected_overlay})")
         else:
@@ -206,9 +184,7 @@ class SmokeTest:
         else:
             ok(f"cmdline.txt contains required modules-load ({token or '<missing>'})")
 
-    def _check_overlay_runtime(
-        self, overlay: str, root_overlay_active: str, post_reboot: bool
-    ) -> None:
+    def _check_overlay_runtime(self, overlay: str, root_overlay_active: str, post_reboot: bool) -> None:
         if overlay in {"enabled", "disabled"}:
             ok(f"OverlayFS boot configuration is {overlay}")
         else:
@@ -237,12 +213,8 @@ class SmokeTest:
         else:
             ok("Root overlay is inactive")
 
-    def _check_initramfs(
-        self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str
-    ) -> None:
-        should_require = (
-            overlay == "enabled" or root_overlay_active == "yes" or readonly == "persistent"
-        )
+    def _check_initramfs(self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str) -> None:
+        should_require = overlay == "enabled" or root_overlay_active == "yes" or readonly == "persistent"
         if not expected_path:
             if should_require:
                 self.warn_fail("Boot initramfs target could not be determined")
@@ -257,12 +229,7 @@ class SmokeTest:
             self.soft_warn(f"Boot initramfs is not present yet ({path})")
 
     def _check_readonly(
-        self,
-        readonly: str,
-        overlay: str,
-        root_overlay_active: str,
-        bluetooth_persistent: bool,
-        post_reboot: bool,
+        self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_persistent: bool, post_reboot: bool
     ) -> None:
         if bluetooth_persistent:
             ok(
@@ -325,7 +292,12 @@ class SmokeTest:
         self._bool(path.exists(), success, failure)
 
     def _command_ok(self, command: list[str], success: str, failure: str) -> None:
-        self._bool(run(command, check=False, capture=True).returncode == 0, success, failure)
+        try:
+            completed = run(command, check=False, capture=True)
+        except (FileNotFoundError, OpsError) as exc:
+            self.warn_fail(failure, str(exc))
+            return
+        self._bool(completed.returncode == 0, success, failure)
 
     def _bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
         if condition:
@@ -346,7 +318,7 @@ class SmokeTest:
     def _capture(self, command: list[str | Path]) -> tuple[int, str]:
         try:
             completed = run(command, check=False, capture=True)
-        except FileNotFoundError as exc:
+        except (FileNotFoundError, OpsError) as exc:
             return 127, str(exc)
         return completed.returncode, (completed.stdout + completed.stderr)
 
@@ -370,16 +342,10 @@ class SmokeTest:
         print(self._capture(["findmnt", "-n", "-T", "/"])[1] or "<no output>")
         print(self._capture(["findmnt", "-n", "-T", "/var/lib/bluetooth"])[1] or "<no output>")
         print("\n## Service status")
-        print(
-            self._capture(["systemctl", "--no-pager", "--full", "status", PATHS.service_unit])[1]
-            or "<no output>"
-        )
+        print(self._capture(["systemctl", "--no-pager", "--full", "status", PATHS.service_unit])[1] or "<no output>")
         print("\n## Journal")
         print(
-            self._capture(
-                ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"]
-            )[1]
-            or "<no output>"
+            self._capture(["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"])[1] or "<no output>"
         )
 
 
@@ -418,11 +384,10 @@ def debug_report(duration: int | None) -> int:
         try:
             completed = run(command, check=False, capture=True, timeout=timeout)
             text = completed.stdout + completed.stderr
-            suffix = (
-                ""
-                if completed.returncode == 0
-                else f"\n[command exited with status {completed.returncode}]"
-            )
+            suffix = "" if completed.returncode == 0 else f"\n[command exited with status {completed.returncode}]"
+        except (FileNotFoundError, OpsError) as exc:
+            text = str(exc)
+            suffix = "\n[command failed]"
         except subprocess.TimeoutExpired as exc:
             text = ((exc.stdout or "") + (exc.stderr or "")) if isinstance(exc.stdout, str) else ""
             suffix = f"\n[timed out after {timeout}s]"
@@ -433,7 +398,11 @@ def debug_report(duration: int | None) -> int:
         "\n".join(
             [
                 f"boot_dir={boot_config.detect_boot_dir()}",
-                f"initial_service_state={run(['systemctl', 'is-active', PATHS.service_unit], check=False, capture=True).stdout.strip() or 'unknown'}",
+                "initial_service_state="
+                + (
+                    run(["systemctl", "is-active", PATHS.service_unit], check=False, capture=True).stdout.strip()
+                    or "unknown"
+                ),
                 f"overlayfs={overlay_status()}",
                 f"readonly_mode={readonly_mode()}",
                 f"bluetooth_state_persistent={'yes' if bluetooth_state_persistent(config) else 'no'}",
@@ -442,15 +411,9 @@ def debug_report(duration: int | None) -> int:
     )
     command_block("Kernel", ["uname", "-a"], 5)
     command_block(
-        "OS release",
-        ["bash", "-lc", "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"],
-        5,
+        "OS release", ["bash", "-lc", "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"], 5
     )
-    command_block(
-        "Hardware model",
-        ["bash", "-lc", "tr -d '\\0' </proc/device-tree/model 2>/dev/null || true"],
-        5,
-    )
+    command_block("Hardware model", ["bash", "-lc", "tr -d '\\0' </proc/device-tree/model 2>/dev/null || true"], 5)
     command_block(
         "config.txt dwc2 lines",
         [
@@ -467,19 +430,11 @@ def debug_report(duration: int | None) -> int:
     command_block("Persistent mount target", ["findmnt", "-n", config.persist_mount], 5)
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
+    command_block("Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8)
     command_block(
-        "Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8
+        "Recent service journal", ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "200", "--no-pager"], 8
     )
-    command_block(
-        "Recent service journal",
-        ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "200", "--no-pager"],
-        8,
-    )
-    command_block(
-        "bluetooth.service status",
-        ["systemctl", "--no-pager", "--full", "status", "bluetooth.service"],
-        8,
-    )
+    command_block("bluetooth.service status", ["systemctl", "--no-pager", "--full", "status", "bluetooth.service"], 8)
     command_block(
         "Relevant kernel log lines",
         ["bash", "-lc", "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"],
@@ -491,11 +446,7 @@ def debug_report(duration: int | None) -> int:
     text_block("rfkill bluetooth state", rfkill_list_bluetooth())
     if PATHS.venv_python.exists():
         command_block("CLI version", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], 5)
-        command_block(
-            "CLI environment validation",
-            [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"],
-            5,
-        )
+        command_block("CLI environment validation", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], 5)
         command_block(
             "Service settings summary",
             [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--print-summary-json"],
@@ -507,25 +458,17 @@ def debug_report(duration: int | None) -> int:
             8,
         )
         debug_command = run(
-            [
-                PATHS.venv_python,
-                "-m",
-                "bluetooth_2_usb.service_settings",
-                "--print-shell-command",
-                "--append-debug",
-            ],
+            [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--print-shell-command", "--append-debug"],
             check=False,
             capture=True,
         ).stdout.strip()
         text_block(
             "Live debug setup",
-            f"live_debug_duration={duration if duration else 'until interrupted'}\nlive_debug_command={debug_command or '<missing>'}",
+            f"live_debug_duration={duration if duration else 'until interrupted'}\n"
+            + f"live_debug_command={debug_command or '<missing>'}",
         )
         if debug_command:
-            text_block(
-                "Live Bluetooth-2-USB debug output",
-                _run_live_debug(debug_command, duration, hostname),
-            )
+            text_block("Live Bluetooth-2-USB debug output", _run_live_debug(debug_command, duration, hostname))
     else:
         text_block("CLI runtime", f"missing virtualenv at {PATHS.venv_python}")
 

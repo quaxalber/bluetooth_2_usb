@@ -17,10 +17,12 @@ function Test-PythonHasHid([string]$Candidate) {
   }
 }
 
+$VenvPython = "$RepoRoot\venv\Scripts\python.exe"
+
 if ($env:HOST_CAPTURE_PYTHON -and (Test-PythonHasHid $env:HOST_CAPTURE_PYTHON)) {
   $PythonBin = $env:HOST_CAPTURE_PYTHON
-} elseif ((Test-Path "$RepoRoot\venv\Scripts\python.exe") -and (Test-PythonHasHid "$RepoRoot\venv\Scripts\python.exe")) {
-  $PythonBin = "$RepoRoot\venv\Scripts\python.exe"
+} elseif ((Test-Path $VenvPython) -and (Test-PythonHasHid $VenvPython)) {
+  $PythonBin = $VenvPython
 } elseif (Test-PythonHasHid "python") {
   $PythonBin = "python"
 } else {

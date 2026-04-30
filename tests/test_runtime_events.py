@@ -1,11 +1,6 @@
 import unittest
 
-from bluetooth_2_usb.runtime_events import (
-    DeviceAdded,
-    DeviceRemoved,
-    ShutdownRequested,
-    UdcStateChanged,
-)
+from bluetooth_2_usb.runtime_events import DeviceAdded, DeviceRemoved, ShutdownRequested, UdcStateChanged
 
 
 class RuntimeEventTest(unittest.TestCase):

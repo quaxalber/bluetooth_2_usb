@@ -98,14 +98,9 @@ class GadgetNodeCandidates:
     consumer_nodes: tuple[HidDeviceInfo, ...]
 
     def matched_nodes(
-        self,
-        keyboard_node: str | None = None,
-        mouse_node: str | None = None,
-        consumer_node: str | None = None,
+        self, keyboard_node: str | None = None, mouse_node: str | None = None, consumer_node: str | None = None
     ) -> GadgetNodes:
-        return GadgetNodes(
-            keyboard_node=keyboard_node, mouse_node=mouse_node, consumer_node=consumer_node
-        )
+        return GadgetNodes(keyboard_node=keyboard_node, mouse_node=mouse_node, consumer_node=consumer_node)
 
     def to_dict(self) -> dict[str, list[str]]:
         return {
@@ -143,13 +138,9 @@ class KeyboardSequenceMatcher:
         self.index += 1
 
     def _apply_expected_step(self, expected) -> bytes:
-        hid_code, _ = evdev_to_usb_hid(
-            SimpleNamespace(scancode=expected.code, keystate=expected.value)
-        )
+        hid_code, _ = evdev_to_usb_hid(SimpleNamespace(scancode=expected.code, keystate=expected.value))
         if hid_code is None:
-            raise CaptureMismatchError(
-                f"Expected keyboard step {expected.describe()} is not mappable to HID"
-            )
+            raise CaptureMismatchError(f"Expected keyboard step {expected.describe()} is not mappable to HID")
         modifier = Keycode.modifier_bit(hid_code)
         if expected.value == 1:
             if modifier:
@@ -185,9 +176,7 @@ class MouseSequenceMatcher:
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
-        return cls(
-            expected_rel_steps=expected_rel_steps, expected_button_steps=expected_button_steps
-        )
+        return cls(expected_rel_steps=expected_rel_steps, expected_button_steps=expected_button_steps)
 
     def handle(self, report: bytes) -> None:
         parsed = _normalize_mouse_report(report)
@@ -214,9 +203,7 @@ class MouseSequenceMatcher:
         if buttons == self._button_state:
             return
         if self.button_index >= len(self.expected_button_steps):
-            raise CaptureMismatchError(
-                f"Unexpected mouse button bits in report {report.hex(sep=' ')}"
-            )
+            raise CaptureMismatchError(f"Unexpected mouse button bits in report {report.hex(sep=' ')}")
         if not self.rel_complete:
             raise CaptureMismatchError("Mouse button report arrived before movement")
 
@@ -231,9 +218,7 @@ class MouseSequenceMatcher:
     def _apply_button_step(self, expected) -> int:
         button_bit = MOUSE_BUTTON_BITS.get(expected.code)
         if button_bit is None:
-            raise CaptureMismatchError(
-                f"Expected mouse button step {expected.describe()} is not mappable to HID"
-            )
+            raise CaptureMismatchError(f"Expected mouse button step {expected.describe()} is not mappable to HID")
         if expected.value == 1:
             self._button_state |= button_bit
         elif expected.value == 0:
@@ -249,14 +234,9 @@ class MouseSequenceMatcher:
         pending_index = self._find_pending_rel_index(code, report_codes)
         if pending_index is None:
             expected = self._pending_rel_remaining[0] if self._pending_rel_remaining else None
-            expected_label = (
-                f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}"
-                if expected
-                else ""
-            )
+            expected_label = f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}" if expected else ""
             raise CaptureMismatchError(
-                "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}{expected_label}"
+                "Unexpected mouse relative event " f"{REL_NAMES.get(code, code)}={value}{expected_label}"
             )
 
         remaining = self._pending_rel_remaining[pending_index][1]
@@ -321,9 +301,7 @@ class ConsumerSequenceMatcher:
         expected = self.expected_steps[self.index]
         expected_usage = CONSUMER_USAGES[expected.code] if expected.value == 1 else 0
         if usage != expected_usage:
-            raise CaptureMismatchError(
-                f"Unexpected consumer usage 0x{usage:04x}; expected 0x{expected_usage:04x}"
-            )
+            raise CaptureMismatchError(f"Unexpected consumer usage 0x{usage:04x}; expected 0x{expected_usage:04x}")
         self.index += 1
 
     @property
@@ -391,11 +369,7 @@ def _is_ignorable_empty_report(report: bytes) -> bool:
 
 
 def _matches_device_substring(device_name: str, substring: str) -> bool:
-    candidates = {
-        substring.lower(),
-        substring.replace("_", " ").lower(),
-        substring.replace("_", "-").lower(),
-    }
+    candidates = {substring.lower(), substring.replace("_", " ").lower(), substring.replace("_", "-").lower()}
     haystack = device_name.lower()
     return any(candidate and candidate in haystack for candidate in candidates)
 
@@ -457,9 +431,7 @@ def _iter_hid_infos(hid_module: Any) -> list[HidDeviceInfo]:
     return infos
 
 
-def _filter_explicit_override(
-    infos: list[HidDeviceInfo], override: str | None, label: str
-) -> list[HidDeviceInfo]:
+def _filter_explicit_override(infos: list[HidDeviceInfo], override: str | None, label: str) -> list[HidDeviceInfo]:
     if override is None:
         return infos
     matched = [info for info in infos if info.node == override]
@@ -505,9 +477,7 @@ def discover_gadget_node_candidates(
         consumer_nodes = _filter_explicit_override(infos, consumer_node, "Consumer-control")
 
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
-        raise MissingNodeError(
-            f"No HID devices matched {device_substring!r} through hidapi enumeration"
-        )
+        raise MissingNodeError(f"No HID devices matched {device_substring!r} through hidapi enumeration")
 
     return GadgetNodeCandidates(
         keyboard_nodes=tuple(sorted(keyboard_nodes, key=lambda info: info.node)),
@@ -532,13 +502,11 @@ def discover_gadget_nodes(
     )
     if len(candidates.keyboard_nodes) > 1:
         raise MissingNodeError(
-            "Multiple keyboard HID devices matched: "
-            + ", ".join(info.node for info in candidates.keyboard_nodes)
+            "Multiple keyboard HID devices matched: " + ", ".join(info.node for info in candidates.keyboard_nodes)
         )
     if len(candidates.mouse_nodes) > 1:
         raise MissingNodeError(
-            "Multiple mouse HID devices matched: "
-            + ", ".join(info.node for info in candidates.mouse_nodes)
+            "Multiple mouse HID devices matched: " + ", ".join(info.node for info in candidates.mouse_nodes)
         )
     if len(candidates.consumer_nodes) > 1:
         raise MissingNodeError(
@@ -563,9 +531,11 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
-                + "On Linux, run `sudo venv/bin/bluetooth_2_usb install-hid-udev-rule "
-                + '--repo-root "$PWD"`, reconnect the Pi, and ensure the user is in the '
-                + "input group with `sudo usermod -aG input $USER` before starting a new login session."
+                + "On Linux, from the repository root run `sudo ./venv/bin/bluetooth_2_usb "
+                + 'install-hid-udev-rule --repo-root "$PWD"`, or for a managed install run '
+                + "`sudo /opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb install-hid-udev-rule "
+                + "--repo-root /opt/bluetooth_2_usb`. Reconnect the Pi, and ensure the user is "
+                + "in the input group with `sudo usermod -aG input $USER` before starting a new login session."
             ) from exc
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
     except Exception as exc:
@@ -580,9 +550,7 @@ def _capture_once(
     candidates: list[_CandidateMatcher] = []
 
     def _active_candidates(role: str) -> list[_CandidateMatcher]:
-        return [
-            candidate for candidate in candidates if candidate.role == role and not candidate.failed
-        ]
+        return [candidate for candidate in candidates if candidate.role == role and not candidate.failed]
 
     def _completed_candidate(role: str) -> _CandidateMatcher | None:
         for candidate in candidates:
@@ -596,9 +564,7 @@ def _capture_once(
         matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
     ) -> None:
         candidates.append(
-            _CandidateMatcher(
-                role=role, info=info, device=_open_hid_device(hid_module, info), matcher=matcher
-            )
+            _CandidateMatcher(role=role, info=info, device=_open_hid_device(hid_module, info), matcher=matcher)
         )
 
     def _required_role_done(role: str) -> bool:
@@ -615,37 +581,25 @@ def _capture_once(
             if not candidate_nodes.keyboard_nodes:
                 raise MissingNodeError("Keyboard HID device was not found")
             for info in candidate_nodes.keyboard_nodes:
-                _register_candidate(
-                    "keyboard", info, KeyboardSequenceMatcher(scenario.keyboard_steps)
-                )
+                _register_candidate("keyboard", info, KeyboardSequenceMatcher(scenario.keyboard_steps))
 
         if scenario.mouse_enabled:
             if not candidate_nodes.mouse_nodes:
                 raise MissingNodeError("Mouse HID device was not found")
             for info in candidate_nodes.mouse_nodes:
                 _register_candidate(
-                    "mouse",
-                    info,
-                    MouseSequenceMatcher.create(
-                        scenario.mouse_rel_steps, scenario.mouse_button_steps
-                    ),
+                    "mouse", info, MouseSequenceMatcher.create(scenario.mouse_rel_steps, scenario.mouse_button_steps)
                 )
 
         if scenario.consumer_enabled:
             if not candidate_nodes.consumer_nodes:
                 raise MissingNodeError("Consumer-control HID device was not found")
             for info in candidate_nodes.consumer_nodes:
-                _register_candidate(
-                    "consumer", info, ConsumerSequenceMatcher(scenario.consumer_steps)
-                )
+                _register_candidate("consumer", info, ConsumerSequenceMatcher(scenario.consumer_steps))
 
         deadline = time.monotonic() + timeout_sec
         while True:
-            if (
-                _required_role_done("keyboard")
-                and _required_role_done("mouse")
-                and _required_role_done("consumer")
-            ):
+            if _required_role_done("keyboard") and _required_role_done("mouse") and _required_role_done("consumer"):
                 break
 
             for role, enabled in (
@@ -662,14 +616,10 @@ def _capture_once(
                     for candidate in candidates
                     if candidate.role == role and candidate.failed_message
                 ]
-                raise CaptureMismatchError(
-                    f"All {role} HID candidates mismatched: " + "; ".join(messages)
-                )
+                raise CaptureMismatchError(f"All {role} HID candidates mismatched: " + "; ".join(messages))
 
             if time.monotonic() >= deadline:
-                raise CaptureTimeoutError(
-                    f"Timed out waiting for {scenario.name} reports after {timeout_sec}s"
-                )
+                raise CaptureTimeoutError(f"Timed out waiting for {scenario.name} reports after {timeout_sec}s")
 
             progress = False
             for candidate in candidates:
@@ -678,13 +628,9 @@ def _capture_once(
                 try:
                     report_values = candidate.device.read(REPORT_READ_SIZE)
                 except OSError as exc:
-                    raise CaptureError(
-                        f"Failed reading HID reports from {candidate.node}: {exc}"
-                    ) from exc
+                    raise CaptureError(f"Failed reading HID reports from {candidate.node}: {exc}") from exc
                 except Exception as exc:
-                    raise CaptureError(
-                        f"Failed reading HID reports from {candidate.node}: {exc}"
-                    ) from exc
+                    raise CaptureError(f"Failed reading HID reports from {candidate.node}: {exc}") from exc
 
                 if not report_values:
                     continue
@@ -795,10 +741,7 @@ def run_capture(
         return result
 
     result = _capture_once(
-        scenario_name=scenario_name,
-        timeout_sec=timeout_sec,
-        candidate_nodes=candidate_nodes,
-        hid_module=hid_module,
+        scenario_name=scenario_name, timeout_sec=timeout_sec, candidate_nodes=candidate_nodes, hid_module=hid_module
     )
     result.details["candidates"] = candidate_nodes.to_dict()
     return result

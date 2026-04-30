@@ -70,13 +70,9 @@ class Runtime:
 
         shortcut_keys = set(self._config.interrupt_shortcut)
         logger.debug("Configuring global interrupt shortcut: %s", shortcut_keys)
-        return ShortcutToggler(
-            shortcut_keys=shortcut_keys, relaying_active=relaying_active, hid_gadgets=hid_gadgets
-        )
+        return ShortcutToggler(shortcut_keys=shortcut_keys, relaying_active=relaying_active, hid_gadgets=hid_gadgets)
 
-    async def _run_tasks(
-        self, event_source: RuntimeEventSource, supervisor: RelaySupervisor
-    ) -> None:
+    async def _run_tasks(self, event_source: RuntimeEventSource, supervisor: RelaySupervisor) -> None:
         event_source_task = asyncio.create_task(event_source.run(), name="runtime event source")
         supervisor_task = asyncio.create_task(supervisor.run(self._events), name="relay supervisor")
         try:
@@ -104,9 +100,7 @@ class Runtime:
             await self._wait_for_shutdown(supervisor_task, event_source_task)
 
     async def _wait_for_shutdown(
-        self,
-        supervisor_task: asyncio.Task[None] | None,
-        event_source_task: asyncio.Task[None] | None,
+        self, supervisor_task: asyncio.Task[None] | None, event_source_task: asyncio.Task[None] | None
     ) -> None:
         tasks = [task for task in (supervisor_task, event_source_task) if task]
         if not tasks:
@@ -114,13 +108,11 @@ class Runtime:
 
         try:
             await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                asyncio.gather(*tasks, return_exceptions=True), timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC
             )
         except TimeoutError:
             logger.warning(
-                "Runtime shutdown exceeded %.1fs; cancelling remaining tasks.",
-                GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
+                "Runtime shutdown exceeded %.1fs; cancelling remaining tasks.", GRACEFUL_SHUTDOWN_TIMEOUT_SEC
             )
             for task in tasks:
                 task.cancel()

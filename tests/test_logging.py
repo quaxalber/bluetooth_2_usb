@@ -46,9 +46,7 @@ class LoggingConfigurationTest(unittest.TestCase):
             bt_logging.add_file_handler(log_path)
 
             file_handlers = [
-                handler
-                for handler in self.package_logger.handlers
-                if isinstance(handler, logging.FileHandler)
+                handler for handler in self.package_logger.handlers if isinstance(handler, logging.FileHandler)
             ]
 
             self.assertEqual(len(file_handlers), 1)
@@ -68,15 +66,11 @@ class LoggingConfigurationTest(unittest.TestCase):
                 bt_logging.add_file_handler("~/relay.log")
 
             file_handlers = [
-                handler
-                for handler in self.package_logger.handlers
-                if isinstance(handler, logging.FileHandler)
+                handler for handler in self.package_logger.handlers if isinstance(handler, logging.FileHandler)
             ]
 
             self.assertEqual(len(file_handlers), 1)
-            self.assertEqual(
-                Path(file_handlers[0].baseFilename), (Path(tmp) / "relay.log").resolve()
-            )
+            self.assertEqual(Path(file_handlers[0].baseFilename), (Path(tmp) / "relay.log").resolve())
             for handler in file_handlers:
                 self.package_logger.removeHandler(handler)
                 handler.close()

@@ -17,13 +17,7 @@ from .inventory import (
     list_input_devices,
 )
 from .logging import get_logger
-from .runtime_events import (
-    DeviceAdded,
-    DeviceRemoved,
-    RuntimeEvent,
-    ShutdownRequested,
-    UdcStateChanged,
-)
+from .runtime_events import DeviceAdded, DeviceRemoved, RuntimeEvent, ShutdownRequested, UdcStateChanged
 from .shortcut_toggler import ShortcutToggler
 
 logger = get_logger(__name__)
@@ -80,14 +74,10 @@ class RelaySupervisor:
         self._relaying_active = relaying_active
         self._shortcut_toggler = shortcut_toggler
 
-        self._device_identifiers = [
-            DeviceIdentifier(identifier) for identifier in (device_identifiers or [])
-        ]
+        self._device_identifiers = [DeviceIdentifier(identifier) for identifier in (device_identifiers or [])]
         self._auto_discover = auto_discover
         self._skip_name_prefixes = (
-            tuple(skip_name_prefixes)
-            if skip_name_prefixes is not None
-            else DEFAULT_SKIP_NAME_PREFIXES
+            tuple(skip_name_prefixes) if skip_name_prefixes is not None else DEFAULT_SKIP_NAME_PREFIXES
         )
 
         self._grab_devices = grab_devices
@@ -164,20 +154,23 @@ class RelaySupervisor:
         while not self._shutdown_requested():
             event_task = asyncio.create_task(events.get())
             shutdown_task = asyncio.create_task(self._shutdown_event.wait())
-            done, pending = await asyncio.wait(
-                {event_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
+            try:
+                done, pending = await asyncio.wait({event_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
 
-            if shutdown_task in done:
-                event_task.cancel()
-                await asyncio.gather(event_task, return_exceptions=True)
-                return
+                if shutdown_task in done:
+                    return
 
-            event = event_task.result()
-            self._handle_runtime_event(event)
+                event = event_task.result()
+                self._handle_runtime_event(event)
+            finally:
+                tasks = [task for task in (event_task, shutdown_task) if not task.done()]
+                for task in tasks:
+                    task.cancel()
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
     def _handle_runtime_event(self, event: RuntimeEvent) -> None:
         if isinstance(event, DeviceAdded):
@@ -245,16 +238,14 @@ class RelaySupervisor:
         if self._state is _SupervisorState.NEW:
             if self._discard_pending_add(device_path):
                 logger.debug(
-                    "Dropped queued add for %s because the device was removed before startup completed.",
-                    device_path,
+                    "Dropped queued add for %s because the device was removed before startup completed.", device_path
                 )
             return
 
         if self._state is _SupervisorState.STARTING:
             if self._discard_pending_add(device_path):
                 logger.debug(
-                    "Dropped queued add for %s because the device was removed before startup completed.",
-                    device_path,
+                    "Dropped queued add for %s because the device was removed before startup completed.", device_path
                 )
                 return
             if device_path not in self._active_relays:
@@ -284,11 +275,7 @@ class RelaySupervisor:
         return pending
 
     def _flush_pending_adds(self) -> None:
-        if (
-            self._state is not _SupervisorState.RUNNING
-            or self._task_group is None
-            or self._shutdown_requested()
-        ):
+        if self._state is not _SupervisorState.RUNNING or self._task_group is None or self._shutdown_requested():
             return
         for device_path in self._pop_pending_adds():
             self._schedule_probe(device_path, self.HOTPLUG_ADD_MAX_RETRIES)
@@ -317,20 +304,12 @@ class RelaySupervisor:
             await asyncio.sleep(self.HOTPLUG_ADD_RETRY_DELAY_SEC)
             self._schedule_probe(device_path, retries_remaining)
 
-        task = self._task_group.create_task(
-            _retry_probe(), name=f"hotplug probe retry {device_path}"
-        )
+        task = self._task_group.create_task(_retry_probe(), name=f"hotplug probe retry {device_path}")
         self._pending_probe_tasks.setdefault(device_path, set()).add(task)
-        task.add_done_callback(
-            lambda done_task, path=device_path: self._discard_probe_task(path, done_task)
-        )
+        task.add_done_callback(lambda done_task, path=device_path: self._discard_probe_task(path, done_task))
 
     def _schedule_probe(self, device_path: str, retries_remaining: int) -> None:
-        if (
-            self._task_group is None
-            or self._state is not _SupervisorState.RUNNING
-            or self._shutdown_requested()
-        ):
+        if self._task_group is None or self._state is not _SupervisorState.RUNNING or self._shutdown_requested():
             logger.debug("Ignoring add for %s; event loop is unavailable.", device_path)
             return
 
@@ -339,9 +318,7 @@ class RelaySupervisor:
         except (OSError, FileNotFoundError):
             if retries_remaining > 0:
                 logger.debug(
-                    "%s vanished before hotplug filtering; retrying (%s left).",
-                    device_path,
-                    retries_remaining,
+                    "%s vanished before hotplug filtering; retrying (%s left).", device_path, retries_remaining
                 )
                 self._schedule_probe_retry(device_path, retries_remaining - 1)
             else:
@@ -357,9 +334,7 @@ class RelaySupervisor:
                 )
                 self._schedule_probe_retry(device_path, retries_remaining - 1)
             else:
-                logger.debug(
-                    "Skipping hotplugged device %s because it does not match relay filters.", device
-                )
+                logger.debug("Skipping hotplugged device %s because it does not match relay filters.", device)
             device.close()
             return
 
@@ -388,9 +363,7 @@ class RelaySupervisor:
             device.close()
             return
         self._active_relays[device.path] = _ActiveRelay(device=device, task=task)
-        task.add_done_callback(
-            lambda done_task, path=device.path: self._relay_task_done(path, done_task)
-        )
+        task.add_done_callback(lambda done_task, path=device.path: self._relay_task_done(path, done_task))
         logger.debug("Created task for %s.", device)
 
     def _cancel_active_relay(self, device_path: str) -> None:

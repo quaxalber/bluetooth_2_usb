@@ -30,16 +30,12 @@ B2U_UDC_PATH=
 
 
 def install_service_unit(repo_root: Path) -> None:
-    shutil.copy2(
-        repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit
-    )
+    shutil.copy2(repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit)
     (Path("/etc/systemd/system") / PATHS.service_unit).chmod(0o644)
 
 
 def activate_service_unit() -> None:
-    was_active = (
-        run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
-    )
+    was_active = run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     run(["systemctl", "enable", PATHS.service_unit])
     run(["systemctl", "restart" if was_active else "start", PATHS.service_unit])
 
@@ -116,14 +112,11 @@ def service_installed() -> bool | None:
     )
     if completed.returncode != 0:
         warn(
-            f"systemctl list-unit-files failed (rc={completed.returncode}); cannot determine state of {PATHS.service_unit}"
+            f"systemctl list-unit-files failed (rc={completed.returncode}); "
+            + f"cannot determine state of {PATHS.service_unit}"
         )
         return None
-    return any(
-        line.split(None, 1)[0] == PATHS.service_unit
-        for line in completed.stdout.splitlines()
-        if line.split()
-    )
+    return any(line.split(None, 1)[0] == PATHS.service_unit for line in completed.stdout.splitlines() if line.split())
 
 
 def install(repo_root: Path) -> None:
@@ -139,7 +132,7 @@ def install(repo_root: Path) -> None:
     model = boot_config.current_pi_model()
     dwc2_mode = boot_config.dwc2_mode()
     overlay_line = boot_config.board_overlay_line(model)
-    modules = boot_config.required_boot_modules_csv()
+    modules = boot_config.required_boot_modules_csv(dwc2_mode)
 
     info(f"Detected model: {model}")
     info(f"Using boot directory: {boot_dir}")
@@ -162,10 +155,6 @@ def install(repo_root: Path) -> None:
     boot_config.normalize_dwc2_overlay(config_txt, overlay_line)
     boot_config.normalize_modules_load(cmdline_txt, modules)
     ok("Boot configuration updated")
-    if dwc2_mode == "unknown":
-        warn(
-            f"Could not determine whether dwc2 is built-in or modular; modules-load was set conservatively to {modules}."
-        )
 
     if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
         info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
@@ -211,7 +200,8 @@ def update(repo_root: Path) -> None:
         fail(f"Expected a git checkout at {PATHS.install_dir}.")
     if output(["git", "-C", PATHS.install_dir, "status", "--porcelain", "--untracked-files=all"]):
         fail(
-            f"Refusing to update a dirty managed checkout at {PATHS.install_dir}. Commit, stash, or remove local changes first."
+            f"Refusing to update a dirty managed checkout at {PATHS.install_dir}. "
+            + "Commit, stash, or remove local changes first."
         )
     branch = output(["git", "-C", PATHS.install_dir, "symbolic-ref", "--quiet", "--short", "HEAD"])
     before = output(["git", "-C", PATHS.install_dir, "rev-parse", "HEAD"])
@@ -241,10 +231,7 @@ def uninstall() -> None:
 
     if manage_b2u_service:
         run(["systemctl", "stop", PATHS.service_unit])
-        if (
-            run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode
-            == 0
-        ):
+        if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
             run(["systemctl", "kill", "--kill-who=all", PATHS.service_unit])
         run(["systemctl", "disable", PATHS.service_unit])
         run(["systemctl", "reset-failed", PATHS.service_unit], check=False)
@@ -259,6 +246,7 @@ def uninstall() -> None:
     run(["systemctl", "daemon-reload"])
     run(["systemctl", "disable", "--now", "var-lib-bluetooth.mount"], check=False)
 
+    bluetooth_was_active = run(["systemctl", "is-active", "--quiet", "bluetooth.service"], check=False).returncode == 0
     if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
         run(["systemctl", "stop", "bluetooth.service"])
         if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
@@ -268,28 +256,17 @@ def uninstall() -> None:
         run(["systemctl", "disable", "--now", unit], check=False)
         if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
             run(["umount", config.persist_mount])
+    if bluetooth_was_active:
+        run(["systemctl", "start", "bluetooth.service"], check=False)
     _remove_gadgets()
     run(["systemctl", "daemon-reload"])
-    _assert_absent(
-        Path("/etc/systemd/system") / PATHS.service_unit,
-        "Service unit file still exists after uninstall",
-    )
+    _assert_absent(Path("/etc/systemd/system") / PATHS.service_unit, "Service unit file still exists after uninstall")
     _assert_absent(PATHS.env_file, "Runtime settings file still exists after uninstall")
     _assert_absent(PATHS.readonly_env_file, "Read-only config file still exists after uninstall")
-    _assert_absent(
-        Path("/usr/local/bin/bluetooth_2_usb"),
-        "bluetooth_2_usb CLI link still exists after uninstall",
-    )
-    _assert_absent(
-        PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall"
-    )
-    _assert_absent(
-        PATHS.bluetooth_service_dropin, "bluetooth.service drop-in still exists after uninstall"
-    )
-    if (
-        run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode
-        == 0
-    ):
+    _assert_absent(Path("/usr/local/bin/bluetooth_2_usb"), "bluetooth_2_usb CLI link still exists after uninstall")
+    _assert_absent(PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall")
+    _assert_absent(PATHS.bluetooth_service_dropin, "bluetooth.service drop-in still exists after uninstall")
+    if run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode == 0:
         fail(f"{PATHS.service_unit} is still enabled after uninstall")
     ok("Uninstall complete")
     info(f"The checkout at {PATHS.install_dir} was left in place.")

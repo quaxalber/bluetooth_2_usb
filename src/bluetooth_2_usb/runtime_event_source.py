@@ -18,16 +18,12 @@ except ModuleNotFoundError:
 
         class Context:
             def __init__(self, *_args, **_kwargs) -> None:
-                raise ModuleNotFoundError(
-                    "pyudev is required for runtime monitoring on this platform."
-                )
+                raise ModuleNotFoundError("pyudev is required for runtime monitoring on this platform.")
 
         class Monitor:
             @staticmethod
             def from_netlink(*_args, **_kwargs):
-                raise ModuleNotFoundError(
-                    "pyudev is required for runtime monitoring on this platform."
-                )
+                raise ModuleNotFoundError("pyudev is required for runtime monitoring on this platform.")
 
     pyudev = _MissingPyudevModule()
 
@@ -37,9 +33,7 @@ class RuntimeEventSource:
     Emits runtime events from UDC state polling and udev input hotplug.
     """
 
-    def __init__(
-        self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5
-    ) -> None:
+    def __init__(self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5) -> None:
         self._events = events
         self._udc_path = udc_path
         self._poll_interval = poll_interval
@@ -55,9 +49,7 @@ class RuntimeEventSource:
         if self._udc_path is None:
             logger.warning("UDC state file not found. Cable monitoring may be unavailable.")
         elif not self._udc_path.is_file():
-            logger.warning(
-                "UDC state file %s not found. Cable monitoring may be unavailable.", self._udc_path
-            )
+            logger.warning("UDC state file %s not found. Cable monitoring may be unavailable.", self._udc_path)
 
     async def run(self) -> None:
         self._start_monitoring()

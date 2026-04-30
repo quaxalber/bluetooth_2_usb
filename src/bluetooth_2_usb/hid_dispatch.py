@@ -59,9 +59,7 @@ def dispatch_key_event_to_hid(event: KeyEvent, hid_gadgets: HidGadgets) -> None:
             output_gadget.release(key_id)
 
 
-def select_hid_gadget(
-    event: KeyEvent, hid_gadgets: HidGadgets
-) -> ConsumerControl | Keyboard | ExtendedMouse | None:
+def select_hid_gadget(event: KeyEvent, hid_gadgets: HidGadgets) -> ConsumerControl | Keyboard | ExtendedMouse | None:
     """
     Determine which HID gadget to target for the given key event.
 

@@ -94,7 +94,7 @@ For an official release:
 Release notes should describe the current supported product surface only:
 
 - clone-based installation into `/opt/bluetooth_2_usb`
-- updates via `/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb update`
+- updates via `bluetooth_2_usb update`
 - diagnostics via `--validate-env`, `bluetooth_2_usb smoketest`, and
   `bluetooth_2_usb debug`
 - persistent read-only operation only when a separate writable ext4 filesystem

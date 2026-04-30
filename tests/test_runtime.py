@@ -84,10 +84,7 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         try:
             self.assertEqual(set(registered_handlers), set(_handled_shutdown_signals()))
             registered_handlers[signal.SIGTERM](signal.SIGTERM, None)
-            self.assertEqual(
-                await asyncio.wait_for(runtime._events.get(), timeout=1),
-                ShutdownRequested("SIGTERM"),
-            )
+            self.assertEqual(await asyncio.wait_for(runtime._events.get(), timeout=1), ShutdownRequested("SIGTERM"))
         finally:
             with patch("bluetooth_2_usb.runtime.signal.signal"):
                 runtime._restore_signal_handlers(handlers)
