@@ -22,6 +22,8 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class HidDispatchStats:
+    """Expose HID write retry and failure counters for diagnostics."""
+
     write_retries: int
     write_failures: int
 
@@ -38,6 +40,10 @@ class HidDispatcher:
     HID_WRITE_RETRY_DELAY_SEC = 0.01
 
     def __init__(self, hid_gadgets: HidGadgets, relay_gate: RelayGate) -> None:
+        """Initialize dispatch state for the HID gadgets and relay gate.
+
+        :return: None.
+        """
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
         self._mouse_delta = MouseDeltaAccumulator()
@@ -46,12 +52,20 @@ class HidDispatcher:
 
     @property
     def stats(self) -> HidDispatchStats:
+        """Return dispatch counters for HID write attempts and failures.
+
+        :return: The current value exposed by this property.
+        """
         return HidDispatchStats(
             write_retries=self._hid_write_retries,
             write_failures=self._hid_write_failures,
         )
 
     async def dispatch(self, event: InputEvent, raw_event: InputEvent) -> None:
+        """Dispatch one categorized event and its raw SYN context to HID output.
+
+        :return: None.
+        """
         if not self._relay_gate.active:
             self.discard_pending()
             return
@@ -74,9 +88,17 @@ class HidDispatcher:
         await self._process_event_with_retry(event)
 
     def discard_pending(self) -> None:
+        """Discard pending coalesced mouse movement that has not been written yet.
+
+        :return: None.
+        """
         self._mouse_delta.discard()
 
     async def flush(self) -> None:
+        """Flush every wrapped stream.
+
+        :return: None.
+        """
         if not self._relay_gate.active:
             self.discard_pending()
             return
@@ -102,6 +124,11 @@ class HidDispatcher:
         for partial in iter_mouse_delta_chunks(delta):
 
             def move_mouse(partial=partial) -> None:
+                """Write one chunk of mouse movement to the mouse HID gadget.
+
+                :return: None.
+                :raises RuntimeError: If runtime state prevents the operation from completing.
+                """
                 mouse = self._hid_gadgets.mouse
                 if mouse is None:
                     raise RuntimeError(

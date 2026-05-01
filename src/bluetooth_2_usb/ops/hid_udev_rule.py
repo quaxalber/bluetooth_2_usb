@@ -11,6 +11,10 @@ PRODUCT_ID = "0104"
 
 
 def install_hid_udev_rule(repo_root: Path) -> None:
+    """Install hid udev rule resources.
+
+    :return: None.
+    """
     rule_src = repo_root / "udev/70-bluetooth_2_usb_hidapi.rules"
     if not rule_src.is_file():
         fail(f"Rule source not found: {rule_src}")

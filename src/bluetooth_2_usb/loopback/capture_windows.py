@@ -106,6 +106,8 @@ _mouse_button_state = 0
 
 
 class RAWINPUTDEVICE(ctypes.Structure):
+    """ctypes structure for registering a Windows Raw Input device class."""
+
     _fields_ = [
         ("usUsagePage", wintypes.USHORT),
         ("usUsage", wintypes.USHORT),
@@ -115,6 +117,8 @@ class RAWINPUTDEVICE(ctypes.Structure):
 
 
 class RAWINPUTHEADER(ctypes.Structure):
+    """ctypes structure for the Windows RAWINPUT header."""
+
     _fields_ = [
         ("dwType", wintypes.DWORD),
         ("dwSize", wintypes.DWORD),
@@ -124,6 +128,8 @@ class RAWINPUTHEADER(ctypes.Structure):
 
 
 class RAWMOUSE(ctypes.Structure):
+    """ctypes structure for Windows raw mouse data."""
+
     _fields_ = [
         ("usFlags", wintypes.USHORT),
         ("ulButtons", wintypes.ULONG),
@@ -135,6 +141,8 @@ class RAWMOUSE(ctypes.Structure):
 
 
 class RAWKEYBOARD(ctypes.Structure):
+    """ctypes structure for Windows raw keyboard data."""
+
     _fields_ = [
         ("MakeCode", wintypes.USHORT),
         ("Flags", wintypes.USHORT),
@@ -146,15 +154,21 @@ class RAWKEYBOARD(ctypes.Structure):
 
 
 class RAWINPUTUNION(ctypes.Union):
+    """ctypes union for Windows raw mouse, keyboard, and HID payloads."""
+
     _fields_ = [("mouse", RAWMOUSE), ("keyboard", RAWKEYBOARD)]
 
 
 class RAWINPUT(ctypes.Structure):
+    """ctypes structure for one Windows Raw Input message payload."""
+
     _anonymous_ = ("data",)
     _fields_ = [("header", RAWINPUTHEADER), ("data", RAWINPUTUNION)]
 
 
 class WNDCLASSW(ctypes.Structure):
+    """ctypes structure used to register the hidden Raw Input window class."""
+
     _fields_ = [
         ("style", wintypes.UINT),
         ("lpfnWndProc", ctypes.c_void_p),
@@ -170,10 +184,14 @@ class WNDCLASSW(ctypes.Structure):
 
 
 class POINT(ctypes.Structure):
+    """ctypes structure for a Win32 screen coordinate."""
+
     _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
 
 
 class MSG(ctypes.Structure):
+    """ctypes structure for a Win32 message loop entry."""
+
     _fields_ = [
         ("hwnd", wintypes.HWND),
         ("message", wintypes.UINT),
@@ -186,6 +204,8 @@ class MSG(ctypes.Structure):
 
 
 class RID_DEVICE_INFO_MOUSE(ctypes.Structure):
+    """ctypes structure for Raw Input mouse device metadata."""
+
     _fields_ = [
         ("dwId", wintypes.DWORD),
         ("dwNumberOfButtons", wintypes.DWORD),
@@ -195,6 +215,8 @@ class RID_DEVICE_INFO_MOUSE(ctypes.Structure):
 
 
 class RID_DEVICE_INFO_KEYBOARD(ctypes.Structure):
+    """ctypes structure for Raw Input keyboard device metadata."""
+
     _fields_ = [
         ("dwType", wintypes.DWORD),
         ("dwSubType", wintypes.DWORD),
@@ -206,6 +228,8 @@ class RID_DEVICE_INFO_KEYBOARD(ctypes.Structure):
 
 
 class RID_DEVICE_INFO_HID(ctypes.Structure):
+    """ctypes structure for Raw Input HID device metadata."""
+
     _fields_ = [
         ("dwVendorId", wintypes.DWORD),
         ("dwProductId", wintypes.DWORD),
@@ -216,6 +240,8 @@ class RID_DEVICE_INFO_HID(ctypes.Structure):
 
 
 class RID_DEVICE_INFO_UNION(ctypes.Union):
+    """ctypes union for Raw Input device metadata variants."""
+
     _fields_ = [
         ("mouse", RID_DEVICE_INFO_MOUSE),
         ("keyboard", RID_DEVICE_INFO_KEYBOARD),
@@ -224,6 +250,8 @@ class RID_DEVICE_INFO_UNION(ctypes.Union):
 
 
 class RID_DEVICE_INFO(ctypes.Structure):
+    """ctypes structure for Raw Input device metadata returned by Win32."""
+
     _anonymous_ = ("info",)
     _fields_ = [
         ("cbSize", wintypes.DWORD),
@@ -233,18 +261,31 @@ class RID_DEVICE_INFO(ctypes.Structure):
 
 
 class RAWINPUTDEVICELIST(ctypes.Structure):
+    """ctypes structure for one entry from GetRawInputDeviceList."""
+
     _fields_ = [("hDevice", wintypes.HANDLE), ("dwType", wintypes.DWORD)]
 
 
 class RAWHIDHEADER(ctypes.Structure):
+    """ctypes structure for the header before Raw Input HID reports."""
+
     _fields_ = [("dwSizeHid", wintypes.DWORD), ("dwCount", wintypes.DWORD)]
 
 
 class _UnsupportedWin32DLL:
     def __init__(self, dll_name: str) -> None:
+        """Initialize a placeholder for an unavailable Windows DLL.
+
+        :return: None.
+        """
         self._dll_name = dll_name
 
     def __getattr__(self, function_name: str):
+        """Reject access to a Windows API function that is unavailable.
+
+        :return: The requested value or status result.
+        :raises RuntimeError: If runtime state prevents the operation from completing.
+        """
         raise RuntimeError(f"{self._dll_name}.{function_name} is only available on Windows")
 
 
@@ -350,9 +391,17 @@ class _RawInputCandidate:
 
     @property
     def complete(self) -> bool:
+        """Return the complete value.
+
+        :return: The current value exposed by this property.
+        """
         return self.matcher.complete
 
     def note_report(self, report: bytes) -> None:
+        """Record that a Raw Input report matched this candidate device.
+
+        :return: None.
+        """
         if len(self.matched_reports) >= 12:
             return
         self.matched_reports.append(report.hex(" "))
@@ -372,11 +421,19 @@ class _RawInputDebug:
     raw_device_list: list[dict[str, object]] | None = None
 
     def __post_init__(self) -> None:
+        """Normalize derived dataclass state after initialization.
+
+        :return: None.
+        """
         self.device_names_seen = {}
         self.sample_events = []
         self.raw_device_list = []
 
     def note_device(self, device_name: str) -> None:
+        """Record a Raw Input device name for debug output.
+
+        :return: None.
+        """
         assert self.device_names_seen is not None
         self.device_names_seen[device_name] = self.device_names_seen.get(device_name, 0) + 1
 
@@ -394,6 +451,10 @@ class _RawInputDebug:
         rel_x: int | None = None,
         rel_y: int | None = None,
     ) -> None:
+        """Record a Raw Input event and report bytes for debug output.
+
+        :return: None.
+        """
         self.total_messages_seen += 1
         if role == "keyboard":
             self.keyboard_messages_seen += 1
@@ -431,6 +492,10 @@ class _RawInputDebug:
         self.sample_events.append(event)
 
     def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable dictionary representation.
+
+        :return: The requested value or status result.
+        """
         assert self.device_names_seen is not None
         assert self.sample_events is not None
         assert self.raw_device_list is not None
@@ -925,6 +990,12 @@ def _pump_raw_input(
 def run_windows_raw_input_capture(
     scenario_name: str, timeout_sec: float, candidate_nodes: GadgetNodeCandidates
 ) -> LoopbackResult:
+    """Capture Windows Raw Input events for loopback validation.
+
+    :return: The requested value or status result.
+    :raises RuntimeError: If runtime state prevents the operation from completing.
+    :raises MissingNodeError: If required gadget HID nodes cannot be discovered.
+    """
     if not IS_WINDOWS:
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 

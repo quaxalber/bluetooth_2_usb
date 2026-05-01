@@ -31,16 +31,34 @@ B2U_UDC_PATH=
 
 
 class RollbackStack:
+    """Track cleanup callbacks for partially completed operational changes."""
+
     def __init__(self) -> None:
+        """Initialize an empty stack of rollback callbacks.
+
+        :return: None.
+        """
         self._callbacks: list[tuple[str, Callable[[], None]]] = []
 
     def push(self, description: str, callback: Callable[[], None]) -> None:
+        """Add a rollback callback to the stack.
+
+        :return: None.
+        """
         self._callbacks.append((description, callback))
 
     def commit(self) -> None:
+        """Mark rollback callbacks as no longer needed.
+
+        :return: None.
+        """
         self._callbacks.clear()
 
     def rollback(self) -> None:
+        """Run rollback callbacks in reverse registration order.
+
+        :return: None.
+        """
         callbacks = list(reversed(self._callbacks))
         self._callbacks.clear()
         for description, callback in callbacks:
@@ -51,6 +69,10 @@ class RollbackStack:
 
 
 def install_service_unit(repo_root: Path) -> None:
+    """Install service unit resources.
+
+    :return: None.
+    """
     shutil.copy2(
         repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit
     )
@@ -58,6 +80,10 @@ def install_service_unit(repo_root: Path) -> None:
 
 
 def activate_service_unit() -> None:
+    """Enable and start the managed bluetooth_2_usb systemd service.
+
+    :return: None.
+    """
     was_active = (
         run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     )
@@ -66,12 +92,20 @@ def activate_service_unit() -> None:
 
 
 def write_default_env_file() -> None:
+    """Write default env file configuration.
+
+    :return: None.
+    """
     if not PATHS.env_file.exists():
         PATHS.env_file.write_text(DEFAULT_ENV_TEXT, encoding="utf-8")
         PATHS.env_file.chmod(0o644)
 
 
 def install_cli_links() -> None:
+    """Install cli links resources.
+
+    :return: None.
+    """
     local_bin = Path("/usr/local/bin")
     local_bin.mkdir(parents=True, exist_ok=True)
     (local_bin / "bluetooth_2_usb.loopback").unlink(missing_ok=True)
@@ -81,12 +115,20 @@ def install_cli_links() -> None:
 
 
 def recreate_venv(venv_dir: Path) -> None:
+    """Create a fresh virtual environment and install the project into it.
+
+    :return: None.
+    """
     if venv_dir.exists():
         shutil.rmtree(venv_dir)
     run(["python3", "-m", "venv", venv_dir])
 
 
 def repair_venv_shebangs(venv_dir: Path, staging_dir: Path) -> None:
+    """Rewrite virtualenv shebangs after an atomic venv directory swap.
+
+    :return: None.
+    """
     for file in (venv_dir / "bin").iterdir():
         if not file.is_file():
             continue
@@ -102,6 +144,10 @@ def repair_venv_shebangs(venv_dir: Path, staging_dir: Path) -> None:
 
 
 def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
+    """Build a replacement virtual environment and atomically promote it.
+
+    :return: None.
+    """
     staging_dir = venv_dir.with_name(f"{venv_dir.name}.new")
     previous_dir = venv_dir.with_name(f"{venv_dir.name}.old.{os.getpid()}")
     shutil.rmtree(staging_dir, ignore_errors=True)
@@ -131,6 +177,10 @@ def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
 
 
 def service_installed() -> bool | None:
+    """Return whether the managed systemd service unit exists.
+
+    :return: The requested value or status result.
+    """
     completed = run(
         ["systemctl", "list-unit-files", "--type=service", "--no-legend", "--no-pager"],
         check=False,
@@ -150,6 +200,10 @@ def service_installed() -> bool | None:
 
 
 def install(repo_root: Path) -> None:
+    """Install or reinstall the managed Raspberry Pi service deployment.
+
+    :return: None.
+    """
     require_commands(["apt-get", "awk", "grep", "git", "install", "python3", "sed", "systemctl"])
     if repo_root != PATHS.install_dir:
         fail(f"Clone this repository to {PATHS.install_dir} and rerun install from there.")
@@ -238,6 +292,10 @@ def install(repo_root: Path) -> None:
 
 
 def update(repo_root: Path) -> None:
+    """Update the managed checkout and reinstall the deployment.
+
+    :return: None.
+    """
     require_commands(["git"])
     if repo_root != PATHS.install_dir:
         fail(f"Clone this repository to {PATHS.install_dir} and rerun update from there.")
@@ -263,6 +321,10 @@ def update(repo_root: Path) -> None:
 
 
 def uninstall() -> None:
+    """Remove the managed service, CLI links, and owned runtime state.
+
+    :return: None.
+    """
     config = load_readonly_config()
     installed = service_installed()
     manage_b2u_service = bool(installed)
@@ -341,6 +403,10 @@ def uninstall() -> None:
 
 
 def remove_owned_gadgets() -> None:
+    """Remove USB gadget trees owned by this application.
+
+    :return: None.
+    """
     from bluetooth_2_usb.hid_gadget_config import remove_owned_gadgets as remove_gadgets
 
     remove_gadgets()

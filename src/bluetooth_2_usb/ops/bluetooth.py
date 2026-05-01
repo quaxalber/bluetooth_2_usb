@@ -8,22 +8,42 @@ from .commands import OpsError, info, ok, output, run, warn
 
 
 def bluetoothctl_show() -> str:
+    """Return `bluetoothctl show` output for the local controller.
+
+    :return: The requested value or status result.
+    """
     return output(["bluetoothctl", "show"])
 
 
 def bluetoothctl_paired_devices() -> str:
+    """Return `bluetoothctl paired-devices` output.
+
+    :return: The requested value or status result.
+    """
     return output(["bluetoothctl", "devices", "Paired"])
 
 
 def btmgmt_info() -> str:
+    """Return `btmgmt info` output for the local controller.
+
+    :return: The requested value or status result.
+    """
     return output(["btmgmt", "info"])
 
 
 def bluetooth_controller_powered_from_text(text: str) -> bool:
+    """Parse whether controller status text reports a powered Bluetooth adapter.
+
+    :return: The requested value or status result.
+    """
     return any(line.strip() == "Powered: yes" for line in text.splitlines())
 
 
 def bluetooth_controller_powered() -> bool:
+    """Return whether the local Bluetooth controller is powered.
+
+    :return: The requested value or status result.
+    """
     try:
         return bluetooth_controller_powered_from_text(bluetoothctl_show())
     except Exception:
@@ -31,27 +51,45 @@ def bluetooth_controller_powered() -> bool:
 
 
 def bluetooth_paired_count() -> int:
+    """Return the number of paired Bluetooth devices reported by bluetoothctl.
+
+    :return: The requested value or status result.
+    """
     return sum(
         1 for line in bluetoothctl_paired_devices().splitlines() if line.startswith("Device ")
     )
 
 
 def rfkill_root() -> Path:
+    """Return the sysfs rfkill root path.
+
+    :return: The requested value or status result.
+    """
     return Path(os.environ.get("B2U_RFKILL_ROOT", "/sys/class/rfkill"))
 
 
 @dataclass(frozen=True, slots=True)
 class RfkillEntry:
+    """Represent one Bluetooth rfkill sysfs entry."""
+
     name: str
     soft: str
     hard: str
     state: str
 
     def line(self) -> str:
+        """Render this rfkill entry as one diagnostic status line.
+
+        :return: The requested value or status result.
+        """
         return f"{self.name} type=bluetooth soft={self.soft} hard={self.hard} state={self.state}"
 
 
 def bluetooth_rfkill_entries(root: Path | None = None) -> list[RfkillEntry]:
+    """Read Bluetooth rfkill entries from sysfs.
+
+    :return: The requested value or status result.
+    """
     base = rfkill_root() if root is None else root
     entries: list[RfkillEntry] = []
     for type_file in sorted(base.glob("rfkill*/type")):
@@ -79,6 +117,10 @@ def _read_optional(path: Path) -> str:
 
 
 def bluetooth_rfkill_blocked(root: Path | None = None) -> bool:
+    """Return whether any Bluetooth rfkill entry is blocked.
+
+    :return: The requested value or status result.
+    """
     return any(
         entry.soft == "1" or entry.hard == "1" or entry.state == "0"
         for entry in bluetooth_rfkill_entries(root)
@@ -86,6 +128,10 @@ def bluetooth_rfkill_blocked(root: Path | None = None) -> bool:
 
 
 def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
+    """Clear soft-blocked Bluetooth rfkill entries while preserving hard blocks.
+
+    :return: None.
+    """
     base = rfkill_root() if root is None else root
     entries = bluetooth_rfkill_entries(base)
     if not entries:
@@ -118,6 +164,10 @@ def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
 
 
 def rfkill_list_bluetooth() -> str:
+    """Return filtered `rfkill list bluetooth` diagnostic output.
+
+    :return: The requested value or status result.
+    """
     try:
         completed = run(["rfkill", "list", "bluetooth"], check=False, capture=True)
         header = completed.stdout.rstrip() or completed.stderr.rstrip()

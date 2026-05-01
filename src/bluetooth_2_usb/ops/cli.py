@@ -32,10 +32,19 @@ OPERATIONAL_COMMANDS = frozenset(
 
 
 def run() -> None:
+    """Run the command entrypoint and return a process-style exit code.
+
+    :return: None.
+    :raises SystemExit: If argument parsing needs to terminate with a usage code.
+    """
     raise SystemExit(main())
 
 
 def main(argv: list[str] | None = None, *, prog: str = "bluetooth_2_usb") -> int:
+    """Run the module entrypoint and return a process-style exit code.
+
+    :return: The requested value or status result.
+    """
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         return _main(args, prog=prog)

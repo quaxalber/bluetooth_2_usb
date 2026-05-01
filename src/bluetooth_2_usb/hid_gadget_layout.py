@@ -124,6 +124,8 @@ DEFAULT_MOUSE_DESCRIPTOR = bytes(
 
 
 class GadgetHidDevice(usb_hid.Device):
+    """Describe one HID function in the Linux USB gadget layout."""
+
     def __init__(
         self,
         *,
@@ -140,6 +142,10 @@ class GadgetHidDevice(usb_hid.Device):
         configfs_report_length: int | None = None,
         wakeup_on_write: bool = False,
     ) -> None:
+        """Initialize metadata for one HID function in the USB gadget layout.
+
+        :return: None.
+        """
         init_kwargs = {
             "descriptor": descriptor,
             "usage_page": usage_page,
@@ -177,6 +183,10 @@ class GadgetHidDevice(usb_hid.Device):
         configfs_report_length: int | None = None,
         wakeup_on_write: bool | None = None,
     ) -> GadgetHidDevice:
+        """Build a GadgetHidDevice from the supplied input.
+
+        :return: The requested value or status result.
+        """
         return cls(
             descriptor=(bytes(base_device.descriptor) if descriptor is None else descriptor),
             usage_page=base_device.usage_page,
@@ -209,6 +219,10 @@ class GadgetHidDevice(usb_hid.Device):
         )
 
     def get_device_path(self, _report_id=None):
+        """Return the Linux hidg device path for this gadget function.
+
+        :return: The requested value or status result.
+        """
         function_root = Path(usb_hid.gadget_root) / f"functions/hid.usb{self.function_index}"
         device = function_root.joinpath("dev").read_text(encoding="utf-8").strip()
         return f"/dev/hidg{device.split(':')[1]}"
@@ -216,6 +230,8 @@ class GadgetHidDevice(usb_hid.Device):
 
 @dataclass(frozen=True, slots=True)
 class GadgetLayout:
+    """Describe the full USB gadget identity, strings, and HID functions."""
+
     devices: tuple[GadgetHidDevice, ...]
     bcd_device: str
     product_name: str
@@ -227,6 +243,10 @@ class GadgetLayout:
 
 
 def build_default_layout() -> GadgetLayout:
+    """Build the default keyboard, mouse, and consumer-control gadget layout.
+
+    :return: The requested value or status result.
+    """
     return GadgetLayout(
         devices=(
             GadgetHidDevice.from_existing(

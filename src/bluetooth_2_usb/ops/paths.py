@@ -6,6 +6,8 @@ from pathlib import Path
 
 @dataclass(frozen=True, slots=True)
 class ManagedPaths:
+    """Collect filesystem paths owned or consumed by operational commands."""
+
     install_dir: Path = Path("/opt/bluetooth_2_usb")
     service_unit: str = "bluetooth_2_usb.service"
     log_dir: Path = Path("/var/log/bluetooth_2_usb")
@@ -19,6 +21,10 @@ class ManagedPaths:
     bluetooth_service_dropin: Path = field(init=False)
 
     def __post_init__(self) -> None:
+        """Normalize derived dataclass state after initialization.
+
+        :return: None.
+        """
         object.__setattr__(self, "persist_bluetooth_dir", self.persist_mount / "bluetooth")
         object.__setattr__(
             self,
@@ -28,6 +34,10 @@ class ManagedPaths:
 
     @property
     def venv_python(self) -> Path:
+        """Return the venv python value.
+
+        :return: The current value exposed by this property.
+        """
         return self.install_dir / "venv/bin/python"
 
 

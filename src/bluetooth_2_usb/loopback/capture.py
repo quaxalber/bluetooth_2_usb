@@ -63,23 +63,33 @@ MOUSE_BUTTON_BITS = {
 
 
 class CaptureError(RuntimeError):
+    """Base error for loopback capture failures reported to callers."""
+
     exit_code = EXIT_ACCESS
 
 
 class MissingNodeError(CaptureError):
+    """Raised when loopback capture cannot find required HID gadget nodes."""
+
     exit_code = EXIT_PREREQUISITE
 
 
 class CaptureTimeoutError(CaptureError):
+    """Raised when loopback capture times out before all expected reports arrive."""
+
     exit_code = EXIT_TIMEOUT
 
 
 class CaptureMismatchError(CaptureError):
+    """Raised when captured HID reports do not match the expected scenario."""
+
     exit_code = EXIT_MISMATCH
 
 
 @dataclass(frozen=True, slots=True)
 class HidDeviceInfo:
+    """Describe one host-visible HID device discovered through hidapi."""
+
     node: str
     raw_path: bytes | str
     name: str
@@ -94,6 +104,8 @@ class HidDeviceInfo:
 
 @dataclass(frozen=True, slots=True)
 class GadgetNodeCandidates:
+    """Group candidate HID device nodes by keyboard, mouse, and consumer roles."""
+
     keyboard_nodes: tuple[HidDeviceInfo, ...]
     mouse_nodes: tuple[HidDeviceInfo, ...]
     consumer_nodes: tuple[HidDeviceInfo, ...]
@@ -104,11 +116,19 @@ class GadgetNodeCandidates:
         mouse_node: str | None = None,
         consumer_node: str | None = None,
     ) -> GadgetNodes:
+        """Return the concrete gadget node paths selected from discovery candidates.
+
+        :return: The requested value or status result.
+        """
         return GadgetNodes(
             keyboard_node=keyboard_node, mouse_node=mouse_node, consumer_node=consumer_node
         )
 
     def to_dict(self) -> dict[str, list[str]]:
+        """Return a JSON-serializable dictionary representation.
+
+        :return: The requested value or status result.
+        """
         return {
             "keyboard_nodes": [info.node for info in self.keyboard_nodes],
             "mouse_nodes": [info.node for info in self.mouse_nodes],
@@ -118,15 +138,29 @@ class GadgetNodeCandidates:
 
 @dataclass(slots=True)
 class KeyboardSequenceMatcher:
+    """Match keyboard HID reports against an expected loopback scenario.
+
+    :raises CaptureMismatchError: If captured reports do not match the expected sequence.
+    """
+
     expected_steps: tuple
     index: int = 0
     _modifier_state: int = 0
     _pressed_keys: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
+        """Normalize derived dataclass state after initialization.
+
+        :return: None.
+        """
         self._pressed_keys = ()
 
     def handle(self, report: bytes) -> None:
+        """Consume one HID report and update matcher progress.
+
+        :return: None.
+        :raises CaptureMismatchError: If captured reports do not match the expected sequence.
+        """
         payload = _normalize_keyboard_report(report)
         if payload is None:
             if _is_ignorable_empty_report(report):
@@ -169,11 +203,20 @@ class KeyboardSequenceMatcher:
 
     @property
     def complete(self) -> bool:
+        """Return the complete value.
+
+        :return: The current value exposed by this property.
+        """
         return self.index >= len(self.expected_steps)
 
 
 @dataclass(slots=True)
 class MouseSequenceMatcher:
+    """Match mouse HID reports against an expected loopback scenario.
+
+    :raises CaptureMismatchError: If captured reports do not match the expected sequence.
+    """
+
     expected_rel_steps: tuple
     expected_button_steps: tuple
     rel_index: int = 0
@@ -182,15 +225,28 @@ class MouseSequenceMatcher:
     _pending_rel_remaining: list[list[int]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        """Normalize derived dataclass state after initialization.
+
+        :return: None.
+        """
         self._pending_rel_remaining = [[step.code, step.value] for step in self.expected_rel_steps]
 
     @classmethod
     def create(cls, expected_rel_steps: tuple, expected_button_steps: tuple):
+        """Create a mouse sequence matcher for the selected scenario.
+
+        :return: The requested value or status result.
+        """
         return cls(
             expected_rel_steps=expected_rel_steps, expected_button_steps=expected_button_steps
         )
 
     def handle(self, report: bytes) -> None:
+        """Consume one HID report and update matcher progress.
+
+        :return: None.
+        :raises CaptureMismatchError: If captured reports do not match the expected sequence.
+        """
         parsed = _normalize_mouse_report(report)
         if parsed is None:
             if _is_ignorable_empty_report(report):
@@ -292,10 +348,18 @@ class MouseSequenceMatcher:
 
     @property
     def rel_complete(self) -> bool:
+        """Return the rel complete value.
+
+        :return: The current value exposed by this property.
+        """
         return self.rel_index >= len(self.expected_rel_steps)
 
     @property
     def complete(self) -> bool:
+        """Return the complete value.
+
+        :return: The current value exposed by this property.
+        """
         return self.rel_complete and self.button_index >= len(self.expected_button_steps)
 
 
@@ -307,10 +371,20 @@ def _same_direction(expected: int, observed: int) -> bool:
 
 @dataclass(slots=True)
 class ConsumerSequenceMatcher:
+    """Match consumer-control HID reports against an expected loopback scenario.
+
+    :raises CaptureMismatchError: If captured reports do not match the expected sequence.
+    """
+
     expected_steps: tuple
     index: int = 0
 
     def handle(self, report: bytes) -> None:
+        """Consume one HID report and update matcher progress.
+
+        :return: None.
+        :raises CaptureMismatchError: If captured reports do not match the expected sequence.
+        """
         usage = _normalize_consumer_report(report)
         if usage is None:
             if _is_ignorable_empty_report(report):
@@ -329,6 +403,10 @@ class ConsumerSequenceMatcher:
 
     @property
     def complete(self) -> bool:
+        """Return the complete value.
+
+        :return: The current value exposed by this property.
+        """
         return self.index >= len(self.expected_steps)
 
 
@@ -342,14 +420,26 @@ class _CandidateMatcher:
 
     @property
     def node(self) -> str:
+        """Return the node value.
+
+        :return: The current value exposed by this property.
+        """
         return self.info.node
 
     @property
     def complete(self) -> bool:
+        """Return the complete value.
+
+        :return: The current value exposed by this property.
+        """
         return self.matcher.complete
 
     @property
     def failed(self) -> bool:
+        """Return the failed value.
+
+        :return: The current value exposed by this property.
+        """
         return self.failed_message is not None
 
 
@@ -476,6 +566,11 @@ def discover_gadget_node_candidates(
     consumer_node: str | None = None,
     hid_module: Any | None = None,
 ) -> GadgetNodeCandidates:
+    """Discover candidate HID gadget nodes grouped by report role.
+
+    :return: The requested value or status result.
+    :raises MissingNodeError: If required gadget HID nodes cannot be discovered.
+    """
     hid_module = _load_hidapi() if hid_module is None else hid_module
     infos = _iter_hid_infos(hid_module)
 
@@ -524,6 +619,11 @@ def discover_gadget_nodes(
     consumer_node: str | None = None,
     hid_module: Any | None = None,
 ) -> GadgetNodes:
+    """Discover exactly one usable HID gadget node per required role.
+
+    :return: The requested value or status result.
+    :raises MissingNodeError: If required gadget HID nodes cannot be discovered.
+    """
     candidates = discover_gadget_node_candidates(
         device_substring=device_substring,
         keyboard_node=keyboard_node,
@@ -765,6 +865,10 @@ def run_capture(
 ) -> LoopbackResult:
     # hidapi capture does not offer exclusive-grab semantics; keep the parameter
     # for CLI parity with other backends.
+    """Capture host-side HID reports and compare them with a loopback scenario.
+
+    :return: The requested value or status result.
+    """
     _ = grab_devices
     scenario = get_scenario(scenario_name)
 

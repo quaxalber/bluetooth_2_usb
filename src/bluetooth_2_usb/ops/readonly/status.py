@@ -12,6 +12,10 @@ READONLY_PACKAGES = ("overlayroot", "cryptsetup", "cryptsetup-bin", "initramfs-t
 
 
 def overlay_status() -> str:
+    """Return the live OverlayFS status reported by raspi-config.
+
+    :return: The requested value or status result.
+    """
     if shutil.which("raspi-config") is None:
         return "unknown"
     for command in (
@@ -25,6 +29,10 @@ def overlay_status() -> str:
 
 
 def overlay_configured_status() -> str:
+    """Return the next-boot OverlayFS status reported by raspi-config.
+
+    :return: The requested value or status result.
+    """
     if shutil.which("raspi-config") is None:
         return "unknown"
     completed = run(["raspi-config", "nonint", "get_overlay_conf"], check=False, capture=True)
@@ -43,25 +51,45 @@ def _overlay_state_from_code(raw: str) -> str:
 
 
 def package_status(package: str) -> str:
+    """Return the dpkg status string for one package.
+
+    :return: The requested value or status result.
+    """
     completed = run(["dpkg-query", "-W", "-f=${Status}", package], check=False, capture=True)
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 
 def readonly_stack_packages_healthy() -> bool:
+    """Return whether readonly stack packages healthy is true.
+
+    :return: The requested value or status result.
+    """
     return all(package_status(package) == "install ok installed" for package in READONLY_PACKAGES)
 
 
 def readonly_stack_packages_bootstrap_safe() -> bool:
+    """Return whether readonly stack packages bootstrap safe is true.
+
+    :return: The requested value or status result.
+    """
     return all(
         package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES
     )
 
 
 def readonly_stack_packages_missing() -> bool:
+    """Return whether readonly stack packages missing is true.
+
+    :return: The requested value or status result.
+    """
     return any(package_status(package) != "install ok installed" for package in READONLY_PACKAGES)
 
 
 def readonly_stack_package_report() -> str:
+    """Return a comma-separated package health report for readonly prerequisites.
+
+    :return: The requested value or status result.
+    """
     lines = []
     for package in READONLY_PACKAGES:
         status = package_status(package) or "not installed"
@@ -70,6 +98,10 @@ def readonly_stack_package_report() -> str:
 
 
 def machine_id_valid() -> bool:
+    """Return whether /etc/machine-id contains a valid persistent identifier.
+
+    :return: The requested value or status result.
+    """
     machine_id = Path("/etc/machine-id")
     return (
         machine_id.is_file()
@@ -79,6 +111,10 @@ def machine_id_valid() -> bool:
 
 
 def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
+    """Return whether Bluetooth state is configured on persistent writable storage.
+
+    :return: The requested value or status result.
+    """
     resolved = load_readonly_config() if config is None else config
     if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode != 0:
         return False
@@ -108,6 +144,10 @@ def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
 
 
 def readonly_mode() -> str:
+    """Return the configured persistent read-only mode.
+
+    :return: The requested value or status result.
+    """
     try:
         root_fstype = current_root_filesystem_type()
     except Exception:
@@ -118,6 +158,10 @@ def readonly_mode() -> str:
 
 
 def print_readonly_status() -> None:
+    """Print readonly status information.
+
+    :return: None.
+    """
     config = load_readonly_config()
     print("Read-only status")
     print(f"mode: {readonly_mode()}")

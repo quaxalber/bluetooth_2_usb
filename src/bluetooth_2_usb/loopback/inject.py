@@ -147,6 +147,10 @@ def run_inject(
     mouse_name: str = DEFAULT_MOUSE_NAME,
     consumer_name: str = DEFAULT_CONSUMER_NAME,
 ) -> LoopbackResult:
+    """Create virtual input devices and inject a deterministic loopback scenario.
+
+    :return: The requested value or status result.
+    """
     scenario = get_scenario(scenario_name)
     if pre_delay_ms < 0 or event_gap_ms < 0:
         return LoopbackResult(

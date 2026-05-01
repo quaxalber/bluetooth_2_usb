@@ -29,11 +29,15 @@ ALLOWED_KEYS = BOOL_KEYS | {
 
 
 class ServiceSettingsError(ValueError):
+    """Raised when managed service settings are invalid or unsupported."""
+
     pass
 
 
 @dataclass(slots=True)
 class ServiceSettings:
+    """Store normalized runtime settings loaded from the service environment file."""
+
     auto_discover: bool = True
     device_ids: list[str] = field(default_factory=list)
     grab_devices: bool = True
@@ -44,6 +48,10 @@ class ServiceSettings:
     udc_path: str = ""
 
     def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable dictionary representation.
+
+        :return: The requested value or status result.
+        """
         return asdict(self)
 
 
@@ -104,6 +112,11 @@ def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
 
 
 def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
+    """Load structured runtime service settings from an environment file.
+
+    :return: The requested value or status result.
+    :raises ServiceSettingsError: If service settings are missing, invalid, or unsupported.
+    """
     settings = ServiceSettings()
     if not env_file.exists():
         return settings
@@ -149,6 +162,11 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
 
 
 def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bool:
+    """Rewrite service-setting boolean values to their canonical string form.
+
+    :return: The requested value or status result.
+    :raises ServiceSettingsError: If service settings are missing, invalid, or unsupported.
+    """
     if not env_file.exists():
         return False
 
@@ -202,6 +220,10 @@ def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bo
 
 
 def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False) -> list[str]:
+    """Build runtime argv data.
+
+    :return: The requested value or status result.
+    """
     argv: list[str] = []
     if settings.auto_discover:
         argv.append("--auto_discover")
@@ -227,6 +249,10 @@ def build_runtime_shell_command(
     env_file: Path = DEFAULT_ENV_FILE,
     append_debug: bool = False,
 ) -> str:
+    """Build runtime shell command data.
+
+    :return: The requested value or status result.
+    """
     resolved_settings = load_service_settings(env_file) if settings is None else settings
     command = shlex.split(executable) + build_runtime_argv(
         resolved_settings, append_debug=append_debug
@@ -235,6 +261,10 @@ def build_runtime_shell_command(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the module entrypoint and return a process-style exit code.
+
+    :return: The requested value or status result.
+    """
     parser = argparse.ArgumentParser(description="Inspect bluetooth_2_usb service settings.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true", help="Validate the settings file.")

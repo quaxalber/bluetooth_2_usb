@@ -4,6 +4,10 @@ import re
 
 
 def redact(text: str, hostname: str) -> str:
+    """Redact local host-specific values from diagnostics text.
+
+    :return: The requested value or status result.
+    """
     patterns = [
         (r"PARTUUID=[^\s]+", "PARTUUID=<<REDACTED_PARTUUID>>"),
         (r"UUID=[^\s]+", "UUID=<<REDACTED_UUID>>"),

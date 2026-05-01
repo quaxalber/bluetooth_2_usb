@@ -25,15 +25,25 @@ logger = get_logger(__name__)
 
 @dataclass(slots=True)
 class EnvironmentStatus:
+    """Describe whether local USB gadget runtime prerequisites are present."""
+
     configfs: bool
     udc_present: bool
     udc_path: Path | None
 
     @property
     def ok(self) -> bool:
+        """Return whether all required environment checks passed.
+
+        :return: The current value exposed by this property.
+        """
         return self.configfs and self.udc_present
 
     def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable dictionary representation.
+
+        :return: The requested value or status result.
+        """
         return {
             "configfs": self.configfs,
             "udc_present": self.udc_present,
@@ -43,6 +53,10 @@ class EnvironmentStatus:
 
 
 def get_udc_path() -> Path | None:
+    """Find the USB device controller state file used for gadget monitoring.
+
+    :return: The requested value or status result.
+    """
     override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
     if override_path:
         candidate = Path(override_path)
@@ -57,6 +71,10 @@ def get_udc_path() -> Path | None:
         return None
 
     def state_path(controller: Path) -> Path:
+        """Return the UDC state-file path below a controller directory.
+
+        :return: The requested value or status result.
+        """
         return controller / "state"
 
     scored_controllers: list[tuple[int, str, Path]] = []
@@ -81,6 +99,10 @@ def get_udc_path() -> Path | None:
 
 
 def validate_environment() -> EnvironmentStatus:
+    """Check whether the local system exposes the required USB gadget runtime paths.
+
+    :return: The requested value or status result.
+    """
     configfs_path = Path("/sys/kernel/config/usb_gadget")
     udc_path = get_udc_path()
     return EnvironmentStatus(
@@ -89,6 +111,10 @@ def validate_environment() -> EnvironmentStatus:
 
 
 def print_environment_status(status: EnvironmentStatus, output: str) -> None:
+    """Print runtime environment status in the requested output format.
+
+    :return: None.
+    """
     if output == "json":
         print(json.dumps(status.to_dict(), sort_keys=True))
         return
@@ -103,11 +129,19 @@ def print_environment_status(status: EnvironmentStatus, output: str) -> None:
 
 
 def print_version() -> int:
+    """Print the package version banner.
+
+    :return: The requested value or status result.
+    """
     print(get_versioned_name())
     return EXIT_OK
 
 
 def configure_logging(args: Arguments) -> None:
+    """Configure package logging from parsed command-line arguments.
+
+    :return: None.
+    """
     if args.debug:
         get_logger().setLevel(DEBUG)
 
@@ -118,6 +152,10 @@ def configure_logging(args: Arguments) -> None:
 
 
 async def async_run(args: Arguments) -> int:
+    """Run the asynchronous relay command flow for parsed arguments.
+
+    :return: The requested value or status result.
+    """
     if args.version:
         return print_version()
 
@@ -165,6 +203,10 @@ async def async_run(args: Arguments) -> int:
 
 
 def run(argv: list[str] | None = None) -> int:
+    """Run the command entrypoint and return a process-style exit code.
+
+    :return: The requested value or status result.
+    """
     raw_args = list(sys.argv[1:] if argv is None else argv)
     from .ops.cli import OPERATIONAL_COMMANDS
     from .ops.cli import main as operational_main

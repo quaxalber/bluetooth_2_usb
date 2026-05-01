@@ -174,6 +174,10 @@ _MOUSE_BUTTONS = set(
 
 
 def evdev_to_usb_hid(event: KeyEvent) -> tuple[int | None, str | None]:
+    """Map an evdev key event to the matching USB HID usage.
+
+    :return: The requested value or status result.
+    """
     scancode: int = event.scancode
     key_name = find_key_name(event)
     hid_usage_id = _evdev_to_usb_hid_map().get(scancode, None)
@@ -192,6 +196,10 @@ def evdev_to_usb_hid(event: KeyEvent) -> tuple[int | None, str | None]:
 
 
 def find_key_name(event: KeyEvent) -> str | None:
+    """Resolve the symbolic evdev key name for a key event.
+
+    :return: The requested value or status result.
+    """
     scancode: int = event.scancode
     for attribute in _cached_dir(ecodes):
         if _cached_getattr(ecodes, attribute) == scancode and attribute.startswith(
@@ -202,6 +210,10 @@ def find_key_name(event: KeyEvent) -> str | None:
 
 
 def find_usage_name(event: KeyEvent, hid_usage_id: int | None) -> str | None:
+    """Resolve a human-readable USB HID usage name for a key event.
+
+    :return: The requested value or status result.
+    """
     code_type = _get_hid_code_type(event)
     for attribute in _cached_dir(code_type):
         if _cached_getattr(code_type, attribute) == hid_usage_id:
@@ -228,14 +240,26 @@ def _get_hid_code_type(event: KeyEvent) -> type:
 
 
 def is_mouse_button(event: KeyEvent) -> bool:
+    """Return whether a key event represents a mouse button.
+
+    :return: The requested value or status result.
+    """
     return event.scancode in _MOUSE_BUTTONS
 
 
 def is_consumer_key(event: KeyEvent) -> bool:
+    """Return whether a key event belongs to the consumer-control HID page.
+
+    :return: The requested value or status result.
+    """
     return event.scancode in _CONSUMER_KEYS
 
 
 def get_mouse_movement(event: RelEvent) -> tuple[int, int, float, float]:
+    """Convert a relative evdev event into HID mouse movement components.
+
+    :return: The requested value or status result.
+    """
     input_event: InputEvent = event.event
     x, y, mwheel, pan = 0, 0, 0.0, 0.0
     if input_event.code == ecodes.REL_X:

@@ -44,6 +44,10 @@ class InputRelay:
         self._currently_grabbed = False
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the InputRelay instance.
+
+        :return: The requested value or status result.
+        """
         return f"relay for {self._input_device}"
 
     @property

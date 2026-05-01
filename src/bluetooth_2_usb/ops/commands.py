@@ -28,37 +28,72 @@ def _style(text: str, color: str) -> str:
 
 
 class OpsError(RuntimeError):
+    """Operational command failure carrying a process-style exit code."""
+
     def __init__(self, message: str, exit_code: int = 1) -> None:
+        """Initialize an operational error with its command exit code.
+
+        :return: None.
+        """
         super().__init__(message)
         self.exit_code = exit_code
 
 
 def timestamp() -> str:
+    """Return a filesystem-safe local timestamp string.
+
+    :return: The requested value or status result.
+    """
     return time.strftime("%Y%m%d_%H%M%S")
 
 
 def info(message: str) -> None:
+    """Print an informational operational status line.
+
+    :return: None.
+    """
     print(f"{_style('[i]', _LIGHT_BLUE)} {message}")
 
 
 def ok(message: str) -> None:
+    """Print a successful operational status line.
+
+    :return: None.
+    """
     print(f"{_style('[+]', _GREEN)} {message}")
 
 
 def warn(message: str) -> None:
+    """Print a warning operational status line.
+
+    :return: None.
+    """
     print(f"{_style('[!]', _YELLOW)} {message}")
 
 
 def fail(message: str, exit_code: int = 1) -> None:
+    """Raise an operational error with a styled user-facing message.
+
+    :return: None.
+    :raises OpsError: If the operational command cannot complete successfully.
+    """
     raise OpsError(_style(message, _RED), exit_code)
 
 
 def ensure_root() -> None:
+    """Ensure root is available.
+
+    :return: None.
+    """
     if os.geteuid() != 0:
         fail("Run this command as root.")
 
 
 def require_commands(commands: Iterable[str]) -> None:
+    """Verify that all named external commands are available on PATH.
+
+    :return: None.
+    """
     missing = [command for command in commands if shutil.which(command) is None]
     for command in missing:
         warn(f"Missing command: {command}")
@@ -75,6 +110,10 @@ def run(
     input_text: str | None = None,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    """Run the command entrypoint and return a process-style exit code.
+
+    :return: The requested value or status result.
+    """
     command_args = [str(arg) for arg in args]
     command = " ".join(command_args)
     try:
@@ -109,20 +148,36 @@ def run(
 
 
 def output(args: list[str | Path], *, timeout: float | None = None) -> str:
+    """Run a command and return stripped stdout text.
+
+    :return: The requested value or status result.
+    """
     completed = run(args, capture=True, timeout=timeout)
     return completed.stdout.strip()
 
 
 def command_ok(args: list[str | Path], *, timeout: float | None = None) -> bool:
+    """Return whether command ok is true.
+
+    :return: The requested value or status result.
+    """
     return run(args, check=False, capture=True, timeout=timeout).returncode == 0
 
 
 def backup_file(path: Path) -> None:
+    """Copy an existing file to a timestamped sibling backup path.
+
+    :return: None.
+    """
     if path.is_file():
         shutil.copy2(path, path.with_name(f"{path.name}.bak.{timestamp()}"))
 
 
 def prepare_log(prefix: str) -> Path:
+    """Create an ops log file and tee stdout and stderr into it.
+
+    :return: The requested value or status result.
+    """
     global _LOG_FILE, _PREVIOUS_STDERR, _PREVIOUS_STDOUT
 
     close_log()
@@ -138,6 +193,10 @@ def prepare_log(prefix: str) -> Path:
 
 
 def close_log() -> None:
+    """Restore stdout and stderr and close the active ops log file.
+
+    :return: None.
+    """
     global _LOG_FILE, _PREVIOUS_STDERR, _PREVIOUS_STDOUT
 
     if _LOG_FILE is None:
@@ -154,14 +213,26 @@ def close_log() -> None:
 
 class _Tee:
     def __init__(self, *streams: object) -> None:
+        """Initialize a write-through stream multiplexer.
+
+        :return: None.
+        """
         self._streams = streams
 
     def write(self, data: str) -> int:
+        """Write text to each wrapped stream and return the written length.
+
+        :return: The requested value or status result.
+        """
         for stream in self._streams:
             stream.write(data)  # type: ignore[attr-defined]
             stream.flush()  # type: ignore[attr-defined]
         return len(data)
 
     def flush(self) -> None:
+        """Flush every wrapped stream.
+
+        :return: None.
+        """
         for stream in self._streams:
             stream.flush()  # type: ignore[attr-defined]

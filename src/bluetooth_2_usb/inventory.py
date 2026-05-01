@@ -18,6 +18,8 @@ DEFAULT_SKIP_NAME_PREFIXES = ("vc4", "gpio", "pwr_button", "raspberrypi-ts")
 
 
 class DeviceEnumerationError(RuntimeError):
+    """Raised when input-device inventory cannot be enumerated reliably."""
+
     pass
 
 
@@ -38,6 +40,8 @@ EVENT_TYPE_NAMES = {native_ecodes.EV_KEY: "EV_KEY", native_ecodes.EV_REL: "EV_RE
 
 @dataclass(slots=True)
 class InputDeviceMetadata:
+    """Describe one input device for listing, JSON output, and relay filtering."""
+
     path: str
     name: str
     phys: str
@@ -48,15 +52,27 @@ class InputDeviceMetadata:
 
     @property
     def identity(self) -> str:
+        """Return the stable identity string for the input device.
+
+        :return: The current value exposed by this property.
+        """
         return self.uniq or self.phys or "-"
 
     def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable dictionary representation.
+
+        :return: The requested value or status result.
+        """
         return asdict(self) | {"identity": self.identity}
 
 
 def auto_discover_exclusion_reason(
     device: InputDevice, skip_name_prefixes: tuple[str, ...] = DEFAULT_SKIP_NAME_PREFIXES
 ) -> str | None:
+    """Return the reason an input device should be excluded from auto-discovery.
+
+    :return: The requested value or status result.
+    """
     name = (device.name or "").strip()
     name_lower = name.lower()
     for prefix in skip_name_prefixes:
@@ -75,6 +91,11 @@ def auto_discover_exclusion_reason(
 
 
 def list_input_device_paths() -> list[str]:
+    """List Linux input event device paths available under /dev/input.
+
+    :return: The requested value or status result.
+    :raises DeviceEnumerationError: If input-device enumeration fails.
+    """
     if _EVDEV_IMPORT_ERROR is not None or list_devices is None:
         raise DeviceEnumerationError(
             "python-evdev is required to enumerate input devices on this host"
@@ -88,6 +109,11 @@ def list_input_device_paths() -> list[str]:
 
 
 def list_input_devices() -> list[InputDevice]:
+    """Open and return all readable evdev input devices.
+
+    :return: The requested value or status result.
+    :raises DeviceEnumerationError: If input-device enumeration fails.
+    """
     devices: list[InputDevice] = []
     for path in list_input_device_paths():
         try:
@@ -100,6 +126,10 @@ def list_input_devices() -> list[InputDevice]:
 def describe_input_devices(
     skip_name_prefixes: tuple[str, ...] = DEFAULT_SKIP_NAME_PREFIXES,
 ) -> list[InputDeviceMetadata]:
+    """Return metadata for readable input devices suitable for display or JSON output.
+
+    :return: The requested value or status result.
+    """
     metadata: list[InputDeviceMetadata] = []
     for device in list_input_devices():
         try:
@@ -130,6 +160,10 @@ def describe_input_devices(
 
 
 def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
+    """Render input-device metadata as human-readable inventory text.
+
+    :return: The requested value or status result.
+    """
     table = Table(
         box=box.MINIMAL_DOUBLE_HEAD,
         expand=False,

@@ -24,11 +24,19 @@ def _ensure_root_logger_configured() -> logging.Logger:
 
 
 def get_logger(name: str | None = None) -> logging.Logger:
+    """Return a package logger with the shared logging configuration applied.
+
+    :return: The requested value or status result.
+    """
     _ensure_root_logger_configured()
     return logging.getLogger(PACKAGE_LOGGER_NAME if name is None else name)
 
 
 def add_file_handler(log_path: str) -> None:
+    """Attach a package-level file log handler.
+
+    :return: None.
+    """
     resolved = str(Path(log_path).expanduser().resolve())
     logger = _ensure_root_logger_configured()
     for handler in logger.handlers:

@@ -19,6 +19,11 @@ class ExtendedMouse:
     TASK = TASK_BUTTON = 0x80
 
     def __init__(self, devices) -> None:
+        """Initialize the extended mouse wrapper over one or more HID devices.
+
+        :return: None.
+        :raises ValueError: If the supplied value is unsupported or malformed.
+        """
         from adafruit_hid import find_device
 
         self._mouse_device = find_device(devices, usage_page=0x1, usage=0x02)
@@ -29,21 +34,41 @@ class ExtendedMouse:
         self._pan_remainder = 0.0
 
     def __str__(self):
+        """Return a human-readable representation of the ExtendedMouse instance.
+
+        :return: The requested value or status result.
+        """
         return str(self._mouse_device)
 
     def press(self, buttons: int) -> None:
+        """Press one or more mouse buttons in the HID report state.
+
+        :return: None.
+        """
         self.report[0] |= buttons
         self._send_no_move()
 
     def release(self, buttons: int) -> None:
+        """Release one or more mouse buttons in the HID report state.
+
+        :return: None.
+        """
         self.report[0] &= ~buttons
         self._send_no_move()
 
     def release_all(self) -> None:
+        """Release all pressed mouse buttons and clear wheel/pan movement.
+
+        :return: None.
+        """
         self.report[0] = 0
         self._send_no_move()
 
     def move(self, x: int = 0, y: int = 0, wheel: float = 0, pan: float = 0) -> None:
+        """Send relative mouse movement, wheel, and horizontal pan reports.
+
+        :return: None.
+        """
         wheel_total = self._wheel_remainder + wheel
         wheel = int(wheel_total)
         self._wheel_remainder = wheel_total - wheel

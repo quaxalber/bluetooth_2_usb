@@ -42,7 +42,13 @@ def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
+    """Argument parser configured for the Bluetooth-2-USB runtime CLI."""
+
     def __init__(self, *args, **kwargs) -> None:
+        """Initialize the Bluetooth-2-USB argument parser and register CLI options.
+
+        :return: None.
+        """
         super().__init__(
             *args,
             add_help=False,
@@ -159,11 +165,17 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
 class _HelpAction(argparse._HelpAction):
     def __call__(self, parser, namespace, values, option_string=None) -> None:
+        """Print help text and terminate argument parsing.
+
+        :return: None.
+        """
         parser.print_help()
         parser.exit()
 
 
 class Arguments:
+    """Immutable-style accessor object for normalized runtime CLI arguments."""
+
     __slots__ = [
         "_device_ids",
         "_auto_discover",
@@ -192,6 +204,10 @@ class Arguments:
         validate_env: bool,
         output: str,
     ) -> None:
+        """Store normalized command-line options for later runtime use.
+
+        :return: None.
+        """
         self._device_ids = device_ids
         self._auto_discover = auto_discover
         self._grab_devices = grab_devices
@@ -206,54 +222,107 @@ class Arguments:
 
     @property
     def device_ids(self) -> list[str] | None:
+        """Return the configured input-device identifiers.
+
+        :return: The current value exposed by this property.
+        """
         return self._device_ids
 
     @property
     def auto_discover(self) -> bool:
+        """Return whether automatic input-device discovery is enabled.
+
+        :return: The current value exposed by this property.
+        """
         return self._auto_discover
 
     @property
     def grab_devices(self) -> bool:
+        """Return whether input devices should be grabbed while relaying.
+
+        :return: The current value exposed by this property.
+        """
         return self._grab_devices
 
     @property
     def interrupt_shortcut(self) -> list[str] | None:
+        """Return the key names that toggle relaying, if configured.
+
+        :return: The current value exposed by this property.
+        """
         return self._interrupt_shortcut
 
     @property
     def list_devices(self) -> bool:
+        """Return whether the CLI should list devices and exit.
+
+        :return: The current value exposed by this property.
+        """
         return self._list_devices
 
     @property
     def log_to_file(self) -> bool:
+        """Return whether file logging is enabled.
+
+        :return: The current value exposed by this property.
+        """
         return self._log_to_file
 
     @property
     def log_path(self) -> str:
+        """Return the configured log-file path.
+
+        :return: The current value exposed by this property.
+        """
         return self._log_path
 
     @property
     def debug(self) -> bool:
+        """Return whether debug logging is enabled.
+
+        :return: The current value exposed by this property.
+        """
         return self._debug
 
     @property
     def version(self) -> bool:
+        """Return whether the CLI should print version information and exit.
+
+        :return: The current value exposed by this property.
+        """
         return self._version
 
     @property
     def validate_env(self) -> bool:
+        """Return whether the CLI should validate runtime prerequisites and exit.
+
+        :return: The current value exposed by this property.
+        """
         return self._validate_env
 
     @property
     def output(self) -> str:
+        """Return the selected machine-readable or text output format.
+
+        :return: The current value exposed by this property.
+        """
         return self._output
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the Arguments instance.
+
+        :return: The requested value or status result.
+        """
         slot_values = [f"{slot[1:]}={getattr(self, slot)}" for slot in self.__slots__]
         return ", ".join(slot_values)
 
 
 def parse_args(argv: list[str] | None = None) -> Arguments:
+    """Parse command-line arguments into an immutable argument object.
+
+    :return: The requested value or status result.
+    :raises SystemExit: If argument parsing needs to terminate with a usage code.
+    """
     parser = CustomArgumentParser()
     args = parser.parse_args(argv)
 

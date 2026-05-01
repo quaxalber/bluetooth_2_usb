@@ -10,6 +10,8 @@ from ..paths import PATHS
 
 @dataclass(slots=True)
 class ReadonlyConfig:
+    """Store persistent read-only mode configuration loaded from disk."""
+
     mode: str = "disabled"
     persist_mount: Path = PATHS.persist_mount
     persist_bluetooth_dir: Path = PATHS.persist_bluetooth_dir
@@ -18,6 +20,10 @@ class ReadonlyConfig:
 
 
 def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig:
+    """Load persistent read-only mode configuration from disk.
+
+    :return: The requested value or status result.
+    """
     config = ReadonlyConfig()
     if not path.is_file():
         return config
@@ -59,6 +65,10 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
 
 
 def write_readonly_config(config: ReadonlyConfig, path: Path = PATHS.readonly_env_file) -> None:
+    """Write persistent read-only mode configuration to disk.
+
+    :return: None.
+    """
     path.write_text(
         "\n".join(
             [
