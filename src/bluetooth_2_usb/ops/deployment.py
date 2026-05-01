@@ -5,7 +5,6 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from bluetooth_2_usb.hid_gadget_config import remove_owned_gadgets
 from bluetooth_2_usb.service_settings import canonicalize_service_settings_bools
 
 from . import boot_config
@@ -340,6 +339,12 @@ def uninstall() -> None:
         fail(f"{PATHS.service_unit} is still enabled after uninstall")
     ok("Uninstall complete")
     info(f"The checkout at {PATHS.install_dir} was left in place.")
+
+
+def remove_owned_gadgets() -> None:
+    from bluetooth_2_usb.hid_gadget_config import remove_owned_gadgets as remove_gadgets
+
+    remove_gadgets()
 
 
 def _assert_absent(path: Path, message: str) -> None:
