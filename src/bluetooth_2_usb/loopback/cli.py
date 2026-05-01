@@ -23,7 +23,8 @@ from .session import (
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Loopback validation for Bluetooth-2-USB relay testing."
+        prog="bluetooth_2_usb loopback",
+        description="Loopback validation for Bluetooth-2-USB relay testing.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -57,9 +57,10 @@ auto-discovery and explicit device identifiers behave consistently.
 
 Managed install, update, uninstall, smoketest, debug, and read-only setup are
 owned by `bluetooth_2_usb.ops`. Loopback validation is exposed as
-`bluetooth_2_usb.loopback inject` and `bluetooth_2_usb.loopback capture`. The
+`bluetooth_2_usb loopback inject` and `bluetooth_2_usb loopback capture`. The
 initial install can run directly from the source tree with `PYTHONPATH=src`;
-after installation the managed venv exposes the console commands.
+after installation the managed venv exposes the `bluetooth_2_usb` console
+command.
 
 Keeping operational behavior in Python removes the old shell-library boundary:
 boot config parsing, rfkill cleanup, read-only state files, systemd unit

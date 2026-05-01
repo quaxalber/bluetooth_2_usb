@@ -867,6 +867,7 @@ class LoopbackCliTest(unittest.TestCase):
             "bluetooth_2_usb.loopback_capture_windows",
             "bluetooth_2_usb.loopback_common",
             "bluetooth_2_usb.loopback_inject",
+            "bluetooth_2_usb.loopback.__main__",
         ):
             with self.subTest(module_name=module_name):
                 with self.assertRaises(ModuleNotFoundError):

@@ -58,13 +58,13 @@ sudo bluetooth_2_usb debug --duration 10
 On Linux:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --timeout-sec 1 --output json
 ```
 
 Experimental: macOS
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --timeout-sec 1 --output json
 ```
 
 > [!NOTE]
@@ -88,7 +88,7 @@ discovery step, not the primary event backend.
 From the repository checkout on the host:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario combo
+venv/bin/bluetooth_2_usb loopback capture --scenario combo
 ```
 
 Default behavior:
@@ -103,7 +103,7 @@ Default behavior:
 If automatic detection is ambiguous, pin the nodes explicitly:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture \
+venv/bin/bluetooth_2_usb loopback capture \
   --scenario combo \
   --keyboard-node '<candidate keyboard path>' \
   --mouse-node '<candidate mouse path>'
@@ -124,7 +124,7 @@ layout or USB identity:
 On the Pi:
 
 ```bash
-sudo bluetooth_2_usb.loopback inject --scenario combo
+sudo bluetooth_2_usb loopback inject --scenario combo
 ```
 
 When `bluetooth_2_usb.service` is active, the injector waits up to the default
@@ -155,8 +155,8 @@ wheel and horizontal pan deltas that require multiple USB HID reports. Use it to
 stress high-speed mouse movement and scrolling forwarding:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario mouse_fast
-sudo bluetooth_2_usb.loopback inject --scenario mouse_fast
+venv/bin/bluetooth_2_usb loopback capture --scenario mouse_fast
+sudo bluetooth_2_usb loopback inject --scenario mouse_fast
 ```
 
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
@@ -165,8 +165,8 @@ signed 8-bit vertical wheel and horizontal pan.
 To validate all eight button bits, run the explicit intrusive button scenario:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario mouse_buttons_intrusive
-sudo bluetooth_2_usb.loopback inject --scenario mouse_buttons_intrusive
+venv/bin/bluetooth_2_usb loopback capture --scenario mouse_buttons_intrusive
+sudo bluetooth_2_usb loopback inject --scenario mouse_buttons_intrusive
 ```
 
 On Windows, the current Raw Input capture backend only maps mouse button bits
@@ -189,22 +189,22 @@ sequence through `/dev/uinput`.
 Keyboard-only:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario keyboard
-sudo bluetooth_2_usb.loopback inject --scenario keyboard
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard
+sudo bluetooth_2_usb loopback inject --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario mouse
-sudo bluetooth_2_usb.loopback inject --scenario mouse
+venv/bin/bluetooth_2_usb loopback capture --scenario mouse
+sudo bluetooth_2_usb loopback inject --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
-venv/bin/bluetooth_2_usb.loopback capture --scenario consumer
-sudo bluetooth_2_usb.loopback inject --scenario consumer
+venv/bin/bluetooth_2_usb loopback capture --scenario consumer
+sudo bluetooth_2_usb loopback inject --scenario consumer
 ```
 
 ## 6. Failure interpretation

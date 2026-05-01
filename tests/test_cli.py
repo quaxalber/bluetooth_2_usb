@@ -30,6 +30,13 @@ class CliTest(unittest.TestCase):
         self.assertEqual(exit_code, 17)
         operational_main.assert_called_once_with(["smoketest", "--verbose"], prog="bluetooth_2_usb")
 
+    def test_loopback_command_delegates_to_loopback_cli(self) -> None:
+        with patch("bluetooth_2_usb.loopback.run", return_value=23) as loopback_run:
+            exit_code = cli.run(["loopback", "inject", "--scenario", "keyboard"])
+
+        self.assertEqual(exit_code, 23)
+        loopback_run.assert_called_once_with(["inject", "--scenario", "keyboard"])
+
     def test_unknown_positional_command_returns_usage_without_falling_through(self) -> None:
         stderr = io.StringIO()
 
@@ -38,7 +45,7 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, cli.EXIT_USAGE)
         self.assertIn("Unknown command: loopback-inject", stderr.getvalue())
-        self.assertIn("bluetooth_2_usb.loopback inject/capture", stderr.getvalue())
+        self.assertIn("bluetooth_2_usb loopback inject/capture", stderr.getvalue())
 
     def test_validate_env_json_output(self) -> None:
         stdout = io.StringIO()

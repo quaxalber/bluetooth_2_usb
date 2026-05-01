@@ -43,9 +43,9 @@ if (-not $PythonBin) {
 $env:PYTHONPATH = "$RepoRoot\src" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
 
 if ($PythonBin -eq "py -3") {
-  & py -3 -m bluetooth_2_usb.loopback capture @args
+  & py -3 -m bluetooth_2_usb loopback capture @args
 } else {
-  & $PythonBin -m bluetooth_2_usb.loopback capture @args
+  & $PythonBin -m bluetooth_2_usb loopback capture @args
 }
 
 exit $LASTEXITCODE

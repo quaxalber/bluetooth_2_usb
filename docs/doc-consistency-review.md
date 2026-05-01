@@ -57,12 +57,12 @@ for command in install update uninstall smoketest debug \
   echo
 done
 
-./venv/bin/python -m bluetooth_2_usb.loopback --help
-./venv/bin/bluetooth_2_usb.loopback --help
+./venv/bin/python -m bluetooth_2_usb loopback --help
+./venv/bin/bluetooth_2_usb loopback --help
 for command in inject capture; do
-  echo "==== bluetooth_2_usb.loopback $command"
-  ./venv/bin/python -m bluetooth_2_usb.loopback "$command" --help
-  ./venv/bin/bluetooth_2_usb.loopback "$command" --help
+  echo "==== bluetooth_2_usb loopback $command"
+  ./venv/bin/python -m bluetooth_2_usb loopback "$command" --help
+  ./venv/bin/bluetooth_2_usb loopback "$command" --help
   echo
 done
 

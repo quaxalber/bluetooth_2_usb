@@ -243,13 +243,13 @@ you need a report to share.
 | --- | --- |
 | `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
 
-### `bluetooth_2_usb.loopback inject`
+### `bluetooth_2_usb loopback inject`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
 loopback inject/capture validation.
 
-### `bluetooth_2_usb.loopback capture`
+### `bluetooth_2_usb loopback capture`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from bluetooth_2_usb.ops.commands import OpsError
 from bluetooth_2_usb.ops.deployment import RollbackStack, install, install_cli_links, uninstall
@@ -33,14 +33,15 @@ class OpsDeploymentTest(unittest.TestCase):
 
         callback.assert_not_called()
 
-    def test_install_cli_links_exposes_main_and_loopback_commands(self) -> None:
+    def test_install_cli_links_exposes_main_command(self) -> None:
         with patch("pathlib.Path.mkdir"):
-            with patch("pathlib.Path.unlink"):
+            with patch("pathlib.Path.unlink") as unlink:
                 with patch("pathlib.Path.symlink_to") as symlink_to:
                     install_cli_links()
 
         linked_commands = [call.args[0].name for call in symlink_to.call_args_list]
-        self.assertEqual(linked_commands, ["bluetooth_2_usb", "bluetooth_2_usb.loopback"])
+        self.assertEqual(linked_commands, ["bluetooth_2_usb"])
+        self.assertEqual(unlink.call_args_list, [call(missing_ok=True), call(missing_ok=True)])
 
     def test_install_restores_active_service_when_rebuild_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
