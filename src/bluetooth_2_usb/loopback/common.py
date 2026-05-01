@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .evdev import ecodes
+from ..evdev import ecodes
 
 EXIT_OK = 0
 EXIT_USAGE = 2

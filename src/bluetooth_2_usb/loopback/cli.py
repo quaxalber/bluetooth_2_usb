@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .loopback_common import (
+from .common import (
     DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
@@ -151,7 +151,7 @@ def run(argv: list[str] | None = None) -> int:
     try:
         with loopback_session(args.command, args.scenario):
             if args.command == "inject":
-                from .loopback_inject import run_inject
+                from .inject import run_inject
 
                 result = run_inject(
                     scenario_name=args.scenario,
@@ -162,7 +162,7 @@ def run(argv: list[str] | None = None) -> int:
                     consumer_name=args.consumer_name,
                 )
             else:
-                from .loopback_capture import run_capture
+                from .capture import run_capture
 
                 result = run_capture(
                     scenario_name=args.scenario,

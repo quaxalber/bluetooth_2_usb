@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
-from .loopback_common import (
+from .common import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
     DEFAULT_KEYBOARD_NAME,

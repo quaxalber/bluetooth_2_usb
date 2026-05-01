@@ -6,7 +6,7 @@ import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
 
-from .loopback_capture import (
+from .capture import (
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
@@ -17,7 +17,7 @@ from .loopback_capture import (
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .loopback_common import (
+from .common import (
     BTN_EXTRA,
     BTN_LEFT,
     BTN_MIDDLE,
