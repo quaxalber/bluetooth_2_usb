@@ -10,6 +10,9 @@ from bluetooth_2_usb.ops.diagnostics import ProbeStatus, SmokeTest, debug_report
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
+DIAGNOSTICS_REPORT = "bluetooth_2_usb.ops.diagnostics.report"
+DIAGNOSTICS_SMOKETEST = "bluetooth_2_usb.ops.diagnostics.smoketest"
+
 
 class OpsDiagnosticsTest(unittest.TestCase):
     def test_smoketest_records_structured_probe_results(self) -> None:
@@ -53,74 +56,74 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
             with ExitStack() as stack:
                 stack.enter_context(
-                    patch("bluetooth_2_usb.ops.diagnostics.readonly_mode", return_value="disabled")
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled")
                 )
                 stack.enter_context(
-                    patch("bluetooth_2_usb.ops.diagnostics.overlay_status", return_value="disabled")
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled")
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics._first_modules_load",
+                        f"{DIAGNOSTICS_SMOKETEST}._first_modules_load",
                         return_value="modules-load=libcomposite",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.dwc2_mode",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode",
                         return_value="unknown",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.required_boot_modules_csv",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv",
                         side_effect=AssertionError("should not require known dwc2 mode"),
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.boot_config_path",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path",
                         return_value=root / "config.txt",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.boot_cmdline_path",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path",
                         return_value=root / "cmdline.txt",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.expected_dwc2_overlay_line",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line",
                         return_value="dtoverlay=dwc2",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.current_root_filesystem_type",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type",
                         return_value="ext4",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.bluetooth_state_persistent",
+                        f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent",
                         return_value=False,
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.boot_config.expected_boot_initramfs_file",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file",
                         return_value="",
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.bluetooth_rfkill_entries",
+                        f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries",
                         return_value=[object()],
                     )
                 )
                 stack.enter_context(
                     patch(
-                        "bluetooth_2_usb.ops.diagnostics.bluetooth_rfkill_blocked",
+                        f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked",
                         return_value=False,
                     )
                 )
@@ -174,38 +177,38 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 return Completed()
 
             with patch.dict(os.environ, {"HOSTNAME": "test-host"}):
-                with patch("bluetooth_2_usb.ops.diagnostics.PATHS", paths):
-                    with patch("bluetooth_2_usb.ops.diagnostics.run", side_effect=fake_run):
+                with patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths):
+                    with patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run):
                         with patch(
-                            "bluetooth_2_usb.ops.diagnostics.load_readonly_config",
+                            f"{DIAGNOSTICS_REPORT}.load_readonly_config",
                             return_value=config,
                         ):
                             with patch(
-                                "bluetooth_2_usb.ops.diagnostics.overlay_status",
+                                f"{DIAGNOSTICS_REPORT}.overlay_status",
                                 return_value="disabled",
                             ):
                                 with patch(
-                                    "bluetooth_2_usb.ops.diagnostics.readonly_mode",
+                                    f"{DIAGNOSTICS_REPORT}.readonly_mode",
                                     return_value="disabled",
                                 ):
                                     with patch(
-                                        "bluetooth_2_usb.ops.diagnostics.bluetooth_state_persistent",
+                                        f"{DIAGNOSTICS_REPORT}.bluetooth_state_persistent",
                                         return_value=False,
                                     ):
                                         with patch(
-                                            "bluetooth_2_usb.ops.diagnostics.rfkill_list_bluetooth",
+                                            f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth",
                                             return_value="",
                                         ):
                                             with patch(
-                                                "bluetooth_2_usb.ops.diagnostics.boot_config.detect_boot_dir",
+                                                f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir",
                                                 return_value=root / "boot",
                                             ):
                                                 with patch(
-                                                    "bluetooth_2_usb.ops.diagnostics.boot_config.boot_config_path",
+                                                    f"{DIAGNOSTICS_REPORT}.boot_config.boot_config_path",
                                                     return_value=root / "config.txt",
                                                 ):
                                                     with patch(
-                                                        "bluetooth_2_usb.ops.diagnostics.boot_config.boot_cmdline_path",
+                                                        f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path",
                                                         return_value=root / "cmdline.txt",
                                                     ):
                                                         self.assertEqual(debug_report(None), 0)
