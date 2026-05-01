@@ -11,6 +11,8 @@ logger = get_logger(__name__)
 class ExtendedMouse:
     """Small mouse report writer with horizontal pan support."""
 
+    REPORT_WRITE_MAX_TRIES = 3
+    REPORT_WRITE_RETRY_DELAY_SEC = 0.001
     CHUNK_REPORT_INTERVAL_SEC = 0.002
 
     LEFT = LEFT_BUTTON = 0x01
@@ -74,7 +76,7 @@ class ExtendedMouse:
                 partial_pan,
                 self.report.hex(" "),
             )
-            self._mouse_device.send_report(self.report)
+            self._send_report()
             x -= partial_x
             y -= partial_y
             wheel -= partial_wheel
@@ -84,4 +86,15 @@ class ExtendedMouse:
 
     def _send_no_move(self) -> None:
         self.report[1:7] = b"\x00" * 6
-        self._mouse_device.send_report(self.report)
+        self._send_report()
+
+    def _send_report(self) -> None:
+        max_tries = self.REPORT_WRITE_MAX_TRIES
+        for attempt in range(1, max_tries + 1):
+            try:
+                self._mouse_device.send_report(self.report)
+                return
+            except BlockingIOError:
+                if attempt >= max_tries:
+                    raise
+                time.sleep(self.REPORT_WRITE_RETRY_DELAY_SEC)

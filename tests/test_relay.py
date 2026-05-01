@@ -357,6 +357,54 @@ class ExtendedMouseTest(unittest.TestCase):
             ],
         )
 
+    def test_move_retries_blocked_report_before_advancing(self) -> None:
+        device = SimpleNamespace(sent=[])
+        attempts = []
+
+        def send_report(report) -> None:
+            attempts.append(bytes(report))
+            if len(attempts) == 1:
+                raise BlockingIOError()
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with (
+            patch("adafruit_hid.find_device", return_value=device),
+            patch("bluetooth_2_usb.extended_mouse.time.sleep") as sleep,
+        ):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(x=1)
+
+        expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.assertEqual(attempts, [expected_report, expected_report])
+        self.assertEqual(device.sent, [expected_report])
+        sleep.assert_called_once_with(mouse.REPORT_WRITE_RETRY_DELAY_SEC)
+
+    def test_move_raises_after_report_retry_budget_is_exhausted(self) -> None:
+        device = SimpleNamespace(attempts=[])
+
+        def send_report(report) -> None:
+            device.attempts.append(bytes(report))
+            raise BlockingIOError()
+
+        device.send_report = send_report
+
+        with (
+            patch("adafruit_hid.find_device", return_value=device),
+            patch("bluetooth_2_usb.extended_mouse.time.sleep") as sleep,
+        ):
+            mouse = ExtendedMouse(devices=[])
+            with self.assertRaises(BlockingIOError):
+                mouse.move(x=1)
+
+        expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.assertEqual(device.attempts, [expected_report] * mouse.REPORT_WRITE_MAX_TRIES)
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(mouse.REPORT_WRITE_RETRY_DELAY_SEC)] * (mouse.REPORT_WRITE_MAX_TRIES - 1),
+        )
+
     def test_move_debug_logs_reports_sent_to_gadget(self) -> None:
         device = SimpleNamespace(sent=[])
 
