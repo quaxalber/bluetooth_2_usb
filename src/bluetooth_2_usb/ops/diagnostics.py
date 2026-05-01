@@ -33,7 +33,6 @@ class ProbeStatus(StrEnum):
     PASS = "pass"
     WARN = "warn"
     FAIL = "fail"
-    SKIP = "skip"
 
 
 @dataclass(frozen=True, slots=True)
