@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from .commands import OpsError, close_log, ensure_root, fail, prepare_log
@@ -56,6 +58,9 @@ def _main(argv: list[str], *, prog: str) -> int:
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
     smoketest_parser.add_argument("--allow-non-pi", action="store_true")
+    smoketest_parser.add_argument(
+        "--output", choices=["text", "json"], default="text", help="Default: text"
+    )
     debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
     setup_parser = _command_parser(
@@ -102,7 +107,14 @@ def _main(argv: list[str], *, prog: str) -> int:
     elif namespace.command == "uninstall":
         uninstall()
     elif namespace.command == "smoketest":
-        return SmokeTest(verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi).run()
+        smoke_test = SmokeTest(verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi)
+        if namespace.output == "json":
+            with redirect_stdout(sys.stderr):
+                exit_code = smoke_test.run()
+            print(json.dumps(smoke_test.result_dict(), sort_keys=True))
+        else:
+            exit_code = smoke_test.run()
+        return exit_code
     elif namespace.command == "debug":
         return debug_report(namespace.duration)
     elif namespace.command == "readonly-setup":

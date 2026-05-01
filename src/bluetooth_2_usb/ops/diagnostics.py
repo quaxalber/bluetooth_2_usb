@@ -42,6 +42,13 @@ class ProbeResult:
     message: str
     detail: str = ""
 
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "status": self.status.value,
+            "message": self.message,
+            "detail": self.detail,
+        }
+
 
 class SmokeTest:
     def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
@@ -200,6 +207,15 @@ class SmokeTest:
         else:
             fail("Smoke test FAILED")
         return self.exit_code
+
+    def result_dict(self) -> dict[str, object]:
+        return {
+            "exit_code": self.exit_code,
+            "result": "ok" if self.exit_code == 0 else "failed",
+            "soft_warnings": self.soft_warnings,
+            "summary": dict(self.summary),
+            "probes": [result.to_dict() for result in self.results],
+        }
 
     def _check_boot_overlay(self, config_txt: Path, expected_overlay: str) -> None:
         if not expected_overlay:

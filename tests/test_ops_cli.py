@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -46,6 +47,33 @@ class OpsCliTest(unittest.TestCase):
                 cli.main(["smoketest", "--unknown"], prog="bluetooth_2_usb")
 
         self.assertEqual(raised.exception.code, 2)
+
+    def test_smoketest_json_output_prints_structured_result(self) -> None:
+        class FakeSmokeTest:
+            def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
+                self.verbose = verbose
+                self.allow_non_pi = allow_non_pi
+
+            def run(self) -> int:
+                print("probe text")
+                return 0
+
+            def result_dict(self) -> dict[str, object]:
+                return {"exit_code": 0, "result": "ok"}
+
+        with patch("bluetooth_2_usb.ops.cli.ensure_root"):
+            with patch("bluetooth_2_usb.ops.cli.prepare_log"):
+                with patch("bluetooth_2_usb.ops.cli.SmokeTest", FakeSmokeTest):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with redirect_stdout(stdout):
+                        with patch("sys.stderr", stderr):
+                            exit_code = cli.main(["smoketest", "--output", "json"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stdout.getvalue().count("\n"), 1)
+        self.assertEqual(json.loads(stdout.getvalue()), {"exit_code": 0, "result": "ok"})
+        self.assertEqual(stderr.getvalue(), "probe text\n")
 
     def test_prepare_log_closes_file_and_restores_streams(self) -> None:
         with patch("bluetooth_2_usb.ops.commands.PATHS", ManagedPaths(log_dir=Path(self.id()))):

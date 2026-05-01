@@ -231,6 +231,7 @@ healthy.
 | Argument | Meaning |
 | --- | --- |
 | `--verbose` | Print fuller diagnostics, including the collected summary data. |
+| `--output {text,json}` | Choose the output format. JSON output is written to stdout for automation; probe text is redirected to stderr. |
 
 ### `debug`
 

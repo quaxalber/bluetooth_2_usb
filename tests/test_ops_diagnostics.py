@@ -29,6 +29,20 @@ class OpsDiagnosticsTest(unittest.TestCase):
         )
         self.assertEqual(smoke.soft_warnings, 1)
         self.assertEqual(smoke.exit_code, 1)
+        self.assertEqual(
+            smoke.result_dict(),
+            {
+                "exit_code": 1,
+                "result": "failed",
+                "soft_warnings": 1,
+                "summary": {},
+                "probes": [
+                    {"status": "pass", "message": "ok probe", "detail": ""},
+                    {"status": "warn", "message": "warning probe", "detail": ""},
+                    {"status": "fail", "message": "failed probe", "detail": "failure detail"},
+                ],
+            },
+        )
 
     def test_smoketest_downgrades_unknown_dwc2_mode_to_heuristic_warning(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
