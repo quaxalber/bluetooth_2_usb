@@ -7,6 +7,8 @@ import signal
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from . import boot_config
@@ -27,6 +29,20 @@ from .readonly import (
 )
 
 
+class ProbeStatus(StrEnum):
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+    SKIP = "skip"
+
+
+@dataclass(frozen=True, slots=True)
+class ProbeResult:
+    status: ProbeStatus
+    message: str
+    detail: str = ""
+
+
 class SmokeTest:
     def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
         self.verbose = verbose
@@ -34,6 +50,7 @@ class SmokeTest:
         self.exit_code = 0
         self.soft_warnings = 0
         self.summary: dict[str, str] = {}
+        self.results: list[ProbeResult] = []
 
     def run(self) -> int:
         config_txt = boot_config.boot_config_path()
@@ -339,19 +356,25 @@ class SmokeTest:
 
     def _bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
         if condition:
-            ok(success)
+            self.pass_probe(success)
         else:
             self.warn_fail(failure, detail)
+
+    def pass_probe(self, message: str) -> None:
+        ok(message)
+        self.results.append(ProbeResult(ProbeStatus.PASS, message))
 
     def soft_warn(self, message: str) -> None:
         warn(message)
         self.soft_warnings += 1
+        self.results.append(ProbeResult(ProbeStatus.WARN, message))
 
     def warn_fail(self, message: str, detail: str = "") -> None:
         warn(message)
         if detail:
             print("\n".join(detail.splitlines()[:20]))
         self.exit_code = 1
+        self.results.append(ProbeResult(ProbeStatus.FAIL, message, detail))
 
     def _capture(self, command: list[str | Path]) -> tuple[int, str]:
         try:

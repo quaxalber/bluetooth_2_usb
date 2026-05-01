@@ -6,12 +6,30 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bluetooth_2_usb.ops.commands import OpsError
-from bluetooth_2_usb.ops.diagnostics import SmokeTest, debug_report
+from bluetooth_2_usb.ops.diagnostics import ProbeStatus, SmokeTest, debug_report
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
 
 class OpsDiagnosticsTest(unittest.TestCase):
+    def test_smoketest_records_structured_probe_results(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=False)
+
+        smoke._bool(True, "ok probe", "failed probe")
+        smoke.soft_warn("warning probe")
+        smoke.warn_fail("failed probe", "failure detail")
+
+        self.assertEqual(
+            [(result.status, result.message, result.detail) for result in smoke.results],
+            [
+                (ProbeStatus.PASS, "ok probe", ""),
+                (ProbeStatus.WARN, "warning probe", ""),
+                (ProbeStatus.FAIL, "failed probe", "failure detail"),
+            ],
+        )
+        self.assertEqual(smoke.soft_warnings, 1)
+        self.assertEqual(smoke.exit_code, 1)
+
     def test_smoketest_downgrades_unknown_dwc2_mode_to_heuristic_warning(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
         checked_modules = []
