@@ -250,7 +250,7 @@ Check on the Pi:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+sudo bluetooth_2_usb --list_devices --output json
 sudo journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 

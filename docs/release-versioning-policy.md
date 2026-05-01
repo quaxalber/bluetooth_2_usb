@@ -65,7 +65,7 @@ These versions are for development, testing, and traceability. They are not offi
 
 This avoids hard-coded version strings in runtime code and keeps these outputs aligned:
 
-- `python -m bluetooth_2_usb --version`
+- `bluetooth_2_usb --version`
 - package metadata
 - wheels and source distributions
 - installed service/runtime logs
@@ -95,8 +95,8 @@ Release notes should describe the current supported product surface only:
 
 - clone-based installation into `/opt/bluetooth_2_usb`
 - updates via `bluetooth_2_usb update`
-- diagnostics via `--validate-env`, `bluetooth_2_usb smoketest`, and
-  `bluetooth_2_usb debug`
+- diagnostics via `bluetooth_2_usb --validate-env`,
+  `bluetooth_2_usb smoketest`, and `bluetooth_2_usb debug`
 - persistent read-only operation only when a separate writable ext4 filesystem
   is configured for Bluetooth state
 

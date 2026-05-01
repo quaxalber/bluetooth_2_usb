@@ -167,9 +167,9 @@ black --check src tests
 ruff check src tests
 python -m compileall src tests
 python -m unittest discover -s tests -v
-python -m bluetooth_2_usb --help
-python -m bluetooth_2_usb --version
-python -m bluetooth_2_usb --validate-env || test $? -eq 3
+bluetooth_2_usb --help
+bluetooth_2_usb --version
+bluetooth_2_usb --validate-env || test $? -eq 3
 yamllint .github/workflows/ci.yml
 python -m build
 ```

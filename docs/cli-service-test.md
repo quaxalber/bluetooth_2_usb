@@ -87,7 +87,7 @@ ssh <pi-host> '
 ```bash
 ssh <pi-host> '
   cd /opt/bluetooth_2_usb
-  sudo -n env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb install
+  sudo -n env PYTHONPATH=src python3 -m bluetooth_2_usb install
 '
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
@@ -216,7 +216,8 @@ sudo -n env SMOKETEST_POST_REBOOT=1 bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 findmnt /var/lib/bluetooth
 findmnt /mnt/b2u-persist
-sudo -n /opt/bluetooth_2_usb/venv/bin/python - <<'PY'
+cd /opt/bluetooth_2_usb
+sudo -n env PYTHONPATH=src python3 - <<'PY'
 from bluetooth_2_usb.ops.boot_config import boot_initramfs_target_path
 
 try:
@@ -237,7 +238,7 @@ Before reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list_devices --output json
 '
 ```
 
@@ -252,7 +253,7 @@ After reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list_devices --output json
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 '
 ```

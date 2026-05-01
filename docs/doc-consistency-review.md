@@ -46,22 +46,18 @@ Compare the docs against the current `--help` output of the supported
 operational commands:
 
 ```bash
-./venv/bin/python -m bluetooth_2_usb --help
 ./venv/bin/bluetooth_2_usb --help
 for command in install update uninstall smoketest debug \
   readonly-setup readonly-enable readonly-disable \
   install-hid-udev-rule; do
   echo "==== $command"
-  ./venv/bin/python -m bluetooth_2_usb "$command" --help
   ./venv/bin/bluetooth_2_usb "$command" --help
   echo
 done
 
-./venv/bin/python -m bluetooth_2_usb loopback --help
 ./venv/bin/bluetooth_2_usb loopback --help
 for command in inject capture; do
   echo "==== bluetooth_2_usb loopback $command"
-  ./venv/bin/python -m bluetooth_2_usb loopback "$command" --help
   ./venv/bin/bluetooth_2_usb loopback "$command" --help
   echo
 done
@@ -76,8 +72,8 @@ fi
 ### 3. Runtime CLI interface
 
 ```bash
-./venv/bin/python -m bluetooth_2_usb --help
-./venv/bin/python -m bluetooth_2_usb --version
+./venv/bin/bluetooth_2_usb --help
+./venv/bin/bluetooth_2_usb --version
 sed -n '1,220p' src/bluetooth_2_usb/args.py
 ```
 
@@ -109,7 +105,7 @@ python3 -m venv "$tmpdir/venv"
 source "$tmpdir/venv/bin/activate"
 pip install -U pip setuptools wheel
 pip install -e . black ruff yamllint build
-python -m bluetooth_2_usb --help
+bluetooth_2_usb --help
 deactivate
 rm -rf "$tmpdir"
 ```
@@ -117,7 +113,7 @@ rm -rf "$tmpdir"
 ### 6. Drift search for commands, flags, and paths
 
 ```bash
-rg -n '(bluetooth_2_usb|python -m bluetooth_2_usb|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
+rg -n '(bluetooth_2_usb|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
 ```
 
 Flag anything that is documented but no longer present, or anything that exists

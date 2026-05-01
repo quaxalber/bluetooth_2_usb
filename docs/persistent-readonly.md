@@ -72,7 +72,8 @@ After reboot:
 ```bash
 sudo env SMOKETEST_POST_REBOOT=1 bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
-sudo /opt/bluetooth_2_usb/venv/bin/python - <<'PY'
+cd /opt/bluetooth_2_usb
+sudo env PYTHONPATH=src python3 - <<'PY'
 from bluetooth_2_usb.ops.boot_config import boot_initramfs_target_path
 
 try:

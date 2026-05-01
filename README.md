@@ -28,7 +28,7 @@ sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2
 ### 2. Install
 
 ```bash
-cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=/opt/bluetooth_2_usb/src python3 -m bluetooth_2_usb install
+cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=src python3 -m bluetooth_2_usb install
 ```
 
 ### 3. Reboot

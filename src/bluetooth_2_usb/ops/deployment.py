@@ -228,14 +228,14 @@ def install(repo_root: Path) -> None:
         raise
     else:
         rollback.commit()
-    print(f"""
+    print("""
 Next steps
 1. Reboot the Pi so the updated boot configuration takes effect.
 2. After reboot, run:
-   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb smoketest
+   sudo bluetooth_2_usb smoketest
 3. If you want persistent read-only operation afterwards, run:
-   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb readonly-setup --device /dev/YOUR-PARTITION
-   sudo {PATHS.install_dir}/venv/bin/bluetooth_2_usb readonly-enable
+   sudo bluetooth_2_usb readonly-setup --device /dev/YOUR-PARTITION
+   sudo bluetooth_2_usb readonly-enable
 """)
 
 
