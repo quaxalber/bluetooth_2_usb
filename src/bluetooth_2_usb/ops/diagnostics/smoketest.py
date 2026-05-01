@@ -18,15 +18,7 @@ from .types import ProbeResult, ProbeStatus
 
 
 class SmokeTest:
-    """Run Pi-side deployment health probes and collect structured results."""
-
     def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
-        """Initialize a smoke-test run.
-
-        :param verbose: Whether to print captured command output after the probe summary.
-        :param allow_non_pi: Whether non-Pi boot-detection failures should be warnings.
-        :return: None.
-        """
         self.verbose = verbose
         self.allow_non_pi = allow_non_pi
         self.exit_code = 0
@@ -35,11 +27,6 @@ class SmokeTest:
         self.results: list[ProbeResult] = []
 
     def run(self) -> int:
-        """Execute all smoke-test probes.
-
-        :return: Process-style exit code, zero for pass or warnings and non-zero for failures.
-        :raises OpsError: If a fatal probe calls the operational failure path.
-        """
         config_txt = boot_config.boot_config_path()
         cmdline_txt = boot_config.boot_cmdline_path()
         readonly = readonly_mode()
@@ -189,10 +176,6 @@ class SmokeTest:
         return self.exit_code
 
     def result_dict(self) -> dict[str, object]:
-        """Return the completed smoke-test result for JSON output.
-
-        :return: Dictionary with exit code, summary values, warning count, and probe results.
-        """
         return {
             "exit_code": self.exit_code,
             "result": "ok" if self.exit_code == 0 else "failed",

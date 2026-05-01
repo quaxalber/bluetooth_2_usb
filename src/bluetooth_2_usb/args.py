@@ -164,21 +164,6 @@ class _HelpAction(argparse._HelpAction):
 
 
 class Arguments:
-    """Normalized runtime CLI options used to build the relay configuration.
-
-    :param device_ids: Device paths, MAC addresses, or name fragments to relay.
-    :param auto_discover: Whether readable input devices should be relayed automatically.
-    :param grab_devices: Whether relayed devices should be grabbed from the host OS.
-    :param interrupt_shortcut: Key names that toggle relaying, or None when disabled.
-    :param list_devices: Whether to list input devices and exit.
-    :param log_to_file: Whether runtime logs should also be written to a file.
-    :param log_path: Runtime log-file path.
-    :param debug: Whether debug-level logging is enabled.
-    :param version: Whether to print version information and exit.
-    :param validate_env: Whether to validate runtime prerequisites and exit.
-    :param output: Output format for inventory and validation commands.
-    """
-
     __slots__ = [
         "_device_ids",
         "_auto_discover",
@@ -221,90 +206,46 @@ class Arguments:
 
     @property
     def device_ids(self) -> list[str] | None:
-        """Return explicitly selected input-device identifiers.
-
-        :return: Device paths, MAC addresses, or name fragments, or None when no filter is set.
-        """
         return self._device_ids
 
     @property
     def auto_discover(self) -> bool:
-        """Return whether readable input devices should be relayed automatically.
-
-        :return: True when auto-discovery mode is enabled.
-        """
         return self._auto_discover
 
     @property
     def grab_devices(self) -> bool:
-        """Return whether relayed input devices should be grabbed from the host OS.
-
-        :return: True when evdev grabs should suppress local input handling.
-        """
         return self._grab_devices
 
     @property
     def interrupt_shortcut(self) -> list[str] | None:
-        """Return the normalized key names that toggle relaying.
-
-        :return: Evdev key names such as ``KEY_LEFTCTRL``, or None when disabled.
-        """
         return self._interrupt_shortcut
 
     @property
     def list_devices(self) -> bool:
-        """Return whether the CLI should list input devices and exit.
-
-        :return: True when device inventory output was requested.
-        """
         return self._list_devices
 
     @property
     def log_to_file(self) -> bool:
-        """Return whether runtime logs should also be written to a file.
-
-        :return: True when file logging is enabled.
-        """
         return self._log_to_file
 
     @property
     def log_path(self) -> str:
-        """Return the configured runtime log-file path.
-
-        :return: Absolute or relative log path string.
-        """
         return self._log_path
 
     @property
     def debug(self) -> bool:
-        """Return whether debug-level logging is enabled.
-
-        :return: True when verbose runtime logging was requested.
-        """
         return self._debug
 
     @property
     def version(self) -> bool:
-        """Return whether the CLI should print version information and exit.
-
-        :return: True when ``--version`` was requested.
-        """
         return self._version
 
     @property
     def validate_env(self) -> bool:
-        """Return whether the CLI should validate runtime prerequisites and exit.
-
-        :return: True when ``--validate-env`` was requested.
-        """
         return self._validate_env
 
     @property
     def output(self) -> str:
-        """Return the selected output format for inventory and validation commands.
-
-        :return: Either ``"text"`` or ``"json"``.
-        """
         return self._output
 
     def __str__(self) -> str:
@@ -313,12 +254,6 @@ class Arguments:
 
 
 def parse_args(argv: list[str] | None = None) -> Arguments:
-    """Parse runtime CLI arguments.
-
-    :param argv: Argument list without the executable name. Uses ``sys.argv`` when None.
-    :return: Normalized runtime arguments.
-    :raises SystemExit: If parsing fails or no arguments were provided.
-    """
     parser = CustomArgumentParser()
     args = parser.parse_args(argv)
 

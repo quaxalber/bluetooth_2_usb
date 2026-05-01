@@ -35,13 +35,6 @@ from .units import (
 
 
 def setup_persistent_bluetooth_state(device: str) -> None:
-    """Prepare persistent storage for Bluetooth state.
-
-    :param device: Ext4 block device that should hold persistent Bluetooth state.
-    :return: ``None``.
-    :raises OpsError: If required commands are missing, the device is unsuitable, service
-        control fails, or post-setup validation fails.
-    """
     require_commands(["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"])
     if not machine_id_valid():
         fail(
@@ -130,12 +123,6 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
 
 
 def enable_readonly() -> None:
-    """Enable persistent read-only mode.
-
-    :return: ``None``.
-    :raises OpsError: If prerequisites are missing, persistent Bluetooth state is inactive,
-        OverlayFS setup fails, or boot initramfs validation fails.
-    """
     require_commands(["dpkg-query", "raspi-config"])
     config = load_readonly_config()
     if not machine_id_valid():
@@ -220,11 +207,6 @@ def enable_readonly() -> None:
 
 
 def disable_readonly() -> None:
-    """Disable OverlayFS while keeping persistent Bluetooth state configuration.
-
-    :return: ``None``.
-    :raises OpsError: If ``raspi-config`` is unavailable or disabling OverlayFS fails.
-    """
     require_commands(["raspi-config"])
     config = load_readonly_config()
     run(["raspi-config", "nonint", "disable_overlayfs"])
