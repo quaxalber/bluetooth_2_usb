@@ -11,9 +11,10 @@ The service runtime is intentionally centered on one asyncio event flow:
   pause state, and HID write suspension are separate causes.
 - `InputRelay` reads one evdev device, handles per-device grab state, applies
   the optional interrupt shortcut, and forwards events to HID dispatch.
-- `HidDispatcher` owns HID translation, mouse frame coalescing, HID write
-  retry, and write-failure suspension. The concrete HID writers own report
-  shaping and pacing for their own gadget type.
+- `HidDispatcher` owns HID translation, mouse frame coalescing, final
+  write-failure handling, and write-failure suspension. The concrete HID
+  writers own report shaping, pacing, and short transient write retry for their
+  own gadget type.
 - `HidGadgets` owns the configured keyboard, mouse, and consumer-control HID
   handles created from `hid_gadget_config.py` and `hid_gadget_layout.py`.
 

@@ -12,6 +12,7 @@ import usb_hid
 
 from bluetooth_2_usb.device_identifier import DeviceIdentifier, DeviceIdentifierType
 from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
+from bluetooth_2_usb.extended_consumer_control import ExtendedConsumerControl
 from bluetooth_2_usb.extended_keyboard import ExtendedKeyboard
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
 from bluetooth_2_usb.hid_dispatch import HidDispatcher
@@ -244,6 +245,92 @@ class ExtendedKeyboardTest(unittest.TestCase):
                 call(keyboard.REPORT_INTERVAL_SEC),
                 call(keyboard.REPORT_INTERVAL_SEC),
             ],
+        )
+
+    def test_press_retries_blocked_write_before_pacing(self) -> None:
+        keyboard_device = Mock()
+        keyboard_device.press.side_effect = [BlockingIOError(), None]
+
+        with (
+            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
+            patch("bluetooth_2_usb.extended_keyboard.time.sleep") as sleep,
+        ):
+            keyboard = ExtendedKeyboard(devices=[])
+            keyboard.press(1)
+
+        self.assertEqual(keyboard_device.press.mock_calls, [call(1), call(1)])
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC), call(keyboard.REPORT_INTERVAL_SEC)],
+        )
+
+    def test_release_raises_after_retry_budget_is_exhausted(self) -> None:
+        keyboard_device = Mock()
+        keyboard_device.release.side_effect = BlockingIOError()
+
+        with (
+            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
+            patch("bluetooth_2_usb.extended_keyboard.time.sleep") as sleep,
+        ):
+            keyboard = ExtendedKeyboard(devices=[])
+            with self.assertRaises(BlockingIOError):
+                keyboard.release(1)
+
+        self.assertEqual(
+            keyboard_device.release.mock_calls,
+            [call(1)] * keyboard.REPORT_WRITE_MAX_TRIES,
+        )
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC)] * (keyboard.REPORT_WRITE_MAX_TRIES - 1),
+        )
+
+
+class ExtendedConsumerControlTest(unittest.TestCase):
+    def test_press_and_release_delegate(self) -> None:
+        consumer_device = Mock()
+
+        with patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device):
+            consumer = ExtendedConsumerControl(devices=[])
+            consumer.press(1)
+            consumer.release()
+
+        consumer_device.press.assert_called_once_with(1)
+        consumer_device.release.assert_called_once_with()
+
+    def test_press_retries_blocked_write(self) -> None:
+        consumer_device = Mock()
+        consumer_device.press.side_effect = [BlockingIOError(), None]
+
+        with (
+            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
+            patch("bluetooth_2_usb.extended_consumer_control.time.sleep") as sleep,
+        ):
+            consumer = ExtendedConsumerControl(devices=[])
+            consumer.press(1)
+
+        self.assertEqual(consumer_device.press.mock_calls, [call(1), call(1)])
+        sleep.assert_called_once_with(consumer.REPORT_WRITE_RETRY_DELAY_SEC)
+
+    def test_release_raises_after_retry_budget_is_exhausted(self) -> None:
+        consumer_device = Mock()
+        consumer_device.release.side_effect = BlockingIOError()
+
+        with (
+            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
+            patch("bluetooth_2_usb.extended_consumer_control.time.sleep") as sleep,
+        ):
+            consumer = ExtendedConsumerControl(devices=[])
+            with self.assertRaises(BlockingIOError):
+                consumer.release()
+
+        self.assertEqual(
+            consumer_device.release.mock_calls,
+            [call()] * consumer.REPORT_WRITE_MAX_TRIES,
+        )
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(consumer.REPORT_WRITE_RETRY_DELAY_SEC)] * (consumer.REPORT_WRITE_MAX_TRIES - 1),
         )
 
 
@@ -519,7 +606,6 @@ class HidDispatchTest(unittest.TestCase):
         dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
 
         hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
-        self.assertEqual(dispatcher.stats.write_retries, 0)
         self.assertEqual(dispatcher.stats.write_failures, 1)
         self.assertTrue(gate.active)
 
@@ -957,13 +1043,10 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         )
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        async def _slow_process(event) -> None:
+        def _slow_process(event) -> None:
             seen.append((event.scancode, event.keystate))
-            await asyncio.sleep(0.001)
 
-        with patch.object(
-            relay._dispatcher, "_process_key_event_with_retry", side_effect=_slow_process
-        ):
+        with patch.object(relay._dispatcher, "_process_key_event", side_effect=_slow_process):
             async with relay:
                 await relay.async_relay_events_loop()
 
@@ -1063,12 +1146,10 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         )
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        async def _record_process(event) -> None:
+        def _record_process(event) -> None:
             seen.append((event.scancode, event.keystate))
 
-        with patch.object(
-            relay._dispatcher, "_process_key_event_with_retry", side_effect=_record_process
-        ):
+        with patch.object(relay._dispatcher, "_process_key_event", side_effect=_record_process):
             async with relay:
                 await relay.async_relay_events_loop()
 
@@ -1114,26 +1195,19 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(gate.state.write_suspended)
         self.assertEqual(relay._dispatcher.stats.write_failures, 1)
 
-    async def test_blocked_hid_retry_stops_after_relaying_is_cleared(self) -> None:
+    async def test_blocked_key_write_is_dropped_after_writer_retry_is_exhausted(self) -> None:
         gate = _active_gate()
         dispatcher = HidDispatcher(_FakeHidGadgets(), gate)
         event = _TestKeyEvent(183, _TestKeyEvent.key_down)
 
-        async def clear_relaying(_delay) -> None:
-            gate.set_host_configured(False)
-
-        with patch(
-            "bluetooth_2_usb.hid_dispatch.asyncio.sleep", new=AsyncMock(side_effect=clear_relaying)
-        ) as sleep:
-            with patch.object(
-                dispatcher, "_dispatch_key_event", side_effect=BlockingIOError()
-            ) as dispatch:
-                await dispatcher._process_key_event_with_retry(event)
+        with patch.object(
+            dispatcher, "_dispatch_key_event", side_effect=BlockingIOError()
+        ) as dispatch:
+            dispatcher._process_key_event(event)
 
         dispatch.assert_called_once_with(event)
-        sleep.assert_awaited_once_with(dispatcher.HID_WRITE_RETRY_DELAY_SEC)
-        self.assertEqual(dispatcher.stats.write_retries, 1)
-        self.assertEqual(dispatcher.stats.write_failures, 0)
+        self.assertEqual(dispatcher.stats.write_failures, 1)
+        self.assertTrue(gate.active)
 
     async def test_unexpected_dispatch_error_propagates(self) -> None:
         gate = _active_gate()
@@ -1179,12 +1253,10 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets.mouse.move = lambda *args: order.append(("mouse", args))
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        async def _record_key(event) -> None:
+        def _record_key(event) -> None:
             order.append(("key", event.scancode))
 
-        with patch.object(
-            relay._dispatcher, "_process_key_event_with_retry", side_effect=_record_key
-        ):
+        with patch.object(relay._dispatcher, "_process_key_event", side_effect=_record_key):
             async with relay:
                 await relay.async_relay_events_loop()
 
@@ -1334,12 +1406,10 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        async def deactivate(_event) -> None:
+        def deactivate(_event) -> None:
             gate.set_host_configured(False)
 
-        with patch.object(
-            relay._dispatcher, "_process_key_event_with_retry", side_effect=deactivate
-        ):
+        with patch.object(relay._dispatcher, "_process_key_event", side_effect=deactivate):
             async with relay:
                 await relay.async_relay_events_loop()
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from .evdev import ecodes, evdev_to_usb_hid, get_mouse_movement, is_consumer_key, is_mouse_button
 from .evdev_types import InputEvent, KeyEvent, RelEvent, categorize
+from .extended_consumer_control import ExtendedConsumerControl
 from .extended_keyboard import ExtendedKeyboard
 from .extended_mouse import ExtendedMouse
 from .hid_gadgets import HidGadgets
@@ -14,15 +13,11 @@ from .mouse_delta import MouseDelta, MouseDeltaAccumulator
 from .relay_gate import RelayGate
 from .shortcut_toggler import ShortcutToggler
 
-if TYPE_CHECKING:
-    from adafruit_hid.consumer_control import ConsumerControl
-
 logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
 class HidDispatchStats:
-    write_retries: int
     write_failures: int
 
 
@@ -31,12 +26,8 @@ class HidDispatcher:
     Converts raw evdev events into HID gadget writes.
 
     This owns HID-domain details: event categorization, shortcut suppression,
-    key routing, mouse frame coalescing, transient key write retry, and
-    write-failure suspension.
+    key routing, mouse frame coalescing, and write-failure suspension.
     """
-
-    HID_WRITE_MAX_TRIES = 20
-    HID_WRITE_RETRY_DELAY_SEC = 0.01
 
     def __init__(
         self,
@@ -48,15 +39,11 @@ class HidDispatcher:
         self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
         self._mouse_delta = MouseDeltaAccumulator()
-        self._hid_write_retries = 0
         self._hid_write_failures = 0
 
     @property
     def stats(self) -> HidDispatchStats:
-        return HidDispatchStats(
-            write_retries=self._hid_write_retries,
-            write_failures=self._hid_write_failures,
-        )
+        return HidDispatchStats(write_failures=self._hid_write_failures)
 
     async def dispatch(self, raw_event: InputEvent) -> None:
         event = categorize(raw_event)
@@ -80,7 +67,7 @@ class HidDispatcher:
         # Preserve cross-gadget event order if another event arrives before SYN_REPORT.
         self.flush()
         if isinstance(event, KeyEvent):
-            await self._process_key_event_with_retry(event)
+            self._process_key_event(event)
 
     @staticmethod
     def _is_syn_report(event: InputEvent) -> bool:
@@ -132,33 +119,20 @@ class HidDispatcher:
             logger.exception("Unexpected error processing mouse movement")
             raise
 
-    async def _process_key_event_with_retry(self, event: KeyEvent) -> None:
-        max_tries = self.HID_WRITE_MAX_TRIES
-        retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
-        for attempt in range(1, max_tries + 1):
-            if not self._relay_gate.active:
-                return
-            try:
-                self._dispatch_key_event(event)
-                return
-            except BlockingIOError:
-                if not self._relay_gate.active:
-                    return
-                if attempt < max_tries:
-                    self._hid_write_retries += 1
-                    logger.debug("HID write blocked (%s/%s)", attempt, max_tries)
-                    await asyncio.sleep(retry_delay)
-                else:
-                    self._hid_write_failures += 1
-                    logger.warning("HID write blocked (%s/%s)", attempt, max_tries)
-                    return
-            except BrokenPipeError:
-                self._handle_broken_pipe()
-                return
-            except Exception:
-                self._hid_write_failures += 1
-                logger.exception("Unexpected error processing %s", event)
-                raise
+    def _process_key_event(self, event: KeyEvent) -> None:
+        if not self._relay_gate.active:
+            return
+        try:
+            self._dispatch_key_event(event)
+        except BlockingIOError:
+            self._hid_write_failures += 1
+            logger.debug("Key HID write blocked; dropping event %s", event)
+        except BrokenPipeError:
+            self._handle_broken_pipe()
+        except Exception:
+            self._hid_write_failures += 1
+            logger.exception("Unexpected error processing %s", event)
+            raise
 
     def _dispatch_key_event(self, event: KeyEvent) -> None:
         key_id, key_name = evdev_to_usb_hid(event)
@@ -181,7 +155,7 @@ class HidDispatcher:
 
     def _select_gadget(
         self, event: KeyEvent
-    ) -> ConsumerControl | ExtendedKeyboard | ExtendedMouse | None:
+    ) -> ExtendedConsumerControl | ExtendedKeyboard | ExtendedMouse | None:
         if is_consumer_key(event):
             return self._hid_gadgets.consumer
         if is_mouse_button(event):

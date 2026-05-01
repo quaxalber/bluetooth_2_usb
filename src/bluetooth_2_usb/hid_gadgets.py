@@ -4,16 +4,13 @@ import os
 import stat
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+from .extended_consumer_control import ExtendedConsumerControl
 from .extended_keyboard import ExtendedKeyboard
 from .extended_mouse import ExtendedMouse
 from .hid_gadget_config import rebuild_gadget
 from .hid_gadget_layout import build_default_layout
 from .logging import get_logger
-
-if TYPE_CHECKING:
-    from adafruit_hid.consumer_control import ConsumerControl
 
 logger = get_logger(__name__)
 
@@ -125,11 +122,9 @@ class HidGadgets:
             enabled_devices = list(rebuild_gadget(build_default_layout()))
             self._validate_hidg_nodes()
 
-        from adafruit_hid.consumer_control import ConsumerControl
-
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
-        self._gadgets["consumer"] = ConsumerControl(enabled_devices)
+        self._gadgets["consumer"] = ExtendedConsumerControl(enabled_devices)
         self._enabled = True
 
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)
@@ -155,12 +150,12 @@ class HidGadgets:
         return self._gadgets["mouse"]
 
     @property
-    def consumer(self) -> ConsumerControl | None:
+    def consumer(self) -> ExtendedConsumerControl | None:
         """
         Get the ConsumerControl gadget.
 
-        :return: A ConsumerControl object, or None if not initialized
-        :rtype: ConsumerControl | None
+        :return: An ExtendedConsumerControl object, or None if not initialized
+        :rtype: ExtendedConsumerControl | None
         """
         return self._gadgets["consumer"]
 

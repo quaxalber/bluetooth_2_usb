@@ -149,8 +149,7 @@ class InputRelay:
                 ex,
             )
         logger.debug(
-            "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
+            "Relay stats for %s: hid_write_failures=%s",
             self._input_device.path,
-            self._dispatcher.stats.write_retries,
             self._dispatcher.stats.write_failures,
         )
