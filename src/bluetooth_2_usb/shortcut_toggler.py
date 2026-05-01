@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-
 from .evdev import find_key_name
 from .evdev_types import KeyEvent
-from .hid_gadgets import HidGadgets
 from .logging import get_logger
+from .relay_gate import RelayGate
 
 logger = get_logger(__name__)
 
@@ -15,17 +13,13 @@ class ShortcutToggler:
     Tracks a user-defined shortcut and toggles relaying on/off when the shortcut is pressed.
     """
 
-    def __init__(
-        self, shortcut_keys: set[str], relaying_active: asyncio.Event, hid_gadgets: HidGadgets
-    ) -> None:
+    def __init__(self, shortcut_keys: set[str], relay_gate: RelayGate) -> None:
         """
         :param shortcut_keys: A set of evdev-style key names to detect
-        :param relaying_active: An asyncio.Event controlling whether relaying is active
-        :param hid_gadgets: HidGadgets to release keyboard/mouse states on toggle
+        :param relay_gate: RelayGate controlling whether relaying is active
         """
         self._shortcut_keys = shortcut_keys
-        self._relaying_active = relaying_active
-        self._hid_gadgets = hid_gadgets
+        self._relay_gate = relay_gate
 
         self._currently_pressed: set[str] = set()
         self._suppressed_keys: set[str] = set()
@@ -70,10 +64,7 @@ class ShortcutToggler:
         """
         Toggle the global relaying state: if it was on, turn it off, otherwise turn it on.
         """
-        if self._relaying_active.is_set():
-            self._hid_gadgets.release_all()
-            self._relaying_active.clear()
-            logger.info("ShortcutToggler: Relaying is now OFF.")
-        else:
-            self._relaying_active.set()
+        if self._relay_gate.toggle_user_enabled():
             logger.info("ShortcutToggler: Relaying is now ON.")
+        else:
+            logger.info("ShortcutToggler: Relaying is now OFF.")

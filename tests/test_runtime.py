@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from bluetooth_2_usb.relay_gate import RelayGate
 from bluetooth_2_usb.runtime import Runtime, _handled_shutdown_signals
 from bluetooth_2_usb.runtime_config import runtime_config_from_args
 from bluetooth_2_usb.runtime_events import ShutdownRequested
@@ -98,25 +99,27 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                 self.task_group = task_group
                 self.child_task_created = False
                 self.shutdown_calls = 0
+                self.stop_event = asyncio.Event()
 
             async def run(self, _events) -> None:
                 self.task_group.create_task(asyncio.sleep(0), name="supervisor child")
                 self.child_task_created = True
-                await asyncio.Event().wait()
+                await self.stop_event.wait()
 
             def request_shutdown(self) -> None:
                 self.shutdown_calls += 1
+                self.stop_event.set()
 
         runtime = self._runtime()
         event_source = CompletingEventSource()
 
-        def build_supervisor(_hid_gadgets, _relaying_active, _shortcut_toggler, task_group):
+        def build_supervisor(_hid_gadgets, _relay_gate, _shortcut_toggler, task_group):
             return WaitingSupervisor(task_group)
 
         runtime._build_supervisor = build_supervisor
 
         await asyncio.wait_for(
-            runtime._run_tasks(event_source, object(), asyncio.Event(), None), timeout=1
+            runtime._run_tasks(event_source, object(), RelayGate(), None), timeout=1
         )
 
         supervisor = runtime._supervisor

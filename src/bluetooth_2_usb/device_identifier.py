@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import re
+from enum import StrEnum
 
 from .evdev_types import InputDevice
+
+
+class DeviceIdentifierType(StrEnum):
+    PATH = "path"
+    MAC = "mac"
+    NAME = "name"
 
 
 class DeviceIdentifier:
@@ -22,19 +29,23 @@ class DeviceIdentifier:
         self._normalized_value = self._normalize_identifier()
 
     def __str__(self) -> str:
-        return f'{self._kind} "{self._value}"'
+        return f'{self.type.value} "{self._value}"'
 
-    def _determine_identifier_kind(self) -> str:
+    @property
+    def type(self) -> DeviceIdentifierType:
+        return self._kind
+
+    def _determine_identifier_kind(self) -> DeviceIdentifierType:
         if re.match(r"^/dev/input/event\d+$", self._value):
-            return "path"
+            return DeviceIdentifierType.PATH
         if re.match(r"^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})$", self._value):
-            return "mac"
-        return "name"
+            return DeviceIdentifierType.MAC
+        return DeviceIdentifierType.NAME
 
     def _normalize_identifier(self) -> str:
-        if self._kind == "path":
+        if self.type is DeviceIdentifierType.PATH:
             return self._value
-        if self._kind == "mac":
+        if self.type is DeviceIdentifierType.MAC:
             return self._value.lower().replace("-", ":")
         return self._value.lower()
 
@@ -46,9 +57,9 @@ class DeviceIdentifier:
         :return: True if matched, False otherwise
         :rtype: bool
         """
-        if self._kind == "path":
+        if self.type is DeviceIdentifierType.PATH:
             return self._value == device.path
-        if self._kind == "mac":
+        if self.type is DeviceIdentifierType.MAC:
             device_uniq = (device.uniq or "").lower().replace("-", ":")
             return self._normalized_value == device_uniq
         return self._normalized_value in (device.name or "").lower()

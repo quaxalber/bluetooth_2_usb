@@ -31,27 +31,52 @@ def _safe_rmdir(path: Path) -> None:
         pass
 
 
-def _teardown_existing_gadget() -> None:
-    if not GADGET_ROOT.exists():
-        return
-
+def _safe_write_text(path: Path, value: str) -> None:
     try:
-        (GADGET_ROOT / "UDC").write_text("\n", encoding="utf-8")
+        path.write_text(value, encoding="utf-8")
     except FileNotFoundError:
         pass
     except OSError:
         pass
 
-    for symlink in sorted(GADGET_ROOT.glob("configs/**/hid.usb*"), reverse=True):
+
+def _remove_gadget_tree(gadget_root: Path) -> None:
+    if not gadget_root.exists():
+        return
+
+    _safe_write_text(gadget_root / "UDC", "\n")
+
+    for symlink in sorted(gadget_root.glob("configs/**/hid.usb*"), reverse=True):
         _safe_unlink(symlink)
 
-    for file_path in sorted(GADGET_ROOT.rglob("*"), reverse=True):
+    for file_path in sorted(gadget_root.rglob("*"), reverse=True):
+        if file_path.is_symlink():
+            _safe_unlink(file_path)
+            continue
         if file_path.is_file():
             _safe_unlink(file_path)
         elif file_path.is_dir():
             _safe_rmdir(file_path)
 
-    _safe_rmdir(GADGET_ROOT)
+    _safe_rmdir(gadget_root)
+
+
+def remove_owned_gadgets() -> None:
+    configfs_root = GADGET_ROOT.parent
+    if not configfs_root.is_dir():
+        return
+
+    gadget_roots = [GADGET_ROOT, *configfs_root.glob("bluetooth_2_usb*")]
+    seen: set[Path] = set()
+    for gadget_root in gadget_roots:
+        if gadget_root in seen:
+            continue
+        seen.add(gadget_root)
+        _remove_gadget_tree(gadget_root)
+
+
+def _teardown_existing_gadget() -> None:
+    _remove_gadget_tree(GADGET_ROOT)
 
 
 def _write_text(path: Path, value: str) -> None:

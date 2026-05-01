@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import errno
-from collections.abc import Callable
-from typing import Any
 
-from .evdev import ecodes, get_mouse_movement
-from .evdev_types import InputDevice, InputEvent, KeyEvent, RelEvent, categorize
-from .hid_dispatch import dispatch_event_to_hid
+from .evdev_types import InputDevice, KeyEvent, RelEvent, categorize
+from .hid_dispatch import HidDispatcher
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
-from .mouse_delta import MouseDelta, MouseDeltaAccumulator, iter_mouse_delta_chunks
+from .relay_gate import RelayGate
 from .shortcut_toggler import ShortcutToggler
 
 logger = get_logger(__name__)
@@ -21,17 +17,14 @@ class InputRelay:
     Relay a single InputDevice's events to USB HID gadgets.
 
     - Optionally grabs the device exclusively.
-    - Retries HID writes if they raise BlockingIOError.
+    - Delegates HID translation and writes to HidDispatcher.
     """
-
-    HID_WRITE_MAX_TRIES = 20
-    HID_WRITE_RETRY_DELAY_SEC = 0.01
 
     def __init__(
         self,
         input_device: InputDevice,
         hid_gadgets: HidGadgets,
-        relaying_active: asyncio.Event,
+        relay_gate: RelayGate,
         grab_device: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
@@ -39,19 +32,16 @@ class InputRelay:
         :param input_device: The evdev input device
         :param hid_gadgets: Provides references to Keyboard, Mouse, ConsumerControl
         :param grab_device: Whether to grab the device for exclusive access
-        :param relaying_active: asyncio.Event that indicates relaying is on/off
+        :param relay_gate: RelayGate that indicates whether relaying is active
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
         """
         self._input_device = input_device
-        self._hid_gadgets = hid_gadgets
+        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate)
         self._grab_device = grab_device
-        self._relaying_active = relaying_active
+        self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
 
         self._currently_grabbed = False
-        self._hid_write_retries = 0
-        self._hid_write_failures = 0
-        self._mouse_delta = MouseDeltaAccumulator()
 
     def __str__(self) -> str:
         return f"relay for {self._input_device}"
@@ -72,12 +62,8 @@ class InputRelay:
 
         :return: self
         """
-        if self._grab_device and self._relaying_active.is_set():
-            try:
-                self._input_device.grab()
-                self._currently_grabbed = True
-            except Exception as ex:
-                logger.warning("Could not grab %s: %s", self._input_device.path, ex)
+        self._relay_gate.add_listener(self._handle_gate_change)
+        self._handle_gate_change(self._relay_gate.active)
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> bool:
@@ -99,10 +85,16 @@ class InputRelay:
                     )
                 else:
                     logger.warning("Unable to ungrab %s: %s", self._input_device.path, ex)
+        self._relay_gate.remove_listener(self._handle_gate_change)
         return False
 
     def _should_ignore_ungrab_error(self, ex: Exception) -> bool:
         return isinstance(ex, OSError) and ex.errno in (errno.ENODEV, errno.EBADF)
+
+    def _handle_gate_change(self, active: bool) -> None:
+        self._update_grab_state(active)
+        if not active:
+            self._dispatcher.discard_pending()
 
     def _update_grab_state(self, active: bool) -> None:
         if self._grab_device and active and not self._currently_grabbed:
@@ -138,10 +130,6 @@ class InputRelay:
         try:
             async for input_event in self._input_device.async_read_loop():
                 event = categorize(input_event)
-                is_syn_report = (
-                    getattr(input_event, "type", None) == ecodes.EV_SYN
-                    and getattr(input_event, "code", None) == ecodes.SYN_REPORT
-                )
 
                 if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
                     logger.debug(
@@ -153,30 +141,13 @@ class InputRelay:
 
                 if self._shortcut_toggler and isinstance(event, KeyEvent):
                     if self._shortcut_toggler.handle_key_event(event):
-                        active = self._relaying_active.is_set()
-                        self._update_grab_state(active)
-                        if not active:
-                            self._discard_pending_mouse_state()
                         continue
 
-                active = self._relaying_active.is_set()
-                self._update_grab_state(active)
-
-                if not active:
-                    self._discard_pending_mouse_state()
+                if not self._relay_gate.active:
+                    self._dispatcher.discard_pending()
                     continue
 
-                if isinstance(event, RelEvent):
-                    self._accumulate_mouse_movement(event)
-                    continue
-
-                if is_syn_report:
-                    await self._flush_pending_mouse_movement()
-                    continue
-
-                # Preserve cross-gadget event order if another event arrives before SYN_REPORT.
-                await self._flush_pending_mouse_movement()
-                await self._process_event_with_retry(event)
+                await self._dispatcher.dispatch(event, input_event)
         except OSError as ex:
             if ex.errno != errno.ENODEV:
                 raise
@@ -185,9 +156,9 @@ class InputRelay:
                 "Stopping relay loop for %s because the input device disappeared.",
                 self._input_device.path,
             )
-            self._discard_pending_mouse_state()
+            self._dispatcher.discard_pending()
         try:
-            await self._flush_pending_mouse_movement()
+            await self._dispatcher.flush()
         except OSError as ex:
             if not input_disappeared or ex.errno != errno.ENODEV:
                 raise
@@ -199,98 +170,6 @@ class InputRelay:
         logger.debug(
             "Relay stats for %s: hid_write_retries=%s hid_write_failures=%s",
             self._input_device.path,
-            self._hid_write_retries,
-            self._hid_write_failures,
+            self._dispatcher.stats.write_retries,
+            self._dispatcher.stats.write_failures,
         )
-
-    def _accumulate_mouse_movement(self, event: RelEvent) -> None:
-        x, y, wheel, pan = get_mouse_movement(event)
-        logger.debug(
-            "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
-            event.event.code,
-            event.event.value,
-            x,
-            y,
-            wheel,
-            pan,
-        )
-        self._mouse_delta.add_event(event)
-
-    def _discard_pending_mouse_state(self) -> None:
-        self._mouse_delta.discard()
-
-    async def _flush_pending_mouse_movement(self) -> None:
-        delta = self._mouse_delta.flush()
-        if delta is None:
-            return
-        await self._process_mouse_delta_with_retry(delta)
-
-    async def _process_mouse_delta_with_retry(self, delta: MouseDelta) -> None:
-        for partial in iter_mouse_delta_chunks(delta):
-
-            def move_mouse(partial=partial) -> None:
-                mouse = self._hid_gadgets.mouse
-                if mouse is None:
-                    raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
-                mouse.move(*partial)
-
-            if not await self._process_hid_action_with_retry(move_mouse, "mouse movement"):
-                return
-
-    async def _process_event_with_retry(self, event: InputEvent) -> None:
-        """
-        Attempt to relay the given event to the appropriate HID gadget.
-        Retry on BlockingIOError within the bounded HID write budget.
-
-        :param event: The InputEvent to process
-        """
-        await self._process_hid_action_with_retry(
-            lambda: dispatch_event_to_hid(event, self._hid_gadgets), f"{event}"
-        )
-
-    async def _process_hid_action_with_retry(
-        self, action: Callable[[], Any], action_name: str
-    ) -> bool:
-        """
-        Attempt to relay one HID action and retry transient write blocking.
-
-        :param action: Callable that performs one HID write operation
-        :param action_name: Human-readable action for error logging
-        """
-        max_tries = self.HID_WRITE_MAX_TRIES
-        retry_delay = self.HID_WRITE_RETRY_DELAY_SEC
-        for attempt in range(1, max_tries + 1):
-            if not self._relaying_active.is_set():
-                return False
-            try:
-                action()
-                return True
-            except BlockingIOError:
-                if not self._relaying_active.is_set():
-                    return False
-                if attempt < max_tries:
-                    self._hid_write_retries += 1
-                    logger.debug("HID write blocked (%s/%s)", attempt, max_tries)
-                    if not self._relaying_active.is_set():
-                        return False
-                    await asyncio.sleep(retry_delay)
-                    if not self._relaying_active.is_set():
-                        return False
-                else:
-                    self._hid_write_failures += 1
-                    logger.warning("HID write blocked (%s/%s)", attempt, max_tries)
-                    return False
-            except BrokenPipeError:
-                self._hid_write_failures += 1
-                logger.warning(
-                    "BrokenPipeError: USB cable likely disconnected or power-only. "
-                    + "Pausing relay.\nSee: "
-                    + "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
-                )
-                self._relaying_active.clear()
-                return False
-            except Exception:
-                self._hid_write_failures += 1
-                logger.exception("Unexpected error processing %s", action_name)
-                raise
-        return False

@@ -4,6 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
+from bluetooth_2_usb.hid_gadget_config import remove_owned_gadgets
 from bluetooth_2_usb.service_settings import DEFAULT_ENV_FILE, canonicalize_service_settings_bools
 
 from . import boot_config
@@ -280,7 +281,7 @@ def uninstall() -> None:
             run(["umount", config.persist_mount])
     if bluetooth_was_active:
         run(["systemctl", "start", "bluetooth.service"], check=False)
-    _remove_gadgets()
+    remove_owned_gadgets()
     run(["systemctl", "daemon-reload"])
     _assert_absent(
         Path("/etc/systemd/system") / PATHS.service_unit,
@@ -305,41 +306,6 @@ def uninstall() -> None:
         fail(f"{PATHS.service_unit} is still enabled after uninstall")
     ok("Uninstall complete")
     info(f"The checkout at {PATHS.install_dir} was left in place.")
-
-
-def _remove_gadgets() -> None:
-    root = Path("/sys/kernel/config/usb_gadget")
-    if not root.is_dir():
-        return
-    for gadget in [root / "adafruit-blinka", *root.glob("bluetooth_2_usb*")]:
-        if not gadget.is_dir():
-            continue
-        udc = gadget / "UDC"
-        if udc.is_file():
-            udc.write_text("", encoding="utf-8")
-        configs = gadget / "configs"
-        if configs.is_dir():
-            for link in configs.rglob("*"):
-                if link.is_symlink():
-                    link.unlink(missing_ok=True)
-        functions = gadget / "functions"
-        if functions.is_dir():
-            for child in functions.iterdir():
-                if child.is_dir():
-                    shutil.rmtree(child, ignore_errors=True)
-                else:
-                    child.unlink(missing_ok=True)
-        if configs.is_dir():
-            for child in configs.iterdir():
-                if child.is_dir():
-                    try:
-                        child.rmdir()
-                    except OSError:
-                        pass
-        try:
-            gadget.rmdir()
-        except OSError:
-            pass
 
 
 def _assert_absent(path: Path, message: str) -> None:

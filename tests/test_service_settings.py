@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from bluetooth_2_usb.args import CustomArgumentParser
 from bluetooth_2_usb.service_settings import (
     ServiceSettings,
     ServiceSettingsError,
@@ -127,11 +128,29 @@ class ServiceSettingsTest(unittest.TestCase):
 
         self.assertNotIn("--hid-profile", argv)
 
-    def test_builds_runtime_argv_with_udc_path(self) -> None:
+    def test_builds_runtime_argv_does_not_emit_internal_udc_path(self) -> None:
         argv = build_runtime_argv(ServiceSettings(udc_path="/tmp/udc-state"))
 
-        self.assertIn("--udc_path", argv)
-        self.assertIn("/tmp/udc-state", argv)
+        self.assertNotIn("--udc_path", argv)
+        self.assertNotIn("/tmp/udc-state", argv)
+
+    def test_generated_runtime_argv_is_accepted_by_runtime_parser(self) -> None:
+        settings = ServiceSettings(
+            auto_discover=True,
+            device_ids=["MX Keys", "/dev/input/event3"],
+            grab_devices=True,
+            interrupt_shortcut="CTRL+SHIFT+F12",
+            log_to_file=True,
+            log_path="/tmp/bluetooth 2 usb.log",
+            debug=True,
+            udc_path="/tmp/internal-udc-state",
+        )
+        argv = build_runtime_argv(settings)
+
+        parsed = CustomArgumentParser().parse_args(argv)
+
+        self.assertTrue(parsed.auto_discover)
+        self.assertEqual(parsed.device_ids, ["MX Keys", "/dev/input/event3"])
 
     def test_canonicalize_service_settings_quotes_interrupt_shortcut_when_needed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

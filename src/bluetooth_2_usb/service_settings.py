@@ -215,8 +215,6 @@ def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False)
         argv.append("--log_to_file")
     if settings.log_path:
         argv.extend(["--log_path", settings.log_path])
-    if settings.udc_path:
-        argv.extend(["--udc_path", settings.udc_path])
     if settings.debug or append_debug:
         argv.append("--debug")
     return argv

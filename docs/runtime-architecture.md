@@ -7,8 +7,12 @@ The service runtime is intentionally centered on one asyncio event flow:
   typed runtime events.
 - `RelaySupervisor` consumes those events and owns all selected input relay
   tasks.
-- `InputRelay` reads one evdev device and writes HID reports to the shared USB
-  gadget objects.
+- `RelayGate` tracks why relaying is active or inactive: host cable state, user
+  pause state, and HID write suspension are separate causes.
+- `InputRelay` reads one evdev device, handles per-device grab state, applies
+  the optional interrupt shortcut, and forwards events to HID dispatch.
+- `HidDispatcher` owns HID translation, mouse frame coalescing, large mouse
+  delta chunking, HID write retry, and write-failure suspension.
 - `HidGadgets` owns the configured keyboard, mouse, and consumer-control HID
   handles created from `hid_gadget_config.py` and `hid_gadget_layout.py`.
 
@@ -26,23 +30,25 @@ through the same queue instead of calling across thread or callback boundaries.
 ## Shutdown
 
 Shutdown is requested by enqueueing `ShutdownRequested`. The supervisor stops
-scheduling new work, cancels active relay tasks, clears relay-active state, and
-releases all HID gadget state once. The runtime also stops the event source and
-applies a bounded graceful shutdown timeout so systemd stop handling remains
-predictable.
+scheduling new work, cancels active relay tasks, marks the host side inactive in
+`RelayGate`, and releases all HID gadget state once. The runtime also stops the
+event source and applies a bounded graceful shutdown timeout so systemd stop
+handling remains predictable.
 
 ## Cable State
 
-`UdcStateChanged("configured")` enables relaying. Any other UDC state disables
-relaying and releases current HID gadget state. This prevents stuck keys or
-buttons from surviving a cable disconnect, suspend transition, or host-side USB
-reset.
+`UdcStateChanged("configured")` marks the host side configured. Any other UDC
+state marks the host side inactive and releases current HID gadget state. User
+pause state is independent, so reconnecting the USB cable does not undo a manual
+pause. A HID `BrokenPipeError` suspends writes until a fresh configured
+transition arrives.
 
 ## Hotplug
 
-`DeviceAdded` probes a matching `/dev/input/event*` path with a short bounded
-retry window because udev can report an input node before all metadata is ready.
-`DeviceRemoved` cancels any pending probe and active relay for that path.
+`DeviceAdded` starts one probe task for the matching `/dev/input/event*` path
+with a short bounded retry window because udev can report an input node before
+all metadata is ready. `DeviceRemoved` cancels the probe and active relay for
+that path.
 
 Startup enumeration and later hotplug use the same filter path, so
 auto-discovery and explicit device identifiers behave consistently.

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
+from .relay_gate import RelayGate
 from .relay_supervisor import RelaySupervisor
 from .runtime_config import RuntimeConfig
 from .runtime_event_source import RuntimeEventSource
@@ -41,31 +42,29 @@ class Runtime:
         self._supervisor: RelaySupervisor | None = None
 
     async def run(self) -> None:
-        relaying_active = asyncio.Event()
+        relay_gate = RelayGate()
         hid_gadgets = HidGadgets()
         hid_gadgets.enable()
 
-        shortcut_toggler = self._build_shortcut_toggler(relaying_active, hid_gadgets)
+        shortcut_toggler = self._build_shortcut_toggler(relay_gate)
         self._event_source = RuntimeEventSource(self._events, udc_path=self._config.udc_path)
 
         handlers = self._install_signal_handlers()
         try:
-            await self._run_tasks(
-                self._event_source, hid_gadgets, relaying_active, shortcut_toggler
-            )
+            await self._run_tasks(self._event_source, hid_gadgets, relay_gate, shortcut_toggler)
         finally:
             self._restore_signal_handlers(handlers)
 
     def _build_supervisor(
         self,
         hid_gadgets: HidGadgets,
-        relaying_active: asyncio.Event,
+        relay_gate: RelayGate,
         shortcut_toggler: ShortcutToggler | None,
         task_group: asyncio.TaskGroup,
     ) -> RelaySupervisor:
         return RelaySupervisor(
             hid_gadgets=hid_gadgets,
-            relaying_active=relaying_active,
+            relay_gate=relay_gate,
             task_group=task_group,
             device_identifiers=list(self._config.device_ids),
             auto_discover=self._config.auto_discover,
@@ -73,23 +72,19 @@ class Runtime:
             shortcut_toggler=shortcut_toggler,
         )
 
-    def _build_shortcut_toggler(
-        self, relaying_active: asyncio.Event, hid_gadgets: HidGadgets
-    ) -> ShortcutToggler | None:
+    def _build_shortcut_toggler(self, relay_gate: RelayGate) -> ShortcutToggler | None:
         if not self._config.interrupt_shortcut:
             return None
 
         shortcut_keys = set(self._config.interrupt_shortcut)
         logger.debug("Configuring global interrupt shortcut: %s", shortcut_keys)
-        return ShortcutToggler(
-            shortcut_keys=shortcut_keys, relaying_active=relaying_active, hid_gadgets=hid_gadgets
-        )
+        return ShortcutToggler(shortcut_keys=shortcut_keys, relay_gate=relay_gate)
 
     async def _run_tasks(
         self,
         event_source: RuntimeEventSource,
         hid_gadgets: HidGadgets,
-        relaying_active: asyncio.Event,
+        relay_gate: RelayGate,
         shortcut_toggler: ShortcutToggler | None,
     ) -> None:
         event_source_task: asyncio.Task[None] | None = None
@@ -98,7 +93,7 @@ class Runtime:
         try:
             async with asyncio.TaskGroup() as task_group:
                 supervisor = self._build_supervisor(
-                    hid_gadgets, relaying_active, shortcut_toggler, task_group
+                    hid_gadgets, relay_gate, shortcut_toggler, task_group
                 )
                 self._supervisor = supervisor
                 event_source_task = task_group.create_task(
@@ -117,9 +112,9 @@ class Runtime:
                     if task is event_source_task:
                         event_source.stop()
                     if task is supervisor_task:
+                        self._events.put_nowait(ShutdownRequested("runtime"))
                         supervisor.request_shutdown()
-                    task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
+                await self._wait_for_shutdown(supervisor_task, event_source_task)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -128,6 +123,7 @@ class Runtime:
         finally:
             event_source.stop()
             if supervisor is not None:
+                self._events.put_nowait(ShutdownRequested("runtime cleanup"))
                 supervisor.request_shutdown()
             await self._wait_for_shutdown(supervisor_task, event_source_task)
 
