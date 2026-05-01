@@ -14,39 +14,17 @@ except ModuleNotFoundError:
 
     class _MissingPyudevModule:
         class Device:
-            """Placeholder pyudev device type used when pyudev is unavailable."""
-
             device_node = None
 
         class Context:
-            """Placeholder pyudev context that reports the missing dependency.
-
-            :raises ModuleNotFoundError: If the optional platform dependency is unavailable.
-            """
-
             def __init__(self, *_args, **_kwargs) -> None:
-                """Raise the missing-dependency error for pyudev context construction.
-
-                :return: None.
-                :raises ModuleNotFoundError: If the optional platform dependency is unavailable.
-                """
                 raise ModuleNotFoundError(
                     "pyudev is required for runtime monitoring on this platform."
                 )
 
         class Monitor:
-            """Placeholder pyudev monitor that reports the missing dependency.
-
-            :raises ModuleNotFoundError: If the optional platform dependency is unavailable.
-            """
-
             @staticmethod
             def from_netlink(*_args, **_kwargs):
-                """Build a _MissingPyudevModule from the supplied input.
-
-                :return: The requested value or status result.
-                :raises ModuleNotFoundError: If the optional platform dependency is unavailable.
-                """
                 raise ModuleNotFoundError(
                     "pyudev is required for runtime monitoring on this platform."
                 )
@@ -62,10 +40,6 @@ class RuntimeEventSource:
     def __init__(
         self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5
     ) -> None:
-        """Initialize UDC polling and udev hotplug monitoring state.
-
-        :return: None.
-        """
         self._events = events
         self._udc_path = udc_path
         self._poll_interval = poll_interval
@@ -86,10 +60,6 @@ class RuntimeEventSource:
             )
 
     async def run(self) -> None:
-        """Run the command entrypoint and return a process-style exit code.
-
-        :return: None.
-        """
         self._start_monitoring()
         try:
             await self._poll_udc_state()
@@ -97,10 +67,6 @@ class RuntimeEventSource:
             self._stop_monitoring()
 
     def stop(self) -> None:
-        """Request runtime event monitoring to stop at the next poll cycle.
-
-        :return: None.
-        """
         self._stop_event.set()
 
     def _start_monitoring(self) -> None:

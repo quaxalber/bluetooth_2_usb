@@ -35,23 +35,13 @@ def _handled_shutdown_signals() -> tuple[signal.Signals, ...]:
 
 
 class Runtime:
-    """Coordinate HID gadget setup, event monitoring, relay supervision, and shutdown."""
-
     def __init__(self, config: RuntimeConfig) -> None:
-        """Initialize runtime orchestration for the supplied configuration.
-
-        :return: None.
-        """
         self._config = config
         self._events: asyncio.Queue[RuntimeEvent] = asyncio.Queue()
         self._event_source: RuntimeEventSource | None = None
         self._supervisor: RelaySupervisor | None = None
 
     async def run(self) -> None:
-        """Run the command entrypoint and return a process-style exit code.
-
-        :return: None.
-        """
         relay_gate = RelayGate()
         hid_gadgets = HidGadgets()
         hid_gadgets.enable()

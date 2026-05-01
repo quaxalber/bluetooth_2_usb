@@ -64,41 +64,25 @@ EVENT_CODE_NAMES = {
 
 @dataclass(frozen=True, slots=True)
 class ExpectedEvent:
-    """Describe one evdev event expected in a loopback scenario."""
-
     event_type: int
     code: int
     value: int
 
     @property
     def event_name(self) -> str:
-        """Return the symbolic evdev event-type name.
-
-        :return: The current value exposed by this property.
-        """
         return EVENT_TYPE_NAMES.get(self.event_type, str(self.event_type))
 
     @property
     def code_name(self) -> str:
-        """Return the symbolic evdev code name.
-
-        :return: The current value exposed by this property.
-        """
         code_table = EVENT_CODE_NAMES.get(self.event_type, {})
         return code_table.get(self.code, str(self.code))
 
     def describe(self) -> str:
-        """Render the expected event as a compact comparison string.
-
-        :return: The requested value or status result.
-        """
         return f"{self.event_name}/{self.code_name}={self.value}"
 
 
 @dataclass(frozen=True, slots=True)
 class ScenarioDefinition:
-    """Describe the keyboard, mouse, and consumer events in a loopback scenario."""
-
     name: str
     keyboard_steps: tuple[ExpectedEvent, ...]
     mouse_rel_steps: tuple[ExpectedEvent, ...]
@@ -108,34 +92,18 @@ class ScenarioDefinition:
 
     @property
     def keyboard_enabled(self) -> bool:
-        """Return whether the scenario requires keyboard reports.
-
-        :return: The current value exposed by this property.
-        """
         return bool(self.keyboard_steps)
 
     @property
     def mouse_enabled(self) -> bool:
-        """Return whether the scenario requires mouse reports.
-
-        :return: The current value exposed by this property.
-        """
         return bool(self.mouse_rel_steps or self.mouse_button_steps)
 
     @property
     def consumer_enabled(self) -> bool:
-        """Return whether the scenario requires consumer-control reports.
-
-        :return: The current value exposed by this property.
-        """
         return bool(self.consumer_steps)
 
     @property
     def required_nodes(self) -> tuple[str, ...]:
-        """Return the gadget node roles needed by this scenario.
-
-        :return: The current value exposed by this property.
-        """
         nodes: list[str] = []
         if self.keyboard_enabled:
             nodes.append("keyboard")
@@ -318,11 +286,6 @@ SCENARIO_NAMES = tuple(SCENARIOS.keys())
 
 
 def get_scenario(name: str) -> ScenarioDefinition:
-    """Return the named loopback scenario definition.
-
-    :return: The requested value or status result.
-    :raises ValueError: If the supplied value is unsupported or malformed.
-    """
     if name not in SCENARIOS:
         valid_names = ", ".join(SCENARIO_NAMES)
         raise ValueError(f"Unknown scenario {name!r}. Expected one of: {valid_names}")
@@ -330,10 +293,6 @@ def get_scenario(name: str) -> ScenarioDefinition:
 
 
 def event_to_dict(event: ExpectedEvent) -> dict[str, object]:
-    """Serialize an expected loopback event to a JSON-ready dictionary.
-
-    :return: The requested value or status result.
-    """
     return {
         "event_type": event.event_type,
         "event_name": event.event_name,
@@ -344,10 +303,6 @@ def event_to_dict(event: ExpectedEvent) -> dict[str, object]:
 
 
 def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
-    """Serialize a loopback scenario definition to a JSON-ready dictionary.
-
-    :return: The requested value or status result.
-    """
     return {
         "name": scenario.name,
         "keyboard_steps": [event_to_dict(step) for step in scenario.keyboard_steps],

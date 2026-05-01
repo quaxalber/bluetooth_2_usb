@@ -35,10 +35,6 @@ from .units import (
 
 
 def setup_persistent_bluetooth_state(device: str) -> None:
-    """Prepare writable persistent storage for Bluetooth state.
-
-    :return: None.
-    """
     require_commands(["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"])
     if not machine_id_valid():
         fail(
@@ -127,10 +123,6 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
 
 
 def enable_readonly() -> None:
-    """Enable the supported persistent read-only operating mode.
-
-    :return: None.
-    """
     require_commands(["dpkg-query", "raspi-config"])
     config = load_readonly_config()
     if not machine_id_valid():
@@ -215,10 +207,6 @@ def enable_readonly() -> None:
 
 
 def disable_readonly() -> None:
-    """Disable persistent read-only mode and restore normal writable operation.
-
-    :return: None.
-    """
     require_commands(["raspi-config"])
     config = load_readonly_config()
     run(["raspi-config", "nonint", "disable_overlayfs"])

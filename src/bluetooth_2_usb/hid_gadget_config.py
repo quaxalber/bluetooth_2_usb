@@ -62,10 +62,6 @@ def _remove_gadget_tree(gadget_root: Path) -> None:
 
 
 def remove_owned_gadgets() -> None:
-    """Remove USB gadget trees owned by this application.
-
-    :return: None.
-    """
     configfs_root = GADGET_ROOT.parent
     if not configfs_root.is_dir():
         return
@@ -109,10 +105,6 @@ def _resolve_udc_name() -> str:
 
 
 def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
-    """Rebuild the configured USB HID gadget layout and return opened HID devices.
-
-    :return: The requested value or status result.
-    """
     _teardown_existing_gadget()
 
     function_root = GADGET_ROOT / "functions"

@@ -21,10 +21,6 @@ from .redaction import redact
 
 
 def debug_report(duration: int | None) -> int:
-    """Write a diagnostics report and optionally run a live foreground debug command.
-
-    :return: The requested value or status result.
-    """
     PATHS.log_dir.mkdir(parents=True, exist_ok=True)
     report_file = PATHS.log_dir / f"debug_{timestamp()}.md"
     hostname = os.environ.get("HOSTNAME") or output(["hostname"])
@@ -32,25 +28,13 @@ def debug_report(duration: int | None) -> int:
     config = load_readonly_config()
 
     def heading(title: str) -> None:
-        """Append a Markdown heading to the diagnostics report.
-
-        :return: None.
-        """
         body.append(f"## {title}\n")
 
     def text_block(title: str, text: str) -> None:
-        """Append a fenced text block to the diagnostics report.
-
-        :return: None.
-        """
         heading(title)
         body.append("```text\n" + redact(text or "<no output>", hostname) + "\n```\n")
 
     def command_block(title: str, command: list[str | Path], timeout: int = 8) -> None:
-        """Append command output to the diagnostics report.
-
-        :return: None.
-        """
         heading(title)
         try:
             completed = run(command, check=False, capture=True, timeout=timeout)

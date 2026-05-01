@@ -18,13 +18,7 @@ from .types import ProbeResult, ProbeStatus
 
 
 class SmokeTest:
-    """Run Pi-side operational probes and collect pass/warn/fail results."""
-
     def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
-        """Initialize smoke-test state and output controls.
-
-        :return: None.
-        """
         self.verbose = verbose
         self.allow_non_pi = allow_non_pi
         self.exit_code = 0
@@ -33,10 +27,6 @@ class SmokeTest:
         self.results: list[ProbeResult] = []
 
     def run(self) -> int:
-        """Run the command entrypoint and return a process-style exit code.
-
-        :return: The requested value or status result.
-        """
         config_txt = boot_config.boot_config_path()
         cmdline_txt = boot_config.boot_cmdline_path()
         readonly = readonly_mode()
@@ -186,10 +176,6 @@ class SmokeTest:
         return self.exit_code
 
     def result_dict(self) -> dict[str, object]:
-        """Return smoke-test probe results as a JSON-ready dictionary.
-
-        :return: The requested value or status result.
-        """
         return {
             "exit_code": self.exit_code,
             "result": "ok" if self.exit_code == 0 else "failed",
@@ -358,27 +344,15 @@ class SmokeTest:
             self.warn_fail(failure, detail)
 
     def pass_probe(self, message: str) -> None:
-        """Record a successful smoke-test probe.
-
-        :return: None.
-        """
         ok(message)
         self.results.append(ProbeResult(ProbeStatus.PASS, message))
 
     def soft_warn(self, message: str) -> None:
-        """Record a non-fatal smoke-test warning.
-
-        :return: None.
-        """
         warn(message)
         self.soft_warnings += 1
         self.results.append(ProbeResult(ProbeStatus.WARN, message))
 
     def warn_fail(self, message: str, detail: str = "") -> None:
-        """Record a failed smoke-test probe.
-
-        :return: None.
-        """
         warn(message)
         if detail:
             print("\n".join(detail.splitlines()[:20]))

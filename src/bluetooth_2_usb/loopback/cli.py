@@ -143,10 +143,6 @@ def _print_result(result: LoopbackResult, output: str) -> None:
 
 
 def run(argv: list[str] | None = None) -> int:
-    """Run the command entrypoint and return a process-style exit code.
-
-    :return: The requested value or status result.
-    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 

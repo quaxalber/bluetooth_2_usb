@@ -10,34 +10,18 @@ from .commands import backup_file, fail, output, require_commands, run
 
 
 def detect_boot_dir() -> Path:
-    """Return the mounted Raspberry Pi boot configuration directory.
-
-    :return: The requested value or status result.
-    """
     return Path("/boot/firmware") if Path("/boot/firmware").is_dir() else Path("/boot")
 
 
 def boot_config_path() -> Path:
-    """Return the Raspberry Pi boot config.txt path.
-
-    :return: The requested value or status result.
-    """
     return detect_boot_dir() / "config.txt"
 
 
 def boot_cmdline_path() -> Path:
-    """Return the Raspberry Pi boot cmdline.txt path.
-
-    :return: The requested value or status result.
-    """
     return detect_boot_dir() / "cmdline.txt"
 
 
 def current_pi_model() -> str:
-    """Return the current pi model value.
-
-    :return: The requested value or status result.
-    """
     model_file = Path("/proc/device-tree/model")
     if not model_file.is_file():
         fail("Could not determine Raspberry Pi model from /proc/device-tree/model.")
@@ -45,10 +29,6 @@ def current_pi_model() -> str:
 
 
 def current_root_filesystem_type() -> str:
-    """Return the current root filesystem type value.
-
-    :return: The requested value or status result.
-    """
     value = output(["findmnt", "-n", "-o", "FSTYPE", "--target", "/"])
     if not value:
         fail("Could not determine the live root filesystem type.")
@@ -56,10 +36,6 @@ def current_root_filesystem_type() -> str:
 
 
 def root_overlay_state() -> str:
-    """Return the live OverlayFS state for the root filesystem.
-
-    :return: The requested value or status result.
-    """
     try:
         return "yes" if current_root_filesystem_type() == "overlay" else "no"
     except Exception:
@@ -67,10 +43,6 @@ def root_overlay_state() -> str:
 
 
 def root_overlay_report() -> str:
-    """Return a compact diagnostic description of the root filesystem overlay state.
-
-    :return: The requested value or status result.
-    """
     completed = run(
         ["findmnt", "-n", "-o", "TARGET,SOURCE,FSTYPE,OPTIONS", "--target", "/"],
         check=False,
@@ -80,10 +52,6 @@ def root_overlay_report() -> str:
 
 
 def boot_config_model_filters(model: str | None = None) -> list[str]:
-    """Return config.txt model-filter sections that apply to the current Pi model.
-
-    :return: The requested value or status result.
-    """
     resolved = current_pi_model() if model is None else model
     cases: list[tuple[str, list[str]]] = [
         ("Raspberry Pi 500", ["pi5", "pi500"]),
@@ -116,10 +84,6 @@ def boot_config_model_filters(model: str | None = None) -> list[str]:
 def boot_config_assignment_value(
     key: str, config_file: Path | None = None, model_filters: list[str] | None = None
 ) -> str:
-    """Return the effective config.txt assignment for the selected key.
-
-    :return: The requested value or status result.
-    """
     path = boot_config_path() if config_file is None else config_file
     if not path.is_file():
         return ""
@@ -144,10 +108,6 @@ def boot_config_assignment_value(
 
 
 def effective_arm_64bit() -> str:
-    """Return the effective Raspberry Pi `arm_64bit` boot setting.
-
-    :return: The requested value or status result.
-    """
     configured = boot_config_assignment_value("arm_64bit")
     if configured in {"0", "1"}:
         return configured
@@ -155,10 +115,6 @@ def effective_arm_64bit() -> str:
 
 
 def default_kernel_image(model: str | None = None) -> str:
-    """Return the default kernel image value.
-
-    :return: The requested value or status result.
-    """
     resolved_model = model if model is not None else _try_current_pi_model()
     arm_64bit = effective_arm_64bit()
     if any(
@@ -196,19 +152,11 @@ def _try_current_pi_model() -> str:
 
 
 def configured_kernel_image(config_file: Path | None = None) -> str:
-    """Return the configured kernel image filename for the current boot config.
-
-    :return: The requested value or status result.
-    """
     value = boot_config_assignment_value("kernel", config_file)
     return value or default_kernel_image()
 
 
 def configured_initramfs_file(config_file: Path | None = None) -> str:
-    """Return the configured initramfs filename from boot config, if any.
-
-    :return: The requested value or status result.
-    """
     path = boot_config_path() if config_file is None else config_file
     if not path.is_file():
         return ""
@@ -232,28 +180,16 @@ def configured_initramfs_file(config_file: Path | None = None) -> str:
 
 
 def auto_initramfs_enabled(config_file: Path | None = None) -> bool:
-    """Return whether automatic initramfs selection is enabled in boot config.
-
-    :return: The requested value or status result.
-    """
     return boot_config_assignment_value("auto_initramfs", config_file) == "1"
 
 
 def expected_auto_initramfs_name(kernel_image: str | None = None) -> str:
-    """Return the expected auto initramfs name value.
-
-    :return: The requested value or status result.
-    """
     resolved = configured_kernel_image() if not kernel_image else kernel_image
     base_name = Path(resolved).name.rsplit(".", 1)[0]
     return f"initramfs{base_name.removeprefix('kernel')}" if base_name.startswith("kernel") else ""
 
 
 def expected_boot_initramfs_file(config_file: Path | None = None) -> str:
-    """Return the expected boot initramfs file value.
-
-    :return: The requested value or status result.
-    """
     explicit = configured_initramfs_file(config_file)
     if explicit:
         return explicit
@@ -263,10 +199,6 @@ def expected_boot_initramfs_file(config_file: Path | None = None) -> str:
 
 
 def boot_initramfs_target_path(target_file: str | None = None) -> Path:
-    """Return the boot-directory target path for an initramfs filename.
-
-    :return: The requested value or status result.
-    """
     resolved = expected_boot_initramfs_file() if not target_file else target_file
     if not resolved:
         fail(
@@ -279,18 +211,10 @@ def boot_initramfs_target_path(target_file: str | None = None) -> Path:
 
 
 def current_kernel_release() -> str:
-    """Return the current kernel release value.
-
-    :return: The requested value or status result.
-    """
     return output(["uname", "-r"])
 
 
 def versioned_initrd_candidates(kernel_release: str | None = None) -> list[Path]:
-    """Return installed initramfs image candidates for a kernel release.
-
-    :return: The requested value or status result.
-    """
     resolved = current_kernel_release() if kernel_release is None else kernel_release
     boot_dir = detect_boot_dir()
     candidates = [Path(f"/boot/initrd.img-{resolved}")]
@@ -300,10 +224,6 @@ def versioned_initrd_candidates(kernel_release: str | None = None) -> list[Path]
 
 
 def find_versioned_initramfs_image(kernel_release: str | None = None) -> Path | None:
-    """Find versioned initramfs image information.
-
-    :return: The requested value or status result.
-    """
     for candidate in versioned_initrd_candidates(kernel_release):
         if candidate.is_file() and candidate.stat().st_size > 0:
             return candidate
@@ -311,10 +231,6 @@ def find_versioned_initramfs_image(kernel_release: str | None = None) -> Path | 
 
 
 def ensure_initramfs_tools_ready() -> None:
-    """Ensure initramfs tools ready is available.
-
-    :return: None.
-    """
     require_commands(["install", "python3", "update-initramfs"])
     if not any(
         Path(path, "mkinitramfs").exists() for path in os.environ.get("PATH", "").split(os.pathsep)
@@ -323,10 +239,6 @@ def ensure_initramfs_tools_ready() -> None:
 
 
 def ensure_kernel_artifacts_present_for_initramfs(kernel_release: str) -> None:
-    """Ensure kernel artifacts present for initramfs is available.
-
-    :return: None.
-    """
     if not Path(f"/lib/modules/{kernel_release}").is_dir():
         fail(f"Kernel modules for {kernel_release} are missing at /lib/modules/{kernel_release}.")
     if (
@@ -340,10 +252,6 @@ def ensure_kernel_artifacts_present_for_initramfs(kernel_release: str) -> None:
 
 
 def run_update_initramfs(action: str, kernel_release: str) -> bool:
-    """Run update-initramfs for the selected action and kernel release.
-
-    :return: The requested value or status result.
-    """
     completed = run(["update-initramfs", action, "-k", kernel_release], check=False, capture=True)
     filtered = [
         line
@@ -356,10 +264,6 @@ def run_update_initramfs(action: str, kernel_release: str) -> bool:
 
 
 def build_or_refresh_initramfs_for_running_kernel(kernel_release: str, target_path: Path) -> Path:
-    """Build or refresh initramfs for running kernel data.
-
-    :return: The requested value or status result.
-    """
     existing = find_versioned_initramfs_image(kernel_release)
     if existing and existing == target_path and target_path.is_file():
         backup_file(target_path)
@@ -379,10 +283,6 @@ def build_or_refresh_initramfs_for_running_kernel(kernel_release: str, target_pa
 
 
 def install_expected_boot_initramfs(source_image: Path, target_path: Path) -> Path:
-    """Install expected boot initramfs resources.
-
-    :return: The requested value or status result.
-    """
     if not source_image.is_file() or source_image.stat().st_size == 0:
         fail(f"Initramfs source image is missing or empty: {source_image}")
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -396,10 +296,6 @@ def install_expected_boot_initramfs(source_image: Path, target_path: Path) -> Pa
 
 
 def ensure_bootable_initramfs_for_current_kernel() -> Path:
-    """Ensure bootable initramfs for current kernel is available.
-
-    :return: The requested value or status result.
-    """
     kernel_release = current_kernel_release()
     target_path = boot_initramfs_target_path()
     overlay_state = root_overlay_state()
@@ -419,10 +315,6 @@ def ensure_bootable_initramfs_for_current_kernel() -> Path:
 
 
 def kernel_config_snippet() -> str:
-    """Return the relevant kernel config flags for gadget-mode diagnostics.
-
-    :return: The requested value or status result.
-    """
     kernel_config = Path(f"/boot/config-{current_kernel_release()}")
     if kernel_config.is_file():
         text = kernel_config.read_text(encoding="utf-8", errors="replace")
@@ -438,10 +330,6 @@ def kernel_config_snippet() -> str:
 
 
 def dwc2_mode() -> str:
-    """Return whether DWC2 is built in, modular, or unknown for this kernel.
-
-    :return: The requested value or status result.
-    """
     snippet = kernel_config_snippet()
     if "CONFIG_USB_DWC2=y" in snippet:
         return "builtin"
@@ -455,11 +343,6 @@ def dwc2_mode() -> str:
 
 
 def required_boot_modules_csv(mode: str | None = None) -> str:
-    """Return the comma-separated modules-load value required for gadget mode.
-
-    :return: The requested value or status result.
-    :raises AssertionError: If an internal mode invariant is violated.
-    """
     if mode is None:
         mode = dwc2_mode()
     if mode == "module":
@@ -474,28 +357,16 @@ def required_boot_modules_csv(mode: str | None = None) -> str:
 
 
 def board_overlay_line(model: str) -> str:
-    """Return the config.txt DWC2 overlay line for a Raspberry Pi model.
-
-    :return: The requested value or status result.
-    """
     if "Raspberry Pi 4" in model or "Raspberry Pi 5" in model:
         return "dtoverlay=dwc2,dr_mode=peripheral"
     return "dtoverlay=dwc2"
 
 
 def expected_dwc2_overlay_line() -> str:
-    """Return the expected dwc2 overlay line value.
-
-    :return: The requested value or status result.
-    """
     return board_overlay_line(current_pi_model())
 
 
 def normalize_dwc2_overlay(config_file: Path, overlay_line: str) -> None:
-    """Normalize dwc2 overlay configuration.
-
-    :return: None.
-    """
     if not config_file.is_file():
         fail(f"Boot config file not found: {config_file}")
     if not os.access(config_file, os.W_OK):
@@ -518,10 +389,6 @@ def normalize_dwc2_overlay(config_file: Path, overlay_line: str) -> None:
 
 
 def normalize_modules_load(cmdline_file: Path, modules: str) -> None:
-    """Normalize modules load configuration.
-
-    :return: None.
-    """
     if not cmdline_file.is_file():
         fail(f"Boot cmdline file not found: {cmdline_file}")
     if not os.access(cmdline_file, os.W_OK):

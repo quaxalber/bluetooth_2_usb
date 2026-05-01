@@ -10,8 +10,6 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    """Store immutable runtime settings derived from CLI and service configuration."""
-
     device_ids: tuple[str, ...]
     auto_discover: bool
     grab_devices: bool
@@ -23,10 +21,6 @@ class RuntimeConfig:
 
 
 def runtime_config_from_args(args: Arguments, *, udc_path: Path | None) -> RuntimeConfig:
-    """Build immutable runtime configuration from parsed CLI arguments.
-
-    :return: The requested value or status result.
-    """
     return RuntimeConfig(
         device_ids=tuple(args.device_ids or ()),
         auto_discover=args.auto_discover,

@@ -10,20 +10,10 @@ logger = get_logger(__name__)
 
 
 class RelayGateListener(Protocol):
-    """Protocol for callbacks notified when relay active state changes."""
-
-    def __call__(self, active: bool) -> None:
-        """Handle a transition of the effective relay active state.
-
-        :param active: True when relaying has become active, false when it has become inactive.
-        :return: None.
-        """
-        ...
+    def __call__(self, active: bool) -> None: ...
 
 
 class RelayInactiveReason(StrEnum):
-    """Enumerate independent reasons relaying can be inactive."""
-
     HOST_NOT_CONFIGURED = "host_not_configured"
     USER_PAUSED = "user_paused"
     WRITE_SUSPENDED = "write_suspended"
@@ -31,26 +21,16 @@ class RelayInactiveReason(StrEnum):
 
 @dataclass(slots=True)
 class RelayGateState:
-    """Store the host, user, and write-failure inputs to relay activation."""
-
     host_configured: bool = False
     user_enabled: bool = True
     write_suspended: bool = False
 
     @property
     def active(self) -> bool:
-        """Return whether relaying is currently allowed.
-
-        :return: The current value exposed by this property.
-        """
         return self.host_configured and self.user_enabled and not self.write_suspended
 
     @property
     def inactive_reasons(self) -> tuple[RelayInactiveReason, ...]:
-        """Return the reasons relaying is currently inactive.
-
-        :return: The current value exposed by this property.
-        """
         reasons: list[RelayInactiveReason] = []
         if not self.host_configured:
             reasons.append(RelayInactiveReason.HOST_NOT_CONFIGURED)
@@ -71,19 +51,11 @@ class RelayGate:
     """
 
     def __init__(self) -> None:
-        """Initialize relay gate state and listener tracking.
-
-        :return: None.
-        """
         self._state = RelayGateState()
         self._listeners: list[RelayGateListener] = []
 
     @property
     def state(self) -> RelayGateState:
-        """Return the state value.
-
-        :return: The current value exposed by this property.
-        """
         return RelayGateState(
             host_configured=self._state.host_configured,
             user_enabled=self._state.user_enabled,
@@ -92,35 +64,19 @@ class RelayGate:
 
     @property
     def active(self) -> bool:
-        """Return whether relaying is currently allowed.
-
-        :return: The current value exposed by this property.
-        """
         return self._state.active
 
     def add_listener(self, listener: RelayGateListener) -> None:
-        """Register a callback for relay active-state transitions.
-
-        :return: None.
-        """
         if listener not in self._listeners:
             self._listeners.append(listener)
 
     def remove_listener(self, listener: RelayGateListener) -> None:
-        """Remove listener state.
-
-        :return: None.
-        """
         try:
             self._listeners.remove(listener)
         except ValueError:
             pass
 
     def set_host_configured(self, configured: bool) -> None:
-        """Set whether the USB host has configured the gadget.
-
-        :return: None.
-        """
         previous_state = self.state
         fresh_configured = configured and not self._state.host_configured
         self._state.host_configured = configured
@@ -129,27 +85,15 @@ class RelayGate:
         self._state_changed(previous_state)
 
     def set_user_enabled(self, enabled: bool) -> None:
-        """Set whether the user pause state allows relaying.
-
-        :return: None.
-        """
         previous_state = self.state
         self._state.user_enabled = enabled
         self._state_changed(previous_state)
 
     def toggle_user_enabled(self) -> bool:
-        """Toggle the user pause state and return the new enabled value.
-
-        :return: The requested value or status result.
-        """
         self.set_user_enabled(not self._state.user_enabled)
         return self._state.user_enabled
 
     def suspend_writes(self) -> None:
-        """Suspend HID writes after a host-visible write failure.
-
-        :return: None.
-        """
         previous_state = self.state
         self._state.write_suspended = True
         self._state_changed(previous_state)

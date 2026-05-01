@@ -8,10 +8,6 @@ from .service_settings import ServiceSettingsError, build_runtime_argv, load_ser
 
 
 def main() -> int:
-    """Run the module entrypoint and return a process-style exit code.
-
-    :return: The requested value or status result.
-    """
     try:
         settings = load_service_settings()
     except ServiceSettingsError as exc:

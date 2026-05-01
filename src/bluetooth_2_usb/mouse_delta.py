@@ -10,18 +10,12 @@ from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 
 @dataclass(frozen=True, slots=True)
 class MouseDelta:
-    """Store one coalesced relative mouse movement frame."""
-
     x: int
     y: int
     wheel: int
     pan: int
 
     def __iter__(self) -> Iterator[int]:
-        """Iterate over the MouseDelta values in report order.
-
-        :return: The requested value or status result.
-        """
         yield self.x
         yield self.y
         yield self.wheel
@@ -29,13 +23,7 @@ class MouseDelta:
 
 
 class MouseDeltaAccumulator:
-    """Accumulate evdev relative events until a HID mouse frame can be flushed."""
-
     def __init__(self) -> None:
-        """Initialize an empty accumulator for one pending mouse report frame.
-
-        :return: None.
-        """
         self._x = 0
         self._y = 0
         self._wheel_low_res = 0.0
@@ -48,10 +36,6 @@ class MouseDeltaAccumulator:
         self._pan_remainder = 0.0
 
     def add_event(self, event: RelEvent) -> None:
-        """Add one relative evdev event to the pending mouse report frame.
-
-        :return: None.
-        """
         x, y, wheel, pan = get_mouse_movement(event)
         self._x += x
         self._y += y
@@ -67,10 +51,6 @@ class MouseDeltaAccumulator:
             self._pan_low_res += pan
 
     def flush(self) -> MouseDelta | None:
-        """Flush every wrapped stream.
-
-        :return: The requested value or status result.
-        """
         x = self._x
         y = self._y
         pending_wheel = self._wheel_hi_res if self._wheel_hi_res_seen else self._wheel_low_res
@@ -87,10 +67,6 @@ class MouseDeltaAccumulator:
         return MouseDelta(x=x, y=y, wheel=wheel, pan=pan)
 
     def discard(self) -> None:
-        """Discard any pending relative mouse movement frame.
-
-        :return: None.
-        """
         self._discard_pending_frame()
         self._wheel_remainder = 0.0
         self._pan_remainder = 0.0
@@ -107,10 +83,6 @@ class MouseDeltaAccumulator:
 
 
 def iter_mouse_delta_chunks(delta: MouseDelta) -> Iterator[MouseDelta]:
-    """Split a pending mouse delta into HID-sized report chunks.
-
-    :return: The requested value or status result.
-    """
     x = delta.x
     y = delta.y
     wheel = delta.wheel

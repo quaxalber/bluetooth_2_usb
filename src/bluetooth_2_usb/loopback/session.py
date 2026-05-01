@@ -18,21 +18,13 @@ else:
 
 
 class LoopbackBusyError(RuntimeError):
-    """Raised when another loopback validation process already holds the lock."""
-
     exit_code = EXIT_ACCESS
 
 
 class LoopbackInterrupted(KeyboardInterrupt):
-    """Raised to convert user interruption into a loopback exit code."""
-
     exit_code = EXIT_INTERRUPTED
 
     def __init__(self, signum: int | None = None) -> None:
-        """Initialize an interrupted-loopback result with its exit code.
-
-        :return: None.
-        """
         self.signum = signum
         signal_name = None
         if signum is not None:
@@ -70,12 +62,6 @@ def _unlock_loopback_file(lock_handle) -> None:
 
 @contextmanager
 def loopback_session(command: str, scenario: str):
-    """Run an exclusive loopback operation under the process lock.
-
-    :return: The requested value or status result.
-    :raises LoopbackInterrupted: If the user interrupts the loopback operation.
-    :raises LoopbackBusyError: If another loopback operation already holds the session lock.
-    """
     lock_handle = LOOPBACK_LOCK_PATH.open("a+", encoding="utf-8")
     try:
         if lock_handle.tell() == 0:

@@ -11,10 +11,6 @@ except ImportError:
 
 
 def get_version() -> str:
-    """Return the installed package version string.
-
-    :return: The requested value or status result.
-    """
     try:
         return package_version(PACKAGE_NAME)
     except PackageNotFoundError:
@@ -24,10 +20,6 @@ def get_version() -> str:
 
 
 def get_versioned_name() -> str:
-    """Return the user-facing package name and version string.
-
-    :return: The requested value or status result.
-    """
     version = get_version()
     if version == UNKNOWN_VERSION:
         return "Bluetooth-2-USB"

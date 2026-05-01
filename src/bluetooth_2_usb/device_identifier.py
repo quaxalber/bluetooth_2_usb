@@ -7,8 +7,6 @@ from .evdev_types import InputDevice
 
 
 class DeviceIdentifierType(StrEnum):
-    """Enumerate supported input-device identifier forms."""
-
     PATH = "path"
     MAC = "mac"
     NAME = "name"
@@ -31,18 +29,10 @@ class DeviceIdentifier:
         self._normalized_value = self._normalize_identifier()
 
     def __str__(self) -> str:
-        """Return a human-readable representation of the DeviceIdentifier instance.
-
-        :return: The requested value or status result.
-        """
         return f'{self.type.value} "{self._value}"'
 
     @property
     def type(self) -> DeviceIdentifierType:
-        """Return the normalized identifier type.
-
-        :return: The current value exposed by this property.
-        """
         return self._kind
 
     def _determine_identifier_kind(self) -> DeviceIdentifierType:
