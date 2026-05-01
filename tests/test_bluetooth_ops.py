@@ -1,6 +1,7 @@
 import tempfile
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ from bluetooth_2_usb.ops.readonly import (
     enable_readonly,
     load_readonly_config,
     overlay_status,
+    print_readonly_status,
     write_bluetooth_bind_mount_unit,
     write_readonly_config,
 )
@@ -167,6 +169,49 @@ class ReadonlyConfigTest(unittest.TestCase):
         with patch(f"{READONLY_STATUS}.run", side_effect=fake_run):
             with patch("pathlib.Path.is_dir", return_value=True):
                 self.assertFalse(bluetooth_state_persistent(config))
+
+    def test_print_readonly_status_reports_configured_and_live_state(self) -> None:
+        config = ReadonlyConfig(
+            mode="persistent",
+            persist_mount=Path("/mnt/persist"),
+            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
+            persist_spec="/dev/disk/by-uuid/abc",
+            persist_device="/dev/sda1",
+        )
+
+        def fake_findmnt(target: str | Path, field: str) -> str:
+            values = {
+                ("/", "SOURCE"): "overlayroot",
+                ("/var/lib/bluetooth", "SOURCE"): "/dev/sda1[/bluetooth]",
+            }
+            return values.get((str(target), field), "")
+
+        stdout = StringIO()
+        with patch(f"{READONLY_STATUS}.load_readonly_config", return_value=config):
+            with patch(f"{READONLY_STATUS}.readonly_mode", return_value="persistent"):
+                with patch(f"{READONLY_STATUS}.overlay_status", return_value="enabled"):
+                    with patch(
+                        f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"
+                    ):
+                        with patch(
+                            f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"
+                        ):
+                            with patch(
+                                f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=True
+                            ):
+                                with patch(
+                                    f"{READONLY_STATUS}._findmnt_value", side_effect=fake_findmnt
+                                ):
+                                    with patch(f"{READONLY_STATUS}._mountpoint", return_value=True):
+                                        with redirect_stdout(stdout):
+                                            print_readonly_status()
+
+        output = stdout.getvalue()
+        self.assertIn("mode: persistent\n", output)
+        self.assertIn("configured_mode: persistent\n", output)
+        self.assertIn("overlay_live: enabled\n", output)
+        self.assertIn("bluetooth_state_persistent: yes\n", output)
+        self.assertIn("persist_device: /dev/sda1\n", output)
 
     def test_b2u_service_helpers_preserve_inactive_service_state(self) -> None:
         calls = []

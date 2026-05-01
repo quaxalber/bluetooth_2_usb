@@ -45,6 +45,8 @@ class OpsCliTest(unittest.TestCase):
                         cli.main(["readonly", "setup", "--device", "/dev/sda1"]),
                         0,
                     )
+                with patch("bluetooth_2_usb.ops.cli.print_readonly_status") as status:
+                    self.assertEqual(cli.main(["readonly", "status"]), 0)
                 with patch("bluetooth_2_usb.ops.cli.enable_readonly") as enable:
                     self.assertEqual(cli.main(["readonly", "enable"]), 0)
                 with patch("bluetooth_2_usb.ops.cli.disable_readonly") as disable:
@@ -53,6 +55,7 @@ class OpsCliTest(unittest.TestCase):
                     self.assertEqual(cli.main(["udev", "install"]), 0)
 
         setup.assert_called_once_with("/dev/sda1")
+        status.assert_called_once_with()
         enable.assert_called_once_with()
         disable.assert_called_once_with()
         install_rule.assert_called_once()

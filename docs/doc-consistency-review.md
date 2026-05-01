@@ -58,6 +58,7 @@ uninstall
 smoketest
 debug
 readonly setup
+readonly status
 readonly enable
 readonly disable
 udev install

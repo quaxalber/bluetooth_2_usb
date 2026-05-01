@@ -115,3 +115,40 @@ def readonly_mode() -> str:
     if root_fstype == "overlay" and bluetooth_state_persistent():
         return "persistent"
     return "disabled"
+
+
+def print_readonly_status() -> None:
+    config = load_readonly_config()
+    print("Read-only status")
+    print(f"mode: {readonly_mode()}")
+    print(f"configured_mode: {config.mode}")
+    print(f"overlay_live: {overlay_status()}")
+    print(f"overlay_configured: {overlay_configured_status()}")
+    print(f"root_filesystem: {_root_filesystem_type()}")
+    print(f"root_source: {_findmnt_value('/', 'SOURCE') or '<unknown>'}")
+    print(f"bluetooth_state_persistent: {'yes' if bluetooth_state_persistent(config) else 'no'}")
+    print(f"bluetooth_state_source: {_findmnt_value('/var/lib/bluetooth', 'SOURCE') or '<none>'}")
+    print(f"persist_mount: {config.persist_mount}")
+    print(f"persist_mount_active: {'yes' if _mountpoint(config.persist_mount) else 'no'}")
+    print(f"persist_device: {config.persist_device or '<unset>'}")
+    print(f"persist_spec: {config.persist_spec or '<unset>'}")
+
+
+def _root_filesystem_type() -> str:
+    try:
+        return current_root_filesystem_type()
+    except Exception:
+        return "unknown"
+
+
+def _findmnt_value(target: str | Path, field: str) -> str:
+    completed = run(
+        ["findmnt", "-n", "-o", field, "--target", target],
+        check=False,
+        capture=True,
+    )
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
+def _mountpoint(path: Path) -> bool:
+    return run(["mountpoint", "-q", path], check=False).returncode == 0

@@ -11,7 +11,12 @@ from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .paths import PATHS
-from .readonly import disable_readonly, enable_readonly, setup_persistent_bluetooth_state
+from .readonly import (
+    disable_readonly,
+    enable_readonly,
+    print_readonly_status,
+    setup_persistent_bluetooth_state,
+)
 
 OPERATIONAL_COMMANDS = frozenset(
     {
@@ -66,6 +71,7 @@ def _main(argv: list[str], *, prog: str) -> int:
         readonly_subparsers, "setup", "Prepare persistent Bluetooth state."
     )
     setup_parser.add_argument("--device", required=True)
+    _command_parser(readonly_subparsers, "status", "Show persistent read-only status.")
     _command_parser(readonly_subparsers, "enable", "Enable persistent read-only mode.")
     _command_parser(readonly_subparsers, "disable", "Disable OverlayFS.")
 
@@ -80,7 +86,7 @@ def _main(argv: list[str], *, prog: str) -> int:
 
     command_path = _command_path(namespace)
 
-    if command_path != ("udev", "install"):
+    if command_path not in {("udev", "install"), ("readonly", "status")}:
         ensure_root()
 
     log_name = "_".join(command_path)
@@ -115,6 +121,8 @@ def _main(argv: list[str], *, prog: str) -> int:
         return debug_report(namespace.duration)
     elif command_path == ("readonly", "setup"):
         setup_persistent_bluetooth_state(namespace.device)
+    elif command_path == ("readonly", "status"):
+        print_readonly_status()
     elif command_path == ("readonly", "enable"):
         enable_readonly()
     elif command_path == ("readonly", "disable"):

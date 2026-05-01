@@ -70,6 +70,7 @@ sudo reboot
 After reboot:
 
 ```bash
+bluetooth_2_usb readonly status
 sudo env SMOKETEST_POST_REBOOT=1 bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 cd /opt/bluetooth_2_usb
@@ -114,6 +115,7 @@ instead of leaving you with a half-configured read-only boot path.
 ## Disable read-only mode
 
 ```bash
+bluetooth_2_usb readonly status
 sudo bluetooth_2_usb readonly disable
 sudo reboot
 ```

@@ -269,6 +269,11 @@ gadget device nodes.
 Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
 persistent read-only mode.
 
+### `bluetooth_2_usb readonly status`
+
+Show the configured and live persistent read-only state, including OverlayFS,
+root filesystem, and persistent Bluetooth-state mount status.
+
 ### `bluetooth_2_usb readonly enable`
 
 Switch Raspberry Pi OS into the supported persistent read-only mode while

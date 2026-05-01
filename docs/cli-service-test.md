@@ -76,6 +76,7 @@ ssh <pi-host> '
   PYTHONPATH=src python3 -m bluetooth_2_usb udev install --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb loopback inject --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb loopback capture --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly status --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly enable --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly disable --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly setup --help >/dev/null
@@ -182,6 +183,7 @@ verifying it with `lsblk -f`.
 ```bash
 ssh <pi-host> '
   sudo -n bluetooth_2_usb readonly setup --device <persist-partition>
+  bluetooth_2_usb readonly status
   sudo -n bluetooth_2_usb readonly enable
 '
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
@@ -212,6 +214,7 @@ After reboot:
 
 ```bash
 ssh <pi-host> 'bash -s' <<'EOF'
+bluetooth_2_usb readonly status
 sudo -n env SMOKETEST_POST_REBOOT=1 bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 findmnt /var/lib/bluetooth
