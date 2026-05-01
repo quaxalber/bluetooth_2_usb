@@ -29,7 +29,13 @@ from bluetooth_2_usb.loopback.capture_windows import (
     RI_MOUSE_WHEEL,
 )
 from bluetooth_2_usb.loopback.constants import EXIT_INTERRUPTED, EXIT_PREREQUISITE, EXIT_USAGE
-from bluetooth_2_usb.loopback.inject import run_inject
+from bluetooth_2_usb.loopback.inject import (
+    DEFAULT_SERVICE_SETTLE_SEC,
+    SERVICE_SETTLE_ENV,
+    _configured_service_settle_sec,
+    _wait_for_service_settle,
+    run_inject,
+)
 from bluetooth_2_usb.loopback.result import LoopbackResult
 from bluetooth_2_usb.loopback.scenarios import (
     CONSUMER_STEPS,
@@ -829,6 +835,22 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
 
 class LoopbackInjectTest(unittest.TestCase):
+    def test_configured_service_settle_accepts_zero_override(self) -> None:
+        with patch.dict("os.environ", {SERVICE_SETTLE_ENV: "0"}):
+            self.assertEqual(_configured_service_settle_sec(), 0)
+
+    def test_configured_service_settle_defaults_for_invalid_values(self) -> None:
+        for value in ("not-a-number", "-1"):
+            with self.subTest(value=value):
+                with patch.dict("os.environ", {SERVICE_SETTLE_ENV: value}):
+                    self.assertEqual(_configured_service_settle_sec(), DEFAULT_SERVICE_SETTLE_SEC)
+
+    def test_wait_for_service_settle_skips_systemctl_when_disabled(self) -> None:
+        with patch("bluetooth_2_usb.loopback.inject.subprocess.run") as run:
+            _wait_for_service_settle(0)
+
+        run.assert_not_called()
+
     def test_run_inject_rejects_negative_timing_before_sleeping(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.time.sleep") as sleep:
             result = run_inject("keyboard", pre_delay_ms=-1)

@@ -10,7 +10,6 @@ from .commands import OpsError, close_log, ensure_root, fail, prepare_log
 from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
-from .loopback import loopback_capture, loopback_inject
 from .paths import PATHS
 from .readonly import disable_readonly, enable_readonly, setup_persistent_bluetooth_state
 
@@ -25,8 +24,6 @@ OPERATIONAL_COMMANDS = frozenset(
         "readonly-enable",
         "readonly-disable",
         "install-hid-udev-rule",
-        "loopback-inject",
-        "loopback-capture",
     }
 )
 
@@ -70,20 +67,11 @@ def _main(argv: list[str], *, prog: str) -> int:
     _command_parser(subparsers, "readonly-enable", "Enable persistent read-only mode.")
     _command_parser(subparsers, "readonly-disable", "Disable OverlayFS.")
     _command_parser(subparsers, "install-hid-udev-rule", "Install the host-side hidapi udev rule.")
-    _passthrough_parser(subparsers, "loopback-inject", "Run the Pi-side loopback injector.")
-    _passthrough_parser(subparsers, "loopback-capture", "Run the host-side loopback capture.")
 
     namespace, remainder = parser.parse_known_args(argv)
-    if remainder and namespace.command not in {"loopback-inject", "loopback-capture"}:
+    if remainder:
         parser.error(f"unrecognized arguments: {' '.join(remainder)}")
     repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else PATHS.install_dir
-    if namespace.command == "loopback-capture" and namespace.repo_root is None:
-        repo_root = Path.cwd()
-
-    if namespace.command == "loopback-inject":
-        return loopback_inject(remainder)
-    if namespace.command == "loopback-capture":
-        return loopback_capture(repo_root, remainder)
 
     if namespace.command not in {"install-hid-udev-rule"}:
         ensure_root()
@@ -137,12 +125,6 @@ def _command_parser(
     parser = subparsers.add_parser(name, help=help_text, add_help=add_help)
     parser.add_argument("--repo-root", default=None, help=argparse.SUPPRESS)
     return parser
-
-
-def _passthrough_parser(
-    subparsers: argparse._SubParsersAction, name: str, help_text: str
-) -> argparse.ArgumentParser:
-    return _command_parser(subparsers, name, help_text, add_help=False)
 
 
 def _positive_int(raw: str) -> int:

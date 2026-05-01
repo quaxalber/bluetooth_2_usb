@@ -75,9 +75,10 @@ def write_default_env_file() -> None:
 def install_cli_links() -> None:
     local_bin = Path("/usr/local/bin")
     local_bin.mkdir(parents=True, exist_ok=True)
-    link = local_bin / "bluetooth_2_usb"
-    link.unlink(missing_ok=True)
-    link.symlink_to(PATHS.install_dir / "venv" / "bin" / "bluetooth_2_usb")
+    for command in ("bluetooth_2_usb", "bluetooth_2_usb.loopback"):
+        link = local_bin / command
+        link.unlink(missing_ok=True)
+        link.symlink_to(PATHS.install_dir / "venv" / "bin" / command)
 
 
 def recreate_venv(venv_dir: Path) -> None:
@@ -289,6 +290,7 @@ def uninstall() -> None:
     PATHS.env_file.unlink(missing_ok=True)
     PATHS.readonly_env_file.unlink(missing_ok=True)
     Path("/usr/local/bin/bluetooth_2_usb").unlink(missing_ok=True)
+    Path("/usr/local/bin/bluetooth_2_usb.loopback").unlink(missing_ok=True)
     remove_bluetooth_persist_dropin()
     remove_bluetooth_bind_mount_unit()
     remove_persist_mount_unit(config.persist_mount)
@@ -320,6 +322,10 @@ def uninstall() -> None:
     _assert_absent(
         Path("/usr/local/bin/bluetooth_2_usb"),
         "bluetooth_2_usb CLI link still exists after uninstall",
+    )
+    _assert_absent(
+        Path("/usr/local/bin/bluetooth_2_usb.loopback"),
+        "bluetooth_2_usb.loopback CLI link still exists after uninstall",
     )
     _assert_absent(
         PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall"

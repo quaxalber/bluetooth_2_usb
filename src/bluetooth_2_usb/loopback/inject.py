@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -22,6 +24,8 @@ from .scenarios import (
 )
 
 UINPUT_PATH = Path("/dev/uinput")
+SERVICE_SETTLE_ENV = "B2U_LOOPBACK_SERVICE_SETTLE_SEC"
+DEFAULT_SERVICE_SETTLE_SEC = 10.0
 
 
 def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
@@ -77,6 +81,58 @@ def _consumer_capabilities() -> dict[int, list[int]]:
     return {ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN]}
 
 
+def _configured_service_settle_sec() -> float:
+    raw = os.environ.get(SERVICE_SETTLE_ENV, str(DEFAULT_SERVICE_SETTLE_SEC))
+    try:
+        settle = float(raw)
+    except ValueError:
+        return DEFAULT_SERVICE_SETTLE_SEC
+    if settle < 0:
+        return DEFAULT_SERVICE_SETTLE_SEC
+    return settle
+
+
+def _wait_for_service_settle(settle_seconds: float) -> None:
+    if settle_seconds == 0:
+        return
+    active = subprocess.run(
+        ["systemctl", "is-active", "--quiet", "bluetooth_2_usb.service"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if active.returncode != 0:
+        return
+    completed = subprocess.run(
+        [
+            "systemctl",
+            "show",
+            "bluetooth_2_usb.service",
+            "--property=ActiveEnterTimestampMonotonic",
+            "--value",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    raw = completed.stdout.strip()
+    if completed.returncode != 0 or not raw or raw == "0":
+        return
+    try:
+        active_since_us = int(raw)
+    except ValueError:
+        return
+    try:
+        uptime = Path("/proc/uptime").read_text(encoding="utf-8").split()[0]
+        now_us = int(float(uptime) * 1_000_000)
+    except (OSError, ValueError, IndexError):
+        return
+    settle_us = int(settle_seconds * 1_000_000)
+    age_us = now_us - active_since_us
+    if age_us < settle_us:
+        time.sleep((settle_us - age_us) / 1_000_000)
+
+
 def run_inject(
     scenario_name: str,
     pre_delay_ms: int = 1000,
@@ -115,6 +171,8 @@ def run_inject(
             message="Virtual device names must not be empty",
             details={},
         )
+
+    _wait_for_service_settle(_configured_service_settle_sec())
 
     keyboard = None
     mouse = None

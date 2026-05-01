@@ -171,6 +171,13 @@ def run(argv: list[str] | None = None) -> int:
 
     if raw_args[:1] and raw_args[0] in OPERATIONAL_COMMANDS:
         return operational_main(raw_args, prog="bluetooth_2_usb")
+    if raw_args[:1] and not raw_args[0].startswith("-"):
+        print(
+            f"Unknown command: {raw_args[0]}. "
+            + "Use bluetooth_2_usb.loopback inject/capture for loopback validation.",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
 
     from .args import parse_args
 

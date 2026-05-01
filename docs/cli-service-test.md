@@ -74,8 +74,8 @@ ssh <pi-host> '
   PYTHONPATH=src python3 -m bluetooth_2_usb smoketest --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb debug --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb install-hid-udev-rule --help >/dev/null
-  PYTHONPATH=src python3 -m bluetooth_2_usb loopback-inject --help >/dev/null
-  PYTHONPATH=src python3 -m bluetooth_2_usb loopback-capture --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb.loopback inject --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb.loopback capture --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly-enable --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly-disable --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly-setup --help >/dev/null
