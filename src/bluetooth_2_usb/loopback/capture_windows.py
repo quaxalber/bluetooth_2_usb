@@ -11,13 +11,13 @@ from .capture import (
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
     GadgetNodeCandidates,
-    GadgetNodes,
     KeyboardSequenceMatcher,
-    LoopbackResult,
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .common import (
+from .constants import EXIT_OK, EXIT_PREREQUISITE
+from .result import GadgetNodes, LoopbackResult
+from .scenarios import (
     BTN_EXTRA,
     BTN_LEFT,
     BTN_MIDDLE,
@@ -25,8 +25,6 @@ from .common import (
     BTN_SIDE,
     EV_KEY,
     EVENT_CODE_NAMES,
-    EXIT_OK,
-    EXIT_PREREQUISITE,
     get_scenario,
 )
 

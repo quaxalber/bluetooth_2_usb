@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
-from .common import (
+from .constants import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
     DEFAULT_KEYBOARD_NAME,
@@ -13,8 +13,10 @@ from .common import (
     EXIT_ACCESS,
     EXIT_OK,
     EXIT_PREREQUISITE,
+)
+from .result import LoopbackResult
+from .scenarios import (
     SCENARIOS,
-    LoopbackResult,
     get_scenario,
     scenario_to_dict,
 )

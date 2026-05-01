@@ -28,12 +28,12 @@ from bluetooth_2_usb.loopback.capture_windows import (
     RI_MOUSE_LEFT_BUTTON_UP,
     RI_MOUSE_WHEEL,
 )
-from bluetooth_2_usb.loopback.common import (
+from bluetooth_2_usb.loopback.constants import EXIT_INTERRUPTED, EXIT_PREREQUISITE, EXIT_USAGE
+from bluetooth_2_usb.loopback.inject import run_inject
+from bluetooth_2_usb.loopback.result import LoopbackResult
+from bluetooth_2_usb.loopback.scenarios import (
     CONSUMER_STEPS,
     EV_REL,
-    EXIT_INTERRUPTED,
-    EXIT_PREREQUISITE,
-    EXIT_USAGE,
     FAST_MOUSE_REL_STEPS,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
@@ -45,11 +45,9 @@ from bluetooth_2_usb.loopback.common import (
     SCENARIOS,
     TEXT_BURST_STEPS,
     ExpectedEvent,
-    LoopbackBusyError,
-    LoopbackResult,
     get_scenario,
 )
-from bluetooth_2_usb.loopback.inject import run_inject
+from bluetooth_2_usb.loopback.session import LoopbackBusyError
 
 
 def _hid_entry(

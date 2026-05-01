@@ -9,7 +9,16 @@ from typing import Any
 from adafruit_hid.keycode import Keycode
 
 from ..evdev import evdev_to_usb_hid
-from .common import (
+from .constants import (
+    DEFAULT_DEVICE_SUBSTRING,
+    EXIT_ACCESS,
+    EXIT_MISMATCH,
+    EXIT_OK,
+    EXIT_PREREQUISITE,
+    EXIT_TIMEOUT,
+)
+from .result import GadgetNodes, LoopbackResult
+from .scenarios import (
     BTN_BACK,
     BTN_EXTRA,
     BTN_FORWARD,
@@ -18,20 +27,12 @@ from .common import (
     BTN_RIGHT,
     BTN_SIDE,
     BTN_TASK,
-    DEFAULT_DEVICE_SUBSTRING,
-    EXIT_ACCESS,
-    EXIT_MISMATCH,
-    EXIT_OK,
-    EXIT_PREREQUISITE,
-    EXIT_TIMEOUT,
     KEY_VOLUMEDOWN,
     KEY_VOLUMEUP,
     REL_HWHEEL,
     REL_WHEEL,
     REL_X,
     REL_Y,
-    GadgetNodes,
-    LoopbackResult,
     get_scenario,
 )
 

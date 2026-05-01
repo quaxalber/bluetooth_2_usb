@@ -3,18 +3,20 @@ from __future__ import annotations
 import argparse
 import json
 
-from .common import (
+from .constants import (
     DEFAULT_CONSUMER_NAME,
     DEFAULT_DEVICE_SUBSTRING,
     DEFAULT_KEYBOARD_NAME,
     DEFAULT_MOUSE_NAME,
     EXIT_INTERRUPTED,
     EXIT_USAGE,
+)
+from .result import LoopbackResult
+from .scenarios import SCENARIO_NAMES
+from .session import (
     LOOPBACK_LOCK_PATH,
-    SCENARIO_NAMES,
     LoopbackBusyError,
     LoopbackInterrupted,
-    LoopbackResult,
     loopback_session,
 )
 
