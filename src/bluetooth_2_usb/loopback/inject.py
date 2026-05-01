@@ -142,20 +142,29 @@ def _wait_for_service_settle(settle_seconds: float) -> None:
 def run_inject(
     scenario_name: str,
     pre_delay_ms: int = 1000,
-    event_gap_ms: int = 40,
+    event_gap_ms: int | None = None,
+    post_delay_ms: int | None = None,
     keyboard_name: str = DEFAULT_KEYBOARD_NAME,
     mouse_name: str = DEFAULT_MOUSE_NAME,
     consumer_name: str = DEFAULT_CONSUMER_NAME,
 ) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
-    if pre_delay_ms < 0 or event_gap_ms < 0:
+    resolved_event_gap_ms = scenario.default_event_gap_ms if event_gap_ms is None else event_gap_ms
+    resolved_post_delay_ms = (
+        scenario.default_post_delay_ms if post_delay_ms is None else post_delay_ms
+    )
+    if pre_delay_ms < 0 or resolved_event_gap_ms < 0 or resolved_post_delay_ms < 0:
         return LoopbackResult(
             command="inject",
             scenario=scenario.name,
             success=False,
             exit_code=EXIT_PREREQUISITE,
-            message="pre_delay_ms and event_gap_ms must be non-negative",
-            details={"pre_delay_ms": pre_delay_ms, "event_gap_ms": event_gap_ms},
+            message="pre_delay_ms, event_gap_ms, and post_delay_ms must be non-negative",
+            details={
+                "pre_delay_ms": pre_delay_ms,
+                "event_gap_ms": resolved_event_gap_ms,
+                "post_delay_ms": resolved_post_delay_ms,
+            },
         )
 
     if not UINPUT_PATH.exists():
@@ -216,7 +225,7 @@ def run_inject(
 
         if keyboard is not None:
             for step_event in scenario.keyboard_steps:
-                _send_step(keyboard, step_event, event_gap_ms)
+                _send_step(keyboard, step_event, resolved_event_gap_ms)
 
         if keyboard is not None and mouse is not None:
             time.sleep(COMBO_MOUSE_DELAY_MS / 1000.0)
@@ -230,18 +239,20 @@ def run_inject(
                 coalesced_steps = scenario.mouse_rel_steps[-coalesced_tail_count:]
 
             for step_event in individual_steps:
-                _send_mouse_rel_step(mouse, step_event, event_gap_ms)
+                _send_mouse_rel_step(mouse, step_event, resolved_event_gap_ms)
             for step_event in coalesced_steps:
                 _write_mouse_rel_step(mouse, step_event)
             if coalesced_steps:
                 mouse.syn()
-                time.sleep(event_gap_ms / 1000.0)
+                time.sleep(resolved_event_gap_ms / 1000.0)
             for step_event in scenario.mouse_button_steps:
-                _send_step(mouse, step_event, event_gap_ms)
+                _send_step(mouse, step_event, resolved_event_gap_ms)
 
         if consumer is not None:
             for step_event in scenario.consumer_steps:
-                _send_step(consumer, step_event, event_gap_ms)
+                _send_step(consumer, step_event, resolved_event_gap_ms)
+
+        time.sleep(resolved_post_delay_ms / 1000.0)
 
     except OSError as exc:
         return LoopbackResult(
@@ -275,7 +286,8 @@ def run_inject(
             "mouse_name": mouse_name if scenario.mouse_enabled else None,
             "consumer_name": consumer_name if scenario.consumer_enabled else None,
             "pre_delay_ms": pre_delay_ms,
-            "event_gap_ms": event_gap_ms,
+            "event_gap_ms": resolved_event_gap_ms,
+            "post_delay_ms": resolved_post_delay_ms,
             "expected": scenario_to_dict(scenario),
             "injected_event_count": injected_events,
         },

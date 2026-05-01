@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .extended_keyboard import ExtendedKeyboard
 from .extended_mouse import ExtendedMouse
 from .hid_gadget_config import rebuild_gadget
 from .hid_gadget_layout import build_default_layout
@@ -13,7 +14,6 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from adafruit_hid.consumer_control import ConsumerControl
-    from adafruit_hid.keyboard import Keyboard
 
 logger = get_logger(__name__)
 
@@ -126,9 +126,8 @@ class HidGadgets:
             self._validate_hidg_nodes()
 
         from adafruit_hid.consumer_control import ConsumerControl
-        from adafruit_hid.keyboard import Keyboard
 
-        self._gadgets["keyboard"] = Keyboard(enabled_devices)
+        self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
         self._enabled = True
@@ -136,12 +135,12 @@ class HidGadgets:
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)
 
     @property
-    def keyboard(self) -> Keyboard | None:
+    def keyboard(self) -> ExtendedKeyboard | None:
         """
         Get the Keyboard gadget.
 
-        :return: A Keyboard object, or None if not initialized
-        :rtype: Keyboard | None
+        :return: An ExtendedKeyboard object, or None if not initialized
+        :rtype: ExtendedKeyboard | None
         """
         return self._gadgets["keyboard"]
 

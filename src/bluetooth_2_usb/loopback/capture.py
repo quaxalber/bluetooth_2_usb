@@ -135,6 +135,9 @@ class KeyboardSequenceMatcher:
         if self.index >= len(self.expected_steps):
             return
 
+        if self.index > 0 and payload == self._current_payload():
+            return
+
         expected = self.expected_steps[self.index]
         expected_payload = self._apply_expected_step(expected)
         if payload != expected_payload:
@@ -163,6 +166,11 @@ class KeyboardSequenceMatcher:
             else:
                 self._pressed_keys = tuple(key for key in self._pressed_keys if key != hid_code)
 
+        keys = list(self._pressed_keys[:6])
+        keys.extend([0] * (6 - len(keys)))
+        return bytes([self._modifier_state, 0, *keys])
+
+    def _current_payload(self) -> bytes:
         keys = list(self._pressed_keys[:6])
         keys.extend([0] * (6 - len(keys)))
         return bytes([self._modifier_state, 0, *keys])

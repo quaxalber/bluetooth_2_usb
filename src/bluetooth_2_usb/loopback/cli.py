@@ -45,7 +45,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Delay after virtual device creation before injection. Default: 1000",
     )
     inject.add_argument(
-        "--event-gap-ms", type=int, default=40, help="Delay between emitted events. Default: 40"
+        "--event-gap-ms",
+        type=int,
+        default=None,
+        help="Delay between emitted events. Default: scenario-specific",
+    )
+    inject.add_argument(
+        "--post-delay-ms",
+        type=int,
+        default=None,
+        help="Delay after injection before closing virtual devices. Default: scenario-specific",
     )
     inject.add_argument(
         "--keyboard-name",
@@ -113,13 +122,22 @@ def _validate_args(args: argparse.Namespace) -> LoopbackResult | None:
                 message="--pre-delay-ms must be >= 0",
                 details={},
             )
-        if args.event_gap_ms < 0:
+        if args.event_gap_ms is not None and args.event_gap_ms < 0:
             return LoopbackResult(
                 command="inject",
                 scenario=args.scenario,
                 success=False,
                 exit_code=EXIT_USAGE,
                 message="--event-gap-ms must be >= 0",
+                details={},
+            )
+        if args.post_delay_ms is not None and args.post_delay_ms < 0:
+            return LoopbackResult(
+                command="inject",
+                scenario=args.scenario,
+                success=False,
+                exit_code=EXIT_USAGE,
+                message="--post-delay-ms must be >= 0",
                 details={},
             )
 
@@ -160,6 +178,7 @@ def run(argv: list[str] | None = None) -> int:
                     scenario_name=args.scenario,
                     pre_delay_ms=args.pre_delay_ms,
                     event_gap_ms=args.event_gap_ms,
+                    post_delay_ms=args.post_delay_ms,
                     keyboard_name=args.keyboard_name,
                     mouse_name=args.mouse_name,
                     consumer_name=args.consumer_name,

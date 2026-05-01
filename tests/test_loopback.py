@@ -44,8 +44,11 @@ from bluetooth_2_usb.loopback.inject import (
 from bluetooth_2_usb.loopback.result import LoopbackResult
 from bluetooth_2_usb.loopback.scenarios import (
     CONSUMER_STEPS,
+    EV_KEY,
     EV_REL,
     FAST_MOUSE_REL_STEPS,
+    KEY_K,
+    KEY_LEFTSHIFT,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
     REL_HWHEEL,
@@ -59,6 +62,18 @@ from bluetooth_2_usb.loopback.scenarios import (
     get_scenario,
 )
 from bluetooth_2_usb.loopback.session import LoopbackBusyError
+
+
+def _chunk_count(value: int, report_limit: int) -> int:
+    return (abs(value) + report_limit - 1) // report_limit
+
+
+def _mouse_report_count(steps: tuple[ExpectedEvent, ...]) -> int:
+    total = 0
+    for step in steps:
+        report_limit = 127 if step.code in (REL_WHEEL, REL_HWHEEL) else 32767
+        total += _chunk_count(step.value, report_limit)
+    return total
 
 
 def _hid_entry(
@@ -124,7 +139,9 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.required_nodes, ("mouse",))
         self.assertEqual(scenario.mouse_rel_steps, FAST_MOUSE_REL_STEPS)
         self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
-        self.assertGreater(max(abs(step.value) for step in scenario.mouse_rel_steps), 32767)
+        self.assertEqual(scenario.default_event_gap_ms, 0)
+        self.assertEqual(scenario.default_post_delay_ms, 1000)
+        self.assertGreaterEqual(_mouse_report_count(scenario.mouse_rel_steps), 80)
 
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaises(ValueError) as error:
@@ -135,12 +152,15 @@ class ScenarioDefinitionTest(unittest.TestCase):
             f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}",
         )
 
-    def test_text_burst_scenario_is_keyboard_only_and_contains_shifted_steps(self) -> None:
+    def test_text_burst_scenario_is_keyboard_only_and_contains_modifier_burst(self) -> None:
         scenario = SCENARIOS["text_burst"]
 
         self.assertEqual(scenario.required_nodes, ("keyboard",))
         self.assertEqual(scenario.keyboard_steps, TEXT_BURST_STEPS)
-        self.assertIn(42, [step.code for step in scenario.keyboard_steps])
+        self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
+        self.assertEqual(scenario.default_event_gap_ms, 20)
+        self.assertEqual(scenario.default_post_delay_ms, 6000)
+        self.assertEqual(len(scenario.keyboard_steps), 216)
 
 
 class GadgetNodeDiscoveryTest(unittest.TestCase):
@@ -396,6 +416,29 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_keyboard_matcher_ignores_duplicate_current_state_reports(self) -> None:
+        shifted_key_steps = (
+            ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 1),
+            ExpectedEvent(EV_KEY, KEY_K, 1),
+            ExpectedEvent(EV_KEY, KEY_K, 0),
+            ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 0),
+        )
+        matcher = KeyboardSequenceMatcher(shifted_key_steps)
+
+        reports = (
+            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, 0x0E, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, 0x0E, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
+            bytes([0x00] * 8),
+        )
+        for report in reports:
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+
     def test_keyboard_matcher_rejects_unexpected_report(self) -> None:
         matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
 
@@ -417,6 +460,26 @@ class MouseSequenceMatcherTest(unittest.TestCase):
                 pan & 0xFF,
             ]
         )
+
+    @classmethod
+    def _reports_for_rel_step(cls, step: ExpectedEvent) -> list[bytes]:
+        reports = []
+        remaining = step.value
+        report_limit = 127 if step.code in (REL_WHEEL, REL_HWHEEL) else 32767
+        while remaining:
+            chunk = max(-report_limit, min(report_limit, remaining))
+            if step.code == REL_X:
+                reports.append(cls._extended_mouse_report(x=chunk))
+            elif step.code == REL_Y:
+                reports.append(cls._extended_mouse_report(y=chunk))
+            elif step.code == REL_WHEEL:
+                reports.append(cls._extended_mouse_report(wheel=chunk))
+            elif step.code == REL_HWHEEL:
+                reports.append(cls._extended_mouse_report(pan=chunk))
+            else:
+                raise AssertionError(f"Unsupported REL code: {step.code}")
+            remaining -= chunk
+        return reports
 
     def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
@@ -493,36 +556,11 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_chunked_fast_motion(self) -> None:
         matcher = MouseSequenceMatcher.create(FAST_MOUSE_REL_STEPS, ())
 
-        for report in (
-            self._extended_mouse_report(x=32767),
-            self._extended_mouse_report(x=7233),
-            self._extended_mouse_report(y=-32767),
-            self._extended_mouse_report(y=-7233),
-            self._extended_mouse_report(x=-32767),
-            self._extended_mouse_report(x=-12233),
-            self._extended_mouse_report(y=32767),
-            self._extended_mouse_report(y=12233),
-            self._extended_mouse_report(wheel=127),
-            self._extended_mouse_report(wheel=127),
-            self._extended_mouse_report(wheel=127),
-            self._extended_mouse_report(wheel=127),
-            self._extended_mouse_report(wheel=92),
-            self._extended_mouse_report(wheel=-127),
-            self._extended_mouse_report(wheel=-127),
-            self._extended_mouse_report(wheel=-127),
-            self._extended_mouse_report(wheel=-127),
-            self._extended_mouse_report(wheel=-92),
-            self._extended_mouse_report(pan=127),
-            self._extended_mouse_report(pan=127),
-            self._extended_mouse_report(pan=127),
-            self._extended_mouse_report(pan=127),
-            self._extended_mouse_report(pan=92),
-            self._extended_mouse_report(pan=-127),
-            self._extended_mouse_report(pan=-127),
-            self._extended_mouse_report(pan=-127),
-            self._extended_mouse_report(pan=-127),
-            self._extended_mouse_report(pan=-92),
-        ):
+        reports = [
+            report for step in FAST_MOUSE_REL_STEPS for report in self._reports_for_rel_step(step)
+        ]
+        self.assertGreaterEqual(len(reports), 80)
+        for report in reports:
             matcher.handle(report)
 
         self.assertTrue(matcher.complete)
@@ -879,6 +917,22 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(result.exit_code, EXIT_ACCESS)
         keyboard.close.assert_called_once_with()
 
+    def test_run_inject_uses_scenario_default_event_gap(self) -> None:
+        keyboard = Mock()
+
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("bluetooth_2_usb.loopback.inject._wait_for_service_settle"),
+            patch("bluetooth_2_usb.loopback.inject.UInput", return_value=keyboard),
+            patch("bluetooth_2_usb.loopback.inject.time.sleep"),
+        ):
+            result = run_inject("text_burst", pre_delay_ms=0)
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.details["event_gap_ms"], 20)
+        self.assertEqual(result.details["post_delay_ms"], 6000)
+        self.assertGreaterEqual(keyboard.write.call_count, 200)
+
     def test_inject_usage_error_returns_exit_usage(self) -> None:
         stdout = io.StringIO()
 
@@ -887,6 +941,23 @@ class LoopbackInjectTest(unittest.TestCase):
 
         self.assertEqual(exit_code, EXIT_USAGE)
         self.assertIn("--pre-delay-ms must be >= 0", stdout.getvalue())
+
+    def test_inject_cli_passes_none_for_scenario_default_event_gap(self) -> None:
+        stdout = io.StringIO()
+        result = SimpleNamespace(
+            exit_code=0,
+            to_dict=lambda: {},
+            to_text=lambda: "ok",
+        )
+
+        with patch("bluetooth_2_usb.loopback.inject.run_inject", return_value=result) as run:
+            with redirect_stdout(stdout):
+                exit_code = run_loopback(["inject"])
+
+        self.assertEqual(exit_code, 0)
+        run.assert_called_once()
+        self.assertIsNone(run.call_args.kwargs["event_gap_ms"])
+        self.assertIsNone(run.call_args.kwargs["post_delay_ms"])
 
     def test_capture_returns_json_from_result(self) -> None:
         stdout = io.StringIO()

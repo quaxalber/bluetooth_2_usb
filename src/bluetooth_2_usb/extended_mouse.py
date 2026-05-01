@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 class ExtendedMouse:
     """Small mouse report writer with horizontal pan support."""
 
-    CHUNK_REPORT_INTERVAL_SEC = 0.001
+    CHUNK_REPORT_INTERVAL_SEC = 0.002
 
     LEFT = LEFT_BUTTON = 0x01
     RIGHT = RIGHT_BUTTON = 0x02
@@ -54,6 +54,7 @@ class ExtendedMouse:
         pan_total = self._pan_remainder + pan
         pan = int(pan_total)
         self._pan_remainder = pan_total - pan
+        pace_reports = abs(x) > 32767 or abs(y) > 32767 or abs(wheel) > 127 or abs(pan) > 127
         while x != 0 or y != 0 or wheel != 0 or pan != 0:
             partial_x = clamp_hid_i16(x)
             partial_y = clamp_hid_i16(y)
@@ -78,7 +79,7 @@ class ExtendedMouse:
             y -= partial_y
             wheel -= partial_wheel
             pan -= partial_pan
-            if x != 0 or y != 0 or wheel != 0 or pan != 0:
+            if pace_reports:
                 time.sleep(self.CHUNK_REPORT_INTERVAL_SEC)
 
     def _send_no_move(self) -> None:

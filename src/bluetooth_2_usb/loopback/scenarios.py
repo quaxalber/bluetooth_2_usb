@@ -89,6 +89,8 @@ class ScenarioDefinition:
     mouse_button_steps: tuple[ExpectedEvent, ...]
     consumer_steps: tuple[ExpectedEvent, ...]
     mouse_coalesced_tail_count: int = 0
+    default_event_gap_ms: int = 40
+    default_post_delay_ms: int = 250
 
     @property
     def keyboard_enabled(self) -> bool:
@@ -138,14 +140,14 @@ MOUSE_REL_STEPS = (
 )
 
 FAST_MOUSE_REL_STEPS = (
-    ExpectedEvent(EV_REL, REL_X, 40000),
-    ExpectedEvent(EV_REL, REL_Y, -40000),
-    ExpectedEvent(EV_REL, REL_X, -45000),
-    ExpectedEvent(EV_REL, REL_Y, 45000),
-    ExpectedEvent(EV_REL, REL_WHEEL, 600),
-    ExpectedEvent(EV_REL, REL_WHEEL, -600),
-    ExpectedEvent(EV_REL, REL_HWHEEL, 600),
-    ExpectedEvent(EV_REL, REL_HWHEEL, -600),
+    ExpectedEvent(EV_REL, REL_X, 180000),
+    ExpectedEvent(EV_REL, REL_Y, -180000),
+    ExpectedEvent(EV_REL, REL_X, -210000),
+    ExpectedEvent(EV_REL, REL_Y, 210000),
+    ExpectedEvent(EV_REL, REL_WHEEL, 2400),
+    ExpectedEvent(EV_REL, REL_WHEEL, -2400),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 2400),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -2400),
 )
 
 MOUSE_BUTTON_STEPS = (
@@ -225,7 +227,8 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
 
 
 _TEXT_BURST_STEPS: list[ExpectedEvent] = []
-_append_text_steps(_TEXT_BURST_STEPS, "KEYBOARD KEYBOARD keyboard KEYBOARD")
+for _ in range(9):
+    _append_text_steps(_TEXT_BURST_STEPS, "kEyBoArD")
 TEXT_BURST_STEPS = tuple(_TEXT_BURST_STEPS)
 
 SCENARIOS = {
@@ -250,6 +253,8 @@ SCENARIOS = {
         mouse_rel_steps=FAST_MOUSE_REL_STEPS,
         mouse_button_steps=(),
         consumer_steps=(),
+        default_event_gap_ms=0,
+        default_post_delay_ms=1000,
     ),
     "mouse_buttons_intrusive": ScenarioDefinition(
         name="mouse_buttons_intrusive",
@@ -279,6 +284,8 @@ SCENARIOS = {
         mouse_rel_steps=(),
         mouse_button_steps=(),
         consumer_steps=(),
+        default_event_gap_ms=20,
+        default_post_delay_ms=6000,
     ),
 }
 
@@ -310,4 +317,6 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
         "mouse_button_steps": [event_to_dict(step) for step in scenario.mouse_button_steps],
         "consumer_steps": [event_to_dict(step) for step in scenario.consumer_steps],
         "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
+        "default_event_gap_ms": scenario.default_event_gap_ms,
+        "default_post_delay_ms": scenario.default_post_delay_ms,
     }

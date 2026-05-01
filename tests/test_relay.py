@@ -12,6 +12,7 @@ import usb_hid
 
 from bluetooth_2_usb.device_identifier import DeviceIdentifier, DeviceIdentifierType
 from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
+from bluetooth_2_usb.extended_keyboard import ExtendedKeyboard
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
 from bluetooth_2_usb.hid_dispatch import HidDispatcher
 from bluetooth_2_usb.hid_gadget_config import rebuild_gadget, remove_owned_gadgets
@@ -33,9 +34,17 @@ from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
 class _FakeKeyboard:
     def __init__(self) -> None:
         self.release_all_calls = 0
+        self.presses = []
+        self.releases = []
 
     def release_all(self) -> None:
         self.release_all_calls += 1
+
+    def press(self, key_id) -> None:
+        self.presses.append(key_id)
+
+    def release(self, key_id) -> None:
+        self.releases.append(key_id)
 
 
 class _FakeMouse:
@@ -212,6 +221,32 @@ class _TestInputDevice:
         return None
 
 
+class ExtendedKeyboardTest(unittest.TestCase):
+    def test_press_release_and_release_all_pace_reports(self) -> None:
+        keyboard_device = Mock()
+
+        with (
+            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
+            patch("bluetooth_2_usb.extended_keyboard.time.sleep") as sleep,
+        ):
+            keyboard = ExtendedKeyboard(devices=[])
+            keyboard.press(1)
+            keyboard.release(1)
+            keyboard.release_all()
+
+        keyboard_device.press.assert_called_once_with(1)
+        keyboard_device.release.assert_called_once_with(1)
+        keyboard_device.release_all.assert_called_once_with()
+        self.assertEqual(
+            sleep.mock_calls,
+            [
+                call(keyboard.REPORT_INTERVAL_SEC),
+                call(keyboard.REPORT_INTERVAL_SEC),
+                call(keyboard.REPORT_INTERVAL_SEC),
+            ],
+        )
+
+
 class ExtendedMouseTest(unittest.TestCase):
     def test_move_uses_16_bit_xy_and_8_bit_wheel_pan(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -293,7 +328,7 @@ class ExtendedMouseTest(unittest.TestCase):
             ],
         )
 
-    def test_move_paces_chunked_reports_only_between_chunks(self) -> None:
+    def test_move_paces_every_report_in_chunked_moves(self) -> None:
         device = SimpleNamespace(sent=[])
 
         def send_report(report) -> None:
@@ -309,7 +344,10 @@ class ExtendedMouseTest(unittest.TestCase):
             mouse.move(x=40000)
             mouse.move(x=1)
 
-        sleep.assert_called_once_with(mouse.CHUNK_REPORT_INTERVAL_SEC)
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(mouse.CHUNK_REPORT_INTERVAL_SEC), call(mouse.CHUNK_REPORT_INTERVAL_SEC)],
+        )
         self.assertEqual(
             device.sent,
             [

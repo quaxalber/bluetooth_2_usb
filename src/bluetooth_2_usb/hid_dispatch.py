@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from .evdev import ecodes, evdev_to_usb_hid, get_mouse_movement, is_consumer_key, is_mouse_button
 from .evdev_types import InputEvent, KeyEvent, RelEvent, categorize
+from .extended_keyboard import ExtendedKeyboard
 from .extended_mouse import ExtendedMouse
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
@@ -15,7 +16,6 @@ from .shortcut_toggler import ShortcutToggler
 
 if TYPE_CHECKING:
     from adafruit_hid.consumer_control import ConsumerControl
-    from adafruit_hid.keyboard import Keyboard
 
 logger = get_logger(__name__)
 
@@ -31,8 +31,8 @@ class HidDispatcher:
     Converts raw evdev events into HID gadget writes.
 
     This owns HID-domain details: event categorization, shortcut suppression,
-    key routing, mouse frame coalescing, large mouse delta chunking, transient
-    key write retry, and write-failure suspension.
+    key routing, mouse frame coalescing, transient key write retry, and
+    write-failure suspension.
     """
 
     HID_WRITE_MAX_TRIES = 20
@@ -179,7 +179,9 @@ class HidDispatcher:
             else:
                 output_gadget.release(key_id)
 
-    def _select_gadget(self, event: KeyEvent) -> ConsumerControl | Keyboard | ExtendedMouse | None:
+    def _select_gadget(
+        self, event: KeyEvent
+    ) -> ConsumerControl | ExtendedKeyboard | ExtendedMouse | None:
         if is_consumer_key(event):
             return self._hid_gadgets.consumer
         if is_mouse_button(event):
