@@ -5,8 +5,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from bluetooth_2_usb.ops.commands import OpsError
-from bluetooth_2_usb.ops.deployment import RollbackStack, install
+from bluetooth_2_usb.ops.deployment import RollbackStack, install, uninstall
 from bluetooth_2_usb.ops.paths import ManagedPaths
+from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
 BOOT_CONFIG = "bluetooth_2_usb.ops.deployment.boot_config"
 
@@ -155,3 +156,72 @@ class OpsDeploymentTest(unittest.TestCase):
                 install(root)
 
         self.assertEqual(canonicalized_paths, [paths.env_file])
+
+    def test_uninstall_cleans_owned_gadgets_without_managing_missing_service(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = ManagedPaths(
+                install_dir=root,
+                env_file=root / "env",
+                readonly_env_file=root / "readonly-env",
+                bluetooth_bind_mount_unit=root / "var-lib-bluetooth.mount",
+                bluetooth_service_dropin=root / "bluetooth_2_usb_persist.conf",
+            )
+            config = ReadonlyConfig(
+                mode="disabled",
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=root / "persist" / "bluetooth",
+                persist_spec="",
+                persist_device="",
+            )
+            commands = []
+
+            def fake_run(command, *, check=True, capture=False):
+                commands.append(command)
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+
+                if command[:4] == ["systemctl", "show", "-P", "LoadState"]:
+                    Completed.stdout = "not-found\n"
+                elif command[:2] == ["findmnt", "-rn"]:
+                    Completed.returncode = 1
+                elif command[:2] == ["systemctl", "is-enabled"]:
+                    Completed.returncode = 1
+                elif command[:3] == ["systemctl", "is-active", "--quiet"]:
+                    Completed.returncode = 1
+                return Completed()
+
+            with ExitStack() as stack:
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.PATHS", paths))
+                stack.enter_context(
+                    patch(
+                        "bluetooth_2_usb.ops.deployment.load_readonly_config", return_value=config
+                    )
+                )
+                stack.enter_context(
+                    patch("bluetooth_2_usb.ops.deployment.service_installed", return_value=False)
+                )
+                remove_owned_gadgets = stack.enter_context(
+                    patch("bluetooth_2_usb.ops.deployment.remove_owned_gadgets")
+                )
+                stack.enter_context(
+                    patch("bluetooth_2_usb.ops.deployment.remove_bluetooth_persist_dropin")
+                )
+                stack.enter_context(
+                    patch("bluetooth_2_usb.ops.deployment.remove_bluetooth_bind_mount_unit")
+                )
+                stack.enter_context(
+                    patch("bluetooth_2_usb.ops.deployment.remove_persist_mount_unit")
+                )
+                stack.enter_context(
+                    patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run)
+                )
+
+                uninstall()
+
+        remove_owned_gadgets.assert_called_once_with()
+        self.assertNotIn(["systemctl", "stop", paths.service_unit], commands)
+        self.assertNotIn(["systemctl", "disable", paths.service_unit], commands)
+        self.assertIn(["systemctl", "daemon-reload"], commands)
