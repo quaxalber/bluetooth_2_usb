@@ -53,6 +53,12 @@ def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
     time.sleep(event_gap_ms / 1000.0)
 
 
+def _close_devices(*devices) -> None:
+    for device in devices:
+        if device is not None:
+            device.close()
+
+
 def _keyboard_capabilities() -> dict[int, list[int]]:
     keyboard_codes = sorted(
         {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
@@ -185,6 +191,7 @@ def run_inject(
         if scenario.consumer_enabled:
             consumer = UInput(_consumer_capabilities(), name=consumer_name)
     except PermissionError as exc:
+        _close_devices(consumer, mouse, keyboard)
         return LoopbackResult(
             command="inject",
             scenario=scenario.name,
@@ -194,6 +201,7 @@ def run_inject(
             details={"uinput_path": str(UINPUT_PATH)},
         )
     except OSError as exc:
+        _close_devices(consumer, mouse, keyboard)
         return LoopbackResult(
             command="inject",
             scenario=scenario.name,
@@ -250,12 +258,7 @@ def run_inject(
             },
         )
     finally:
-        if consumer is not None:
-            consumer.close()
-        if mouse is not None:
-            mouse.close()
-        if keyboard is not None:
-            keyboard.close()
+        _close_devices(consumer, mouse, keyboard)
 
     injected_events = len(scenario.keyboard_steps) + len(scenario.mouse_rel_steps)
     injected_events += len(scenario.mouse_button_steps)

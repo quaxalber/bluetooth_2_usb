@@ -243,43 +243,40 @@ you need a report to share.
 | --- | --- |
 | `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
 
-### `bluetooth_2_usb loopback inject`
+### `loopback inject`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
 loopback inject/capture validation.
 
-### `bluetooth_2_usb loopback capture`
+### `loopback capture`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
-validation.
+validation. On Windows, use `scripts/loopback-capture.ps1` as the launcher for
+the same host-capture flow.
 
-### `loopback-capture.ps1`
-
-Windows PowerShell launcher for the same host-capture flow.
-
-### `bluetooth_2_usb udev install`
+### `udev install`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
 gadget device nodes.
 
-### `bluetooth_2_usb readonly setup`
+### `readonly setup`
 
 Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
 persistent read-only mode.
 
-### `bluetooth_2_usb readonly status`
+### `readonly status`
 
 Show the configured and live persistent read-only state, including OverlayFS,
 root filesystem, and persistent Bluetooth-state mount status.
 
-### `bluetooth_2_usb readonly enable`
+### `readonly enable`
 
 Switch Raspberry Pi OS into the supported persistent read-only mode while
 keeping Bluetooth state on separate writable storage.
 
-### `bluetooth_2_usb readonly disable`
+### `readonly disable`
 
 Return the system to normal writable mode while keeping the persistent
 Bluetooth-state configuration available.

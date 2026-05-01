@@ -26,7 +26,7 @@ from bluetooth_2_usb.input_relay import InputRelay
 from bluetooth_2_usb.mouse_delta import MouseDelta
 from bluetooth_2_usb.relay_gate import RelayGate, RelayInactiveReason
 from bluetooth_2_usb.relay_supervisor import RelaySupervisor, _ActiveRelay, _SupervisorState
-from bluetooth_2_usb.runtime_events import DeviceAdded, UdcStateChanged
+from bluetooth_2_usb.runtime_events import DeviceAdded, ShutdownRequested, UdcStateChanged
 from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
 
 
@@ -509,52 +509,52 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
 
     def test_release_all_releases_keyboard_mouse_and_consumer(self) -> None:
-        manager = HidGadgets()
-        manager._gadgets = {
+        hid_gadgets = HidGadgets()
+        hid_gadgets._gadgets = {
             "keyboard": _FakeKeyboard(),
             "mouse": _FakeMouse(),
             "consumer": _FakeConsumer(),
         }
 
-        manager.release_all()
+        hid_gadgets.release_all()
 
-        self.assertEqual(manager._gadgets["keyboard"].release_all_calls, 1)
-        self.assertEqual(manager._gadgets["mouse"].release_all_calls, 1)
-        self.assertEqual(manager._gadgets["consumer"].release_calls, 1)
+        self.assertEqual(hid_gadgets._gadgets["keyboard"].release_all_calls, 1)
+        self.assertEqual(hid_gadgets._gadgets["mouse"].release_all_calls, 1)
+        self.assertEqual(hid_gadgets._gadgets["consumer"].release_calls, 1)
 
     def test_release_all_continues_when_one_raises(self) -> None:
-        manager = HidGadgets()
+        hid_gadgets = HidGadgets()
         keyboard = _FakeKeyboard()
         mouse = _FakeMouse()
         consumer = _FakeConsumer()
         keyboard.release_all = Mock(side_effect=RuntimeError("keyboard stuck"))
-        manager._gadgets = {"keyboard": keyboard, "mouse": mouse, "consumer": consumer}
+        hid_gadgets._gadgets = {"keyboard": keyboard, "mouse": mouse, "consumer": consumer}
 
-        manager.release_all()
+        hid_gadgets.release_all()
 
         keyboard.release_all.assert_called_once_with()
         self.assertEqual(mouse.release_all_calls, 1)
         self.assertEqual(consumer.release_calls, 1)
 
     def test_enable_clears_published_refs_before_rebuild(self) -> None:
-        manager = HidGadgets()
-        manager._gadgets = {
+        hid_gadgets = HidGadgets()
+        hid_gadgets._gadgets = {
             "keyboard": _FakeKeyboard(),
             "mouse": _FakeMouse(),
             "consumer": _FakeConsumer(),
         }
-        manager._enabled = True
+        hid_gadgets._enabled = True
 
-        with patch.object(manager, "_prune_stale_hidg_nodes"):
+        with patch.object(hid_gadgets, "_prune_stale_hidg_nodes"):
             with patch(
                 "bluetooth_2_usb.hid_gadgets.rebuild_gadget",
                 side_effect=RuntimeError("rebuild failed"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "rebuild failed"):
-                    manager.enable()
+                    hid_gadgets.enable()
 
-        self.assertEqual(manager._gadgets, {"keyboard": None, "mouse": None, "consumer": None})
-        self.assertFalse(manager._enabled)
+        self.assertEqual(hid_gadgets._gadgets, {"keyboard": None, "mouse": None, "consumer": None})
+        self.assertFalse(hid_gadgets._enabled)
 
     def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
         devices = (SimpleNamespace(function_index=2), SimpleNamespace(function_index=7))
@@ -611,50 +611,50 @@ class HidGadgetsLayoutTest(unittest.TestCase):
         self.assertEqual(init_calls[0]["subclass"], 1)
 
     def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
-        manager = HidGadgets()
+        hid_gadgets = HidGadgets()
         with tempfile.TemporaryDirectory() as tmp:
             stale = Path(tmp) / "hidg1"
             stale.write_text("stale", encoding="utf-8")
-            with patch.object(manager, "_expected_hidg_paths", return_value=(stale,)):
-                manager._prune_stale_hidg_nodes()
+            with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(stale,)):
+                hid_gadgets._prune_stale_hidg_nodes()
             self.assertFalse(stale.exists())
 
     def test_prune_stale_hidg_nodes_ignores_unlink_race(self) -> None:
-        manager = HidGadgets()
+        hid_gadgets = HidGadgets()
         with tempfile.TemporaryDirectory() as tmp:
             stale = Path(tmp) / "hidg1"
             stale.write_text("stale", encoding="utf-8")
-            with patch.object(manager, "_expected_hidg_paths", return_value=(stale,)):
+            with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(stale,)):
                 with patch.object(Path, "unlink", side_effect=FileNotFoundError):
-                    manager._prune_stale_hidg_nodes()
+                    hid_gadgets._prune_stale_hidg_nodes()
 
     def test_validate_hidg_nodes_rejects_regular_files(self) -> None:
-        manager = HidGadgets()
+        hid_gadgets = HidGadgets()
         with tempfile.TemporaryDirectory() as tmp:
             bad = Path(tmp) / "hidg1"
             bad.write_text("not-a-device", encoding="utf-8")
-            with patch.object(manager, "_expected_hidg_paths", return_value=(bad,)):
+            with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(bad,)):
                 with self.assertRaisesRegex(RuntimeError, re.escape(str(bad))):
-                    manager._validate_hidg_nodes(timeout_sec=0, poll_interval_sec=0)
+                    hid_gadgets._validate_hidg_nodes(timeout_sec=0, poll_interval_sec=0)
 
     def test_validate_hidg_nodes_waits_for_delayed_nodes(self) -> None:
-        manager = HidGadgets()
+        hid_gadgets = HidGadgets()
 
         with patch.object(
-            manager, "_collect_invalid_hidg_nodes", side_effect=[["/dev/hidg0 (missing)"], []]
+            hid_gadgets, "_collect_invalid_hidg_nodes", side_effect=[["/dev/hidg0 (missing)"], []]
         ) as collect_invalid:
             with patch("bluetooth_2_usb.hid_gadgets.time.sleep") as sleep:
-                manager._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
+                hid_gadgets._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
 
         self.assertEqual(collect_invalid.call_count, 2)
         sleep.assert_called_once_with(0.01)
 
     def test_collect_invalid_hidg_nodes_rejects_unopenable_character_devices(self) -> None:
-        manager = HidGadgets()
+        hid_gadgets = HidGadgets()
         path = Path("/dev/hidg0")
         stats = SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=0)
 
-        with patch.object(manager, "_expected_hidg_paths", return_value=(path,)):
+        with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(path,)):
             with patch.object(Path, "stat", return_value=stats):
                 with patch("bluetooth_2_usb.hid_gadgets.os.minor", return_value=0, create=True):
                     with patch("bluetooth_2_usb.hid_gadgets.os.O_NONBLOCK", 0, create=True):
@@ -662,7 +662,7 @@ class HidGadgetsLayoutTest(unittest.TestCase):
                             "bluetooth_2_usb.hid_gadgets.os.open",
                             side_effect=OSError(errno.ENODEV, "No such device"),
                         ):
-                            invalid_paths = manager._collect_invalid_hidg_nodes()
+                            invalid_paths = hid_gadgets._collect_invalid_hidg_nodes()
 
         self.assertEqual(invalid_paths, [f"{path} (No such device)"])
 
@@ -1009,25 +1009,25 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(2, -3, 1, 1)])
+        self.assertEqual(hid_gadgets.mouse.moves, [(2, -3, 1, 1)])
 
     async def test_pending_mouse_delta_flushes_before_later_key_event(self) -> None:
         gate = _active_gate()
         input_device = _TestInputDevice(
             [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(183, _TestKeyEvent.key_down)]
         )
-        manager = _FakeHidGadgets()
+        hid_gadgets = _FakeHidGadgets()
         order = []
-        manager.mouse.move = lambda *args: order.append(("mouse", args))
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets.mouse.move = lambda *args: order.append(("mouse", args))
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         async def _record_key(event) -> None:
             order.append(("key", event.scancode))
@@ -1081,25 +1081,27 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(32767, -32767, 127, -127), (7233, -7233, 73, -73)])
+        self.assertEqual(
+            hid_gadgets.mouse.moves, [(32767, -32767, 127, -127), (7233, -7233, 73, -73)]
+        )
 
     async def test_large_mouse_deltas_abort_remaining_chunks_after_write_failure(self) -> None:
         gate = _active_gate()
-        manager = _FakeHidGadgets()
-        manager.mouse.move = Mock(side_effect=BrokenPipeError())
-        dispatcher = HidDispatcher(manager, gate)
+        hid_gadgets = _FakeHidGadgets()
+        hid_gadgets.mouse.move = Mock(side_effect=BrokenPipeError())
+        dispatcher = HidDispatcher(hid_gadgets, gate)
 
         await dispatcher._process_mouse_delta_with_retry(MouseDelta(40000, -40000, 200, -200))
 
-        manager.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
+        hid_gadgets.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
         self.assertEqual(dispatcher.stats.write_failures, 1)
         self.assertFalse(gate.active)
 
@@ -1113,15 +1115,15 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1)])
+        self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 0, 1)])
 
     async def test_high_resolution_vertical_wheel_accumulates_fractional_steps(self) -> None:
         gate = _active_gate()
@@ -1133,15 +1135,15 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0)])
+        self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 1, 0)])
 
     async def test_high_resolution_horizontal_wheel_suppresses_low_res_fallback(self) -> None:
         gate = _active_gate()
@@ -1155,15 +1157,15 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(0, 0, 0, 1), (0, 0, 0, -1)])
+        self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 0, 1), (0, 0, 0, -1)])
 
     async def test_high_resolution_vertical_wheel_suppresses_low_res_fallback(self) -> None:
         gate = _active_gate()
@@ -1177,15 +1179,15 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
             with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
                 async with relay:
                     await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(0, 0, 1, 0), (0, 0, -1, 0)])
+        self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 1, 0), (0, 0, -1, 0)])
 
     async def test_inactive_relay_discards_pending_mouse_events(self) -> None:
         gate = _active_gate()
@@ -1198,8 +1200,8 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 _TestSynEvent(),
             ]
         )
-        manager = _FakeHidGadgets()
-        relay = InputRelay(input_device, manager, relay_gate=gate)
+        hid_gadgets = _FakeHidGadgets()
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         async def deactivate(_event) -> None:
             gate.set_host_configured(False)
@@ -1215,62 +1217,62 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                         async with relay:
                             await relay.async_relay_events_loop()
 
-        self.assertEqual(manager.mouse.moves, [(5, 0, 0, 0)])
+        self.assertEqual(hid_gadgets.mouse.moves, [(5, 0, 0, 0)])
 
 
 class RelaySupervisorHotplugTest(unittest.TestCase):
     def test_device_added_ignored_until_supervisor_is_running(self) -> None:
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
 
-        controller._device_added("/dev/input/event7")
-        controller._device_added("/dev/input/event7")
+        supervisor._device_added("/dev/input/event7")
+        supervisor._device_added("/dev/input/event7")
 
-        self.assertEqual(controller._hotplug_probe_tasks, {})
+        self.assertEqual(supervisor._hotplug_probe_tasks, {})
 
-        controller._state = _SupervisorState.RUNNING
-        controller._schedule_hotplug_probe = Mock()
+        supervisor._state = _SupervisorState.RUNNING
+        supervisor._schedule_hotplug_probe = Mock()
 
-        controller._device_added("/dev/input/event7")
+        supervisor._device_added("/dev/input/event7")
 
-        controller._schedule_hotplug_probe.assert_called_once_with("/dev/input/event7")
+        supervisor._schedule_hotplug_probe.assert_called_once_with("/dev/input/event7")
 
     def test_device_removed_cancels_active_relay_while_running(self) -> None:
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
         task = _FakeTaskHandle()
-        controller._state = _SupervisorState.RUNNING
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(_FakeInputHandle(), task)
+        supervisor._state = _SupervisorState.RUNNING
+        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(_FakeInputHandle(), task)
 
-        controller._device_removed("/dev/input/event7")
+        supervisor._device_removed("/dev/input/event7")
 
         self.assertEqual(task.cancel_calls, 1)
 
     def test_device_added_ignores_after_shutdown_requested(self) -> None:
-        controller = _relay_supervisor()
-        controller.request_shutdown()
+        supervisor = _relay_supervisor()
+        supervisor._handle_runtime_event(ShutdownRequested("test"))
 
-        controller._device_added("/dev/input/event7")
+        supervisor._device_added("/dev/input/event7")
 
-        self.assertEqual(controller._hotplug_probe_tasks, {})
+        self.assertEqual(supervisor._hotplug_probe_tasks, {})
 
-    def test_request_shutdown_cancels_active_tasks_and_closes_devices(self) -> None:
+    def test_shutdown_event_cancels_active_tasks_and_closes_devices(self) -> None:
         gate = _active_gate()
         hid_gadgets = _FakeHidGadgets()
-        controller = _relay_supervisor(hid_gadgets=hid_gadgets, relay_gate=gate)
+        supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, relay_gate=gate)
         task = _FakeTaskHandle()
         device = _FakeInputHandle()
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(device, task)
-        controller._state = _SupervisorState.RUNNING
+        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(device, task)
+        supervisor._state = _SupervisorState.RUNNING
 
-        controller.request_shutdown()
+        supervisor._handle_runtime_event(ShutdownRequested("test"))
 
-        self.assertTrue(controller._shutdown_event.is_set())
-        self.assertIs(controller._state, _SupervisorState.STOPPING)
+        self.assertTrue(supervisor._shutdown_event.is_set())
+        self.assertIs(supervisor._state, _SupervisorState.STOPPING)
         self.assertFalse(gate.active)
         self.assertEqual(hid_gadgets.release_all_calls, 1)
         self.assertEqual(task.cancel_calls, 1)
         self.assertEqual(device.close_calls, 0)
-        self.assertIs(controller._active_relays["/dev/input/event7"].task, task)
-        self.assertIs(controller._active_relays["/dev/input/event7"].device, device)
+        self.assertIs(supervisor._active_relays["/dev/input/event7"].task, task)
+        self.assertIs(supervisor._active_relays["/dev/input/event7"].device, device)
 
         task.finish()
 
@@ -1282,53 +1284,53 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
     def test_udc_disconnect_releases_host_visible_hid_state_once(self) -> None:
         gate = RelayGate()
         hid_gadgets = _FakeHidGadgets()
-        controller = _relay_supervisor(hid_gadgets=hid_gadgets, relay_gate=gate)
-        gate.add_listener(controller._relay_gate_changed)
+        supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, relay_gate=gate)
+        gate.add_listener(supervisor._relay_gate_changed)
 
-        controller._handle_runtime_event(UdcStateChanged("configured"))
+        supervisor._handle_runtime_event(UdcStateChanged("configured"))
         self.assertTrue(gate.active)
 
-        controller._handle_runtime_event(UdcStateChanged("not_attached"))
-        controller._handle_runtime_event(UdcStateChanged("not_attached"))
+        supervisor._handle_runtime_event(UdcStateChanged("not_attached"))
+        supervisor._handle_runtime_event(UdcStateChanged("not_attached"))
 
         self.assertFalse(gate.active)
         self.assertEqual(hid_gadgets.release_all_calls, 1)
-        gate.remove_listener(controller._relay_gate_changed)
+        gate.remove_listener(supervisor._relay_gate_changed)
 
     def test_cancel_active_relay_removes_done_task_and_closes_handle(self) -> None:
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
         task = _FakeTaskHandle(done=True)
         device = _FakeInputHandle()
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(device, task)
+        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(device, task)
 
-        controller._cancel_active_relay("/dev/input/event7")
+        supervisor._cancel_active_relay("/dev/input/event7")
 
         self.assertEqual(task.cancel_calls, 0)
         self.assertEqual(device.close_calls, 1)
-        self.assertNotIn("/dev/input/event7", controller._active_relays)
+        self.assertNotIn("/dev/input/event7", supervisor._active_relays)
 
     def test_relay_task_done_ignores_stale_task(self) -> None:
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
         current_task = _FakeTaskHandle(done=True)
         stale_task = _FakeTaskHandle(done=True)
         device = _FakeInputHandle()
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(device, current_task)
+        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(device, current_task)
 
-        controller._relay_task_done("/dev/input/event7", stale_task)
+        supervisor._relay_task_done("/dev/input/event7", stale_task)
 
         self.assertEqual(device.close_calls, 0)
-        self.assertIn("/dev/input/event7", controller._active_relays)
+        self.assertIn("/dev/input/event7", supervisor._active_relays)
 
     def test_start_open_device_closes_duplicate_handle(self) -> None:
-        controller = _relay_supervisor()
-        controller._state = _SupervisorState.RUNNING
+        supervisor = _relay_supervisor()
+        supervisor._state = _SupervisorState.RUNNING
         active_device = _FakeInputHandle()
         duplicate_device = _FakeInputHandle()
-        controller._active_relays["/dev/input/event7"] = _ActiveRelay(
+        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(
             active_device, _FakeTaskHandle()
         )
 
-        controller._start_open_device(duplicate_device)
+        supervisor._start_open_device(duplicate_device)
 
         self.assertEqual(active_device.close_calls, 0)
         self.assertEqual(duplicate_device.close_calls, 1)
@@ -1336,59 +1338,59 @@ class RelaySupervisorHotplugTest(unittest.TestCase):
     def test_schedule_hotplug_probe_creates_one_task_per_path(self) -> None:
         task = _FakeTaskHandle()
         task_group = _FakeTaskGroup(task)
-        controller = _relay_supervisor(task_group=task_group, auto_discover=True)
-        controller._state = _SupervisorState.RUNNING
+        supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+        supervisor._state = _SupervisorState.RUNNING
 
-        controller._schedule_hotplug_probe("/dev/input/event7")
-        controller._schedule_hotplug_probe("/dev/input/event7")
+        supervisor._schedule_hotplug_probe("/dev/input/event7")
+        supervisor._schedule_hotplug_probe("/dev/input/event7")
 
         self.assertEqual(len(task_group.created), 1)
         self.assertEqual(task_group.created[0][1], "hotplug probe /dev/input/event7")
-        self.assertIs(controller._hotplug_probe_tasks["/dev/input/event7"], task)
+        self.assertIs(supervisor._hotplug_probe_tasks["/dev/input/event7"], task)
 
     def test_hotplug_probe_opens_matching_device_once_and_starts_relay(self) -> None:
         task = _FakeTaskHandle()
         task_group = _FakeTaskGroup(task)
-        controller = _relay_supervisor(task_group=task_group, auto_discover=True)
-        controller._state = _SupervisorState.RUNNING
+        supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+        supervisor._state = _SupervisorState.RUNNING
         device = _FakeInputHandle()
 
         with patch(
             "bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device
         ) as input_device:
-            asyncio.run(controller._run_hotplug_probe("/dev/input/event7"))
+            asyncio.run(supervisor._run_hotplug_probe("/dev/input/event7"))
 
         input_device.assert_called_once_with("/dev/input/event7")
         self.assertEqual(device.close_calls, 0)
-        self.assertIs(controller._active_relays["/dev/input/event7"].device, device)
-        self.assertIs(controller._active_relays["/dev/input/event7"].task, task)
+        self.assertIs(supervisor._active_relays["/dev/input/event7"].device, device)
+        self.assertIs(supervisor._active_relays["/dev/input/event7"].task, task)
         self.assertEqual(len(task.done_callbacks), 1)
 
     def test_hotplug_probe_retries_until_filters_match(self) -> None:
-        controller = _relay_supervisor(device_identifiers=["target"])
-        controller._state = _SupervisorState.RUNNING
+        supervisor = _relay_supervisor(device_identifiers=["target"])
+        supervisor._state = _SupervisorState.RUNNING
         device = _FakeInputHandle(name="not ready")
 
         with patch("bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device):
             with patch("bluetooth_2_usb.relay_supervisor.asyncio.sleep", new=AsyncMock()):
-                asyncio.run(controller._run_hotplug_probe("/dev/input/event7"))
+                asyncio.run(supervisor._run_hotplug_probe("/dev/input/event7"))
 
-        self.assertEqual(device.close_calls, controller.HOTPLUG_ADD_MAX_RETRIES + 1)
-        self.assertEqual(controller._active_relays, {})
+        self.assertEqual(device.close_calls, supervisor.HOTPLUG_ADD_MAX_RETRIES + 1)
+        self.assertEqual(supervisor._active_relays, {})
 
     def test_device_removed_cancels_delayed_hotplug_probe(self) -> None:
         task_group = _FakeTaskGroup()
-        controller = _relay_supervisor(task_group=task_group, device_identifiers=["target"])
-        controller._state = _SupervisorState.RUNNING
+        supervisor = _relay_supervisor(task_group=task_group, device_identifiers=["target"])
+        supervisor._state = _SupervisorState.RUNNING
         device = _FakeInputHandle(name="not ready")
 
         with patch("bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device):
-            controller._schedule_hotplug_probe("/dev/input/event7")
+            supervisor._schedule_hotplug_probe("/dev/input/event7")
 
-        controller._device_removed("/dev/input/event7")
+        supervisor._device_removed("/dev/input/event7")
 
         self.assertEqual(task_group.task.cancel_calls, 1)
-        self.assertNotIn("/dev/input/event7", controller._hotplug_probe_tasks)
+        self.assertNotIn("/dev/input/event7", supervisor._hotplug_probe_tasks)
 
 
 class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
@@ -1419,34 +1421,26 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 with patch("bluetooth_2_usb.relay_supervisor.InputRelay", WaitingInputRelay):
                     events: asyncio.Queue = asyncio.Queue()
                     async with asyncio.TaskGroup() as task_group:
-                        controller = _relay_supervisor(task_group=task_group, auto_discover=True)
-                        relay_task = task_group.create_task(controller.run(events))
+                        supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                        relay_task = task_group.create_task(supervisor.run(events))
                         await asyncio.wait_for(relay_ready.wait(), timeout=1)
-                        controller.request_shutdown()
+                        events.put_nowait(ShutdownRequested("test"))
                         await asyncio.wait_for(relay_task, timeout=1)
 
         self.assertEqual(device.close_calls, 1)
-        self.assertEqual(controller._active_relays, {})
-        self.assertIs(controller._state, _SupervisorState.STOPPED)
-
-    async def test_run_returns_when_shutdown_requested_before_start(self) -> None:
-        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices") as list_devices:
-            async with asyncio.TaskGroup() as task_group:
-                controller = _relay_supervisor(task_group=task_group, auto_discover=True)
-                controller.request_shutdown()
-                await controller.run(asyncio.Queue())
-
-        list_devices.assert_not_called()
-        self.assertIs(controller._state, _SupervisorState.STOPPED)
+        self.assertEqual(supervisor._active_relays, {})
+        self.assertIs(supervisor._state, _SupervisorState.STOPPED)
 
     async def test_run_cannot_restart_after_stop(self) -> None:
-        async with asyncio.TaskGroup() as task_group:
-            controller = _relay_supervisor(task_group=task_group, auto_discover=True)
-            controller.request_shutdown()
-            await controller.run(asyncio.Queue())
+        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[]):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                events: asyncio.Queue = asyncio.Queue()
+                events.put_nowait(ShutdownRequested("test"))
+                await supervisor.run(events)
 
         with self.assertRaisesRegex(RuntimeError, "cannot be restarted"):
-            await controller.run(asyncio.Queue())
+            await supervisor.run(asyncio.Queue())
 
     async def test_unexpected_input_relay_os_errors_are_reraised(self) -> None:
         class FailingInputRelay:
@@ -1462,12 +1456,12 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             async def async_relay_events_loop(self) -> None:
                 raise OSError(errno.EIO, "I/O error")
 
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
         device = SimpleNamespace(path="/dev/input/event7", name="failure device", close=Mock())
 
         with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
             with self.assertRaises(OSError) as raised:
-                await controller._run_input_relay(device)
+                await supervisor._run_input_relay(device)
 
         self.assertEqual(raised.exception.errno, errno.EIO)
         device.close.assert_not_called()
@@ -1486,11 +1480,11 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             async def async_relay_events_loop(self) -> None:
                 raise OSError(errno.ENODEV, "No such device")
 
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
         device = SimpleNamespace(path="/dev/input/event7", name="removed device", close=Mock())
 
         with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
-            await controller._run_input_relay(device)
+            await supervisor._run_input_relay(device)
 
         device.close.assert_not_called()
 
@@ -1508,12 +1502,12 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             async def async_relay_events_loop(self) -> None:
                 raise RuntimeError("boom")
 
-        controller = _relay_supervisor()
+        supervisor = _relay_supervisor()
         device = SimpleNamespace(path="/dev/input/event7", name="failure device", close=Mock())
 
         with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
             with self.assertRaisesRegex(RuntimeError, "boom"):
-                await controller._run_input_relay(device)
+                await supervisor._run_input_relay(device)
 
         device.close.assert_not_called()
 
@@ -1526,13 +1520,13 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 events: asyncio.Queue = asyncio.Queue()
                 await events.put(DeviceAdded("/dev/input/event7"))
                 async with asyncio.TaskGroup() as task_group:
-                    controller = _relay_supervisor(
+                    supervisor = _relay_supervisor(
                         hid_gadgets=hid_gadgets,
                         relay_gate=gate,
                         task_group=task_group,
                     )
-                    controller._handle_runtime_event = Mock(side_effect=RuntimeError("boom"))
-                    await controller.run(events)
+                    supervisor._handle_runtime_event = Mock(side_effect=RuntimeError("boom"))
+                    await supervisor.run(events)
 
         self.assertIsInstance(raised.exception.exceptions[0], RuntimeError)
         self.assertEqual(str(raised.exception.exceptions[0]), "boom")

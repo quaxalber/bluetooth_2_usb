@@ -28,7 +28,12 @@ from bluetooth_2_usb.loopback.capture_windows import (
     RI_MOUSE_LEFT_BUTTON_UP,
     RI_MOUSE_WHEEL,
 )
-from bluetooth_2_usb.loopback.constants import EXIT_INTERRUPTED, EXIT_PREREQUISITE, EXIT_USAGE
+from bluetooth_2_usb.loopback.constants import (
+    EXIT_ACCESS,
+    EXIT_INTERRUPTED,
+    EXIT_PREREQUISITE,
+    EXIT_USAGE,
+)
 from bluetooth_2_usb.loopback.inject import (
     DEFAULT_SERVICE_SETTLE_SEC,
     SERVICE_SETTLE_ENV,
@@ -859,19 +864,20 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(result.exit_code, EXIT_PREREQUISITE)
         sleep.assert_not_called()
 
+    def test_run_inject_closes_created_devices_when_setup_fails(self) -> None:
+        keyboard = Mock()
 
-class LoopbackCliTest(unittest.TestCase):
-    def test_old_flat_loopback_modules_are_not_preserved(self) -> None:
-        for module_name in (
-            "bluetooth_2_usb.loopback_capture",
-            "bluetooth_2_usb.loopback_capture_windows",
-            "bluetooth_2_usb.loopback_common",
-            "bluetooth_2_usb.loopback_inject",
-            "bluetooth_2_usb.loopback.__main__",
-        ):
-            with self.subTest(module_name=module_name):
-                with self.assertRaises(ModuleNotFoundError):
-                    importlib.import_module(module_name)
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("bluetooth_2_usb.loopback.inject._wait_for_service_settle"):
+                with patch(
+                    "bluetooth_2_usb.loopback.inject.UInput",
+                    side_effect=[keyboard, OSError("mouse failed")],
+                ):
+                    result = run_inject("combo")
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_ACCESS)
+        keyboard.close.assert_called_once_with()
 
     def test_inject_usage_error_returns_exit_usage(self) -> None:
         stdout = io.StringIO()

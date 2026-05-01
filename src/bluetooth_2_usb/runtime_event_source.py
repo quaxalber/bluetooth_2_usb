@@ -124,8 +124,8 @@ class RuntimeEventSource:
 
         action = getattr(device, "action", None)
         if action == "add":
-            logger.debug("RuntimeEventSource: added input => %s", device_node)
+            logger.debug("Input device added: %s", device_node)
             self._events.put_nowait(DeviceAdded(device_node))
         elif action == "remove":
-            logger.debug("RuntimeEventSource: removed input => %s", device_node)
+            logger.debug("Input device removed: %s", device_node)
             self._events.put_nowait(DeviceRemoved(device_node))

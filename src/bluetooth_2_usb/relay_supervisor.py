@@ -126,13 +126,13 @@ class RelaySupervisor:
             try:
                 initial_devices = list_input_devices()
             except DeviceEnumerationError as exc:
-                logger.exception("RelaySupervisor: Failed enumerating input devices: %s", exc)
+                logger.exception("Failed enumerating input devices: %s", exc)
                 raise
 
             self._relay_gate.add_listener(self._relay_gate_changed)
             await self._run(events, initial_devices)
         except Exception:
-            logger.exception("RelaySupervisor failed.")
+            logger.exception("Relay supervisor failed.")
             raise
         finally:
             self._state = _SupervisorState.STOPPED
@@ -142,14 +142,14 @@ class RelaySupervisor:
             self._relay_gate.remove_listener(self._relay_gate_changed)
             self._relay_gate.set_host_configured(False)
             self._release_all_once()
-            logger.debug("RelaySupervisor: TaskGroup exited.")
+            logger.debug("Task group exited.")
 
     async def _run(
         self,
         events: asyncio.Queue[RuntimeEvent],
         initial_devices: list[InputDevice],
     ) -> None:
-        logger.debug("RelaySupervisor: TaskGroup started.")
+        logger.debug("Task group started.")
 
         if not self._shutdown_requested():
             self._state = _SupervisorState.RUNNING
@@ -199,7 +199,7 @@ class RelaySupervisor:
             self._relay_gate.set_host_configured(event.state is UdcState.CONFIGURED)
         elif isinstance(event, ShutdownRequested):
             logger.debug("Runtime shutdown requested: %s", event.reason)
-            self.request_shutdown()
+            self._begin_shutdown()
 
     def _relay_gate_changed(self, active: bool) -> None:
         if active:
@@ -207,7 +207,7 @@ class RelaySupervisor:
             return
         self._release_all_once()
 
-    def request_shutdown(self) -> None:
+    def _begin_shutdown(self) -> None:
         """
         Stop scheduling new relay work and actively unwind existing device tasks.
 
@@ -224,17 +224,14 @@ class RelaySupervisor:
         self._relay_gate.set_host_configured(False)
         self._release_all_once()
 
-        def _begin_shutdown() -> None:
-            tasks = [active_relay.task for active_relay in self._active_relays.values()]
-            for device_path in list(self._active_relays):
-                self._cancel_active_relay(device_path)
-            self._release_gadgets_after_relay_tasks_stop(tasks)
-
-        _begin_shutdown()
+        tasks = [active_relay.task for active_relay in self._active_relays.values()]
+        for device_path in list(self._active_relays):
+            self._cancel_active_relay(device_path)
+        self._release_gadgets_after_relay_tasks_stop(tasks)
 
     def _device_added(self, device_path: str) -> None:
         if self._state is not _SupervisorState.RUNNING:
-            logger.debug("Ignoring add for %s; controller is shutting down.", device_path)
+            logger.debug("Ignoring add for %s; supervisor is shutting down.", device_path)
             return
 
         self._schedule_hotplug_probe(device_path)
@@ -245,7 +242,7 @@ class RelaySupervisor:
             _SupervisorState.STOPPING,
             _SupervisorState.STOPPED,
         ):
-            logger.debug("Ignoring remove for %s; controller is shutting down.", device_path)
+            logger.debug("Ignoring remove for %s; supervisor is shutting down.", device_path)
             return
         if self._shutdown_requested():
             logger.debug("Ignoring remove for %s; event loop is unavailable.", device_path)
@@ -329,7 +326,7 @@ class RelaySupervisor:
 
     def _start_open_device(self, device: InputDevice) -> None:
         if self._state is not _SupervisorState.RUNNING:
-            logger.debug("Ignoring %s; controller is not running.", device)
+            logger.debug("Ignoring %s; supervisor is not running.", device)
             device.close()
             return
 

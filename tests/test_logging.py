@@ -1,4 +1,3 @@
-import importlib
 import logging
 import os
 import tempfile
@@ -80,21 +79,3 @@ class LoggingConfigurationTest(unittest.TestCase):
             for handler in file_handlers:
                 self.package_logger.removeHandler(handler)
                 handler.close()
-
-
-class RelayModuleBoundaryTest(unittest.TestCase):
-    def test_old_runtime_module_imports_are_not_preserved(self) -> None:
-        for module_name in (
-            "bluetooth_2_usb.device_relay",
-            "bluetooth_2_usb.gadget_config",
-            "bluetooth_2_usb.gadget_manager",
-            "bluetooth_2_usb.hid_layout",
-            "bluetooth_2_usb.relay",
-            "bluetooth_2_usb.relay_controller",
-            "bluetooth_2_usb.runtime_monitor",
-            "bluetooth_2_usb.service_config",
-            "bluetooth_2_usb.service_runner",
-        ):
-            with self.subTest(module_name=module_name):
-                with self.assertRaises(ModuleNotFoundError):
-                    importlib.import_module(module_name)

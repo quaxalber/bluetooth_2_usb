@@ -104,7 +104,9 @@ class HidDispatcher:
             def move_mouse(partial=partial) -> None:
                 mouse = self._hid_gadgets.mouse
                 if mouse is None:
-                    raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
+                    raise RuntimeError(
+                        "Mouse gadget is not available; HID gadgets are not enabled."
+                    )
                 mouse.move(*partial)
 
             if not await self._process_hid_action_with_retry(move_mouse, "mouse movement"):
@@ -164,7 +166,7 @@ def dispatch_event_to_hid(event: InputEvent, hid_gadgets: HidGadgets) -> None:
     if isinstance(event, RelEvent):
         mouse = hid_gadgets.mouse
         if mouse is None:
-            raise RuntimeError("Mouse gadget not initialized or manager not enabled.")
+            raise RuntimeError("Mouse gadget is not available; HID gadgets are not enabled.")
         mouse.move(*get_mouse_movement(event))
     elif isinstance(event, KeyEvent):
         dispatch_key_event_to_hid(event, hid_gadgets)
@@ -184,7 +186,7 @@ def dispatch_key_event_to_hid(event: KeyEvent, hid_gadgets: HidGadgets) -> None:
 
     output_gadget = select_hid_gadget(event, hid_gadgets)
     if output_gadget is None:
-        raise RuntimeError("No appropriate USB gadget found (manager not enabled?).")
+        raise RuntimeError("No appropriate USB HID gadget is available.")
 
     if event.keystate == KeyEvent.key_down:
         logger.debug("Pressing %s (0x%02X) via %s", key_name, key_id, output_gadget)

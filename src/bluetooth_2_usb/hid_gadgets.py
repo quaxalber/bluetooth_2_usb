@@ -169,7 +169,7 @@ class HidGadgets:
         """
         Best-effort release of any pressed/active state on all HID gadgets.
 
-        Shared gadget state is owned by the manager rather than individual
+        Shared gadget state is owned by HidGadgets rather than individual
         device relays, so global shutdown can clear host-visible state once.
         """
         seen: set[int] = set()

@@ -65,6 +65,6 @@ class ShortcutToggler:
         Toggle the global relaying state: if it was on, turn it off, otherwise turn it on.
         """
         if self._relay_gate.toggle_user_enabled():
-            logger.info("ShortcutToggler: Relaying is now ON.")
+            logger.info("Relaying is now ON.")
         else:
-            logger.info("ShortcutToggler: Relaying is now OFF.")
+            logger.info("Relaying is now OFF.")

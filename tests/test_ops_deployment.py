@@ -13,6 +13,18 @@ BOOT_CONFIG = "bluetooth_2_usb.ops.deployment.boot_config"
 
 
 class OpsDeploymentTest(unittest.TestCase):
+    def test_managed_paths_derives_paths_from_overrides(self) -> None:
+        paths = ManagedPaths(
+            persist_mount=Path("/tmp/persist"),
+            bluetooth_service_dropin_dir=Path("/tmp/dropins"),
+        )
+
+        self.assertEqual(paths.persist_bluetooth_dir, Path("/tmp/persist/bluetooth"))
+        self.assertEqual(
+            paths.bluetooth_service_dropin,
+            Path("/tmp/dropins/bluetooth_2_usb_persist.conf"),
+        )
+
     def test_rollback_stack_runs_callbacks_in_reverse_order(self) -> None:
         calls = []
         rollback = RollbackStack()
@@ -175,7 +187,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 env_file=root / "env",
                 readonly_env_file=root / "readonly-env",
                 bluetooth_bind_mount_unit=root / "var-lib-bluetooth.mount",
-                bluetooth_service_dropin=root / "bluetooth_2_usb_persist.conf",
+                bluetooth_service_dropin_dir=root,
             )
             config = ReadonlyConfig(
                 mode="disabled",

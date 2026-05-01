@@ -15,6 +15,8 @@ class RuntimeEventTest(unittest.TestCase):
         self.assertEqual(DeviceRemoved("/dev/input/event2"), DeviceRemoved("/dev/input/event2"))
         self.assertEqual(UdcStateChanged("configured"), UdcStateChanged("configured"))
         self.assertEqual(ShutdownRequested("signal"), ShutdownRequested("signal"))
+        self.assertNotEqual(DeviceAdded("/dev/input/event1"), DeviceAdded("/dev/input/event2"))
+        self.assertNotEqual(UdcStateChanged("configured"), UdcStateChanged("not attached"))
 
     def test_udc_state_changed_normalizes_raw_state(self) -> None:
         self.assertIs(UdcStateChanged("not attached").state, UdcState.NOT_ATTACHED)

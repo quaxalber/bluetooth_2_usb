@@ -113,7 +113,6 @@ class Runtime:
                         event_source.stop()
                     if task is supervisor_task:
                         self._events.put_nowait(ShutdownRequested("runtime"))
-                        supervisor.request_shutdown()
                 await self._wait_for_shutdown(supervisor_task, event_source_task)
         except asyncio.CancelledError:
             raise
@@ -124,7 +123,6 @@ class Runtime:
             event_source.stop()
             if supervisor is not None:
                 self._events.put_nowait(ShutdownRequested("runtime cleanup"))
-                supervisor.request_shutdown()
             await self._wait_for_shutdown(supervisor_task, event_source_task)
 
     async def _wait_for_shutdown(
@@ -155,20 +153,20 @@ class Runtime:
         previous_handlers: dict[int, signal.Handlers] = {}
         loop_handled_signals: list[int] = []
 
-        def _request_shutdown(sig_name: str) -> None:
-            logger.debug("Received signal: %s. Requesting graceful shutdown.", sig_name)
+        def _enqueue_shutdown(sig_name: str) -> None:
+            logger.debug("Received signal: %s. Enqueuing graceful shutdown.", sig_name)
             self._events.put_nowait(ShutdownRequested(sig_name))
 
         def _fallback_signal_handler(sig: int, frame) -> None:
             del frame
-            _request_shutdown(signal.Signals(sig).name)
+            _enqueue_shutdown(signal.Signals(sig).name)
 
         for handled_signal in _handled_shutdown_signals():
             sig_name = signal.Signals(handled_signal).name
             add_signal_handler = getattr(active_loop, "add_signal_handler", None)
             if add_signal_handler is not None:
                 try:
-                    active_loop.add_signal_handler(handled_signal, _request_shutdown, sig_name)
+                    active_loop.add_signal_handler(handled_signal, _enqueue_shutdown, sig_name)
                     loop_handled_signals.append(handled_signal)
                     continue
                 except (NotImplementedError, RuntimeError, ValueError):

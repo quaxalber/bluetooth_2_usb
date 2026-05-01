@@ -98,16 +98,14 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
             def __init__(self, task_group: asyncio.TaskGroup) -> None:
                 self.task_group = task_group
                 self.child_task_created = False
-                self.shutdown_calls = 0
+                self.shutdown_events = []
                 self.stop_event = asyncio.Event()
 
-            async def run(self, _events) -> None:
+            async def run(self, events) -> None:
                 self.task_group.create_task(asyncio.sleep(0), name="supervisor child")
                 self.child_task_created = True
-                await self.stop_event.wait()
-
-            def request_shutdown(self) -> None:
-                self.shutdown_calls += 1
+                event = await events.get()
+                self.shutdown_events.append(event)
                 self.stop_event.set()
 
         runtime = self._runtime()
@@ -126,4 +124,5 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(supervisor.task_group)
         self.assertTrue(supervisor.child_task_created)
         self.assertGreaterEqual(event_source.stop_calls, 1)
-        self.assertGreaterEqual(supervisor.shutdown_calls, 1)
+        self.assertTrue(supervisor.shutdown_events)
+        self.assertIsInstance(supervisor.shutdown_events[0], ShutdownRequested)

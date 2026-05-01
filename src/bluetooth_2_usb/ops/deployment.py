@@ -227,15 +227,14 @@ def install(repo_root: Path) -> None:
         raise
     else:
         rollback.commit()
-    print("""
-Next steps
-1. Reboot the Pi so the updated boot configuration takes effect.
-2. After reboot, run:
-   sudo bluetooth_2_usb smoketest
-3. If you want persistent read-only operation afterwards, run:
-   sudo bluetooth_2_usb readonly setup --device /dev/YOUR-PARTITION
-   sudo bluetooth_2_usb readonly enable
-""")
+    info("Next steps")
+    info("1. Reboot the Pi so the updated boot configuration takes effect.")
+    info("2. After reboot, run: sudo bluetooth_2_usb smoketest")
+    info(
+        "3. For persistent read-only operation, run: "
+        "sudo bluetooth_2_usb readonly setup --device /dev/YOUR-PARTITION"
+    )
+    info("   Then run: sudo bluetooth_2_usb readonly enable")
 
 
 def update(repo_root: Path) -> None:

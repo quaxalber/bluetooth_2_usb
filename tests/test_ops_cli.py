@@ -21,22 +21,6 @@ class OpsCliTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 2)
 
-    def test_old_loopback_operational_commands_are_not_preserved(self) -> None:
-        for command in (
-            "loopback-inject",
-            "loopback-capture",
-            "readonly-setup",
-            "readonly-enable",
-            "readonly-disable",
-            "install-hid-udev-rule",
-        ):
-            with self.subTest(command=command):
-                with self.assertRaises(SystemExit) as raised:
-                    with patch("sys.stderr", new=io.StringIO()):
-                        cli.main([command], prog="bluetooth_2_usb")
-
-                self.assertEqual(raised.exception.code, 2)
-
     def test_nested_operational_commands_dispatch_without_dash_aliases(self) -> None:
         with patch("bluetooth_2_usb.ops.cli.ensure_root"):
             with patch("bluetooth_2_usb.ops.cli.prepare_log"):

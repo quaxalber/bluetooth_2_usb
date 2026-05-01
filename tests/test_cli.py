@@ -41,10 +41,10 @@ class CliTest(unittest.TestCase):
         stderr = io.StringIO()
 
         with redirect_stderr(stderr):
-            exit_code = cli.run(["loopback-inject", "--help"])
+            exit_code = cli.run(["not-a-command", "--help"])
 
         self.assertEqual(exit_code, cli.EXIT_USAGE)
-        self.assertIn("Unknown command: loopback-inject", stderr.getvalue())
+        self.assertIn("Unknown command: not-a-command", stderr.getvalue())
         self.assertIn("bluetooth_2_usb loopback inject/capture", stderr.getvalue())
 
     def test_validate_env_json_output(self) -> None:
