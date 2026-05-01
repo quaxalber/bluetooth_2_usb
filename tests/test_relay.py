@@ -13,7 +13,7 @@ import usb_hid
 from bluetooth_2_usb.device_identifier import DeviceIdentifier, DeviceIdentifierType
 from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
 from bluetooth_2_usb.extended_mouse import ExtendedMouse
-from bluetooth_2_usb.hid_dispatch import HidDispatcher, dispatch_key_event_to_hid
+from bluetooth_2_usb.hid_dispatch import HidDispatcher
 from bluetooth_2_usb.hid_gadget_config import rebuild_gadget, remove_owned_gadgets
 from bluetooth_2_usb.hid_gadget_layout import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
@@ -368,13 +368,51 @@ class ExtendedMouseButtonMappingTest(unittest.TestCase):
 class HidDispatchTest(unittest.TestCase):
     def test_consumer_key_release_uses_consumer_control_release_api(self) -> None:
         hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
-        dispatch_key_event_to_hid(
-            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0), hid_gadgets
-        )
+        dispatcher._dispatch_key_event(SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0))
 
         self.assertEqual(hid_gadgets.consumer.release_calls, 1)
         self.assertEqual(hid_gadgets.mouse.releases, [])
+
+    def test_dispatch_categorizes_raw_event(self) -> None:
+        dispatcher = HidDispatcher(_FakeHidGadgets(), _active_gate())
+        raw_event = object()
+        categorized = _TestSynEvent()
+
+        with patch(
+            "bluetooth_2_usb.hid_dispatch.categorize", return_value=categorized
+        ) as categorize:
+            asyncio.run(dispatcher.dispatch(raw_event))
+
+        categorize.assert_called_once_with(raw_event)
+
+    def test_dispatch_accepts_single_syn_event_and_flushes_mouse_delta(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate())
+
+        with patch("bluetooth_2_usb.hid_dispatch.categorize", side_effect=lambda event: event):
+            with patch("bluetooth_2_usb.hid_dispatch.RelEvent", _TestRelEvent):
+                asyncio.run(dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7)))
+                asyncio.run(dispatcher.dispatch(_TestSynEvent()))
+
+        self.assertEqual(hid_gadgets.mouse.moves, [(7, 0, 0, 0)])
+
+    def test_mouse_blocking_write_skips_chunk_without_retrying(self) -> None:
+        gate = _active_gate()
+        hid_gadgets = _FakeHidGadgets()
+        hid_gadgets.mouse.move = Mock(side_effect=[BlockingIOError(), None])
+        dispatcher = HidDispatcher(hid_gadgets, gate)
+
+        dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
+
+        self.assertEqual(
+            hid_gadgets.mouse.move.mock_calls,
+            [call(32767, -32767, 127, -127), call(7233, -7233, 73, -73)],
+        )
+        self.assertEqual(dispatcher.stats.write_retries, 0)
+        self.assertEqual(dispatcher.stats.write_failures, 1)
+        self.assertTrue(gate.active)
 
 
 class DeviceIdentifierTest(unittest.TestCase):
@@ -789,10 +827,9 @@ class HidGadgetsLayoutTest(unittest.TestCase):
 class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self._event_type_patchers = [
-            patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent),
-            patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent),
             patch("bluetooth_2_usb.hid_dispatch.KeyEvent", _TestKeyEvent),
             patch("bluetooth_2_usb.hid_dispatch.RelEvent", _TestRelEvent),
+            patch("bluetooth_2_usb.hid_dispatch.categorize", side_effect=lambda event: event),
         ]
         for patcher in self._event_type_patchers:
             patcher.start()
@@ -815,13 +852,11 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
             seen.append((event.scancode, event.keystate))
             await asyncio.sleep(0.001)
 
-        with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                with patch.object(
-                    relay._dispatcher, "_process_event_with_retry", side_effect=_slow_process
-                ):
-                    async with relay:
-                        await relay.async_relay_events_loop()
+        with patch.object(
+            relay._dispatcher, "_process_key_event_with_retry", side_effect=_slow_process
+        ):
+            async with relay:
+                await relay.async_relay_events_loop()
 
         self.assertEqual(seen, [(183, 1), (183, 0), (184, 1), (184, 0)])
 
@@ -862,6 +897,17 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(hid_gadgets.mouse.release_all_calls, 0)
         self.assertEqual(hid_gadgets.consumer.release_calls, 0)
 
+    async def test_input_relay_passes_raw_events_to_dispatcher(self) -> None:
+        gate = _active_gate()
+        raw_event = object()
+        relay = InputRelay(_TestInputDevice([raw_event]), _FakeHidGadgets(), relay_gate=gate)
+
+        with patch.object(relay._dispatcher, "dispatch", new=AsyncMock()) as dispatch:
+            async with relay:
+                await relay.async_relay_events_loop()
+
+        dispatch.assert_awaited_once_with(raw_event)
+
     async def test_handled_shortcut_runs_pause_cleanup_before_continue(self) -> None:
         gate = _active_gate()
         hid_gadgets = _FakeHidGadgets()
@@ -881,18 +927,23 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
             shortcut_toggler=toggler,
         )
 
-        with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-                with patch(
-                    "bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event
-                ):
-                    async with relay:
-                        await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertFalse(gate.active)
         self.assertEqual(input_device.grab_calls, 1)
         self.assertEqual(input_device.ungrab_calls, 1)
         self.assertEqual(hid_gadgets.mouse.moves, [])
+
+    async def test_shortcut_can_resume_when_relay_inactive(self) -> None:
+        gate = _active_gate()
+        gate.set_user_enabled(False)
+        toggler = ShortcutToggler(shortcut_keys={"KEY_F12"}, relay_gate=gate)
+        dispatcher = HidDispatcher(_FakeHidGadgets(), gate, toggler)
+
+        await dispatcher.dispatch(_TestKeyEvent(88, _TestKeyEvent.key_down))
+
+        self.assertTrue(gate.active)
 
     async def test_input_device_removal_stops_reader_without_failing_task_group(self) -> None:
         gate = _active_gate()
@@ -906,13 +957,11 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         async def _record_process(event) -> None:
             seen.append((event.scancode, event.keystate))
 
-        with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                with patch.object(
-                    relay._dispatcher, "_process_event_with_retry", side_effect=_record_process
-                ):
-                    async with relay:
-                        await relay.async_relay_events_loop()
+        with patch.object(
+            relay._dispatcher, "_process_key_event_with_retry", side_effect=_record_process
+        ):
+            async with relay:
+                await relay.async_relay_events_loop()
 
         self.assertEqual(seen, [(183, 1), (183, 0)])
 
@@ -948,14 +997,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                with patch(
-                    "bluetooth_2_usb.hid_dispatch.dispatch_event_to_hid",
-                    side_effect=BrokenPipeError(),
-                ):
-                    async with relay:
-                        await relay.async_relay_events_loop()
+        with patch.object(relay._dispatcher, "_dispatch_key_event", side_effect=BrokenPipeError()):
+            async with relay:
+                await relay.async_relay_events_loop()
 
         self.assertFalse(gate.active)
         self.assertTrue(gate.state.write_suspended)
@@ -964,7 +1008,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_blocked_hid_retry_stops_after_relaying_is_cleared(self) -> None:
         gate = _active_gate()
         dispatcher = HidDispatcher(_FakeHidGadgets(), gate)
-        action = Mock(side_effect=BlockingIOError())
+        event = _TestKeyEvent(183, _TestKeyEvent.key_down)
 
         async def clear_relaying(_delay) -> None:
             gate.set_host_configured(False)
@@ -972,10 +1016,12 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         with patch(
             "bluetooth_2_usb.hid_dispatch.asyncio.sleep", new=AsyncMock(side_effect=clear_relaying)
         ) as sleep:
-            processed = await dispatcher._process_hid_action_with_retry(action, "test write")
+            with patch.object(
+                dispatcher, "_dispatch_key_event", side_effect=BlockingIOError()
+            ) as dispatch:
+                await dispatcher._process_key_event_with_retry(event)
 
-        self.assertFalse(processed)
-        action.assert_called_once_with()
+        dispatch.assert_called_once_with(event)
         sleep.assert_awaited_once_with(dispatcher.HID_WRITE_RETRY_DELAY_SEC)
         self.assertEqual(dispatcher.stats.write_retries, 1)
         self.assertEqual(dispatcher.stats.write_failures, 0)
@@ -985,15 +1031,12 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                with patch(
-                    "bluetooth_2_usb.hid_dispatch.dispatch_event_to_hid",
-                    side_effect=RuntimeError("dispatch bug"),
-                ):
-                    async with relay:
-                        with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
-                            await relay.async_relay_events_loop()
+        with patch.object(
+            relay._dispatcher, "_dispatch_key_event", side_effect=RuntimeError("dispatch bug")
+        ):
+            async with relay:
+                with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
+                    await relay.async_relay_events_loop()
 
         self.assertTrue(gate.active)
         self.assertEqual(relay._dispatcher.stats.write_failures, 1)
@@ -1012,10 +1055,8 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                async with relay:
-                    await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertEqual(hid_gadgets.mouse.moves, [(2, -3, 1, 1)])
 
@@ -1032,16 +1073,11 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         async def _record_key(event) -> None:
             order.append(("key", event.scancode))
 
-        with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-            with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-                with patch(
-                    "bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event
-                ):
-                    with patch.object(
-                        relay._dispatcher, "_process_event_with_retry", side_effect=_record_key
-                    ):
-                        async with relay:
-                            await relay.async_relay_events_loop()
+        with patch.object(
+            relay._dispatcher, "_process_key_event_with_retry", side_effect=_record_key
+        ):
+            async with relay:
+                await relay.async_relay_events_loop()
 
         self.assertEqual(order, [("mouse", (5, 0, 0, 0)), ("key", 183)])
 
@@ -1058,11 +1094,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         )
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
-                    async with relay:
-                        await relay.async_relay_events_loop()
+        with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+            async with relay:
+                await relay.async_relay_events_loop()
 
         output = "\n".join(logs.output)
         self.assertIn("Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0.0 pan=0.0", output)
@@ -1084,22 +1118,20 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                async with relay:
-                    await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertEqual(
             hid_gadgets.mouse.moves, [(32767, -32767, 127, -127), (7233, -7233, 73, -73)]
         )
 
-    async def test_large_mouse_deltas_abort_remaining_chunks_after_write_failure(self) -> None:
+    async def test_large_mouse_deltas_abort_remaining_chunks_after_broken_pipe(self) -> None:
         gate = _active_gate()
         hid_gadgets = _FakeHidGadgets()
         hid_gadgets.mouse.move = Mock(side_effect=BrokenPipeError())
         dispatcher = HidDispatcher(hid_gadgets, gate)
 
-        await dispatcher._process_mouse_delta_with_retry(MouseDelta(40000, -40000, 200, -200))
+        dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
 
         hid_gadgets.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
         self.assertEqual(dispatcher.stats.write_failures, 1)
@@ -1118,10 +1150,8 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                async with relay:
-                    await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 0, 1)])
 
@@ -1138,10 +1168,8 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                async with relay:
-                    await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 1, 0)])
 
@@ -1160,10 +1188,8 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                async with relay:
-                    await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 0, 1), (0, 0, 0, -1)])
 
@@ -1182,10 +1208,8 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event):
-                async with relay:
-                    await relay.async_relay_events_loop()
+        async with relay:
+            await relay.async_relay_events_loop()
 
         self.assertEqual(hid_gadgets.mouse.moves, [(0, 0, 1, 0), (0, 0, -1, 0)])
 
@@ -1206,16 +1230,11 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         async def deactivate(_event) -> None:
             gate.set_host_configured(False)
 
-        with patch("bluetooth_2_usb.input_relay.RelEvent", _TestRelEvent):
-            with patch("bluetooth_2_usb.input_relay.KeyEvent", _TestKeyEvent):
-                with patch(
-                    "bluetooth_2_usb.input_relay.categorize", side_effect=lambda event: event
-                ):
-                    with patch.object(
-                        relay._dispatcher, "_process_event_with_retry", side_effect=deactivate
-                    ):
-                        async with relay:
-                            await relay.async_relay_events_loop()
+        with patch.object(
+            relay._dispatcher, "_process_key_event_with_retry", side_effect=deactivate
+        ):
+            async with relay:
+                await relay.async_relay_events_loop()
 
         self.assertEqual(hid_gadgets.mouse.moves, [(5, 0, 0, 0)])
 

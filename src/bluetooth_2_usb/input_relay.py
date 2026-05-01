@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import errno
 
-from .evdev_types import InputDevice, KeyEvent, RelEvent, categorize
+from .evdev_types import InputDevice
 from .hid_dispatch import HidDispatcher
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
@@ -36,10 +36,9 @@ class InputRelay:
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
         """
         self._input_device = input_device
-        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate)
+        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler)
         self._grab_device = grab_device
         self._relay_gate = relay_gate
-        self._shortcut_toggler = shortcut_toggler
 
         self._currently_grabbed = False
 
@@ -129,25 +128,7 @@ class InputRelay:
         input_disappeared = False
         try:
             async for input_event in self._input_device.async_read_loop():
-                event = categorize(input_event)
-
-                if any(isinstance(event, ev_type) for ev_type in [KeyEvent, RelEvent]):
-                    logger.debug(
-                        "Received %s from %s (%s)",
-                        event,
-                        self._input_device.name,
-                        self._input_device.path,
-                    )
-
-                if self._shortcut_toggler and isinstance(event, KeyEvent):
-                    if self._shortcut_toggler.handle_key_event(event):
-                        continue
-
-                if not self._relay_gate.active:
-                    self._dispatcher.discard_pending()
-                    continue
-
-                await self._dispatcher.dispatch(event, input_event)
+                await self._dispatcher.dispatch(input_event)
         except OSError as ex:
             if ex.errno != errno.ENODEV:
                 raise
@@ -158,7 +139,7 @@ class InputRelay:
             )
             self._dispatcher.discard_pending()
         try:
-            await self._dispatcher.flush()
+            self._dispatcher.flush()
         except OSError as ex:
             if not input_disappeared or ex.errno != errno.ENODEV:
                 raise
