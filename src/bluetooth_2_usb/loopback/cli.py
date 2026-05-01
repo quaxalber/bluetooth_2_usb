@@ -143,6 +143,11 @@ def _print_result(result: LoopbackResult, output: str) -> None:
 
 
 def run(argv: list[str] | None = None) -> int:
+    """Run the ``bluetooth_2_usb loopback`` command group.
+
+    :param argv: Loopback arguments without ``bluetooth_2_usb loopback``. Uses parser defaults when None.
+    :return: Process-style exit code from inject, capture, validation, or lock handling.
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 

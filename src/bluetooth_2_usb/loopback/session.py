@@ -18,13 +18,22 @@ else:
 
 
 class LoopbackBusyError(RuntimeError):
+    """Raised when another loopback command already owns the process lock."""
+
     exit_code = EXIT_ACCESS
 
 
 class LoopbackInterrupted(KeyboardInterrupt):
+    """Raised when a loopback command is interrupted by a handled signal."""
+
     exit_code = EXIT_INTERRUPTED
 
     def __init__(self, signum: int | None = None) -> None:
+        """Initialize an interrupted-loopback exception.
+
+        :param signum: Signal number that interrupted the command, if known.
+        :return: None.
+        """
         self.signum = signum
         signal_name = None
         if signum is not None:
@@ -62,6 +71,14 @@ def _unlock_loopback_file(lock_handle) -> None:
 
 @contextmanager
 def loopback_session(command: str, scenario: str):
+    """Run a loopback command under the cross-process session lock.
+
+    :param command: Loopback subcommand name, such as ``inject`` or ``capture``.
+    :param scenario: Scenario name being injected or captured.
+    :return: Context manager that yields after the lock and signal handlers are installed.
+    :raises LoopbackBusyError: If another loopback command already holds the lock.
+    :raises LoopbackInterrupted: If SIGINT, SIGTERM, SIGHUP, or SIGQUIT interrupts the session.
+    """
     lock_handle = LOOPBACK_LOCK_PATH.open("a+", encoding="utf-8")
     try:
         if lock_handle.tell() == 0:

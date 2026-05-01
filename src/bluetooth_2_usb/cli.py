@@ -165,6 +165,11 @@ async def async_run(args: Arguments) -> int:
 
 
 def run(argv: list[str] | None = None) -> int:
+    """Run the installed ``bluetooth_2_usb`` command.
+
+    :param argv: Command-line arguments without the executable name. Uses ``sys.argv`` when None.
+    :return: Process-style exit code for runtime, loopback, or operational subcommands.
+    """
     raw_args = list(sys.argv[1:] if argv is None else argv)
     from .ops.cli import OPERATIONAL_COMMANDS
     from .ops.cli import main as operational_main

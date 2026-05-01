@@ -32,10 +32,22 @@ OPERATIONAL_COMMANDS = frozenset(
 
 
 def run() -> None:
+    """Run the operational CLI and terminate the process with its exit code.
+
+    :return: This function does not return.
+    :raises SystemExit: Always raised with the exit code returned by :func:`main`.
+    """
     raise SystemExit(main())
 
 
 def main(argv: list[str] | None = None, *, prog: str = "bluetooth_2_usb") -> int:
+    """Run the operational CLI.
+
+    :param argv: Command-line arguments without the program name; when omitted,
+        ``sys.argv[1:]`` is used.
+    :param prog: Program name shown by argparse help and error output.
+    :return: Process-style exit code.
+    """
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         return _main(args, prog=prog)

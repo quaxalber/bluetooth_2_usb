@@ -10,6 +10,15 @@ from ..paths import PATHS
 
 @dataclass(slots=True)
 class ReadonlyConfig:
+    """Persistent read-only mode settings stored in the managed env file.
+
+    :param mode: Configured readonly mode, usually ``"disabled"`` or ``"persistent"``.
+    :param persist_mount: Mount point used for persistent storage.
+    :param persist_bluetooth_dir: Directory bound onto ``/var/lib/bluetooth``.
+    :param persist_spec: Stable mount spec for persistent storage, or an empty string.
+    :param persist_device: Original device path used during setup, or an empty string.
+    """
+
     mode: str = "disabled"
     persist_mount: Path = PATHS.persist_mount
     persist_bluetooth_dir: Path = PATHS.persist_bluetooth_dir
@@ -18,6 +27,12 @@ class ReadonlyConfig:
 
 
 def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig:
+    """Load persistent read-only mode settings from an env-style file.
+
+    :param path: Configuration file to read.
+    :return: Parsed configuration, or disabled defaults when the file is missing.
+    :raises OpsError: If the file contains invalid syntax or unsupported keys.
+    """
     config = ReadonlyConfig()
     if not path.is_file():
         return config
@@ -59,6 +74,12 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
 
 
 def write_readonly_config(config: ReadonlyConfig, path: Path = PATHS.readonly_env_file) -> None:
+    """Write persistent read-only mode settings to an env-style file.
+
+    :param config: Configuration values to persist.
+    :param path: Configuration file to replace.
+    :return: None.
+    """
     path.write_text(
         "\n".join(
             [

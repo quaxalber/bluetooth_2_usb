@@ -21,6 +21,12 @@ from .redaction import redact
 
 
 def debug_report(duration: int | None) -> int:
+    """Collect a redacted Markdown diagnostics report.
+
+    :param duration: Optional live foreground runtime duration in seconds.
+    :return: Process-style exit code.
+    :raises OpsError: If report setup or a required operational command fails.
+    """
     PATHS.log_dir.mkdir(parents=True, exist_ok=True)
     report_file = PATHS.log_dir / f"debug_{timestamp()}.md"
     hostname = os.environ.get("HOSTNAME") or output(["hostname"])

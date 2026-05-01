@@ -4,6 +4,12 @@ import re
 
 
 def redact(text: str, hostname: str) -> str:
+    """Redact host-specific identifiers from diagnostics text.
+
+    :param text: Raw diagnostics text.
+    :param hostname: Local hostname to redact when present.
+    :return: Text with UUIDs, PARTUUIDs, Bluetooth MACs, machine IDs, and hostname redacted.
+    """
     patterns = [
         (r"PARTUUID=[^\s]+", "PARTUUID=<<REDACTED_PARTUUID>>"),
         (r"UUID=[^\s]+", "UUID=<<REDACTED_UUID>>"),
