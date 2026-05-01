@@ -21,6 +21,11 @@ from bluetooth_2_usb.ops.readonly import (
 )
 
 READONLY = "bluetooth_2_usb.ops.readonly"
+READONLY_CONFIG = "bluetooth_2_usb.ops.readonly.config"
+READONLY_SERVICE = "bluetooth_2_usb.ops.readonly.service"
+READONLY_STATUS = "bluetooth_2_usb.ops.readonly.status"
+READONLY_UNITS = "bluetooth_2_usb.ops.readonly.units"
+READONLY_WORKFLOWS = "bluetooth_2_usb.ops.readonly.workflows"
 
 
 def _write_rfkill_entry(
@@ -110,10 +115,8 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             return Completed()
 
-        with patch(
-            "bluetooth_2_usb.ops.readonly.shutil.which", return_value="/usr/bin/raspi-config"
-        ):
-            with patch("bluetooth_2_usb.ops.readonly.run", side_effect=fake_run):
+        with patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"):
+            with patch(f"{READONLY_STATUS}.run", side_effect=fake_run):
                 self.assertEqual(overlay_status(), "enabled")
 
         self.assertEqual(calls[0], ["raspi-config", "nonint", "get_overlay_now"])
@@ -161,7 +164,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             return Completed()
 
-        with patch("bluetooth_2_usb.ops.readonly.run", side_effect=fake_run):
+        with patch(f"{READONLY_STATUS}.run", side_effect=fake_run):
             with patch("pathlib.Path.is_dir", return_value=True):
                 self.assertFalse(bluetooth_state_persistent(config))
 
@@ -178,7 +181,7 @@ class ReadonlyConfigTest(unittest.TestCase):
             return Completed()
 
         with patch("bluetooth_2_usb.ops.deployment.service_installed", return_value=True):
-            with patch("bluetooth_2_usb.ops.readonly.run", side_effect=fake_run):
+            with patch(f"{READONLY_SERVICE}.run", side_effect=fake_run):
                 was_active = _stop_b2u_if_installed("during test")
                 _restart_b2u_if_installed(was_active, "during test")
 
@@ -191,10 +194,10 @@ class ReadonlyConfigTest(unittest.TestCase):
             unit_path = Path(tmpdir) / "var-lib-bluetooth.mount"
             paths = ManagedPaths(bluetooth_bind_mount_unit=unit_path)
 
-            with patch("bluetooth_2_usb.ops.readonly.PATHS", paths):
+            with patch(f"{READONLY_UNITS}.PATHS", paths):
                 with patch("pathlib.Path.mkdir"):
                     with patch(
-                        "bluetooth_2_usb.ops.readonly.persist_mount_unit_name",
+                        f"{READONLY_UNITS}.persist_mount_unit_name",
                         return_value="mnt-persist.mount",
                     ) as unit_name:
                         write_bluetooth_bind_mount_unit(
@@ -229,38 +232,56 @@ class ReadonlyConfigTest(unittest.TestCase):
             return Completed()
 
         with ExitStack() as stack:
-            stack.enter_context(patch(f"{READONLY}.require_commands"))
-            stack.enter_context(patch(f"{READONLY}.load_readonly_config", return_value=config))
-            stack.enter_context(patch(f"{READONLY}.machine_id_valid", return_value=True))
-            stack.enter_context(patch(f"{READONLY}.bluetooth_state_persistent", return_value=True))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
             stack.enter_context(
-                patch(f"{READONLY}.readonly_stack_packages_bootstrap_safe", return_value=True)
+                patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config)
             )
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.machine_id_valid", return_value=True))
             stack.enter_context(
-                patch(f"{READONLY}.readonly_stack_packages_missing", return_value=False)
+                patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=True)
             )
-            stack.enter_context(
-                patch(f"{READONLY}.readonly_stack_packages_healthy", return_value=True)
-            )
-            stack.enter_context(patch(f"{READONLY}.overlay_status", return_value="disabled"))
-            stack.enter_context(patch(f"{READONLY}.current_kernel_release", return_value="6.6.1"))
-            stack.enter_context(
-                patch(f"{READONLY}.configured_kernel_image", return_value="kernel8.img")
-            )
-            stack.enter_context(patch(f"{READONLY}.configured_initramfs_file", return_value=""))
-            stack.enter_context(
-                patch(f"{READONLY}.expected_boot_initramfs_file", return_value="initramfs8")
-            )
-            stack.enter_context(patch(f"{READONLY}.versioned_initrd_candidates", return_value=[]))
             stack.enter_context(
                 patch(
-                    f"{READONLY}.ensure_bootable_initramfs_for_current_kernel",
+                    f"{READONLY_WORKFLOWS}.readonly_stack_packages_bootstrap_safe",
+                    return_value=True,
+                )
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.readonly_stack_packages_missing", return_value=False)
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.readonly_stack_packages_healthy", return_value=True)
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.overlay_status", return_value="disabled")
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.current_kernel_release", return_value="6.6.1")
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.configured_kernel_image", return_value="kernel8.img")
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.configured_initramfs_file", return_value="")
+            )
+            stack.enter_context(
+                patch(
+                    f"{READONLY_WORKFLOWS}.expected_boot_initramfs_file",
+                    return_value="initramfs8",
+                )
+            )
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.versioned_initrd_candidates", return_value=[])
+            )
+            stack.enter_context(
+                patch(
+                    f"{READONLY_WORKFLOWS}.ensure_bootable_initramfs_for_current_kernel",
                     side_effect=OpsError("initramfs failed"),
                 )
             )
-            stack.enter_context(patch(f"{READONLY}.run", side_effect=fake_run))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
             stack.enter_context(
-                patch(f"{READONLY}.write_readonly_config", side_effect=written.append)
+                patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append)
             )
 
             with self.assertRaises(OpsError):

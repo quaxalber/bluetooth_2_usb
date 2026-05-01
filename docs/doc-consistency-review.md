@@ -47,13 +47,21 @@ operational commands:
 
 ```bash
 ./venv/bin/bluetooth_2_usb --help
-for command in install update uninstall smoketest debug \
-  readonly-setup readonly-enable readonly-disable \
-  install-hid-udev-rule; do
+while read -r command; do
   echo "==== $command"
-  ./venv/bin/bluetooth_2_usb "$command" --help
+  ./venv/bin/bluetooth_2_usb $command --help
   echo
-done
+done <<'EOF'
+install
+update
+uninstall
+smoketest
+debug
+readonly setup
+readonly enable
+readonly disable
+udev install
+EOF
 
 ./venv/bin/bluetooth_2_usb loopback --help
 for command in inject capture; do

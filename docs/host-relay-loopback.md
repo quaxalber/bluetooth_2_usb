@@ -43,7 +43,7 @@ python3 -m pip install -r requirements-host-capture.txt
 On Linux, install the udev rule once:
 
 ```bash
-sudo venv/bin/bluetooth_2_usb install-hid-udev-rule --repo-root "$PWD"
+sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
 Recommended baseline checks on the Pi:
@@ -234,7 +234,7 @@ ls -l /dev/bus/usb/*/*
 If needed:
 
 ```bash
-sudo venv/bin/bluetooth_2_usb install-hid-udev-rule --repo-root "$PWD"
+sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
 ### Host capture times out

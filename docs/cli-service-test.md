@@ -73,12 +73,12 @@ ssh <pi-host> '
   PYTHONPATH=src python3 -m bluetooth_2_usb uninstall --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb smoketest --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb debug --help >/dev/null
-  PYTHONPATH=src python3 -m bluetooth_2_usb install-hid-udev-rule --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb udev install --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb loopback inject --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb loopback capture --help >/dev/null
-  PYTHONPATH=src python3 -m bluetooth_2_usb readonly-enable --help >/dev/null
-  PYTHONPATH=src python3 -m bluetooth_2_usb readonly-disable --help >/dev/null
-  PYTHONPATH=src python3 -m bluetooth_2_usb readonly-setup --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly enable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly disable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly setup --help >/dev/null
 '
 ```
 
@@ -181,8 +181,8 @@ verifying it with `lsblk -f`.
 
 ```bash
 ssh <pi-host> '
-  sudo -n bluetooth_2_usb readonly-setup --device <persist-partition>
-  sudo -n bluetooth_2_usb readonly-enable
+  sudo -n bluetooth_2_usb readonly setup --device <persist-partition>
+  sudo -n bluetooth_2_usb readonly enable
 '
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
@@ -204,7 +204,7 @@ repair `initramfs-tools` before rebooting and rerun the enable step:
 ssh <pi-host> '
   sudo -n sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
   sudo -n dpkg --configure -a
-  sudo -n bluetooth_2_usb readonly-enable
+  sudo -n bluetooth_2_usb readonly enable
 '
 ```
 
@@ -300,7 +300,7 @@ Pass criteria:
 ## Disable read-only mode again
 
 ```bash
-ssh <pi-host> 'sudo -n bluetooth_2_usb readonly-disable'
+ssh <pi-host> 'sudo -n bluetooth_2_usb readonly disable'
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))

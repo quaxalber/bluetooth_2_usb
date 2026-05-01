@@ -22,13 +22,40 @@ class OpsCliTest(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
 
     def test_old_loopback_operational_commands_are_not_preserved(self) -> None:
-        for command in ("loopback-inject", "loopback-capture"):
+        for command in (
+            "loopback-inject",
+            "loopback-capture",
+            "readonly-setup",
+            "readonly-enable",
+            "readonly-disable",
+            "install-hid-udev-rule",
+        ):
             with self.subTest(command=command):
                 with self.assertRaises(SystemExit) as raised:
                     with patch("sys.stderr", new=io.StringIO()):
                         cli.main([command], prog="bluetooth_2_usb")
 
                 self.assertEqual(raised.exception.code, 2)
+
+    def test_nested_operational_commands_dispatch_without_dash_aliases(self) -> None:
+        with patch("bluetooth_2_usb.ops.cli.ensure_root"):
+            with patch("bluetooth_2_usb.ops.cli.prepare_log"):
+                with patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup:
+                    self.assertEqual(
+                        cli.main(["readonly", "setup", "--device", "/dev/sda1"]),
+                        0,
+                    )
+                with patch("bluetooth_2_usb.ops.cli.enable_readonly") as enable:
+                    self.assertEqual(cli.main(["readonly", "enable"]), 0)
+                with patch("bluetooth_2_usb.ops.cli.disable_readonly") as disable:
+                    self.assertEqual(cli.main(["readonly", "disable"]), 0)
+                with patch("bluetooth_2_usb.ops.cli.install_hid_udev_rule") as install_rule:
+                    self.assertEqual(cli.main(["udev", "install"]), 0)
+
+        setup.assert_called_once_with("/dev/sda1")
+        enable.assert_called_once_with()
+        disable.assert_called_once_with()
+        install_rule.assert_called_once()
 
     def test_smoketest_json_output_prints_structured_result(self) -> None:
         class FakeSmokeTest:

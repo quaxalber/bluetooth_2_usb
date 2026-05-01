@@ -259,22 +259,22 @@ validation.
 
 Windows PowerShell launcher for the same host-capture flow.
 
-### `install-hid-udev-rule`
+### `bluetooth_2_usb udev install`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
 gadget device nodes.
 
-### `readonly-setup`
+### `bluetooth_2_usb readonly setup`
 
 Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
 persistent read-only mode.
 
-### `readonly-enable`
+### `bluetooth_2_usb readonly enable`
 
 Switch Raspberry Pi OS into the supported persistent read-only mode while
 keeping Bluetooth state on separate writable storage.
 
-### `readonly-disable`
+### `bluetooth_2_usb readonly disable`
 
 Return the system to normal writable mode while keeping the persistent
 Bluetooth-state configuration available.

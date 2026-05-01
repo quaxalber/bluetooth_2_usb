@@ -168,7 +168,7 @@ Notes for the LLVM fallback:
 
 These build paths are unvalidated for this project. They are included so you
 can build and deploy the matching custom kernel and let
-`bluetooth_2_usb readonly-enable` install the corresponding boot initramfs
+`bluetooth_2_usb readonly enable` install the corresponding boot initramfs
 automatically when you later enable persistent read-only mode. Use the target
 matrix above for the expected image and initramfs filenames.
 
@@ -231,7 +231,7 @@ from the kernel image name. Use the matching boot initramfs target from the
 same matrix when checking or troubleshooting boot artifacts.
 
 When you later enable persistent read-only mode,
-`bluetooth_2_usb readonly-enable` ensures a bootable initramfs exists for the
+`bluetooth_2_usb readonly enable` ensures a bootable initramfs exists for the
 running kernel and installs or reuses the matching boot initramfs file
 automatically. That path depends on the running kernel being fully installed on
 the Pi, so do not treat `config-<kernelrelease>` as optional:
@@ -242,7 +242,7 @@ the Pi, so do not treat `config-<kernelrelease>` as optional:
 - keep the custom kernel image selected in `config.txt` consistent with the
   running release
 
-If those artifacts are missing, `bluetooth_2_usb readonly-enable` aborts
+If those artifacts are missing, `bluetooth_2_usb readonly enable` aborts
 instead of trying to guess a bootable initramfs layout from documentation alone.
 
 Keep the stock kernel entry available so rollback is trivial.

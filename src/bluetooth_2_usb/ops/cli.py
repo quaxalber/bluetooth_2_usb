@@ -20,10 +20,8 @@ OPERATIONAL_COMMANDS = frozenset(
         "uninstall",
         "smoketest",
         "debug",
-        "readonly-setup",
-        "readonly-enable",
-        "readonly-disable",
-        "install-hid-udev-rule",
+        "readonly",
+        "udev",
     }
 )
 
@@ -60,41 +58,51 @@ def _main(argv: list[str], *, prog: str) -> int:
     )
     debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
+    readonly_parser = _command_parser(
+        subparsers, "readonly", "Manage persistent read-only operation."
+    )
+    readonly_subparsers = readonly_parser.add_subparsers(dest="readonly_command", required=True)
     setup_parser = _command_parser(
-        subparsers, "readonly-setup", "Prepare persistent Bluetooth state."
+        readonly_subparsers, "setup", "Prepare persistent Bluetooth state."
     )
     setup_parser.add_argument("--device", required=True)
-    _command_parser(subparsers, "readonly-enable", "Enable persistent read-only mode.")
-    _command_parser(subparsers, "readonly-disable", "Disable OverlayFS.")
-    _command_parser(subparsers, "install-hid-udev-rule", "Install the host-side hidapi udev rule.")
+    _command_parser(readonly_subparsers, "enable", "Enable persistent read-only mode.")
+    _command_parser(readonly_subparsers, "disable", "Disable OverlayFS.")
+
+    udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
+    udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
+    _command_parser(udev_subparsers, "install", "Install the host-side hidapi udev rule.")
 
     namespace, remainder = parser.parse_known_args(argv)
     if remainder:
         parser.error(f"unrecognized arguments: {' '.join(remainder)}")
     repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else PATHS.install_dir
 
-    if namespace.command not in {"install-hid-udev-rule"}:
+    command_path = _command_path(namespace)
+
+    if command_path != ("udev", "install"):
         ensure_root()
 
-    if namespace.command in {
-        "install",
-        "update",
-        "uninstall",
-        "smoketest",
-        "debug",
-        "readonly-setup",
-        "readonly-enable",
-        "readonly-disable",
+    log_name = "_".join(command_path)
+    if command_path in {
+        ("install",),
+        ("update",),
+        ("uninstall",),
+        ("smoketest",),
+        ("debug",),
+        ("readonly", "setup"),
+        ("readonly", "enable"),
+        ("readonly", "disable"),
     }:
-        prepare_log(namespace.command.replace("-", "_"))
+        prepare_log(log_name)
 
-    if namespace.command == "install":
+    if command_path == ("install",):
         install(repo_root)
-    elif namespace.command == "update":
+    elif command_path == ("update",):
         update(repo_root)
-    elif namespace.command == "uninstall":
+    elif command_path == ("uninstall",):
         uninstall()
-    elif namespace.command == "smoketest":
+    elif command_path == ("smoketest",):
         smoke_test = SmokeTest(verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi)
         if namespace.output == "json":
             with redirect_stdout(sys.stderr):
@@ -103,20 +111,28 @@ def _main(argv: list[str], *, prog: str) -> int:
         else:
             exit_code = smoke_test.run()
         return exit_code
-    elif namespace.command == "debug":
+    elif command_path == ("debug",):
         return debug_report(namespace.duration)
-    elif namespace.command == "readonly-setup":
+    elif command_path == ("readonly", "setup"):
         setup_persistent_bluetooth_state(namespace.device)
-    elif namespace.command == "readonly-enable":
+    elif command_path == ("readonly", "enable"):
         enable_readonly()
-    elif namespace.command == "readonly-disable":
+    elif command_path == ("readonly", "disable"):
         disable_readonly()
-    elif namespace.command == "install-hid-udev-rule":
+    elif command_path == ("udev", "install"):
         ensure_root()
         install_hid_udev_rule(repo_root)
     else:
-        fail(f"Unhandled operational command: {namespace.command}")
+        fail(f"Unhandled operational command: {' '.join(command_path)}")
     return 0
+
+
+def _command_path(namespace: argparse.Namespace) -> tuple[str, ...]:
+    if namespace.command == "readonly":
+        return (namespace.command, namespace.readonly_command)
+    if namespace.command == "udev":
+        return (namespace.command, namespace.udev_command)
+    return (namespace.command,)
 
 
 def _command_parser(

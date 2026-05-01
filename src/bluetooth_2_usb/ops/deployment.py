@@ -234,8 +234,8 @@ Next steps
 2. After reboot, run:
    sudo bluetooth_2_usb smoketest
 3. If you want persistent read-only operation afterwards, run:
-   sudo bluetooth_2_usb readonly-setup --device /dev/YOUR-PARTITION
-   sudo bluetooth_2_usb readonly-enable
+   sudo bluetooth_2_usb readonly setup --device /dev/YOUR-PARTITION
+   sudo bluetooth_2_usb readonly enable
 """)
 
 
