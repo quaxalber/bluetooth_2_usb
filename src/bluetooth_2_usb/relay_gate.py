@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol
+
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class RelayGateListener(Protocol):
     def __call__(self, active: bool) -> None: ...
+
+
+class RelayInactiveReason(StrEnum):
+    HOST_NOT_CONFIGURED = "host_not_configured"
+    USER_PAUSED = "user_paused"
+    WRITE_SUSPENDED = "write_suspended"
 
 
 @dataclass(slots=True)
@@ -17,6 +28,17 @@ class RelayGateState:
     @property
     def active(self) -> bool:
         return self.host_configured and self.user_enabled and not self.write_suspended
+
+    @property
+    def inactive_reasons(self) -> tuple[RelayInactiveReason, ...]:
+        reasons: list[RelayInactiveReason] = []
+        if not self.host_configured:
+            reasons.append(RelayInactiveReason.HOST_NOT_CONFIGURED)
+        if not self.user_enabled:
+            reasons.append(RelayInactiveReason.USER_PAUSED)
+        if self.write_suspended:
+            reasons.append(RelayInactiveReason.WRITE_SUSPENDED)
+        return tuple(reasons)
 
 
 class RelayGate:
@@ -55,30 +77,45 @@ class RelayGate:
             pass
 
     def set_host_configured(self, configured: bool) -> None:
-        previous_active = self.active
+        previous_state = self.state
         fresh_configured = configured and not self._state.host_configured
         self._state.host_configured = configured
         if fresh_configured:
             self._state.write_suspended = False
-        self._notify_if_changed(previous_active)
+        self._state_changed(previous_state)
 
     def set_user_enabled(self, enabled: bool) -> None:
-        previous_active = self.active
+        previous_state = self.state
         self._state.user_enabled = enabled
-        self._notify_if_changed(previous_active)
+        self._state_changed(previous_state)
 
     def toggle_user_enabled(self) -> bool:
         self.set_user_enabled(not self._state.user_enabled)
         return self._state.user_enabled
 
     def suspend_writes(self) -> None:
-        previous_active = self.active
+        previous_state = self.state
         self._state.write_suspended = True
-        self._notify_if_changed(previous_active)
+        self._state_changed(previous_state)
 
-    def _notify_if_changed(self, previous_active: bool) -> None:
+    def _state_changed(self, previous_state: RelayGateState) -> None:
+        if previous_state == self._state:
+            return
+        self._log_state_change(previous_state)
         active = self.active
-        if active == previous_active:
+        if active == previous_state.active:
             return
         for listener in list(self._listeners):
             listener(active)
+
+    def _log_state_change(self, previous_state: RelayGateState) -> None:
+        logger.debug(
+            "Relay gate changed: active=%s host_configured=%s user_enabled=%s "
+            "write_suspended=%s inactive_reasons=%s previous_active=%s",
+            self._state.active,
+            self._state.host_configured,
+            self._state.user_enabled,
+            self._state.write_suspended,
+            ",".join(reason.value for reason in self._state.inactive_reasons) or "none",
+            previous_state.active,
+        )

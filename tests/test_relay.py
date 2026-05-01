@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import usb_hid
 
@@ -24,7 +24,7 @@ from bluetooth_2_usb.hid_gadget_layout import (
 from bluetooth_2_usb.hid_gadgets import HidGadgets
 from bluetooth_2_usb.input_relay import InputRelay
 from bluetooth_2_usb.mouse_delta import MouseDelta
-from bluetooth_2_usb.relay_gate import RelayGate
+from bluetooth_2_usb.relay_gate import RelayGate, RelayInactiveReason
 from bluetooth_2_usb.relay_supervisor import RelaySupervisor, _ActiveRelay, _SupervisorState
 from bluetooth_2_usb.runtime_events import DeviceAdded, UdcStateChanged
 from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
@@ -445,6 +445,23 @@ class ShortcutTogglerTest(unittest.TestCase):
 
 
 class RelayGateTest(unittest.TestCase):
+    def test_inactive_reasons_explain_current_gate_state(self) -> None:
+        gate = RelayGate()
+
+        self.assertEqual(gate.state.inactive_reasons, (RelayInactiveReason.HOST_NOT_CONFIGURED,))
+
+        gate.set_user_enabled(False)
+        gate.suspend_writes()
+
+        self.assertEqual(
+            gate.state.inactive_reasons,
+            (
+                RelayInactiveReason.HOST_NOT_CONFIGURED,
+                RelayInactiveReason.USER_PAUSED,
+                RelayInactiveReason.WRITE_SUSPENDED,
+            ),
+        )
+
     def test_user_pause_survives_host_reconnect(self) -> None:
         gate = _active_gate()
 
@@ -468,6 +485,17 @@ class RelayGateTest(unittest.TestCase):
 
         self.assertTrue(gate.active)
         self.assertFalse(gate.state.write_suspended)
+
+    def test_listeners_only_run_when_active_changes(self) -> None:
+        gate = RelayGate()
+        listener = Mock()
+        gate.add_listener(listener)
+
+        gate.set_user_enabled(False)
+        gate.set_host_configured(True)
+        gate.set_user_enabled(True)
+
+        self.assertEqual(listener.call_args_list, [call(True)])
 
 
 class HidGadgetsLayoutTest(unittest.TestCase):
