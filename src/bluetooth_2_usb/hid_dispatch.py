@@ -9,7 +9,7 @@ from .evdev_types import InputEvent, KeyEvent, RelEvent, categorize
 from .extended_mouse import ExtendedMouse
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
-from .mouse_delta import MouseDelta, MouseDeltaAccumulator, iter_mouse_delta_chunks
+from .mouse_delta import MouseDelta, MouseDeltaAccumulator
 from .relay_gate import RelayGate
 from .shortcut_toggler import ShortcutToggler
 
@@ -118,22 +118,19 @@ class HidDispatcher:
         mouse = self._hid_gadgets.mouse
         if mouse is None:
             raise RuntimeError("Mouse gadget is not available; HID gadgets are not enabled.")
-        for partial in iter_mouse_delta_chunks(delta):
-            if not self._relay_gate.active:
-                return
-            try:
-                mouse.move(*partial)
-            except BlockingIOError:
-                self._hid_write_failures += 1
-                logger.debug("Mouse movement HID write blocked; dropping chunk %s", partial)
-                continue
-            except BrokenPipeError:
-                self._handle_broken_pipe()
-                return
-            except Exception:
-                self._hid_write_failures += 1
-                logger.exception("Unexpected error processing mouse movement")
-                raise
+        if not self._relay_gate.active:
+            return
+        try:
+            mouse.move(*delta)
+        except BlockingIOError:
+            self._hid_write_failures += 1
+            logger.debug("Mouse movement HID write blocked; dropping delta %s", delta)
+        except BrokenPipeError:
+            self._handle_broken_pipe()
+        except Exception:
+            self._hid_write_failures += 1
+            logger.exception("Unexpected error processing mouse movement")
+            raise
 
     async def _process_key_event_with_retry(self, event: KeyEvent) -> None:
         max_tries = self.HID_WRITE_MAX_TRIES

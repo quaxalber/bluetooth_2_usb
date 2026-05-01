@@ -293,6 +293,32 @@ class ExtendedMouseTest(unittest.TestCase):
             ],
         )
 
+    def test_move_paces_chunked_reports_only_between_chunks(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report) -> None:
+            device.sent.append(bytes(report))
+
+        device.send_report = send_report
+
+        with (
+            patch("adafruit_hid.find_device", return_value=device),
+            patch("bluetooth_2_usb.extended_mouse.time.sleep") as sleep,
+        ):
+            mouse = ExtendedMouse(devices=[])
+            mouse.move(x=40000)
+            mouse.move(x=1)
+
+        sleep.assert_called_once_with(mouse.CHUNK_REPORT_INTERVAL_SEC)
+        self.assertEqual(
+            device.sent,
+            [
+                bytes([0x00, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x00, 0x41, 0x1C, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            ],
+        )
+
     def test_move_debug_logs_reports_sent_to_gadget(self) -> None:
         device = SimpleNamespace(sent=[])
 
@@ -398,18 +424,15 @@ class HidDispatchTest(unittest.TestCase):
 
         self.assertEqual(hid_gadgets.mouse.moves, [(7, 0, 0, 0)])
 
-    def test_mouse_blocking_write_skips_chunk_without_retrying(self) -> None:
+    def test_mouse_blocking_write_drops_delta_without_retrying(self) -> None:
         gate = _active_gate()
         hid_gadgets = _FakeHidGadgets()
-        hid_gadgets.mouse.move = Mock(side_effect=[BlockingIOError(), None])
+        hid_gadgets.mouse.move = Mock(side_effect=BlockingIOError())
         dispatcher = HidDispatcher(hid_gadgets, gate)
 
         dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
 
-        self.assertEqual(
-            hid_gadgets.mouse.move.mock_calls,
-            [call(32767, -32767, 127, -127), call(7233, -7233, 73, -73)],
-        )
+        hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
         self.assertEqual(dispatcher.stats.write_retries, 0)
         self.assertEqual(dispatcher.stats.write_failures, 1)
         self.assertTrue(gate.active)
@@ -1104,7 +1127,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mouse REL input: code=11 value=60 -> x=0 y=0 wheel=0.5 pan=0.0", output)
         self.assertIn("Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0.0 pan=-0.5", output)
 
-    async def test_large_mouse_deltas_are_split_before_retry_boundary(self) -> None:
+    async def test_large_mouse_deltas_are_passed_to_gadget_writer(self) -> None:
         gate = _active_gate()
         input_device = _TestInputDevice(
             [
@@ -1121,9 +1144,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         async with relay:
             await relay.async_relay_events_loop()
 
-        self.assertEqual(
-            hid_gadgets.mouse.moves, [(32767, -32767, 127, -127), (7233, -7233, 73, -73)]
-        )
+        self.assertEqual(hid_gadgets.mouse.moves, [(40000, -40000, 200, -200)])
 
     async def test_large_mouse_deltas_abort_remaining_chunks_after_broken_pipe(self) -> None:
         gate = _active_gate()
@@ -1133,7 +1154,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
 
         dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
 
-        hid_gadgets.mouse.move.assert_called_once_with(32767, -32767, 127, -127)
+        hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
         self.assertEqual(dispatcher.stats.write_failures, 1)
         self.assertFalse(gate.active)
 

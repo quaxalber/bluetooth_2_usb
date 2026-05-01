@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 from .logging import get_logger
 
@@ -8,6 +10,8 @@ logger = get_logger(__name__)
 
 class ExtendedMouse:
     """Small mouse report writer with horizontal pan support."""
+
+    CHUNK_REPORT_INTERVAL_SEC = 0.001
 
     LEFT = LEFT_BUTTON = 0x01
     RIGHT = RIGHT_BUTTON = 0x02
@@ -74,6 +78,8 @@ class ExtendedMouse:
             y -= partial_y
             wheel -= partial_wheel
             pan -= partial_pan
+            if x != 0 or y != 0 or wheel != 0 or pan != 0:
+                time.sleep(self.CHUNK_REPORT_INTERVAL_SEC)
 
     def _send_no_move(self) -> None:
         self.report[1:7] = b"\x00" * 6

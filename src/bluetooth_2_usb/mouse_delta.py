@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from .evdev import ecodes, get_mouse_movement
 from .evdev_types import RelEvent
-from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,19 +79,3 @@ class MouseDeltaAccumulator:
         self._pan_low_res = 0.0
         self._pan_hi_res = 0.0
         self._pan_hi_res_seen = False
-
-
-def iter_mouse_delta_chunks(delta: MouseDelta) -> Iterator[MouseDelta]:
-    x = delta.x
-    y = delta.y
-    wheel = delta.wheel
-    pan = delta.pan
-    while x != 0 or y != 0 or wheel != 0 or pan != 0:
-        partial = MouseDelta(
-            x=clamp_hid_i16(x), y=clamp_hid_i16(y), wheel=clamp_hid_i8(wheel), pan=clamp_hid_i8(pan)
-        )
-        yield partial
-        x -= partial.x
-        y -= partial.y
-        wheel -= partial.wheel
-        pan -= partial.pan
