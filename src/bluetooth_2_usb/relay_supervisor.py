@@ -23,6 +23,7 @@ from .runtime_events import (
     DeviceRemoved,
     RuntimeEvent,
     ShutdownRequested,
+    UdcState,
     UdcStateChanged,
 )
 from .shortcut_toggler import ShortcutToggler
@@ -195,7 +196,7 @@ class RelaySupervisor:
         elif isinstance(event, DeviceRemoved):
             self._device_removed(event.path)
         elif isinstance(event, UdcStateChanged):
-            self._relay_gate.set_host_configured(event.state == "configured")
+            self._relay_gate.set_host_configured(event.state is UdcState.CONFIGURED)
         elif isinstance(event, ShutdownRequested):
             logger.debug("Runtime shutdown requested: %s", event.reason)
             self.request_shutdown()

@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from .logging import get_logger
-from .runtime_events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcStateChanged
+from .runtime_events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcState, UdcStateChanged
 
 logger = get_logger(__name__)
 
@@ -46,7 +46,7 @@ class RuntimeEventSource:
 
         self._stop_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._last_state: str | None = None
+        self._last_state: UdcState | None = None
 
         context = pyudev.Context()
         self._monitor = pyudev.Monitor.from_netlink(context)
@@ -95,16 +95,16 @@ class RuntimeEventSource:
             except TimeoutError:
                 pass
 
-    def _read_udc_state(self) -> str:
+    def _read_udc_state(self) -> UdcState:
         if self._udc_path is None:
-            return "not_attached"
+            return UdcState.NOT_ATTACHED
 
         try:
             with open(self._udc_path, encoding="utf-8") as handle:
-                return handle.read().strip()
+                return UdcState.from_raw(handle.read())
         except OSError:
             logger.debug("Unable to read UDC state from %s", self._udc_path)
-            return "not_attached"
+            return UdcState.NOT_ATTACHED
 
     def _drain_udev_events(self) -> None:
         while True:

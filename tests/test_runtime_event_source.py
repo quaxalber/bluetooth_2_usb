@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from bluetooth_2_usb.runtime_event_source import RuntimeEventSource
-from bluetooth_2_usb.runtime_events import DeviceAdded, DeviceRemoved, UdcStateChanged
+from bluetooth_2_usb.runtime_events import DeviceAdded, DeviceRemoved, UdcState, UdcStateChanged
 
 
 class _FakeMonitor:
@@ -94,6 +94,24 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(monitor.started)
         self.assertIsNone(source._loop)
+        monitor.close()
+
+    async def test_runtime_event_source_normalizes_udc_state_text(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            udc_path = Path(tmpdir) / "state"
+            udc_path.write_text("not attached\n", encoding="utf-8")
+            source = self._build_source(queue, monitor=monitor, udc_path=udc_path)
+
+            task = asyncio.create_task(source.run())
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=1)
+            finally:
+                source.stop()
+                await asyncio.wait_for(task, timeout=1)
+
+        self.assertEqual(event, UdcStateChanged(UdcState.NOT_ATTACHED))
         monitor.close()
 
     async def test_runtime_event_source_treats_missing_udc_path_as_not_attached(self) -> None:
