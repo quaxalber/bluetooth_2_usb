@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from bluetooth_2_usb.hid_gadget_config import remove_owned_gadgets
-from bluetooth_2_usb.service_settings import DEFAULT_ENV_FILE, canonicalize_service_settings_bools
+from bluetooth_2_usb.service_settings import canonicalize_service_settings_bools
 
 from . import boot_config
 from .bluetooth import clear_bluetooth_rfkill_soft_blocks
@@ -28,6 +29,26 @@ B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
 B2U_DEBUG=false
 B2U_UDC_PATH=
 """
+
+
+class RollbackStack:
+    def __init__(self) -> None:
+        self._callbacks: list[tuple[str, Callable[[], None]]] = []
+
+    def push(self, description: str, callback: Callable[[], None]) -> None:
+        self._callbacks.append((description, callback))
+
+    def commit(self) -> None:
+        self._callbacks.clear()
+
+    def rollback(self) -> None:
+        callbacks = list(reversed(self._callbacks))
+        self._callbacks.clear()
+        for description, callback in callbacks:
+            try:
+                callback()
+            except Exception as exc:
+                warn(f"Rollback step failed ({description}): {exc}")
 
 
 def install_service_unit(repo_root: Path) -> None:
@@ -165,12 +186,17 @@ def install(repo_root: Path) -> None:
     boot_config.normalize_modules_load(cmdline_txt, modules)
     ok("Boot configuration updated")
 
+    rollback = RollbackStack()
     was_active = (
         run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     )
     if was_active:
         info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
         run(["systemctl", "stop", PATHS.service_unit])
+        rollback.push(
+            f"restore {PATHS.service_unit}",
+            lambda: run(["systemctl", "start", PATHS.service_unit], check=False),
+        )
     try:
         info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
         rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir)
@@ -178,7 +204,7 @@ def install(repo_root: Path) -> None:
 
         install_service_unit(repo_root)
         write_default_env_file()
-        canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
+        canonicalize_service_settings_bools(PATHS.env_file)
         run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
         install_cli_links()
         run(["systemctl", "daemon-reload"])
@@ -196,9 +222,11 @@ def install(repo_root: Path) -> None:
             fail(f"Environment validation failed with exit code {validate.returncode}")
     except Exception:
         if was_active:
-            warn(f"Reinstall failed; attempting to restore {PATHS.service_unit}.")
-            run(["systemctl", "start", PATHS.service_unit], check=False)
+            warn("Reinstall failed; attempting rollback.")
+        rollback.rollback()
         raise
+    else:
+        rollback.commit()
     print(f"""
 Next steps
 1. Reboot the Pi so the updated boot configuration takes effect.
