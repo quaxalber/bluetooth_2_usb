@@ -138,7 +138,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(scenario.required_nodes, ("keyboard",))
         self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
-        self.assertEqual(scenario.default_event_gap_ms, 20)
+        self.assertEqual(scenario.default_event_gap_ms, 10)
         self.assertEqual(scenario.default_post_delay_ms, 6000)
         self.assertEqual(scenario.default_capture_timeout_sec, 15.0)
         self.assertEqual(len(scenario.keyboard_steps), 216)
@@ -935,7 +935,7 @@ class LoopbackInjectTest(unittest.TestCase):
             result = run_inject("keyboard", pre_delay_ms=0)
 
         self.assertTrue(result.success)
-        self.assertEqual(result.details["event_gap_ms"], 20)
+        self.assertEqual(result.details["event_gap_ms"], 10)
         self.assertEqual(result.details["post_delay_ms"], 6000)
         self.assertGreaterEqual(keyboard.write.call_count, 200)
 
