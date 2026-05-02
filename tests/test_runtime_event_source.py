@@ -113,6 +113,19 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(task, timeout=1)
         monitor.close()
 
+    async def test_runtime_event_source_stops_when_start_monitoring_fails(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
+        source = self._build_source(queue, monitor=monitor)
+
+        with patch.object(source, "_start_monitoring", side_effect=OSError("monitor unavailable")):
+            with patch.object(source, "_stop_monitoring") as stop_monitoring:
+                with self.assertRaisesRegex(OSError, "monitor unavailable"):
+                    await source.run()
+
+        stop_monitoring.assert_called_once_with()
+        monitor.close()
+
     async def test_udc_read_error_reports_not_attached(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()

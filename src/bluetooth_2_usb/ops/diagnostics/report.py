@@ -20,7 +20,12 @@ def debug_report(duration: int | None) -> int:
     report_file = PATHS.log_dir / f"debug_{timestamp()}.md"
     hostname = os.environ.get("HOSTNAME") or output(["hostname"])
     body: list[str] = []
-    config = load_readonly_config()
+    try:
+        config = load_readonly_config()
+        readonly_config_error = ""
+    except Exception as exc:
+        config = None
+        readonly_config_error = f"Read-only config parse error: {exc}"
 
     def heading(title: str) -> None:
         body.append(f"## {title}\n")
@@ -35,7 +40,7 @@ def debug_report(duration: int | None) -> int:
             completed = run(command, check=False, capture=True, timeout=timeout)
             text = completed.stdout + completed.stderr
             suffix = "" if completed.returncode == 0 else f"\n[command exited with status {completed.returncode}]"
-        except (FileNotFoundError, OpsError) as exc:
+        except (OSError, OpsError) as exc:
             text = str(exc)
             suffix = "\n[command failed]"
         except subprocess.TimeoutExpired as exc:
@@ -47,19 +52,26 @@ def debug_report(duration: int | None) -> int:
         initial_service_state = (
             run(["systemctl", "is-active", PATHS.service_unit], check=False, capture=True).stdout.strip() or "unknown"
         )
-    except OpsError:
+    except (OpsError, OSError):
         initial_service_state = "unknown"
 
     text_block(
         "System summary",
         "\n".join(
-            [
+            line
+            for line in [
                 f"boot_dir={boot_config.detect_boot_dir()}",
                 f"initial_service_state={initial_service_state}",
                 f"overlayfs={overlay_status()}",
                 f"readonly_mode={readonly_mode()}",
-                f"bluetooth_state_persistent={'yes' if bluetooth_state_persistent(config) else 'no'}",
+                (
+                    f"bluetooth_state_persistent={'yes' if bluetooth_state_persistent(config) else 'no'}"
+                    if config is not None
+                    else "bluetooth_state_persistent=unknown"
+                ),
+                readonly_config_error,
             ]
+            if line
         ),
     )
     command_block("Kernel", ["uname", "-a"], 5)
@@ -80,7 +92,8 @@ def debug_report(duration: int | None) -> int:
     command_block("UDC controllers", ["ls", "/sys/class/udc"], 5)
     command_block("Overlay and tmpfs mounts", ["findmnt", "-t", "overlay,tmpfs"], 5)
     command_block("Bluetooth state mount", ["findmnt", "-n", "-T", "/var/lib/bluetooth"], 5)
-    command_block("Persistent mount target", ["findmnt", "-n", config.persist_mount], 5)
+    if config is not None:
+        command_block("Persistent mount target", ["findmnt", "-n", config.persist_mount], 5)
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
     command_block("Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8)
@@ -123,7 +136,7 @@ def debug_report(duration: int | None) -> int:
                 capture=True,
                 timeout=5,
             ).stdout.strip()
-        except (FileNotFoundError, OpsError, subprocess.TimeoutExpired):
+        except (OSError, OpsError, subprocess.TimeoutExpired):
             debug_command = ""
         text_block(
             "Live debug setup",

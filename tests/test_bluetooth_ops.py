@@ -209,6 +209,10 @@ class ReadonlyConfigTest(unittest.TestCase):
         with patch(f"{READONLY_STATUS}.run", side_effect=OpsError("findmnt unavailable")):
             self.assertFalse(bluetooth_state_persistent(config))
 
+    def test_bluetooth_state_persistent_returns_false_when_config_cannot_load(self) -> None:
+        with patch(f"{READONLY_STATUS}.load_readonly_config", side_effect=OpsError("invalid readonly env")):
+            self.assertFalse(bluetooth_state_persistent())
+
     def test_print_readonly_status_reports_configured_and_live_state(self) -> None:
         config = ReadonlyConfig(
             mode="persistent",
@@ -240,6 +244,24 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertIn("overlay_live: enabled\n", output)
         self.assertIn("bluetooth_state_persistent: yes\n", output)
         self.assertIn("persist_device: /dev/sda1\n", output)
+
+    def test_print_readonly_status_uses_safe_defaults_when_config_cannot_load(self) -> None:
+        stdout = StringIO()
+        with patch(f"{READONLY_STATUS}.load_readonly_config", side_effect=OpsError("invalid readonly env")):
+            with patch(f"{READONLY_STATUS}.readonly_mode", return_value="disabled"):
+                with patch(f"{READONLY_STATUS}.overlay_status", return_value="unknown"):
+                    with patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="unknown"):
+                        with patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="unknown"):
+                            with patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=False):
+                                with patch(f"{READONLY_STATUS}._findmnt_value", return_value=""):
+                                    with patch(f"{READONLY_STATUS}._mountpoint", return_value=False):
+                                        with redirect_stdout(stdout):
+                                            print_readonly_status()
+
+        output = stdout.getvalue()
+        self.assertIn("configured_mode: disabled\n", output)
+        self.assertIn("bluetooth_state_persistent: no\n", output)
+        self.assertIn("persist_device: <unset>\n", output)
 
     def test_b2u_service_helpers_preserve_inactive_service_state(self) -> None:
         calls = []

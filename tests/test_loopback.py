@@ -215,7 +215,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [_hid_entry("kbd-a", usage_page=0x01, usage=0x06), _hid_entry("kbd-b", usage_page=0x01, usage=0x06)]
         )
 
-        with self.assertRaisesRegex(Exception, "Multiple keyboard HID devices"):
+        with self.assertRaisesRegex(MissingNodeError, "Multiple keyboard HID devices"):
             discover_gadget_nodes(hid_module=hid_module)
 
     def test_explicit_override_bypasses_auto_detection(self) -> None:

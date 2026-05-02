@@ -244,6 +244,97 @@ class OpsDiagnosticsTest(unittest.TestCase):
             report = next(paths.log_dir.glob("debug_*.md"))
             self.assertIn("initial_service_state=unknown", report.read_text(encoding="utf-8"))
 
+    def test_debug_report_keeps_writing_when_readonly_config_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = ManagedPaths(install_dir=root / "missing-install", log_dir=root / "logs")
+
+            def fake_run(command, *, check=True, capture=False, timeout=None, **kwargs):
+                del command, check, capture, timeout, kwargs
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+
+                return Completed()
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"HOSTNAME": "test-host"}))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.load_readonly_config", side_effect=OpsError("invalid readonly env"))
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth", return_value=""))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir", return_value=root / "boot")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+
+                self.assertEqual(debug_report(None), 0)
+
+            report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
+            self.assertIn("bluetooth_state_persistent=unknown", report)
+            self.assertIn("Read-only config parse error: invalid readonly env", report)
+
+    def test_debug_report_records_os_errors_as_command_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = ManagedPaths(install_dir=root / "install", log_dir=root / "logs")
+            paths.venv_python.parent.mkdir(parents=True)
+            paths.venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+            config = ReadonlyConfig(
+                mode="disabled",
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=root / "persist" / "bluetooth",
+                persist_spec="",
+                persist_device="",
+            )
+
+            def fake_run(command, *, check=True, capture=False, timeout=None, **kwargs):
+                if command[:2] == [paths.venv_python, "-m"]:
+                    raise PermissionError("venv python is not executable")
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+
+                return Completed()
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"HOSTNAME": "test-host"}))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.bluetooth_state_persistent", return_value=False))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth", return_value=""))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir", return_value=root / "boot")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+
+                self.assertEqual(debug_report(None), 0)
+
+            report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
+            self.assertIn("venv python is not executable", report)
+            self.assertIn("[command failed]", report)
+
     def test_debug_report_cleans_up_live_debug_after_keyboard_interrupt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

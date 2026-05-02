@@ -35,8 +35,8 @@ class RuntimeEventSource:
             logger.warning("UDC state file %s not found. Cable monitoring may be unavailable.", self._udc_path)
 
     async def run(self) -> None:
-        self._start_monitoring()
         try:
+            self._start_monitoring()
             await self._poll_udc_state()
         finally:
             self._stop_monitoring()

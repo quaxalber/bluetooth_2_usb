@@ -4,9 +4,12 @@ import re
 import shutil
 from pathlib import Path
 
+from ...logging import get_logger
 from ..boot_config import current_root_filesystem_type
 from ..commands import OpsError, run
 from .config import ReadonlyConfig, load_readonly_config
+
+logger = get_logger(__name__)
 
 READONLY_PACKAGES = ("overlayroot", "cryptsetup", "cryptsetup-bin", "initramfs-tools")
 
@@ -82,7 +85,14 @@ def machine_id_valid() -> bool:
 
 
 def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
-    resolved = load_readonly_config() if config is None else config
+    if config is None:
+        try:
+            resolved = load_readonly_config()
+        except Exception as exc:
+            logger.warning("Unable to read read-only configuration: %s", exc)
+            return False
+    else:
+        resolved = config
     try:
         if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode != 0:
             return False
@@ -117,7 +127,7 @@ def readonly_mode() -> str:
 
 
 def print_readonly_status() -> None:
-    config = load_readonly_config()
+    config = _load_readonly_config_or_default()
     print("Read-only status")
     print(f"mode: {readonly_mode()}")
     print(f"configured_mode: {config.mode}")
@@ -153,3 +163,11 @@ def _mountpoint(path: Path) -> bool:
         return run(["mountpoint", "-q", path], check=False).returncode == 0
     except (FileNotFoundError, OpsError, OSError):
         return False
+
+
+def _load_readonly_config_or_default() -> ReadonlyConfig:
+    try:
+        return load_readonly_config()
+    except Exception as exc:
+        logger.warning("Unable to read read-only configuration: %s", exc)
+        return ReadonlyConfig()
