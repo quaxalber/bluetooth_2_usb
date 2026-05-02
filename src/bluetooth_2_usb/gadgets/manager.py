@@ -39,11 +39,24 @@ class HidGadgets:
     def _requested_devices(self):
         return list(build_default_layout().devices)
 
-    def _expected_hidg_paths(self) -> tuple[Path, ...]:
+    def _declared_hidg_paths(self) -> tuple[Path, ...]:
         return tuple(Path(f"/dev/hidg{device.function_index}") for device in self._requested_devices())
 
-    def _prune_stale_hidg_nodes(self, *, remove_character_devices: bool = False) -> None:
-        for path in self._expected_hidg_paths():
+    def _hidg_path(self, device) -> Path | None:
+        if getattr(device, "path", None):
+            return Path(device.path)
+        try:
+            return Path(device.get_device_path())
+        except FileNotFoundError:
+            return None
+
+    def _hidg_paths(self, devices) -> tuple[Path, ...]:
+        return tuple(path for device in devices if (path := self._hidg_path(device)) is not None)
+
+    def _prune_stale_hidg_nodes(
+        self, paths: tuple[Path, ...] | None = None, *, remove_character_devices: bool = False
+    ) -> None:
+        for path in self._declared_hidg_paths() if paths is None else paths:
             try:
                 mode = path.stat().st_mode
             except FileNotFoundError:
@@ -56,9 +69,13 @@ class HidGadgets:
             except FileNotFoundError:
                 continue
 
-    def _collect_invalid_hidg_nodes(self) -> list[str]:
+    def _collect_invalid_hidg_nodes(self, devices) -> list[str]:
         invalid_paths: list[str] = []
-        for device, path in zip(self._requested_devices(), self._expected_hidg_paths(), strict=False):
+        for device in devices:
+            path = self._hidg_path(device)
+            if path is None:
+                invalid_paths.append(f"{device.name} (missing device path)")
+                continue
             try:
                 stats = path.stat()
             except FileNotFoundError:
@@ -67,10 +84,6 @@ class HidGadgets:
             mode = stats.st_mode
             if not stat.S_ISCHR(mode):
                 invalid_paths.append(f"{path} (mode=0o{mode:o})")
-                continue
-            expected_minor = device.function_index
-            if os.minor(stats.st_rdev) != expected_minor:
-                invalid_paths.append(f"{path} (minor={os.minor(stats.st_rdev)}, expected={expected_minor})")
                 continue
             try:
                 fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
@@ -82,14 +95,14 @@ class HidGadgets:
         return invalid_paths
 
     async def _validate_hidg_nodes(
-        self, timeout_sec: float | None = None, poll_interval_sec: float | None = None
+        self, devices, timeout_sec: float | None = None, poll_interval_sec: float | None = None
     ) -> None:
         timeout_sec = self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
         poll_interval_sec = self.HIDG_NODE_POLL_INTERVAL_SEC if poll_interval_sec is None else poll_interval_sec
         deadline = asyncio.get_running_loop().time() + max(timeout_sec, 0.0)
 
         while True:
-            invalid_paths = self._collect_invalid_hidg_nodes()
+            invalid_paths = self._collect_invalid_hidg_nodes(devices)
             if not invalid_paths:
                 return
             if asyncio.get_running_loop().time() >= deadline:
@@ -102,15 +115,15 @@ class HidGadgets:
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
         self._clear_gadget_state()
-        self._prune_stale_hidg_nodes(remove_character_devices=True)
+        self._prune_stale_hidg_nodes()
         enabled_devices = list(rebuild_gadget(build_default_layout()))
         try:
-            await self._validate_hidg_nodes()
+            await self._validate_hidg_nodes(enabled_devices)
         except RuntimeError:
             logger.warning("Retrying HID gadget initialization after stale node validation failure")
-            self._prune_stale_hidg_nodes(remove_character_devices=True)
+            self._prune_stale_hidg_nodes(self._hidg_paths(enabled_devices), remove_character_devices=True)
             enabled_devices = list(rebuild_gadget(build_default_layout()))
-            await self._validate_hidg_nodes()
+            await self._validate_hidg_nodes(enabled_devices)
 
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
