@@ -31,9 +31,7 @@ def bluetooth_controller_powered() -> bool:
 
 
 def bluetooth_paired_count() -> int:
-    return sum(
-        1 for line in bluetoothctl_paired_devices().splitlines() if line.startswith("Device ")
-    )
+    return sum(1 for line in bluetoothctl_paired_devices().splitlines() if line.startswith("Device "))
 
 
 def rfkill_root() -> Path:
@@ -79,10 +77,7 @@ def _read_optional(path: Path) -> str:
 
 
 def bluetooth_rfkill_blocked(root: Path | None = None) -> bool:
-    return any(
-        entry.soft == "1" or entry.hard == "1" or entry.state == "0"
-        for entry in bluetooth_rfkill_entries(root)
-    )
+    return any(entry.soft == "1" or entry.hard == "1" or entry.state == "0" for entry in bluetooth_rfkill_entries(root))
 
 
 def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
@@ -97,9 +92,7 @@ def clear_bluetooth_rfkill_soft_blocks(root: Path | None = None) -> None:
             warn(f"Bluetooth rfkill {entry.name} is hard-blocked; leaving it unchanged.")
             continue
         if entry.soft != "1":
-            info(
-                f"Bluetooth rfkill {entry.name} is already unblocked (soft={entry.soft} state={entry.state})."
-            )
+            info(f"Bluetooth rfkill {entry.name} is already unblocked (soft={entry.soft} state={entry.state}).")
             continue
 
         soft_file = base / entry.name / "soft"

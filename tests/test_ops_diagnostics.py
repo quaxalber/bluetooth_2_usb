@@ -50,8 +50,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
     def test_redaction_keeps_partuuid_and_uuid_patterns_distinct(self) -> None:
         redacted = redact(
-            "root=PARTUUID=1111-2222 boot=UUID=3333-4444 "
-            + "/dev/disk/by-partuuid/aaaa /dev/disk/by-uuid/bbbb",
+            "root=PARTUUID=1111-2222 boot=UUID=3333-4444 " + "/dev/disk/by-partuuid/aaaa /dev/disk/by-uuid/bbbb",
             hostname="",
         )
 
@@ -68,24 +67,12 @@ class OpsDiagnosticsTest(unittest.TestCase):
             root = Path(tmpdir)
 
             with ExitStack() as stack:
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
                 stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled")
+                    patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value="modules-load=libcomposite")
                 )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled")
-                )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}._first_modules_load",
-                        return_value="modules-load=libcomposite",
-                    )
-                )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode",
-                        return_value="unknown",
-                    )
-                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value="unknown"))
                 stack.enter_context(
                     patch(
                         f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv",
@@ -93,59 +80,29 @@ class OpsDiagnosticsTest(unittest.TestCase):
                     )
                 )
                 stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path",
-                        return_value=root / "config.txt",
-                    )
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
                 )
                 stack.enter_context(
                     patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path",
-                        return_value=root / "cmdline.txt",
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line", return_value="dtoverlay=dwc2"
                     )
                 )
                 stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line",
-                        return_value="dtoverlay=dwc2",
-                    )
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type", return_value="ext4")
                 )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
                 stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type",
-                        return_value="ext4",
-                    )
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
                 )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent",
-                        return_value=False,
-                    )
-                )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file",
-                        return_value="",
-                    )
-                )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries",
-                        return_value=[object()],
-                    )
-                )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked",
-                        return_value=False,
-                    )
-                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[object()]))
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=False))
                 stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
                 stack.enter_context(
                     patch.object(
-                        smoke,
-                        "_check_modules",
-                        side_effect=lambda _token, required: checked_modules.extend(required),
+                        smoke, "_check_modules", side_effect=lambda _token, required: checked_modules.extend(required)
                     )
                 )
                 for method in (
@@ -192,26 +149,11 @@ class OpsDiagnosticsTest(unittest.TestCase):
             with patch.dict(os.environ, {"HOSTNAME": "test-host"}):
                 with patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths):
                     with patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run):
-                        with patch(
-                            f"{DIAGNOSTICS_REPORT}.load_readonly_config",
-                            return_value=config,
-                        ):
-                            with patch(
-                                f"{DIAGNOSTICS_REPORT}.overlay_status",
-                                return_value="disabled",
-                            ):
-                                with patch(
-                                    f"{DIAGNOSTICS_REPORT}.readonly_mode",
-                                    return_value="disabled",
-                                ):
-                                    with patch(
-                                        f"{DIAGNOSTICS_REPORT}.bluetooth_state_persistent",
-                                        return_value=False,
-                                    ):
-                                        with patch(
-                                            f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth",
-                                            return_value="",
-                                        ):
+                        with patch(f"{DIAGNOSTICS_REPORT}.load_readonly_config", return_value=config):
+                            with patch(f"{DIAGNOSTICS_REPORT}.overlay_status", return_value="disabled"):
+                                with patch(f"{DIAGNOSTICS_REPORT}.readonly_mode", return_value="disabled"):
+                                    with patch(f"{DIAGNOSTICS_REPORT}.bluetooth_state_persistent", return_value=False):
+                                        with patch(f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth", return_value=""):
                                             with patch(
                                                 f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir",
                                                 return_value=root / "boot",

@@ -11,24 +11,9 @@ from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .paths import PATHS
-from .readonly import (
-    disable_readonly,
-    enable_readonly,
-    print_readonly_status,
-    setup_persistent_bluetooth_state,
-)
+from .readonly import disable_readonly, enable_readonly, print_readonly_status, setup_persistent_bluetooth_state
 
-OPERATIONAL_COMMANDS = frozenset(
-    {
-        "install",
-        "update",
-        "uninstall",
-        "smoketest",
-        "debug",
-        "readonly",
-        "udev",
-    }
-)
+OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev"})
 
 
 def run() -> None:
@@ -51,25 +36,17 @@ def _main(argv: list[str], *, prog: str) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _command_parser(subparsers, "install", "Apply the managed system install.")
-    _command_parser(
-        subparsers, "update", "Fast-forward and reapply the managed install when changed."
-    )
+    _command_parser(subparsers, "update", "Fast-forward and reapply the managed install when changed.")
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
     smoketest_parser.add_argument("--allow-non-pi", action="store_true")
-    smoketest_parser.add_argument(
-        "--output", choices=["text", "json"], default="text", help="Default: text"
-    )
+    smoketest_parser.add_argument("--output", choices=["text", "json"], default="text", help="Default: text")
     debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
-    readonly_parser = _command_parser(
-        subparsers, "readonly", "Manage persistent read-only operation."
-    )
+    readonly_parser = _command_parser(subparsers, "readonly", "Manage persistent read-only operation.")
     readonly_subparsers = readonly_parser.add_subparsers(dest="readonly_command", required=True)
-    setup_parser = _command_parser(
-        readonly_subparsers, "setup", "Prepare persistent Bluetooth state."
-    )
+    setup_parser = _command_parser(readonly_subparsers, "setup", "Prepare persistent Bluetooth state.")
     setup_parser.add_argument("--device", required=True)
     _command_parser(readonly_subparsers, "status", "Show persistent read-only status.")
     _command_parser(readonly_subparsers, "enable", "Enable persistent read-only mode.")

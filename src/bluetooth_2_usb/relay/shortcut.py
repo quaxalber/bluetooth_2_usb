@@ -48,11 +48,7 @@ class ShortcutToggler:
             if self._shortcut_keys and key_name in self._shortcut_keys:
                 self._shortcut_armed = True
 
-        if (
-            self._shortcut_armed
-            and self._shortcut_keys
-            and self._shortcut_keys.issubset(self._currently_pressed)
-        ):
+        if self._shortcut_armed and self._shortcut_keys and self._shortcut_keys.issubset(self._currently_pressed):
             self._shortcut_armed = False
             self._suppressed_keys.update(self._shortcut_keys)
             self.toggle_relaying()

@@ -14,16 +14,10 @@ BOOT_CONFIG = "bluetooth_2_usb.ops.deployment.boot_config"
 
 class OpsDeploymentTest(unittest.TestCase):
     def test_managed_paths_derives_paths_from_overrides(self) -> None:
-        paths = ManagedPaths(
-            persist_mount=Path("/tmp/persist"),
-            bluetooth_service_dropin_dir=Path("/tmp/dropins"),
-        )
+        paths = ManagedPaths(persist_mount=Path("/tmp/persist"), bluetooth_service_dropin_dir=Path("/tmp/dropins"))
 
         self.assertEqual(paths.persist_bluetooth_dir, Path("/tmp/persist/bluetooth"))
-        self.assertEqual(
-            paths.bluetooth_service_dropin,
-            Path("/tmp/dropins/bluetooth_2_usb_persist.conf"),
-        )
+        self.assertEqual(paths.bluetooth_service_dropin, Path("/tmp/dropins/bluetooth_2_usb_persist.conf"))
 
     def test_rollback_stack_runs_callbacks_in_reverse_order(self) -> None:
         calls = []
@@ -75,41 +69,21 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.PATHS", paths))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.require_commands"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.detect_boot_dir", return_value=root))
-                stack.enter_context(
-                    patch(f"{BOOT_CONFIG}.boot_config_path", return_value=root / "config.txt")
-                )
-                stack.enter_context(
-                    patch(f"{BOOT_CONFIG}.boot_cmdline_path", return_value=root / "cmdline.txt")
-                )
-                stack.enter_context(
-                    patch(f"{BOOT_CONFIG}.current_pi_model", return_value="Raspberry Pi 4")
-                )
+                stack.enter_context(patch(f"{BOOT_CONFIG}.boot_config_path", return_value=root / "config.txt"))
+                stack.enter_context(patch(f"{BOOT_CONFIG}.boot_cmdline_path", return_value=root / "cmdline.txt"))
+                stack.enter_context(patch(f"{BOOT_CONFIG}.current_pi_model", return_value="Raspberry Pi 4"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.dwc2_mode", return_value="module"))
                 stack.enter_context(
-                    patch(
-                        f"{BOOT_CONFIG}.board_overlay_line",
-                        return_value="dtoverlay=dwc2,dr_mode=peripheral",
-                    )
+                    patch(f"{BOOT_CONFIG}.board_overlay_line", return_value="dtoverlay=dwc2,dr_mode=peripheral")
                 )
-                stack.enter_context(
-                    patch(
-                        f"{BOOT_CONFIG}.required_boot_modules_csv", return_value="dwc2,libcomposite"
-                    )
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks")
-                )
+                stack.enter_context(patch(f"{BOOT_CONFIG}.required_boot_modules_csv", return_value="dwc2,libcomposite"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_dwc2_overlay"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_modules_load"))
                 stack.enter_context(
-                    patch(
-                        "bluetooth_2_usb.ops.deployment.rebuild_venv_atomically",
-                        side_effect=OpsError("venv failed"),
-                    )
+                    patch("bluetooth_2_usb.ops.deployment.rebuild_venv_atomically", side_effect=OpsError("venv failed"))
                 )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run)
-                )
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run))
 
                 with self.assertRaises(OpsError):
                     install(root)
@@ -135,30 +109,15 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.PATHS", paths))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.require_commands"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.detect_boot_dir", return_value=root))
-                stack.enter_context(
-                    patch(f"{BOOT_CONFIG}.boot_config_path", return_value=root / "config.txt")
-                )
-                stack.enter_context(
-                    patch(f"{BOOT_CONFIG}.boot_cmdline_path", return_value=root / "cmdline.txt")
-                )
-                stack.enter_context(
-                    patch(f"{BOOT_CONFIG}.current_pi_model", return_value="Raspberry Pi 4")
-                )
+                stack.enter_context(patch(f"{BOOT_CONFIG}.boot_config_path", return_value=root / "config.txt"))
+                stack.enter_context(patch(f"{BOOT_CONFIG}.boot_cmdline_path", return_value=root / "cmdline.txt"))
+                stack.enter_context(patch(f"{BOOT_CONFIG}.current_pi_model", return_value="Raspberry Pi 4"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.dwc2_mode", return_value="module"))
                 stack.enter_context(
-                    patch(
-                        f"{BOOT_CONFIG}.board_overlay_line",
-                        return_value="dtoverlay=dwc2,dr_mode=peripheral",
-                    )
+                    patch(f"{BOOT_CONFIG}.board_overlay_line", return_value="dtoverlay=dwc2,dr_mode=peripheral")
                 )
-                stack.enter_context(
-                    patch(
-                        f"{BOOT_CONFIG}.required_boot_modules_csv", return_value="dwc2,libcomposite"
-                    )
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks")
-                )
+                stack.enter_context(patch(f"{BOOT_CONFIG}.required_boot_modules_csv", return_value="dwc2,libcomposite"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_dwc2_overlay"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_modules_load"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.rebuild_venv_atomically"))
@@ -171,9 +130,7 @@ class OpsDeploymentTest(unittest.TestCase):
                         side_effect=lambda path: canonicalized_paths.append(path) or True,
                     )
                 )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run)
-                )
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run))
 
                 install(root)
 
@@ -217,29 +174,13 @@ class OpsDeploymentTest(unittest.TestCase):
 
             with ExitStack() as stack:
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.PATHS", paths))
-                stack.enter_context(
-                    patch(
-                        "bluetooth_2_usb.ops.deployment.load_readonly_config", return_value=config
-                    )
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.service_installed", return_value=False)
-                )
-                remove_owned_gadgets = stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.remove_owned_gadgets")
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.remove_bluetooth_persist_dropin")
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.remove_bluetooth_bind_mount_unit")
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.remove_persist_mount_unit")
-                )
-                stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run)
-                )
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.load_readonly_config", return_value=config))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.service_installed", return_value=False))
+                remove_owned_gadgets = stack.enter_context(patch("bluetooth_2_usb.ops.deployment.remove_owned_gadgets"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.remove_bluetooth_persist_dropin"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.remove_bluetooth_bind_mount_unit"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.remove_persist_mount_unit"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run))
 
                 uninstall()
 

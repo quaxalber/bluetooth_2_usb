@@ -18,11 +18,7 @@ from .constants import (
     EXIT_PREREQUISITE,
 )
 from .result import LoopbackResult
-from .scenarios import (
-    SCENARIOS,
-    get_scenario,
-    scenario_to_dict,
-)
+from .scenarios import SCENARIOS, get_scenario, scenario_to_dict
 
 UINPUT_PATH = Path("/dev/uinput")
 SERVICE_SETTLE_ENV = "B2U_LOOPBACK_SERVICE_SETTLE_SEC"
@@ -35,10 +31,7 @@ def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
     time.sleep(event_gap_ms / 1000.0)
 
 
-_HI_RES_REL_CODES = {
-    ecodes.REL_WHEEL: ecodes.REL_WHEEL_HI_RES,
-    ecodes.REL_HWHEEL: ecodes.REL_HWHEEL_HI_RES,
-}
+_HI_RES_REL_CODES = {ecodes.REL_WHEEL: ecodes.REL_WHEEL_HI_RES, ecodes.REL_HWHEEL: ecodes.REL_HWHEEL_HI_RES}
 
 
 def _write_mouse_rel_step(device: UInput, step_event) -> None:
@@ -61,9 +54,7 @@ def _close_devices(*devices) -> None:
 
 
 def _keyboard_capabilities() -> dict[int, list[int]]:
-    keyboard_codes = sorted(
-        {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
-    )
+    keyboard_codes = sorted({step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps})
     return {ecodes.EV_KEY: keyboard_codes}
 
 
@@ -115,13 +106,7 @@ def _wait_for_service_settle(settle_seconds: float) -> None:
         return
     try:
         completed = subprocess.run(
-            [
-                "systemctl",
-                "show",
-                "bluetooth_2_usb.service",
-                "--property=ActiveEnterTimestampMonotonic",
-                "--value",
-            ],
+            ["systemctl", "show", "bluetooth_2_usb.service", "--property=ActiveEnterTimestampMonotonic", "--value"],
             check=False,
             capture_output=True,
             text=True,
@@ -160,9 +145,7 @@ def run_inject(
 ) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     resolved_event_gap_ms = scenario.default_event_gap_ms if event_gap_ms is None else event_gap_ms
-    resolved_post_delay_ms = (
-        scenario.default_post_delay_ms if post_delay_ms is None else post_delay_ms
-    )
+    resolved_post_delay_ms = scenario.default_post_delay_ms if post_delay_ms is None else post_delay_ms
     if pre_delay_ms < 0 or resolved_event_gap_ms < 0 or resolved_post_delay_ms < 0:
         return LoopbackResult(
             command="inject",

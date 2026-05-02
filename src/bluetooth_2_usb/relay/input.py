@@ -79,8 +79,7 @@ class InputRelay:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
                     logger.debug(
-                        "Skipping ungrab for %s because the device is no longer available.",
-                        self._input_device.path,
+                        "Skipping ungrab for %s because the device is no longer available.", self._input_device.path
                     )
                 else:
                     logger.warning("Unable to ungrab %s: %s", self._input_device.path, ex)
@@ -112,8 +111,7 @@ class InputRelay:
                 self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
                     logger.debug(
-                        "Skipping ungrab for %s because the device is no longer available.",
-                        self._input_device.path,
+                        "Skipping ungrab for %s because the device is no longer available.", self._input_device.path
                     )
                 else:
                     logger.warning("Could not ungrab %s: %s", self._input_device, ex)
@@ -133,10 +131,7 @@ class InputRelay:
             if ex.errno != errno.ENODEV:
                 raise
             input_disappeared = True
-            logger.debug(
-                "Stopping relay loop for %s because the input device disappeared.",
-                self._input_device.path,
-            )
+            logger.debug("Stopping relay loop for %s because the input device disappeared.", self._input_device.path)
             self._dispatcher.discard_pending()
         try:
             await self._dispatcher.flush()
@@ -149,7 +144,5 @@ class InputRelay:
                 ex,
             )
         logger.debug(
-            "Relay stats for %s: hid_write_failures=%s",
-            self._input_device.path,
-            self._dispatcher.write_failures,
+            "Relay stats for %s: hid_write_failures=%s", self._input_device.path, self._dispatcher.write_failures
         )

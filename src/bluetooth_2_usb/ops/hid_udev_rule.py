@@ -29,6 +29,4 @@ def install_hid_udev_rule(repo_root: Path) -> None:
         ]
     )
     ok(f"Installed udev rule: {RULE_DST}")
-    info(
-        "Reconnect the Pi gadget or replug the OTG cable if the USB device permissions do not update immediately."
-    )
+    info("Reconnect the Pi gadget or replug the OTG cable if the USB device permissions do not update immediately.")

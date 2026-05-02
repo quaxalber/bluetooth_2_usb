@@ -105,9 +105,7 @@ def describe_input_devices(
         try:
             try:
                 capabilities = sorted(
-                    EVENT_TYPE_NAMES[code]
-                    for code in device.capabilities(verbose=False)
-                    if code in EVENT_TYPE_NAMES
+                    EVENT_TYPE_NAMES[code] for code in device.capabilities(verbose=False) if code in EVENT_TYPE_NAMES
                 )
             except OSError as exc:
                 capabilities = []
@@ -132,13 +130,7 @@ def describe_input_devices(
 
 
 def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
-    table = Table(
-        box=box.MINIMAL_DOUBLE_HEAD,
-        expand=False,
-        header_style="bold",
-        pad_edge=False,
-        show_lines=False,
-    )
+    table = Table(box=box.MINIMAL_DOUBLE_HEAD, expand=False, header_style="bold", pad_edge=False, show_lines=False)
     table.add_column("Status", no_wrap=True, width=7)
     table.add_column("Device", min_width=18, overflow="fold")
     table.add_column("Identity", min_width=16, overflow="fold")
@@ -147,9 +139,7 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
 
     for device in devices:
         status = "relay" if device.relay_candidate else "skip"
-        table.add_row(
-            status, device.name or "-", device.identity, device.path, device.exclusion_reason or ""
-        )
+        table.add_row(status, device.name or "-", device.identity, device.path, device.exclusion_reason or "")
 
     output = io.StringIO()
     console = Console(

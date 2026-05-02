@@ -11,10 +11,7 @@ class ServiceEntrypointTest(unittest.TestCase):
         env = {"BLUETOOTH_2_USB_UDC_PATH": "/stale"}
 
         with patch.dict(os.environ, env, clear=True):
-            with patch(
-                "bluetooth_2_usb.service_entrypoint.load_service_settings",
-                return_value=ServiceSettings(),
-            ):
+            with patch("bluetooth_2_usb.service_entrypoint.load_service_settings", return_value=ServiceSettings()):
                 with patch("bluetooth_2_usb.service_entrypoint.run", return_value=0):
                     self.assertEqual(service_entrypoint.main(), 0)
 
@@ -24,9 +21,7 @@ class ServiceEntrypointTest(unittest.TestCase):
         settings = ServiceSettings(udc_path="/tmp/udc-state")
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch(
-                "bluetooth_2_usb.service_entrypoint.load_service_settings", return_value=settings
-            ):
+            with patch("bluetooth_2_usb.service_entrypoint.load_service_settings", return_value=settings):
                 with patch("bluetooth_2_usb.service_entrypoint.run", return_value=0):
                     self.assertEqual(service_entrypoint.main(), 0)
 
