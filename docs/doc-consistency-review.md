@@ -6,7 +6,7 @@ still match the current repository state.
 The goal is to catch drift between:
 
 - documented commands
-- actual script and CLI interfaces
+- actual CLI interfaces
 - current managed paths and defaults
 - the supported development workflow
 
@@ -18,7 +18,6 @@ Review at least:
 - `CONTRIBUTING.md`
 - `TROUBLESHOOTING.md`
 - every remaining `docs/*.md` file
-- supported public shell entrypoints under `scripts/`
 - `src/bluetooth_2_usb/args.py`
 - `pyproject.toml`
 
@@ -41,22 +40,34 @@ For each Markdown file, verify that:
 - placeholders are clearly marked as placeholders
 - examples favor readability over unnecessary shell indirection
 
-### 2. Script interfaces
+### 2. Operational CLI interface
 
-Compare the docs against the current `--help` output of the supported public
-scripts:
-
-This is only safe because the current entrypoint scripts parse `--help` before
-side effects; audit any new script for early side effects before adding it to
-`scripts/` or this checklist.
+Compare the docs against the current `--help` output of the supported
+operational commands:
 
 ```bash
-mapfile -d '' shell_scripts < <(
-  find scripts -maxdepth 2 -type f -name '*.sh' ! -path 'scripts/lib/*' -print0 | sort -z
-)
-for s in "${shell_scripts[@]}"; do
-  echo "==== $s"
-  bash "$s" --help
+./venv/bin/bluetooth_2_usb --help
+while read -r command; do
+  echo "==== $command"
+  ./venv/bin/bluetooth_2_usb $command --help
+  echo
+done <<'EOF'
+install
+update
+uninstall
+smoketest
+debug
+readonly setup
+readonly status
+readonly enable
+readonly disable
+udev install
+EOF
+
+./venv/bin/bluetooth_2_usb loopback --help
+for command in inject capture; do
+  echo "==== bluetooth_2_usb loopback $command"
+  ./venv/bin/bluetooth_2_usb loopback "$command" --help
   echo
 done
 
@@ -67,20 +78,22 @@ if [[ -f scripts/loopback-capture.ps1 ]] && command -v powershell >/dev/null 2>&
 fi
 ```
 
-### 3. Python CLI interface
+### 3. Runtime CLI interface
 
 ```bash
-./venv/bin/python -m bluetooth_2_usb --help
-./venv/bin/python -m bluetooth_2_usb --version
+./venv/bin/bluetooth_2_usb --help
+./venv/bin/bluetooth_2_usb --version
 sed -n '1,220p' src/bluetooth_2_usb/args.py
 ```
 
 ### 4. Managed paths and service assumptions
 
 ```bash
-for f in scripts/lib/*.sh; do
-  echo "==== $f"
-  sed -n '1,220p' "$f"
+sed -n '1,220p' src/bluetooth_2_usb/ops/paths.py
+sed -n '1,260p' src/bluetooth_2_usb/ops/deployment.py
+for file in src/bluetooth_2_usb/ops/readonly/*.py; do
+  echo "==== $file"
+  sed -n '1,220p' "$file"
 done
 sed -n '1,120p' bluetooth_2_usb.service
 ```
@@ -88,7 +101,7 @@ sed -n '1,120p' bluetooth_2_usb.service
 Pay attention to:
 
 - install root
-- runtime config path
+- runtime settings path
 - read-only config path
 - log directory
 - persistent Bluetooth-state paths
@@ -103,8 +116,8 @@ tmpdir="$(mktemp -d)"
 python3 -m venv "$tmpdir/venv"
 source "$tmpdir/venv/bin/activate"
 pip install -U pip setuptools wheel
-pip install -e . black ruff yamllint shfmt-py shellcheck-py build
-python -m bluetooth_2_usb --help
+pip install -e . black ruff yamllint build
+bluetooth_2_usb --help
 deactivate
 rm -rf "$tmpdir"
 ```
@@ -112,7 +125,7 @@ rm -rf "$tmpdir"
 ### 6. Drift search for commands, flags, and paths
 
 ```bash
-rg -n '(scripts/[a-z0-9_./-]+\.sh|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
+rg -n '(bluetooth_2_usb|--[a-z0-9][a-z0-9_-]*)' README.md CONTRIBUTING.md TROUBLESHOOTING.md docs
 ```
 
 Flag anything that is documented but no longer present, or anything that exists
@@ -123,18 +136,16 @@ in code but is not explained where an operator would reasonably expect it.
 ```bash
 ./venv/bin/python -m compileall src tests
 ./venv/bin/python -m unittest discover -s tests -v
-mapfile -d '' shell_scripts < <(find scripts -type f -name '*.sh' -print0 | sort -z)
-bash -n "${shell_scripts[@]}"
 ```
 
 ## Expected outcome
 
 At the end of the review, answer these questions explicitly:
 
-1. Do the remaining repo docs match the current script interfaces?
+1. Do the remaining repo docs match the current operational CLI interfaces?
 2. Do they match the current Python CLI surface?
 3. Do the documented managed paths and defaults still match
-   `scripts/lib/paths.sh` and the service unit?
+   `bluetooth_2_usb.ops.paths` and the service unit?
 4. Are there any stale commands, removed flags, outdated entrypoints, or
    unnecessary lab-specific assumptions left?
 5. Did you make doc fixes, or is the current documentation already consistent?

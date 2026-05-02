@@ -60,15 +60,16 @@ version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
 
 [tool.black]
-line-length = 88
+line-length = 120
+skip-magic-trailing-comma = true
 target-version = ["py311"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["F", "I", "B", "UP"]
+select = ["F", "I", "B", "UP", "G004"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

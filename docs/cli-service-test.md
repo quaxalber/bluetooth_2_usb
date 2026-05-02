@@ -63,26 +63,33 @@ ssh <pi-host> '
 '
 ```
 
-## Script help surface
+## Operational CLI help surface
 
 ```bash
 ssh <pi-host> '
-  bash /opt/bluetooth_2_usb/scripts/install.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/update.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/uninstall.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/smoketest.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/debug.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/loopback-inject.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/readonly-enable.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/readonly-disable.sh --help >/dev/null
-  bash /opt/bluetooth_2_usb/scripts/readonly-setup.sh --help >/dev/null
+  cd /opt/bluetooth_2_usb
+  PYTHONPATH=src python3 -m bluetooth_2_usb install --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb update --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb uninstall --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb smoketest --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb debug --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb udev install --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb loopback inject --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb loopback capture --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly status --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly enable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly disable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly setup --help >/dev/null
 '
 ```
 
 ## Install validation
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/install.sh'
+ssh <pi-host> '
+  cd /opt/bluetooth_2_usb
+  sudo -n env PYTHONPATH=src python3 -m bluetooth_2_usb install
+'
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
@@ -101,7 +108,7 @@ After reboot:
 ```bash
 ssh <pi-host> '
   systemctl is-active bluetooth_2_usb.service
-  sudo -n /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+  sudo -n bluetooth_2_usb smoketest --verbose
   sudo -n bluetoothctl show
   sudo -n btmgmt info
 '
@@ -114,7 +121,7 @@ present yet, or when the OTG cable is not attached and the UDC state is not
 ## Update validation
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/update.sh'
+ssh <pi-host> 'sudo -n bluetooth_2_usb update'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
@@ -128,13 +135,13 @@ configuration or other reboot-sensitive behavior.
 Bounded run:
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh --duration 5'
+ssh <pi-host> 'sudo -n bluetooth_2_usb debug --duration 10'
 ```
 
 Manual interrupt path:
 
 ```bash
-ssh -t <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/debug.sh'
+ssh -t <pi-host> 'sudo -n bluetooth_2_usb debug'
 ```
 
 Verify:
@@ -146,7 +153,7 @@ Verify:
 
 ## Real relay validation with a paired device
 
-Use this when you want to prove the real user path, not just the harness path.
+Use this when you want to prove the real user path, not just the loopback path.
 
 Steps:
 
@@ -163,7 +170,7 @@ Pass criteria:
 ## Relay loopback inject/capture validation
 
 If the Pi is physically attached to a host through the gadget data path, run the
-end-to-end loopback inject/capture harness from
+end-to-end loopback inject/capture validation from
 [host-relay-loopback.md](host-relay-loopback.md).
 
 ## Persistent read-only validation
@@ -175,8 +182,9 @@ verifying it with `lsblk -f`.
 
 ```bash
 ssh <pi-host> '
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly-setup.sh --device <persist-partition>
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
+  sudo -n bluetooth_2_usb readonly setup --device <persist-partition>
+  bluetooth_2_usb readonly status
+  sudo -n bluetooth_2_usb readonly enable
 '
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
@@ -198,7 +206,7 @@ repair `initramfs-tools` before rebooting and rerun the enable step:
 ssh <pi-host> '
   sudo -n sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
   sudo -n dpkg --configure -a
-  sudo -n /opt/bluetooth_2_usb/scripts/readonly-enable.sh
+  sudo -n bluetooth_2_usb readonly enable
 '
 ```
 
@@ -206,13 +214,22 @@ After reboot:
 
 ```bash
 ssh <pi-host> 'bash -s' <<'EOF'
-sudo -n env SMOKETEST_POST_REBOOT=1 /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
+bluetooth_2_usb readonly status
+sudo -n env SMOKETEST_POST_REBOOT=1 bluetooth_2_usb smoketest --verbose
 findmnt -no FSTYPE,SOURCE /
 findmnt /var/lib/bluetooth
 findmnt /mnt/b2u-persist
-. /opt/bluetooth_2_usb/scripts/lib/boot.sh
-p="$(boot_initramfs_target_path || true)"
-[ -s "$p" ] && printf 'boot-initramfs %s\n' "$p"
+cd /opt/bluetooth_2_usb
+sudo -n env PYTHONPATH=src python3 - <<'PY'
+from bluetooth_2_usb.ops.boot_config import boot_initramfs_target_path
+
+try:
+    path = boot_initramfs_target_path()
+except Exception as exc:
+    print(f"boot-initramfs unavailable: {exc}")
+else:
+    print(f"boot-initramfs {path}")
+PY
 grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
 EOF
 ```
@@ -224,7 +241,7 @@ Before reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list_devices --output json
 '
 ```
 
@@ -239,7 +256,7 @@ After reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list_devices --output json
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 '
 ```
@@ -286,7 +303,7 @@ Pass criteria:
 ## Disable read-only mode again
 
 ```bash
-ssh <pi-host> 'sudo -n /opt/bluetooth_2_usb/scripts/readonly-disable.sh'
+ssh <pi-host> 'sudo -n bluetooth_2_usb readonly disable'
 old_boot_id="$(ssh <pi-host> 'cat /proc/sys/kernel/random/boot_id')"
 ssh <pi-host> 'sudo -n reboot' || true
 deadline=$((SECONDS + 180))
@@ -308,7 +325,7 @@ the live root filesystem.
 
 ```bash
 ssh <pi-host> '
-  sudo -n /opt/bluetooth_2_usb/scripts/uninstall.sh
+  sudo -n bluetooth_2_usb uninstall
   systemctl is-active bluetooth_2_usb.service || true
   systemctl show -P LoadState bluetooth_2_usb.service
   systemctl is-enabled var-lib-bluetooth.mount >/dev/null 2>&1 && echo mount-enabled || echo mount-disabled
@@ -321,7 +338,7 @@ Expected outcome:
 - service integration is removed
 - checkout remains present
 - persistent mount units are disabled
-- runtime env files and wrapper are removed
+- runtime env files and CLI links are removed
 
 ## What to record
 

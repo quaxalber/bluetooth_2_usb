@@ -29,17 +29,29 @@ Repo-owned focused guides:
 - `docs/host-relay-loopback.md`
 - `docs/persistent-readonly.md`
 - `docs/remote-wakeup-kernel.md`
+- `docs/runtime-architecture.md`
 - `docs/doc-consistency-review.md`
 - `docs/release-versioning-policy.md`
 
 ## Agent deltas
 
+- Constructive criticism, objections, and requests for clarification are
+  welcome and appreciated.
+- When a prompt or part of a prompt seems unclear, risky, internally
+  inconsistent, or worth a second thought, give honest feedback before
+  implementing.
+- Ask concise questions or offer concrete alternatives when clarification would
+  materially improve the result; do not withhold technical concerns to avoid
+  hurting feelings.
+- Treat direct disagreement as normal professional collaboration: surface the
+  concern, explain the tradeoff, and then proceed once the direction is clear.
 - Prefer the repo venv for checks. Do not silently fall back to system Python
   when the venv workflow applies.
 - For remote Pi work, passwordless sudo is strongly recommended so `sudo -n`
   validation paths do not fail early.
 - Keep changes focused. Update docs when behavior, commands, paths, defaults, or
   validation guidance change.
+- Follow the compatibility policy in `CONTRIBUTING.md`.
 - Do not push directly to `main`. Use `staging` as the integration branch for
   normal work.
 - Open normal PRs against `staging` and squash-merge them there. Small
@@ -54,18 +66,18 @@ Repo-owned focused guides:
 
 Use the baseline checks from [CONTRIBUTING.md](CONTRIBUTING.md).
 
-If you change installer, diagnostics, or read-only logic, recursive shell
-validation is mandatory.
+If you change installer, diagnostics, or read-only logic, run the full
+operational CLI validation path.
 
 For runtime-affecting changes, validate on real Pi hardware when feasible.
 Minimum Pi-side checks:
 
-- `sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose`
-- `sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10`
-- `sudo bluetoothctl show`
-- `sudo btmgmt info`
+- `sudo -n bluetooth_2_usb smoketest --verbose`
+- `sudo -n bluetooth_2_usb debug --duration 10`
+- `sudo -n bluetoothctl show`
+- `sudo -n btmgmt info`
 
-For relay-path changes, also use the host/Pi loopback inject/capture harness from
+For relay-path changes, also use the host/Pi loopback inject/capture validation from
 `docs/host-relay-loopback.md`.
 
 If destructive Pi flows were not executed, say so explicitly in the final
