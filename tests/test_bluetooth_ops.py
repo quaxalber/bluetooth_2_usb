@@ -62,6 +62,7 @@ class BluetoothRfkillOpsTest(unittest.TestCase):
             clear_bluetooth_rfkill_soft_blocks(rfkill_root)
 
             self.assertEqual((entry / "soft").read_text(encoding="utf-8").strip(), "1")
+            self.assertEqual((entry / "hard").read_text(encoding="utf-8").strip(), "1")
 
     def test_clear_bluetooth_rfkill_soft_blocks_with_no_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

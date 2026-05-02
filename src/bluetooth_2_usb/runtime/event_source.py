@@ -17,6 +17,8 @@ class RuntimeEventSource:
     """
 
     def __init__(self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5) -> None:
+        if poll_interval <= 0:
+            raise ValueError("poll_interval must be > 0")
         self._events = events
         self._udc_path = udc_path
         self._poll_interval = poll_interval

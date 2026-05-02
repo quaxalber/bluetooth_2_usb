@@ -45,6 +45,15 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.runtime.event_source.pyudev.Monitor.from_netlink", return_value=monitor):
                 return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
 
+    async def test_runtime_event_source_rejects_non_positive_poll_interval(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
+
+        with self.assertRaisesRegex(ValueError, "poll_interval must be > 0"):
+            self._build_source(queue, monitor=monitor, poll_interval=0)
+
+        monitor.close()
+
     async def test_runtime_event_source_emits_udev_hotplug_events(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor(
