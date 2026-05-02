@@ -28,7 +28,7 @@ sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2
 ### 2. Install
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/install.sh
+cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=src python3 -m bluetooth_2_usb install
 ```
 
 ### 3. Reboot
@@ -57,7 +57,7 @@ exit
 ### 5. Run the smoketest
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh
+sudo bluetooth_2_usb smoketest
 ```
 
 ### 6. Connect the Pi to the target host
@@ -83,13 +83,13 @@ sudo /opt/bluetooth_2_usb/scripts/smoketest.sh
 ## Updating
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/update.sh
+sudo bluetooth_2_usb update
 ```
 
 ## Uninstalling
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
+sudo bluetooth_2_usb uninstall
 ```
 
 ## Diagnostics
@@ -97,14 +97,28 @@ sudo /opt/bluetooth_2_usb/scripts/uninstall.sh
 For most issues, start with the two built-in diagnostics:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 10
+sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb debug --duration 10
 ```
 
-The `smoketest` is the quick health gate. `debug.sh` collects a fuller
+The `smoketest` is the quick health gate. `debug` collects a fuller
 redacted snapshot and can run a short bounded foreground debug session. If you
 need the next steps after those checks, use
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+## Runtime behavior
+
+The service runs one asyncio runtime that turns UDC cable state, input hotplug,
+and shutdown signals into typed runtime events. A relay supervisor consumes
+those events and owns all per-device relay tasks.
+
+Relaying starts only when the USB device controller reports `configured`.
+Relaying pauses, and all HID gadget state is released, when the controller
+leaves `configured`. That keeps host-visible keys and buttons from sticking
+across cable disconnects, suspend transitions, and USB resets.
+
+For implementation details, see
+[docs/runtime-architecture.md](docs/runtime-architecture.md).
 
 ## Persistent read-only operation
 
@@ -157,7 +171,7 @@ Meaning:
 - `B2U_UDC_PATH` is optional and only needed when you must pin UDC detection on
   a system with multiple gadget-capable controllers.
 
-After editing the runtime config:
+After editing the runtime settings:
 
 ```bash
 sudo systemctl restart bluetooth_2_usb.service
@@ -185,27 +199,30 @@ sudo systemctl restart bluetooth_2_usb.service
 | `--output {text,json}` | Choose the output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
 | `--help, -h` | Show built-in CLI help and exit. |
 
-## Script reference
+## Operational command reference
 
-Managed deployment scripts live in `/opt/bluetooth_2_usb/scripts/` after
-installation.
+Managed deployment commands use the same `bluetooth_2_usb` CLI as the runtime.
+During the initial source-tree install, run the module with `PYTHONPATH`
+pointed at the checkout. After installation, use the managed `bluetooth_2_usb`
+console command.
 
-### `install.sh`
+### `install`
 
 Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
 Use this after cloning into the supported install path.
 
-### `update.sh`
+### `update`
 
-Fast-forward the managed checkout and call `install.sh` only when the checkout
+Fast-forward the managed checkout and call `install` only when the checkout
 actually changed. This is the normal update path for an installed system.
 
-### `uninstall.sh`
+### `uninstall`
 
 Remove the managed system integration while leaving the checkout in place. Use
-this when you want to remove the service and wrapper without deleting the clone.
+this when you want to remove the service and CLI links without deleting the
+clone.
 
-### `smoketest.sh`
+### `smoketest`
 
 Fast health check for the supported managed deployment. Use this first when you
 want to confirm that the service, gadget path, and Bluetooth basics are
@@ -214,8 +231,9 @@ healthy.
 | Argument | Meaning |
 | --- | --- |
 | `--verbose` | Print fuller diagnostics, including the collected summary data. |
+| `--output {text,json}` | Choose the output format. JSON output is written to stdout for automation; probe text is redirected to stderr. |
 
-### `debug.sh`
+### `debug`
 
 Collect a redacted diagnostics report and optionally run a bounded live
 foreground debug session. Use this when the `smoketest` is not enough or when
@@ -225,38 +243,40 @@ you need a report to share.
 | --- | --- |
 | `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
 
-### `loopback-inject.sh`
+### `loopback inject`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
-loopback inject/capture harness.
+loopback inject/capture validation.
 
-### `loopback-capture.sh`
+### `loopback capture`
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
-harness.
+validation. On Windows, use `scripts/loopback-capture.ps1` as the launcher for
+the same host-capture flow.
 
-### `loopback-capture.ps1`
-
-Windows PowerShell wrapper for the same host-capture flow.
-
-### `install-hid-udev-rule.sh`
+### `udev install`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
 gadget device nodes.
 
-### `readonly-setup.sh`
+### `readonly setup`
 
 Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
 persistent read-only mode.
 
-### `readonly-enable.sh`
+### `readonly status`
+
+Show the configured and live persistent read-only state, including OverlayFS,
+root filesystem, and persistent Bluetooth-state mount status.
+
+### `readonly enable`
 
 Switch Raspberry Pi OS into the supported persistent read-only mode while
 keeping Bluetooth state on separate writable storage.
 
-### `readonly-disable.sh`
+### `readonly disable`
 
 Return the system to normal writable mode while keeping the persistent
 Bluetooth-state configuration available.
@@ -267,9 +287,9 @@ Bluetooth-state configuration available.
 | --- | --- |
 | `/opt/bluetooth_2_usb` | Managed installation root |
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
-| `/etc/default/bluetooth_2_usb` | Structured runtime configuration |
+| `/etc/default/bluetooth_2_usb` | Structured runtime settings |
 | `/etc/default/bluetooth_2_usb_readonly` | Persistent read-only configuration |
-| `/var/log/bluetooth_2_usb` | Script and report output |
+| `/var/log/bluetooth_2_usb` | Operational command and runtime diagnostic output |
 | `/mnt/b2u-persist` | Default persistent mount target |
 | `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |
 | `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |
@@ -278,7 +298,7 @@ Bluetooth-state configuration available.
 
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Pi validation flow: [docs/cli-service-test.md](docs/cli-service-test.md)
-- Loopback inject/capture harness: [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
+- Loopback inject/capture validation: [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
 - Persistent read-only workflow: [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - Doc consistency review: [docs/doc-consistency-review.md](docs/doc-consistency-review.md)
 - Release tagging and versioning: [docs/release-versioning-policy.md](docs/release-versioning-policy.md)

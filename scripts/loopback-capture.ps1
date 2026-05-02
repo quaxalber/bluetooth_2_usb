@@ -17,10 +17,14 @@ function Test-PythonHasHid([string]$Candidate) {
   }
 }
 
+$VenvPython = "$RepoRoot\venv\Scripts\python.exe"
+
 if ($env:HOST_CAPTURE_PYTHON -and (Test-PythonHasHid $env:HOST_CAPTURE_PYTHON)) {
   $PythonBin = $env:HOST_CAPTURE_PYTHON
-} elseif ((Test-Path "$RepoRoot\venv\Scripts\python.exe") -and (Test-PythonHasHid "$RepoRoot\venv\Scripts\python.exe")) {
-  $PythonBin = "$RepoRoot\venv\Scripts\python.exe"
+} elseif ((Test-Path $VenvPython) -and (Test-PythonHasHid $VenvPython)) {
+  $PythonBin = $VenvPython
+} elseif (Test-Path $VenvPython) {
+  Write-Error "Repository venv exists at '$VenvPython' but cannot import hid. Install requirements-host-capture.txt into that venv."
 } elseif (Test-PythonHasHid "python") {
   $PythonBin = "python"
 } else {
@@ -41,9 +45,9 @@ if (-not $PythonBin) {
 $env:PYTHONPATH = "$RepoRoot\src" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
 
 if ($PythonBin -eq "py -3") {
-  & py -3 -m bluetooth_2_usb.test_harness capture @args
+  & py -3 -m bluetooth_2_usb loopback capture @args
 } else {
-  & $PythonBin -m bluetooth_2_usb.test_harness capture @args
+  & $PythonBin -m bluetooth_2_usb loopback capture @args
 }
 
 exit $LASTEXITCODE

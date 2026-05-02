@@ -25,9 +25,6 @@ class VersionTest(unittest.TestCase):
                 self.assertEqual(version.get_version(), "1.2.3")
 
     def test_falls_back_to_scm_version(self) -> None:
-        with patch(
-            "bluetooth_2_usb.version.package_version",
-            side_effect=version.PackageNotFoundError,
-        ):
+        with patch("bluetooth_2_usb.version.package_version", side_effect=version.PackageNotFoundError):
             with patch("bluetooth_2_usb.version.SCM_VERSION", "2.0.0.dev1"):
                 self.assertEqual(version.get_version(), "2.0.0.dev1")

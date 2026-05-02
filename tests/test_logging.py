@@ -1,4 +1,3 @@
-import importlib
 import logging
 import os
 import tempfile
@@ -28,19 +27,17 @@ class LoggingConfigurationTest(unittest.TestCase):
         self.package_logger.setLevel(self.original_level)
         self.package_logger.propagate = self.original_propagate
 
-    def test_get_logger_uses_named_children_with_handlers_only_on_package_root(
-        self,
-    ) -> None:
-        child = bt_logging.get_logger("bluetooth_2_usb.device_relay")
+    def test_get_logger_uses_named_children_with_handlers_only_on_package_root(self) -> None:
+        child = bt_logging.get_logger("bluetooth_2_usb.relay.input")
 
-        self.assertEqual(child.name, "bluetooth_2_usb.device_relay")
+        self.assertEqual(child.name, "bluetooth_2_usb.relay.input")
         self.assertEqual(child.handlers, [])
         self.assertTrue(child.propagate)
         self.assertGreater(len(self.package_logger.handlers), 0)
         self.assertFalse(self.package_logger.propagate)
 
     def test_add_file_handler_attaches_to_package_root_once(self) -> None:
-        bt_logging.get_logger("bluetooth_2_usb.device_relay")
+        bt_logging.get_logger("bluetooth_2_usb.relay.input")
 
         with tempfile.TemporaryDirectory() as tmp:
             log_path = str(Path(tmp) / "relay.log")
@@ -48,9 +45,7 @@ class LoggingConfigurationTest(unittest.TestCase):
             bt_logging.add_file_handler(log_path)
 
             file_handlers = [
-                handler
-                for handler in self.package_logger.handlers
-                if isinstance(handler, logging.FileHandler)
+                handler for handler in self.package_logger.handlers if isinstance(handler, logging.FileHandler)
             ]
 
             self.assertEqual(len(file_handlers), 1)
@@ -59,39 +54,22 @@ class LoggingConfigurationTest(unittest.TestCase):
                 handler.close()
 
     def test_add_file_handler_expands_user_path_before_opening(self) -> None:
-        bt_logging.get_logger("bluetooth_2_usb.device_relay")
+        bt_logging.get_logger("bluetooth_2_usb.relay.input")
 
         with tempfile.TemporaryDirectory() as tmp:
             env = {"HOME": tmp}
             if os.name == "nt":
                 drive, tail = os.path.splitdrive(tmp)
-                env.update(
-                    {
-                        "USERPROFILE": tmp,
-                        "HOMEDRIVE": drive,
-                        "HOMEPATH": tail or "\\",
-                    }
-                )
+                env.update({"USERPROFILE": tmp, "HOMEDRIVE": drive, "HOMEPATH": tail or "\\"})
             with patch.dict(os.environ, env, clear=False):
                 bt_logging.add_file_handler("~/relay.log")
 
             file_handlers = [
-                handler
-                for handler in self.package_logger.handlers
-                if isinstance(handler, logging.FileHandler)
+                handler for handler in self.package_logger.handlers if isinstance(handler, logging.FileHandler)
             ]
 
             self.assertEqual(len(file_handlers), 1)
-            self.assertEqual(
-                Path(file_handlers[0].baseFilename),
-                (Path(tmp) / "relay.log").resolve(),
-            )
+            self.assertEqual(Path(file_handlers[0].baseFilename), (Path(tmp) / "relay.log").resolve())
             for handler in file_handlers:
                 self.package_logger.removeHandler(handler)
                 handler.close()
-
-
-class RelayModuleBoundaryTest(unittest.TestCase):
-    def test_old_relay_module_import_is_not_preserved(self) -> None:
-        with self.assertRaises(ModuleNotFoundError):
-            importlib.import_module("bluetooth_2_usb.relay")

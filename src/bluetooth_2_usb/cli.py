@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import signal
 import sys
 from dataclasses import dataclass
 from logging import DEBUG
@@ -20,7 +19,6 @@ EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_ENVIRONMENT = 3
 EXIT_RUNTIME = 4
-GRACEFUL_SHUTDOWN_TIMEOUT_SEC = 4.0
 
 logger = get_logger(__name__)
 
@@ -42,12 +40,6 @@ class EnvironmentStatus:
             "udc_path": str(self.udc_path) if self.udc_path else None,
             "ok": self.ok,
         }
-
-
-@dataclass(slots=True)
-class _ServiceTaskResult:
-    source: str
-    exception: Exception | None = None
 
 
 def get_udc_path() -> Path | None:
@@ -91,11 +83,7 @@ def get_udc_path() -> Path | None:
 def validate_environment() -> EnvironmentStatus:
     configfs_path = Path("/sys/kernel/config/usb_gadget")
     udc_path = get_udc_path()
-    return EnvironmentStatus(
-        configfs=configfs_path.is_dir(),
-        udc_present=udc_path is not None,
-        udc_path=udc_path,
-    )
+    return EnvironmentStatus(configfs=configfs_path.is_dir(), udc_present=udc_path is not None, udc_path=udc_path)
 
 
 def print_environment_status(status: EnvironmentStatus, output: str) -> None:
@@ -124,93 +112,7 @@ def configure_logging(args: Arguments) -> None:
     if args.log_to_file:
         add_file_handler(args.log_path)
 
-    logger.debug(f"CLI args: {args}")
-
-
-def _handled_shutdown_signals() -> tuple[signal.Signals, ...]:
-    signals = [signal.SIGINT, signal.SIGTERM]
-    for optional_name in ("SIGHUP", "SIGQUIT"):
-        optional_signal = getattr(signal, optional_name, None)
-        if optional_signal is not None:
-            signals.append(optional_signal)
-    return tuple(signals)
-
-
-def _install_shutdown_signal_handlers(
-    shutdown_event: asyncio.Event,
-    *,
-    loop: asyncio.AbstractEventLoop | None = None,
-) -> tuple[dict[int, signal.Handlers], tuple[int, ...]]:
-    active_loop = asyncio.get_running_loop() if loop is None else loop
-    previous_handlers: dict[int, signal.Handlers] = {}
-    loop_handled_signals: list[int] = []
-
-    def _request_shutdown(sig_name: str) -> None:
-        logger.debug(f"Received signal: {sig_name}. Requesting graceful shutdown.")
-        shutdown_event.set()
-
-    def _signal_handler(sig: int, frame) -> None:
-        del frame
-        sig_name = signal.Signals(sig).name
-        _request_shutdown(sig_name)
-        try:
-            active_loop.call_soon_threadsafe(shutdown_event.set)
-        except RuntimeError:
-            shutdown_event.set()
-
-    for handled_signal in _handled_shutdown_signals():
-        sig_name = signal.Signals(handled_signal).name
-        add_signal_handler = getattr(active_loop, "add_signal_handler", None)
-        if add_signal_handler is not None:
-            try:
-                active_loop.add_signal_handler(
-                    handled_signal,
-                    _request_shutdown,
-                    sig_name,
-                )
-                loop_handled_signals.append(handled_signal)
-                continue
-            except (NotImplementedError, RuntimeError, ValueError):
-                pass
-        previous_handlers[handled_signal] = signal.getsignal(handled_signal)
-        signal.signal(handled_signal, _signal_handler)
-
-    return previous_handlers, tuple(loop_handled_signals)
-
-
-def _restore_signal_handlers(
-    previous_handlers: dict[int, signal.Handlers],
-    loop_handled_signals: tuple[int, ...],
-    *,
-    loop: asyncio.AbstractEventLoop | None = None,
-) -> None:
-    active_loop = asyncio.get_running_loop() if loop is None else loop
-    for handled_signal in loop_handled_signals:
-        remove_signal_handler = getattr(active_loop, "remove_signal_handler", None)
-        if remove_signal_handler is not None:
-            remove_signal_handler(handled_signal)
-    for handled_signal, previous_handler in previous_handlers.items():
-        signal.signal(handled_signal, previous_handler)
-
-
-async def _watch_shutdown_event(
-    shutdown_event: asyncio.Event,
-    results: asyncio.Queue[_ServiceTaskResult],
-) -> None:
-    await shutdown_event.wait()
-    await results.put(_ServiceTaskResult("shutdown"))
-
-
-async def _run_relay_controller(
-    relay_controller,
-    results: asyncio.Queue[_ServiceTaskResult],
-) -> None:
-    try:
-        await relay_controller.async_relay_devices()
-    except Exception as exc:
-        await results.put(_ServiceTaskResult("relay", exc))
-    else:
-        await results.put(_ServiceTaskResult("relay"))
+    logger.debug("CLI args: %s", args)
 
 
 async def async_run(args: Arguments) -> int:
@@ -218,11 +120,7 @@ async def async_run(args: Arguments) -> int:
         return print_version()
 
     if args.list_devices:
-        from .inventory import (
-            DeviceEnumerationError,
-            describe_input_devices,
-            inventory_to_text,
-        )
+        from .inputs.inventory import DeviceEnumerationError, describe_input_devices, inventory_to_text
 
         try:
             devices = describe_input_devices()
@@ -244,136 +142,56 @@ async def async_run(args: Arguments) -> int:
 
     configure_logging(args)
 
-    logger.info(f"Launching {get_versioned_name()}")
+    logger.info("Launching %s", get_versioned_name())
 
     if not env_status.ok:
         if not env_status.configfs:
-            logger.error(
-                "configfs gadget path is missing: /sys/kernel/config/usb_gadget"
-            )
+            logger.error("configfs gadget path is missing: /sys/kernel/config/usb_gadget")
         if not env_status.udc_present:
             logger.error("No UDC detected! USB gadget mode may not be enabled.")
         return EXIT_ENVIRONMENT
 
-    relaying_active = asyncio.Event()
+    logger.debug("Detected UDC state file: %s", env_status.udc_path)
 
-    from .gadget_manager import GadgetManager
-    from .relay_controller import RelayController
-    from .runtime_monitor import RuntimeMonitor
-    from .shortcut_toggler import ShortcutToggler
+    from .runtime.app import Runtime
+    from .runtime.config import runtime_config_from_args
 
-    gadget_manager = GadgetManager()
-    gadget_manager.enable_gadgets()
-
-    shortcut_toggler = None
-    if args.interrupt_shortcut:
-        shortcut_keys = set(args.interrupt_shortcut)
-        logger.debug(f"Configuring global interrupt shortcut: {shortcut_keys}")
-        shortcut_toggler = ShortcutToggler(
-            shortcut_keys=shortcut_keys,
-            relaying_active=relaying_active,
-            gadget_manager=gadget_manager,
-        )
-
-    relay_controller = RelayController(
-        gadget_manager=gadget_manager,
-        device_identifiers=args.device_ids,
-        auto_discover=args.auto_discover,
-        grab_devices=args.grab_devices,
-        relaying_active=relaying_active,
-        shortcut_toggler=shortcut_toggler,
-    )
-
-    logger.debug(f"Detected UDC state file: {env_status.udc_path}")
-    shutdown_event = asyncio.Event()
-    previous_handlers, loop_handled_signals = _install_shutdown_signal_handlers(
-        shutdown_event
-    )
-
-    try:
-        runtime_monitor = RuntimeMonitor(
-            relay_controller=relay_controller,
-            relaying_active=relaying_active,
-            udc_path=env_status.udc_path,
-        )
-        results: asyncio.Queue[_ServiceTaskResult] = asyncio.Queue()
-        async with asyncio.TaskGroup() as task_group:
-            monitor_task = task_group.create_task(
-                runtime_monitor.async_monitor_runtime(),
-                name="runtime monitor",
-            )
-            relay_task = task_group.create_task(
-                _run_relay_controller(relay_controller, results),
-                name="relay controller",
-            )
-            shutdown_task = task_group.create_task(
-                _watch_shutdown_event(shutdown_event, results),
-                name="shutdown watcher",
-            )
-
-            result = await results.get()
-            if result.source == "shutdown" or shutdown_event.is_set():
-                logger.debug("Shutdown event triggered. Stopping runtime tasks...")
-                runtime_monitor.stop()
-                relay_controller.request_shutdown()
-                shutdown_task.cancel()
-                try:
-                    await asyncio.wait_for(
-                        relay_task,
-                        timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
-                    )
-                except TimeoutError:
-                    logger.warning(
-                        "Relay shutdown exceeded %.1fs; cancelling remaining tasks.",
-                        GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
-                    )
-                    relay_task.cancel()
-                await asyncio.gather(relay_task, shutdown_task, return_exceptions=True)
-                monitor_task.cancel()
-                await asyncio.gather(monitor_task, return_exceptions=True)
-                return EXIT_OK
-
-            relay_controller.request_shutdown()
-            runtime_monitor.stop()
-            shutdown_task.cancel()
-            monitor_task.cancel()
-            await asyncio.gather(
-                relay_task,
-                shutdown_task,
-                monitor_task,
-                return_exceptions=True,
-            )
-            if result.exception is None:
-                logger.error(
-                    "Relay task exited unexpectedly before shutdown was requested."
-                )
-            else:
-                logger.error(
-                    "Relay task exited unexpectedly before shutdown was requested: %s",
-                    result.exception,
-                )
-            return EXIT_RUNTIME
-    finally:
-        _restore_signal_handlers(
-            previous_handlers,
-            loop_handled_signals,
-        )
+    runtime = Runtime(runtime_config_from_args(args, udc_path=env_status.udc_path))
+    await runtime.run()
 
     return EXIT_OK
 
 
 def run(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    from .ops.cli import OPERATIONAL_COMMANDS
+    from .ops.cli import main as operational_main
+
+    if raw_args[:1] and raw_args[0] in OPERATIONAL_COMMANDS:
+        return operational_main(raw_args, prog="bluetooth_2_usb")
+    if raw_args[:1] == ["loopback"]:
+        from .loopback import run as loopback_run
+
+        return loopback_run(raw_args[1:])
+    if raw_args[:1] and not raw_args[0].startswith("-"):
+        print(
+            f"Unknown command: {raw_args[0]}. "
+            + "Use bluetooth_2_usb loopback inject/capture for loopback validation.",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
     from .args import parse_args
 
     try:
-        args = parse_args(argv)
+        args = parse_args(raw_args)
     except SystemExit as exc:
         return int(exc.code) if exc.code is not None else EXIT_OK
 
     try:
         return asyncio.run(async_run(args))
     except OSError as exc:
-        logger.error(f"Runtime environment error: {exc}")
+        logger.error("Runtime environment error: %s", exc)
         return EXIT_ENVIRONMENT
     except Exception:
         logger.exception("Unhandled exception encountered. Aborting mission.")

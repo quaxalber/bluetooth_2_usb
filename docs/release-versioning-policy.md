@@ -37,11 +37,15 @@ are ignored by the package version logic.
 Starting with the `1.0.0` release, official releases follow SemVer:
 
 - `PATCH`
-  Bug fixes, diagnostics improvements, compatibility fixes, packaging fixes, and other backward-compatible corrections.
+  Bug fixes, diagnostics improvements, packaging fixes, and other corrections
+  that do not intentionally change the supported product surface.
 - `MINOR`
-  Backward-compatible new features, new supported workflows, new CLI options, or expanded hardware/runtime support.
+  New supported workflows, new CLI options, or expanded hardware/runtime
+  support that do not intentionally remove an existing supported workflow.
 - `MAJOR`
-  Breaking changes to CLI behavior, configuration files, installer/runtime contracts, supported operational model, or other externally visible compatibility boundaries.
+  Breaking changes to CLI behavior, configuration files, installer/runtime
+  contracts, supported operational model, or other externally visible product
+  boundaries.
 
 ## Development builds
 
@@ -61,13 +65,13 @@ These versions are for development, testing, and traceability. They are not offi
 
 This avoids hard-coded version strings in runtime code and keeps these outputs aligned:
 
-- `python -m bluetooth_2_usb --version`
+- `bluetooth_2_usb --version`
 - package metadata
 - wheels and source distributions
 - installed service/runtime logs
 
-The managed `/opt/bluetooth_2_usb` clone-based install remains compatible with
-that versioning model. The installer rebuilds the venv from the checked-out Git
+The managed `/opt/bluetooth_2_usb` clone-based install works with that
+versioning model. The installer rebuilds the venv from the checked-out Git
 tree in `/opt/bluetooth_2_usb`, so an install from the exact tagged commit will
 show that exact release version. A separate tarball install is not required for
 the runtime to report `1.0.0`.
@@ -90,8 +94,9 @@ For an official release:
 Release notes should describe the current supported product surface only:
 
 - clone-based installation into `/opt/bluetooth_2_usb`
-- updates via `/opt/bluetooth_2_usb/scripts/update.sh`
-- diagnostics via `--validate-env`, `smoketest.sh`, and `debug.sh`
+- updates via `bluetooth_2_usb update`
+- diagnostics via `bluetooth_2_usb --validate-env`,
+  `bluetooth_2_usb smoketest`, and `bluetooth_2_usb debug`
 - persistent read-only operation only when a separate writable ext4 filesystem
   is configured for Bluetooth state
 

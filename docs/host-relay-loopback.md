@@ -7,19 +7,22 @@ The flow is:
 
 1. prepare a host Python environment with `hidapi`
 2. start a host-side capture against the gadget HID device
-3. inject deterministic virtual keyboard and mouse events on the Pi
+3. inject deterministic virtual keyboard, mouse, and consumer-control events on the Pi
 4. verify that the capture observes the expected relayed sequence
 
 This validates the path:
 
 `Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
-By default, run only the lower-risk scenarios: `keyboard`, `mouse`,
-`mouse_fast`, `combo`, and `consumer`. These avoid left, right, middle,
-forward, back, and task mouse button down events. Run `mouse_buttons_intrusive`
-only when you
-intentionally want full live button-bit validation and can tolerate possible
-host UI interaction.
+For regular validation, run `combo`. It exercises the keyboard, mouse, and
+consumer-control paths in one pass. Use `keyboard`, `mouse`, or `consumer` only
+when you need to isolate a specific domain.
+
+The `mouse` and `combo` scenarios include fast relative movement, vertical and
+horizontal scrolling, and all configured mouse button bits. Host capture can
+reduce normal desktop handling while it owns the gadget interfaces, but it is
+not a hard isolation boundary. Run these scenarios only in a test session where
+unexpected mouse-button effects are acceptable.
 
 ## Preconditions
 
@@ -43,14 +46,14 @@ python3 -m pip install -r requirements-host-capture.txt
 On Linux, install the udev rule once:
 
 ```bash
-sudo ./scripts/install-hid-udev-rule.sh
+sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
 Recommended baseline checks on the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/smoketest.sh --verbose
-sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
+sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb debug --duration 10
 ```
 
 ## 1. Confirm host-side enumeration
@@ -58,23 +61,24 @@ sudo /opt/bluetooth_2_usb/scripts/debug.sh --duration 5
 On Linux:
 
 ```bash
-./scripts/loopback-capture.sh --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
 ```
 
 Experimental: macOS
 
 ```bash
-./scripts/loopback-capture.sh --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
 ```
 
 > [!NOTE]
 > Experimental - unvalidated on real macOS hosts. The macOS variant uses the
-> same shell wrapper, but it has not yet been validated on real macOS hardware.
+> same capture command, but it has not yet been validated on real macOS
+> hardware.
 
 On Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --timeout-sec 1 --output json
+powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
@@ -87,25 +91,28 @@ discovery step, not the primary event backend.
 From the repository checkout on the host:
 
 ```bash
-./scripts/loopback-capture.sh --scenario combo
+venv/bin/bluetooth_2_usb loopback capture --scenario combo
 ```
 
 Default behavior:
 
 - detects the gadget HID device by product name and HID usage
-- waits up to `5` seconds for the complete sequence
+- waits up to the scenario-specific timeout for the complete sequence (`10`
+  seconds by default; `keyboard` uses `15` seconds and `combo` uses `30`
+  seconds)
 - may temporarily claim the gadget HID interfaces while the capture runs, so do
   not assume the local desktop will process the same inputs during that window
-- uses a single harness lock file; do not run multiple inject/capture sessions
+- uses a single loopback lock file; do not run multiple inject/capture sessions
   in parallel against the same host/Pi pair
 
 If automatic detection is ambiguous, pin the nodes explicitly:
 
 ```bash
-./scripts/loopback-capture.sh \
+venv/bin/bluetooth_2_usb loopback capture \
   --scenario combo \
   --keyboard-node '<candidate keyboard path>' \
-  --mouse-node '<candidate mouse path>'
+  --mouse-node '<candidate mouse path>' \
+  --consumer-node '<candidate consumer path>'
 ```
 
 Keep this command running while you trigger the Pi-side injection.
@@ -123,57 +130,39 @@ layout or USB identity:
 On the Pi:
 
 ```bash
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario combo
+sudo bluetooth_2_usb loopback inject --scenario combo
 ```
 
 When `bluetooth_2_usb.service` is active, the injector waits up to the default
 service-settle window before emitting events. This avoids racing a freshly
 re-enumerated USB HID gadget before the host has started draining reports. Set
-`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that harness-only wait. Invalid
+`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that loopback-only wait. Invalid
 values are ignored and the default settle window is used.
 
 The injector creates temporary virtual devices named:
 
 - `B2U Test Keyboard`
 - `B2U Test Mouse`
+- `B2U Test Consumer`
 
 and emits this deterministic sequence:
 
-- keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
-- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
-  `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`,
-  one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then
-  side/extra mouse button bits press/release
+- keyboard: an alternating-case burst with modifier transitions
+- mouse: large relative X/Y movement, vertical wheel deltas, horizontal pan
+  deltas, then all configured mouse button bits press/release
+- consumer: volume up/down press/release
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
 and high-res evdev events in the same `SYN_REPORT` frame. The host capture
 expects the relay to emit one equivalent USB HID wheel or pan step.
 
-The `mouse_fast` scenario emits large relative X/Y movement plus fast vertical
-wheel and horizontal pan deltas that require multiple USB HID reports. Use it to
-stress high-speed mouse movement and scrolling forwarding:
-
-```bash
-./scripts/loopback-capture.sh --scenario mouse_fast
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_fast
-```
-
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit vertical wheel and horizontal pan.
 
-To validate all eight button bits, run the explicit intrusive button scenario:
-
-```bash
-./scripts/loopback-capture.sh --scenario mouse_buttons_intrusive
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse_buttons_intrusive
-```
-
 On Windows, the current Raw Input capture backend only maps mouse button bits
-through `BTN_EXTRA`. It rejects `mouse_buttons_intrusive` with
-`EXIT_PREREQUISITE` because that scenario also includes `BTN_FORWARD`,
-`BTN_BACK`, and `BTN_TASK`; use the default `mouse` or `combo` scenario there,
-or run intrusive button validation on a backend that can surface every button
-bit.
+through `BTN_EXTRA`. Windows can still run all four public scenarios, but mouse
+button validation is partial for `mouse` and `combo`; skipped buttons are
+reported as `windows_skipped_mouse_buttons`.
 
 ## 4. Success criteria
 
@@ -188,22 +177,22 @@ sequence through `/dev/uinput`.
 Keyboard-only:
 
 ```bash
-./scripts/loopback-capture.sh --scenario keyboard
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario keyboard
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard
+sudo bluetooth_2_usb loopback inject --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-./scripts/loopback-capture.sh --scenario mouse
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario mouse
+venv/bin/bluetooth_2_usb loopback capture --scenario mouse
+sudo bluetooth_2_usb loopback inject --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
-./scripts/loopback-capture.sh --scenario consumer
-sudo /opt/bluetooth_2_usb/scripts/loopback-inject.sh --scenario consumer
+venv/bin/bluetooth_2_usb loopback capture --scenario consumer
+sudo bluetooth_2_usb loopback inject --scenario consumer
 ```
 
 ## 6. Failure interpretation
@@ -233,7 +222,7 @@ ls -l /dev/bus/usb/*/*
 If needed:
 
 ```bash
-sudo ./scripts/install-hid-udev-rule.sh
+sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
 ### Host capture times out
@@ -249,7 +238,7 @@ Check on the Pi:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-sudo /opt/bluetooth_2_usb/venv/bin/python -m bluetooth_2_usb --list_devices --output json
+sudo bluetooth_2_usb --list_devices --output json
 sudo journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 
@@ -269,21 +258,21 @@ That can happen. Opening the gadget HID interfaces for capture may temporarily
 claim them while the test is running, which can reduce or suppress normal local
 handling of the same keyboard, mouse, or consumer inputs.
 
-The loopback sequence still uses non-text keyboard keys and tiny mouse-rel
-movements so the test remains low-impact if the local desktop does process the
-events, but the capture should be treated as a dedicated verification session
+The loopback sequence is intentionally forceful enough to validate chunked
+mouse motion, scrolling, modifier transitions, and all configured mouse button
+bits, so the capture should be treated as a dedicated verification session
 rather than as a transparent observer.
 
-### Harness says it is already running
+### Loopback says it is already running
 
-The harness uses a single lock file and will reject parallel runs. If no other
+The loopback validator uses a single lock file and will reject parallel runs. If no other
 run is active, clear the stale lock file and retry.
 
 Lock paths:
 
-- host Windows: `%TEMP%\bluetooth_2_usb_test_harness.lock`
-- host Linux/macOS: `/tmp/bluetooth_2_usb_test_harness.lock`
-- Pi: `/tmp/bluetooth_2_usb_test_harness.lock`
+- host Windows: `%TEMP%\bluetooth_2_usb_loopback.lock`
+- host Linux/macOS: `/tmp/bluetooth_2_usb_loopback.lock`
+- Pi: `/tmp/bluetooth_2_usb_loopback.lock`
 
 ## 7. CI scope
 
