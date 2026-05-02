@@ -6,11 +6,10 @@ from . import timing
 
 
 class ExtendedKeyboard:
-    """Keyboard report writer with pacing for host-visible state transitions."""
+    """Keyboard report writer with short transient write retry."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
     REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
-    REPORT_INTERVAL_SEC = timing.REPORT_INTERVAL_SEC
 
     def __init__(self, devices) -> None:
         from adafruit_hid.keyboard import Keyboard
@@ -22,15 +21,12 @@ class ExtendedKeyboard:
 
     async def press(self, keycode: int) -> None:
         await self._write(self._keyboard.press, keycode)
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release(self, keycode: int) -> None:
         await self._write(self._keyboard.release, keycode)
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release_all(self) -> None:
         await self._write(self._keyboard.release_all)
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def _write(self, operation, *args) -> None:
         max_tries = self.REPORT_WRITE_MAX_TRIES

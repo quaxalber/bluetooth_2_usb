@@ -102,7 +102,7 @@ class _TestSynEvent:
 
 
 class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
-    async def test_press_release_and_release_all_pace_reports(self) -> None:
+    async def test_press_release_and_release_all_do_not_sleep(self) -> None:
         keyboard_device = Mock()
 
         with (
@@ -117,16 +117,9 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
         keyboard_device.press.assert_called_once_with(1)
         keyboard_device.release.assert_called_once_with(1)
         keyboard_device.release_all.assert_called_once_with()
-        self.assertEqual(
-            sleep.mock_calls,
-            [
-                call(keyboard.REPORT_INTERVAL_SEC),
-                call(keyboard.REPORT_INTERVAL_SEC),
-                call(keyboard.REPORT_INTERVAL_SEC),
-            ],
-        )
+        sleep.assert_not_called()
 
-    async def test_press_retries_blocked_write_before_pacing(self) -> None:
+    async def test_press_retries_blocked_write(self) -> None:
         keyboard_device = Mock()
         keyboard_device.press.side_effect = [BlockingIOError(), None]
 
@@ -138,10 +131,7 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
             await keyboard.press(1)
 
         self.assertEqual(keyboard_device.press.mock_calls, [call(1), call(1)])
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC), call(keyboard.REPORT_INTERVAL_SEC)],
-        )
+        sleep.assert_called_once_with(keyboard.REPORT_WRITE_RETRY_DELAY_SEC)
 
     async def test_release_raises_after_retry_budget_is_exhausted(self) -> None:
         keyboard_device = Mock()
@@ -166,7 +156,7 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
-    async def test_press_and_release_delegate(self) -> None:
+    async def test_press_and_release_delegate_without_sleep(self) -> None:
         consumer_device = Mock()
 
         with (
@@ -179,10 +169,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
 
         consumer_device.press.assert_called_once_with(1)
         consumer_device.release.assert_called_once_with()
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(consumer.REPORT_INTERVAL_SEC), call(consumer.REPORT_INTERVAL_SEC)],
-        )
+        sleep.assert_not_called()
 
     async def test_press_retries_blocked_write(self) -> None:
         consumer_device = Mock()
@@ -196,10 +183,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
             await consumer.press(1)
 
         self.assertEqual(consumer_device.press.mock_calls, [call(1), call(1)])
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(consumer.REPORT_WRITE_RETRY_DELAY_SEC), call(consumer.REPORT_INTERVAL_SEC)],
-        )
+        sleep.assert_called_once_with(consumer.REPORT_WRITE_RETRY_DELAY_SEC)
 
     async def test_release_raises_after_retry_budget_is_exhausted(self) -> None:
         consumer_device = Mock()
@@ -224,7 +208,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
-    async def test_button_reports_are_paced(self) -> None:
+    async def test_button_reports_do_not_sleep(self) -> None:
         device = SimpleNamespace(sent=[])
 
         def send_report(report) -> None:
@@ -249,14 +233,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
                 bytes([0, 0, 0, 0, 0, 0, 0]),
             ],
         )
-        self.assertEqual(
-            sleep.mock_calls,
-            [
-                call(mouse.REPORT_INTERVAL_SEC),
-                call(mouse.REPORT_INTERVAL_SEC),
-                call(mouse.REPORT_INTERVAL_SEC),
-            ],
-        )
+        sleep.assert_not_called()
 
     async def test_move_uses_16_bit_xy_and_8_bit_wheel_pan(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -338,7 +315,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    async def test_move_paces_every_report_in_chunked_moves(self) -> None:
+    async def test_move_chunks_large_reports_without_sleep(self) -> None:
         device = SimpleNamespace(sent=[])
 
         def send_report(report) -> None:
@@ -354,7 +331,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             await mouse.move(x=40000)
             await mouse.move(x=1)
 
-        self.assertEqual(sleep.mock_calls, [call(mouse.REPORT_INTERVAL_SEC)] * 2)
+        sleep.assert_not_called()
         self.assertEqual(
             device.sent,
             [

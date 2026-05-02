@@ -6,11 +6,10 @@ from . import timing
 
 
 class ExtendedConsumerControl:
-    """Consumer-control report writer with pacing for host-visible state transitions."""
+    """Consumer-control report writer with short transient write retry."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
     REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
-    REPORT_INTERVAL_SEC = timing.REPORT_INTERVAL_SEC
 
     def __init__(self, devices) -> None:
         from adafruit_hid.consumer_control import ConsumerControl
@@ -22,11 +21,9 @@ class ExtendedConsumerControl:
 
     async def press(self, consumer_code: int) -> None:
         await self._write(self._consumer_control.press, consumer_code)
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release(self) -> None:
         await self._write(self._consumer_control.release)
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def _write(self, operation, *args) -> None:
         max_tries = self.REPORT_WRITE_MAX_TRIES

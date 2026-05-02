@@ -15,7 +15,6 @@ class ExtendedMouse:
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
     REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
-    REPORT_INTERVAL_SEC = timing.REPORT_INTERVAL_SEC
 
     from .buttons import (
         BACK,
@@ -52,17 +51,14 @@ class ExtendedMouse:
     async def press(self, buttons: int) -> None:
         self.report[0] |= buttons
         await self._send_no_move()
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release(self, buttons: int) -> None:
         self.report[0] &= ~buttons
         await self._send_no_move()
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release_all(self) -> None:
         self.report[0] = 0
         await self._send_no_move()
-        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def move(self, x: int = 0, y: int = 0, wheel: float = 0, pan: float = 0) -> None:
         wheel_total = self._wheel_remainder + wheel
@@ -71,7 +67,6 @@ class ExtendedMouse:
         pan_total = self._pan_remainder + pan
         pan = int(pan_total)
         self._pan_remainder = pan_total - pan
-        pace_reports = abs(x) > 32767 or abs(y) > 32767 or abs(wheel) > 127 or abs(pan) > 127
         while x != 0 or y != 0 or wheel != 0 or pan != 0:
             partial_x = clamp_hid_i16(x)
             partial_y = clamp_hid_i16(y)
@@ -96,8 +91,6 @@ class ExtendedMouse:
             y -= partial_y
             wheel -= partial_wheel
             pan -= partial_pan
-            if pace_reports:
-                await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def _send_no_move(self) -> None:
         self.report[1:7] = b"\x00" * 6
