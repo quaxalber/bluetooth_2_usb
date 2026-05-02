@@ -7,19 +7,22 @@ The flow is:
 
 1. prepare a host Python environment with `hidapi`
 2. start a host-side capture against the gadget HID device
-3. inject deterministic virtual keyboard and mouse events on the Pi
+3. inject deterministic virtual keyboard, mouse, and consumer-control events on the Pi
 4. verify that the capture observes the expected relayed sequence
 
 This validates the path:
 
 `Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
-By default, run only the lower-risk scenarios: `keyboard`, `mouse`,
-`mouse_fast`, `combo`, and `consumer`. These avoid left, right, middle,
-forward, back, and task mouse button down events. Run `mouse_buttons_intrusive`
-only when you
-intentionally want full live button-bit validation and can tolerate possible
-host UI interaction.
+For regular validation, run `combo`. It exercises the keyboard, mouse, and
+consumer-control paths in one pass. Use `keyboard`, `mouse`, or `consumer` only
+when you need to isolate a specific domain.
+
+The `mouse` and `combo` scenarios include fast relative movement, vertical and
+horizontal scrolling, and all configured mouse button bits. Host capture can
+reduce normal desktop handling while it owns the gadget interfaces, but it is
+not a hard isolation boundary. Run these scenarios only in a test session where
+unexpected mouse-button effects are acceptable.
 
 ## Preconditions
 
@@ -94,7 +97,9 @@ venv/bin/bluetooth_2_usb loopback capture --scenario combo
 Default behavior:
 
 - detects the gadget HID device by product name and HID usage
-- waits up to `5` seconds for the complete sequence
+- waits up to the scenario-specific timeout for the complete sequence (`10`
+  seconds by default; `keyboard` uses `15` seconds and `combo` uses `30`
+  seconds)
 - may temporarily claim the gadget HID interfaces while the capture runs, so do
   not assume the local desktop will process the same inputs during that window
 - uses a single loopback lock file; do not run multiple inject/capture sessions
@@ -106,7 +111,8 @@ If automatic detection is ambiguous, pin the nodes explicitly:
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario combo \
   --keyboard-node '<candidate keyboard path>' \
-  --mouse-node '<candidate mouse path>'
+  --mouse-node '<candidate mouse path>' \
+  --consumer-node '<candidate consumer path>'
 ```
 
 Keep this command running while you trigger the Pi-side injection.
@@ -137,44 +143,26 @@ The injector creates temporary virtual devices named:
 
 - `B2U Test Keyboard`
 - `B2U Test Mouse`
+- `B2U Test Consumer`
 
 and emits this deterministic sequence:
 
-- keyboard: `KEY_F13`, `KEY_F14`, `KEY_F15` down/up
-- mouse: `REL_X +1`, `REL_X -1`, `REL_Y +1`, `REL_Y -1`,
-  `REL_WHEEL +1`, `REL_WHEEL -1`, `REL_HWHEEL +1`, `REL_HWHEEL -1`,
-  one coalesced `REL_X +2` / `REL_Y -3` / `REL_HWHEEL +1` frame, then
-  side/extra mouse button bits press/release
+- keyboard: an alternating-case burst with modifier transitions
+- mouse: large relative X/Y movement, vertical wheel deltas, horizontal pan
+  deltas, then all configured mouse button bits press/release
+- consumer: volume up/down press/release
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
 and high-res evdev events in the same `SYN_REPORT` frame. The host capture
 expects the relay to emit one equivalent USB HID wheel or pan step.
 
-The `mouse_fast` scenario emits large relative X/Y movement plus fast vertical
-wheel and horizontal pan deltas that require multiple USB HID reports. Use it to
-stress high-speed mouse movement and scrolling forwarding:
-
-```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario mouse_fast
-sudo bluetooth_2_usb loopback inject --scenario mouse_fast
-```
-
 The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit vertical wheel and horizontal pan.
 
-To validate all eight button bits, run the explicit intrusive button scenario:
-
-```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario mouse_buttons_intrusive
-sudo bluetooth_2_usb loopback inject --scenario mouse_buttons_intrusive
-```
-
 On Windows, the current Raw Input capture backend only maps mouse button bits
-through `BTN_EXTRA`. It rejects `mouse_buttons_intrusive` with
-`EXIT_PREREQUISITE` because that scenario also includes `BTN_FORWARD`,
-`BTN_BACK`, and `BTN_TASK`; use the default `mouse` or `combo` scenario there,
-or run intrusive button validation on a backend that can surface every button
-bit.
+through `BTN_EXTRA`. Windows can still run all four public scenarios, but mouse
+button validation is partial for `mouse` and `combo`; skipped buttons are
+reported as `windows_skipped_mouse_buttons`.
 
 ## 4. Success criteria
 
@@ -270,9 +258,9 @@ That can happen. Opening the gadget HID interfaces for capture may temporarily
 claim them while the test is running, which can reduce or suppress normal local
 handling of the same keyboard, mouse, or consumer inputs.
 
-The loopback sequence still uses non-text keyboard keys and tiny mouse-rel
-movements so the test remains low-impact if the local desktop does process the
-events, but the capture should be treated as a dedicated verification session
+The loopback sequence is intentionally forceful enough to validate chunked
+mouse motion, scrolling, modifier transitions, and all configured mouse button
+bits, so the capture should be treated as a dedicated verification session
 rather than as a transparent observer.
 
 ### Loopback says it is already running

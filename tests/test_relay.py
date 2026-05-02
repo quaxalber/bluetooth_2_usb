@@ -1,35 +1,17 @@
 import asyncio
 import errno
-import re
-import stat
-import tempfile
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
-import usb_hid
-
-from bluetooth_2_usb.device_identifier import DeviceIdentifier, DeviceIdentifierType
-from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
-from bluetooth_2_usb.extended_consumer_control import ExtendedConsumerControl
-from bluetooth_2_usb.extended_keyboard import ExtendedKeyboard
-from bluetooth_2_usb.extended_mouse import ExtendedMouse
-from bluetooth_2_usb.hid_dispatch import HidDispatcher
-from bluetooth_2_usb.hid_gadget_config import rebuild_gadget, remove_owned_gadgets
-from bluetooth_2_usb.hid_gadget_layout import (
-    DEFAULT_KEYBOARD_DESCRIPTOR,
-    DEFAULT_MOUSE_DESCRIPTOR,
-    GadgetHidDevice,
-    build_default_layout,
-)
-from bluetooth_2_usb.hid_gadgets import HidGadgets
-from bluetooth_2_usb.input_relay import InputRelay
-from bluetooth_2_usb.mouse_delta import MouseDelta
-from bluetooth_2_usb.relay_gate import RelayGate, RelayInactiveReason
-from bluetooth_2_usb.relay_supervisor import RelaySupervisor, _ActiveRelay, _SupervisorState
-from bluetooth_2_usb.runtime_events import DeviceAdded, ShutdownRequested, UdcState, UdcStateChanged
-from bluetooth_2_usb.shortcut_toggler import ShortcutToggler
+from bluetooth_2_usb.evdev import ecodes
+from bluetooth_2_usb.hid.dispatch import HidDispatcher
+from bluetooth_2_usb.hid.mouse_delta import MouseDelta
+from bluetooth_2_usb.relay.gate import RelayGate, RelayInactiveReason
+from bluetooth_2_usb.relay.input import InputRelay
+from bluetooth_2_usb.relay.shortcut import ShortcutToggler
+from bluetooth_2_usb.relay.supervisor import RelaySupervisor, _ActiveRelay, _SupervisorState
+from bluetooth_2_usb.runtime.events import DeviceAdded, ShutdownRequested, UdcState, UdcStateChanged
 
 
 class _FakeKeyboard:
@@ -222,427 +204,6 @@ class _TestInputDevice:
         return None
 
 
-class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
-    async def test_press_release_and_release_all_pace_reports(self) -> None:
-        keyboard_device = Mock()
-
-        with (
-            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
-            patch("bluetooth_2_usb.extended_keyboard.asyncio.sleep") as sleep,
-        ):
-            keyboard = ExtendedKeyboard(devices=[])
-            await keyboard.press(1)
-            await keyboard.release(1)
-            await keyboard.release_all()
-
-        keyboard_device.press.assert_called_once_with(1)
-        keyboard_device.release.assert_called_once_with(1)
-        keyboard_device.release_all.assert_called_once_with()
-        self.assertEqual(
-            sleep.mock_calls,
-            [
-                call(keyboard.REPORT_INTERVAL_SEC),
-                call(keyboard.REPORT_INTERVAL_SEC),
-                call(keyboard.REPORT_INTERVAL_SEC),
-            ],
-        )
-
-    async def test_press_retries_blocked_write_before_pacing(self) -> None:
-        keyboard_device = Mock()
-        keyboard_device.press.side_effect = [BlockingIOError(), None]
-
-        with (
-            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
-            patch("bluetooth_2_usb.extended_keyboard.asyncio.sleep") as sleep,
-        ):
-            keyboard = ExtendedKeyboard(devices=[])
-            await keyboard.press(1)
-
-        self.assertEqual(keyboard_device.press.mock_calls, [call(1), call(1)])
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC), call(keyboard.REPORT_INTERVAL_SEC)],
-        )
-
-    async def test_release_raises_after_retry_budget_is_exhausted(self) -> None:
-        keyboard_device = Mock()
-        keyboard_device.release.side_effect = BlockingIOError()
-
-        with (
-            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
-            patch("bluetooth_2_usb.extended_keyboard.asyncio.sleep") as sleep,
-        ):
-            keyboard = ExtendedKeyboard(devices=[])
-            with self.assertRaises(BlockingIOError):
-                await keyboard.release(1)
-
-        self.assertEqual(
-            keyboard_device.release.mock_calls,
-            [call(1)] * keyboard.REPORT_WRITE_MAX_TRIES,
-        )
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC)] * (keyboard.REPORT_WRITE_MAX_TRIES - 1),
-        )
-
-
-class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
-    async def test_press_and_release_delegate(self) -> None:
-        consumer_device = Mock()
-
-        with patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device):
-            consumer = ExtendedConsumerControl(devices=[])
-            await consumer.press(1)
-            await consumer.release()
-
-        consumer_device.press.assert_called_once_with(1)
-        consumer_device.release.assert_called_once_with()
-
-    async def test_press_retries_blocked_write(self) -> None:
-        consumer_device = Mock()
-        consumer_device.press.side_effect = [BlockingIOError(), None]
-
-        with (
-            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
-            patch("bluetooth_2_usb.extended_consumer_control.asyncio.sleep") as sleep,
-        ):
-            consumer = ExtendedConsumerControl(devices=[])
-            await consumer.press(1)
-
-        self.assertEqual(consumer_device.press.mock_calls, [call(1), call(1)])
-        sleep.assert_called_once_with(consumer.REPORT_WRITE_RETRY_DELAY_SEC)
-
-    async def test_release_raises_after_retry_budget_is_exhausted(self) -> None:
-        consumer_device = Mock()
-        consumer_device.release.side_effect = BlockingIOError()
-
-        with (
-            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
-            patch("bluetooth_2_usb.extended_consumer_control.asyncio.sleep") as sleep,
-        ):
-            consumer = ExtendedConsumerControl(devices=[])
-            with self.assertRaises(BlockingIOError):
-                await consumer.release()
-
-        self.assertEqual(
-            consumer_device.release.mock_calls,
-            [call()] * consumer.REPORT_WRITE_MAX_TRIES,
-        )
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(consumer.REPORT_WRITE_RETRY_DELAY_SEC)] * (consumer.REPORT_WRITE_MAX_TRIES - 1),
-        )
-
-
-class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
-    async def test_move_uses_16_bit_xy_and_8_bit_wheel_pan(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with patch("adafruit_hid.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.move(x=300, y=-300, wheel=1, pan=-1)
-
-        self.assertEqual(device.sent, [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0xFF])])
-
-    async def test_move_accumulates_fractional_pan_across_calls(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with patch("adafruit_hid.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.move(pan=0.5)
-            await mouse.move(pan=0.5)
-            await mouse.move(pan=-0.5)
-            await mouse.move(pan=-0.5)
-
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
-                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]),
-            ],
-        )
-
-    async def test_move_accumulates_fractional_wheel_across_calls(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with patch("adafruit_hid.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.move(wheel=0.5)
-            await mouse.move(wheel=0.5)
-            await mouse.move(wheel=-0.5)
-            await mouse.move(wheel=-0.5)
-
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
-                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]),
-            ],
-        )
-
-    async def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with patch("adafruit_hid.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
-
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x7F, 0x81]),
-                bytes([0x00, 0x41, 0x1C, 0xBF, 0xE3, 0x49, 0xB7]),
-            ],
-        )
-
-    async def test_move_paces_every_report_in_chunked_moves(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.extended_mouse.asyncio.sleep") as sleep,
-        ):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.move(x=40000)
-            await mouse.move(x=1)
-
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(mouse.CHUNK_REPORT_INTERVAL_SEC), call(mouse.CHUNK_REPORT_INTERVAL_SEC)],
-        )
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x00, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0x00]),
-                bytes([0x00, 0x41, 0x1C, 0x00, 0x00, 0x00, 0x00]),
-                bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]),
-            ],
-        )
-
-    async def test_move_retries_blocked_report_before_advancing(self) -> None:
-        device = SimpleNamespace(sent=[])
-        attempts = []
-
-        def send_report(report) -> None:
-            attempts.append(bytes(report))
-            if len(attempts) == 1:
-                raise BlockingIOError()
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.extended_mouse.asyncio.sleep") as sleep,
-        ):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.move(x=1)
-
-        expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
-        self.assertEqual(attempts, [expected_report, expected_report])
-        self.assertEqual(device.sent, [expected_report])
-        sleep.assert_called_once_with(mouse.REPORT_WRITE_RETRY_DELAY_SEC)
-
-    async def test_move_raises_after_report_retry_budget_is_exhausted(self) -> None:
-        device = SimpleNamespace(attempts=[])
-
-        def send_report(report) -> None:
-            device.attempts.append(bytes(report))
-            raise BlockingIOError()
-
-        device.send_report = send_report
-
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.extended_mouse.asyncio.sleep") as sleep,
-        ):
-            mouse = ExtendedMouse(devices=[])
-            with self.assertRaises(BlockingIOError):
-                await mouse.move(x=1)
-
-        expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
-        self.assertEqual(device.attempts, [expected_report] * mouse.REPORT_WRITE_MAX_TRIES)
-        self.assertEqual(
-            sleep.mock_calls,
-            [call(mouse.REPORT_WRITE_RETRY_DELAY_SEC)] * (mouse.REPORT_WRITE_MAX_TRIES - 1),
-        )
-
-    async def test_move_debug_logs_reports_sent_to_gadget(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with patch("adafruit_hid.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
-            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
-                await mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
-
-        self.assertEqual(len(device.sent), 2)
-        self.assertIn(
-            "Sending mouse movement to gadget: buttons=0x00 "
-            + "x=32767 y=-32767 wheel=127 pan=-127 "
-            + "report=00 ff 7f 01 80 7f 81",
-            logs.output[0],
-        )
-        self.assertIn(
-            "Sending mouse movement to gadget: buttons=0x00 "
-            + "x=7233 y=-7233 wheel=73 pan=-73 "
-            + "report=00 41 1c bf e3 49 b7",
-            logs.output[1],
-        )
-
-    async def test_button_reports_use_one_full_button_byte(self) -> None:
-        device = SimpleNamespace(sent=[])
-
-        def send_report(report) -> None:
-            device.sent.append(bytes(report))
-
-        device.send_report = send_report
-
-        with patch("adafruit_hid.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
-            await mouse.press(ExtendedMouse.TASK_BUTTON)
-            await mouse.release(ExtendedMouse.TASK_BUTTON)
-
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-            ],
-        )
-
-
-class ExtendedMouseButtonMappingTest(unittest.TestCase):
-    def test_evdev_uses_extended_mouse_button_bits(self) -> None:
-        expected_buttons = {
-            ecodes.BTN_LEFT: ExtendedMouse.LEFT,
-            ecodes.BTN_RIGHT: ExtendedMouse.RIGHT,
-            ecodes.BTN_MIDDLE: ExtendedMouse.MIDDLE,
-            ecodes.BTN_SIDE: ExtendedMouse.SIDE,
-            ecodes.BTN_EXTRA: ExtendedMouse.EXTRA,
-            ecodes.BTN_FORWARD: ExtendedMouse.FORWARD,
-            ecodes.BTN_BACK: ExtendedMouse.BACK,
-            ecodes.BTN_TASK: ExtendedMouse.TASK,
-        }
-
-        for scancode, button in expected_buttons.items():
-            with self.subTest(scancode=scancode):
-                hid_code, hid_name = evdev_to_usb_hid(
-                    SimpleNamespace(scancode=scancode, keystate=1)
-                )
-
-                self.assertEqual(hid_code, button)
-                self.assertIsNotNone(hid_name)
-
-
-class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
-    async def test_consumer_key_release_uses_consumer_control_release_api(self) -> None:
-        hid_gadgets = _FakeHidGadgets()
-        dispatcher = HidDispatcher(hid_gadgets, _active_gate())
-
-        await dispatcher._dispatch_key_event(
-            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0)
-        )
-
-        self.assertEqual(hid_gadgets.consumer.release_calls, 1)
-        self.assertEqual(hid_gadgets.mouse.releases, [])
-
-    async def test_dispatch_categorizes_raw_event(self) -> None:
-        dispatcher = HidDispatcher(_FakeHidGadgets(), _active_gate())
-        raw_event = object()
-        categorized = _TestSynEvent()
-
-        with patch(
-            "bluetooth_2_usb.hid_dispatch.categorize", return_value=categorized
-        ) as categorize:
-            await dispatcher.dispatch(raw_event)
-
-        categorize.assert_called_once_with(raw_event)
-
-    async def test_dispatch_accepts_single_syn_event_and_flushes_mouse_delta(self) -> None:
-        hid_gadgets = _FakeHidGadgets()
-        dispatcher = HidDispatcher(hid_gadgets, _active_gate())
-
-        with patch("bluetooth_2_usb.hid_dispatch.categorize", side_effect=lambda event: event):
-            with patch("bluetooth_2_usb.hid_dispatch.RelEvent", _TestRelEvent):
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
-                await dispatcher.dispatch(_TestSynEvent())
-
-        self.assertEqual(hid_gadgets.mouse.moves, [(7, 0, 0, 0)])
-
-    async def test_mouse_blocking_write_drops_delta_without_retrying(self) -> None:
-        gate = _active_gate()
-        hid_gadgets = _FakeHidGadgets()
-        hid_gadgets.mouse.move = Mock(side_effect=BlockingIOError())
-        dispatcher = HidDispatcher(hid_gadgets, gate)
-
-        await dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
-
-        hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
-        self.assertEqual(dispatcher.write_failures, 1)
-        self.assertTrue(gate.active)
-
-
-class DeviceIdentifierTest(unittest.TestCase):
-    def test_blank_identifier_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "must not be blank"):
-            DeviceIdentifier(" \t ")
-
-    def test_mac_identifier_matches_hyphenated_device_uniq(self) -> None:
-        identifier = DeviceIdentifier("aa:bb:cc:dd:ee:ff")
-        device = SimpleNamespace(
-            path="/dev/input/event7", uniq="AA-BB-CC-DD-EE-FF", name="keyboard"
-        )
-
-        self.assertIs(identifier.type, DeviceIdentifierType.MAC)
-        self.assertTrue(identifier.matches(device))
-
-    def test_event_like_name_without_numeric_suffix_matches_by_name(self) -> None:
-        identifier = DeviceIdentifier("/dev/input/eventual")
-        device = SimpleNamespace(
-            path="/dev/input/event7", uniq="", name="prefix /dev/input/eventual suffix"
-        )
-
-        self.assertIs(identifier.type, DeviceIdentifierType.NAME)
-        self.assertTrue(identifier.matches(device))
-
-    def test_event_path_identifier_matches_by_path(self) -> None:
-        identifier = DeviceIdentifier("/dev/input/event7")
-        device = SimpleNamespace(path="/dev/input/event7", uniq="", name="keyboard")
-
-        self.assertIs(identifier.type, DeviceIdentifierType.PATH)
-        self.assertTrue(identifier.matches(device))
-
-
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         gate = RelayGate()
@@ -733,300 +294,12 @@ class RelayGateTest(unittest.TestCase):
         self.assertEqual(listener.call_args_list, [call(True)])
 
 
-class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
-    async def test_requested_devices_use_default_layout(self) -> None:
-        with patch(
-            "bluetooth_2_usb.hid_gadgets.build_default_layout",
-            return_value=SimpleNamespace(devices=("keyboard", "mouse", "consumer")),
-        ):
-            devices = HidGadgets()._requested_devices()
-
-        self.assertEqual(devices, ["keyboard", "mouse", "consumer"])
-
-    async def test_release_all_releases_keyboard_mouse_and_consumer(self) -> None:
-        hid_gadgets = HidGadgets()
-        hid_gadgets._gadgets = {
-            "keyboard": _FakeKeyboard(),
-            "mouse": _FakeMouse(),
-            "consumer": _FakeConsumer(),
-        }
-
-        await hid_gadgets.release_all()
-
-        self.assertEqual(hid_gadgets._gadgets["keyboard"].release_all_calls, 1)
-        self.assertEqual(hid_gadgets._gadgets["mouse"].release_all_calls, 1)
-        self.assertEqual(hid_gadgets._gadgets["consumer"].release_calls, 1)
-
-    async def test_release_all_continues_when_one_raises(self) -> None:
-        hid_gadgets = HidGadgets()
-        keyboard = _FakeKeyboard()
-        mouse = _FakeMouse()
-        consumer = _FakeConsumer()
-        keyboard.release_all = Mock(side_effect=RuntimeError("keyboard stuck"))
-        hid_gadgets._gadgets = {"keyboard": keyboard, "mouse": mouse, "consumer": consumer}
-
-        await hid_gadgets.release_all()
-
-        keyboard.release_all.assert_called_once_with()
-        self.assertEqual(mouse.release_all_calls, 1)
-        self.assertEqual(consumer.release_calls, 1)
-
-    async def test_enable_clears_published_refs_before_rebuild(self) -> None:
-        hid_gadgets = HidGadgets()
-        hid_gadgets._gadgets = {
-            "keyboard": _FakeKeyboard(),
-            "mouse": _FakeMouse(),
-            "consumer": _FakeConsumer(),
-        }
-        hid_gadgets._enabled = True
-
-        with patch.object(hid_gadgets, "_prune_stale_hidg_nodes"):
-            with patch(
-                "bluetooth_2_usb.hid_gadgets.rebuild_gadget",
-                side_effect=RuntimeError("rebuild failed"),
-            ):
-                with self.assertRaisesRegex(RuntimeError, "rebuild failed"):
-                    await hid_gadgets.enable()
-
-        self.assertEqual(hid_gadgets._gadgets, {"keyboard": None, "mouse": None, "consumer": None})
-        self.assertFalse(hid_gadgets._enabled)
-
-    async def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
-        devices = (SimpleNamespace(function_index=2), SimpleNamespace(function_index=7))
-        with patch(
-            "bluetooth_2_usb.hid_gadgets.build_default_layout",
-            return_value=SimpleNamespace(devices=devices),
-        ):
-            paths = HidGadgets()._expected_hidg_paths()
-
-        self.assertEqual(paths, (Path("/dev/hidg2"), Path("/dev/hidg7")))
-
-    async def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(self) -> None:
-        layout = build_default_layout()
-
-        self.assertEqual(len(layout.devices), 3)
-        self.assertEqual(bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR)
-        self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
-        self.assertEqual(DEFAULT_MOUSE_DESCRIPTOR.count(bytes((0x09, 0x48))), 2)
-        self.assertEqual(tuple(layout.devices[1].report_ids), (0,))
-        self.assertEqual(tuple(layout.devices[1].in_report_lengths), (7,))
-        self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
-        self.assertEqual(layout.devices[1].configfs_report_length, 8)
-        self.assertEqual(
-            bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor)
-        )
-        self.assertEqual(layout.bcd_device, "0x0205")
-        self.assertEqual(layout.product_name, "USB Combo Device")
-        self.assertEqual(layout.serial_number, "213374badcafe")
-        self.assertEqual(layout.max_power, 100)
-        self.assertEqual(layout.bm_attributes, 0xA0)
-        self.assertEqual(layout.max_speed, "high-speed")
-        self.assertTrue(layout.devices[0].wakeup_on_write)
-        self.assertFalse(layout.devices[1].wakeup_on_write)
-        self.assertFalse(layout.devices[2].wakeup_on_write)
-
-    async def test_gadget_hid_device_passes_protocol_and_subclass_when_required(self) -> None:
-        init_calls = []
-
-        def fake_device_init(self, **kwargs) -> None:
-            init_calls.append(kwargs)
-            if "subclass" not in kwargs or "protocol" not in kwargs:
-                raise TypeError(
-                    "Device.__init__() missing 2 required keyword-only arguments: "
-                    + "'subclass' and 'protocol'"
-                )
-
-        with patch.object(usb_hid.Device, "__init__", fake_device_init):
-            GadgetHidDevice.from_existing(
-                usb_hid.Device.BOOT_KEYBOARD, function_index=0, protocol=1, subclass=1
-            )
-
-        self.assertEqual(len(init_calls), 1)
-        self.assertEqual(init_calls[0]["protocol"], 1)
-        self.assertEqual(init_calls[0]["subclass"], 1)
-
-    async def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
-        hid_gadgets = HidGadgets()
-        with tempfile.TemporaryDirectory() as tmp:
-            stale = Path(tmp) / "hidg1"
-            stale.write_text("stale", encoding="utf-8")
-            with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(stale,)):
-                hid_gadgets._prune_stale_hidg_nodes()
-            self.assertFalse(stale.exists())
-
-    async def test_prune_stale_hidg_nodes_ignores_unlink_race(self) -> None:
-        hid_gadgets = HidGadgets()
-        with tempfile.TemporaryDirectory() as tmp:
-            stale = Path(tmp) / "hidg1"
-            stale.write_text("stale", encoding="utf-8")
-            with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(stale,)):
-                with patch.object(Path, "unlink", side_effect=FileNotFoundError):
-                    hid_gadgets._prune_stale_hidg_nodes()
-
-    async def test_validate_hidg_nodes_rejects_regular_files(self) -> None:
-        hid_gadgets = HidGadgets()
-        with tempfile.TemporaryDirectory() as tmp:
-            bad = Path(tmp) / "hidg1"
-            bad.write_text("not-a-device", encoding="utf-8")
-            with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(bad,)):
-                with self.assertRaisesRegex(RuntimeError, re.escape(str(bad))):
-                    await hid_gadgets._validate_hidg_nodes(timeout_sec=0, poll_interval_sec=0)
-
-    async def test_validate_hidg_nodes_waits_for_delayed_nodes(self) -> None:
-        hid_gadgets = HidGadgets()
-
-        with patch.object(
-            hid_gadgets, "_collect_invalid_hidg_nodes", side_effect=[["/dev/hidg0 (missing)"], []]
-        ) as collect_invalid:
-            with patch("bluetooth_2_usb.hid_gadgets.asyncio.sleep") as sleep:
-                await hid_gadgets._validate_hidg_nodes(timeout_sec=0.1, poll_interval_sec=0.01)
-
-        self.assertEqual(collect_invalid.call_count, 2)
-        sleep.assert_called_once_with(0.01)
-
-    async def test_collect_invalid_hidg_nodes_rejects_unopenable_character_devices(self) -> None:
-        hid_gadgets = HidGadgets()
-        path = Path("/dev/hidg0")
-        stats = SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=0)
-
-        with patch.object(hid_gadgets, "_expected_hidg_paths", return_value=(path,)):
-            with patch.object(Path, "stat", return_value=stats):
-                with patch("bluetooth_2_usb.hid_gadgets.os.minor", return_value=0, create=True):
-                    with patch("bluetooth_2_usb.hid_gadgets.os.O_NONBLOCK", 0, create=True):
-                        with patch(
-                            "bluetooth_2_usb.hid_gadgets.os.open",
-                            side_effect=OSError(errno.ENODEV, "No such device"),
-                        ):
-                            invalid_paths = hid_gadgets._collect_invalid_hidg_nodes()
-
-        self.assertEqual(invalid_paths, [f"{path} (No such device)"])
-
-    async def test_rebuild_gadget_writes_default_power_and_identity(self) -> None:
-        layout = build_default_layout()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
-            with patch("bluetooth_2_usb.hid_gadget_config.GADGET_ROOT", gadget_root):
-                with patch(
-                    "bluetooth_2_usb.hid_gadget_config._resolve_udc_name", return_value="dummy.udc"
-                ):
-                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
-                        rebuild_gadget(layout)
-
-            self.assertEqual(
-                (gadget_root / "strings/0x409/product").read_text(encoding="utf-8").strip(),
-                "USB Combo Device",
-            )
-            self.assertEqual(
-                (gadget_root / "strings/0x409/serialnumber").read_text(encoding="utf-8").strip(),
-                "213374badcafe",
-            )
-            self.assertEqual(
-                (gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), "0x0205"
-            )
-            self.assertEqual(
-                (gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(), "100"
-            )
-            self.assertEqual(
-                (gadget_root / "configs/c.1/bmAttributes").read_text(encoding="utf-8").strip(),
-                "0xa0",
-            )
-            self.assertEqual(
-                (gadget_root / "configs/c.1/strings/0x409/configuration")
-                .read_text(encoding="utf-8")
-                .strip(),
-                "Config 1: HID relay",
-            )
-            self.assertEqual(
-                (gadget_root / "max_speed").read_text(encoding="utf-8").strip(), "high-speed"
-            )
-            self.assertEqual(
-                (gadget_root / "functions/hid.usb0/report_length")
-                .read_text(encoding="utf-8")
-                .strip(),
-                "8",
-            )
-            self.assertEqual(
-                (gadget_root / "functions/hid.usb1/report_length")
-                .read_text(encoding="utf-8")
-                .strip(),
-                "8",
-            )
-            self.assertEqual(
-                (gadget_root / "functions/hid.usb2/report_length")
-                .read_text(encoding="utf-8")
-                .strip(),
-                "2",
-            )
-
-    async def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:
-        layout = build_default_layout()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
-            keyboard_wakeup = gadget_root / "functions/hid.usb0/wakeup_on_write"
-            mouse_wakeup = gadget_root / "functions/hid.usb1/wakeup_on_write"
-
-            def fake_exists(path: Path) -> bool:
-                if path in {keyboard_wakeup, mouse_wakeup}:
-                    return True
-                return original_exists(path)
-
-            original_exists = type(keyboard_wakeup).exists
-
-            with patch("bluetooth_2_usb.hid_gadget_config.GADGET_ROOT", gadget_root):
-                with patch(
-                    "bluetooth_2_usb.hid_gadget_config._resolve_udc_name", return_value="dummy.udc"
-                ):
-                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
-                        with patch.object(type(keyboard_wakeup), "exists", fake_exists):
-                            rebuild_gadget(layout)
-
-            self.assertEqual(keyboard_wakeup.read_text(encoding="utf-8").strip(), "1")
-            self.assertEqual(mouse_wakeup.read_text(encoding="utf-8").strip(), "0")
-            self.assertFalse((gadget_root / "functions/hid.usb2/wakeup_on_write").exists())
-
-    async def test_remove_owned_gadgets_removes_default_and_project_gadget_trees(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            configfs_root = Path(tmpdir) / "usb_gadget"
-            gadget_root = configfs_root / "adafruit-blinka"
-            project_root = configfs_root / "bluetooth_2_usb-test"
-            for root in (gadget_root, project_root):
-                (root / "configs/c.1").mkdir(parents=True)
-                (root / "functions/hid.usb0").mkdir(parents=True)
-                (root / "UDC").write_text("dummy.udc\n", encoding="utf-8")
-                (root / "functions/hid.usb0/report_length").write_text("8\n", encoding="utf-8")
-                (root / "configs/c.1/hid.usb0").symlink_to(root / "functions/hid.usb0")
-
-            with patch("bluetooth_2_usb.hid_gadget_config.GADGET_ROOT", gadget_root):
-                remove_owned_gadgets()
-
-            self.assertFalse(gadget_root.exists())
-            self.assertFalse(project_root.exists())
-
-    async def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
-        base_device = GadgetHidDevice.from_existing(
-            usb_hid.Device.BOOT_KEYBOARD,
-            function_index=0,
-            protocol=1,
-            subclass=1,
-            descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
-            configfs_report_length=8,
-            wakeup_on_write=True,
-        )
-
-        cloned = GadgetHidDevice.from_existing(
-            base_device, function_index=1, protocol=0, subclass=0
-        )
-
-        self.assertTrue(cloned.wakeup_on_write)
-        self.assertEqual(cloned.configfs_report_length, 8)
-
-
 class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self._event_type_patchers = [
-            patch("bluetooth_2_usb.hid_dispatch.KeyEvent", _TestKeyEvent),
-            patch("bluetooth_2_usb.hid_dispatch.RelEvent", _TestRelEvent),
-            patch("bluetooth_2_usb.hid_dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.KeyEvent", _TestKeyEvent),
+            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
         ]
         for patcher in self._event_type_patchers:
             patcher.start()
@@ -1569,7 +842,7 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
         device = _FakeInputHandle()
 
         with patch(
-            "bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device
+            "bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device
         ) as input_device:
             asyncio.run(supervisor._run_hotplug_probe("/dev/input/event7"))
 
@@ -1584,8 +857,8 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
         supervisor._state = _SupervisorState.RUNNING
         device = _FakeInputHandle(name="not ready")
 
-        with patch("bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device):
-            with patch("bluetooth_2_usb.relay_supervisor.asyncio.sleep", new=AsyncMock()):
+        with patch("bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device):
+            with patch("bluetooth_2_usb.relay.supervisor.asyncio.sleep", new=AsyncMock()):
                 asyncio.run(supervisor._run_hotplug_probe("/dev/input/event7"))
 
         self.assertEqual(device.close_calls, supervisor.HOTPLUG_ADD_MAX_RETRIES + 1)
@@ -1597,7 +870,7 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
         supervisor._state = _SupervisorState.RUNNING
         device = _FakeInputHandle(name="not ready")
 
-        with patch("bluetooth_2_usb.relay_supervisor.InputDevice", return_value=device):
+        with patch("bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device):
             supervisor._schedule_hotplug_probe("/dev/input/event7")
 
         supervisor._device_removed("/dev/input/event7")
@@ -1626,12 +899,12 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
         device = _FakeInputHandle()
 
-        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[device]):
+        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
             with patch(
-                "bluetooth_2_usb.relay_supervisor.InputDevice",
+                "bluetooth_2_usb.relay.supervisor.InputDevice",
                 side_effect=AssertionError("startup device was reopened"),
             ):
-                with patch("bluetooth_2_usb.relay_supervisor.InputRelay", WaitingInputRelay):
+                with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
                     events: asyncio.Queue = asyncio.Queue()
                     async with asyncio.TaskGroup() as task_group:
                         supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
@@ -1645,7 +918,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         self.assertIs(supervisor._state, _SupervisorState.STOPPED)
 
     async def test_run_cannot_restart_after_stop(self) -> None:
-        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[]):
+        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]):
             async with asyncio.TaskGroup() as task_group:
                 supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
                 events: asyncio.Queue = asyncio.Queue()
@@ -1672,7 +945,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         supervisor = _relay_supervisor()
         device = SimpleNamespace(path="/dev/input/event7", name="failure device", close=Mock())
 
-        with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
+        with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
             with self.assertRaises(OSError) as raised:
                 await supervisor._run_input_relay(device)
 
@@ -1696,7 +969,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         supervisor = _relay_supervisor()
         device = SimpleNamespace(path="/dev/input/event7", name="removed device", close=Mock())
 
-        with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
+        with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
             await supervisor._run_input_relay(device)
 
         device.close.assert_not_called()
@@ -1718,7 +991,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         supervisor = _relay_supervisor()
         device = SimpleNamespace(path="/dev/input/event7", name="failure device", close=Mock())
 
-        with patch("bluetooth_2_usb.relay_supervisor.InputRelay", FailingInputRelay):
+        with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
             with self.assertRaisesRegex(RuntimeError, "boom"):
                 await supervisor._run_input_relay(device)
 
@@ -1728,7 +1001,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         gate = _active_gate()
         hid_gadgets = _FakeHidGadgets()
 
-        with patch("bluetooth_2_usb.relay_supervisor.list_input_devices", return_value=[]):
+        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]):
             with self.assertRaises(ExceptionGroup) as raised:
                 events: asyncio.Queue = asyncio.Queue()
                 await events.put(DeviceAdded("/dev/input/event7"))

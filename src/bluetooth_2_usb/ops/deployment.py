@@ -349,7 +349,7 @@ def uninstall() -> None:
 
 
 def remove_owned_gadgets() -> None:
-    from bluetooth_2_usb.hid_gadget_config import remove_owned_gadgets as remove_gadgets
+    from bluetooth_2_usb.gadgets.config import remove_owned_gadgets as remove_gadgets
 
     remove_gadgets()
 

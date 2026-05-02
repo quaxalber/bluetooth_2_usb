@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from .evdev import ecodes, get_mouse_movement
-from .evdev_types import RelEvent
-from .logging import get_logger
+from ..evdev import ecodes, get_mouse_movement
+from ..evdev.types import RelEvent
+from ..logging import get_logger
 
 logger = get_logger(__name__)
 

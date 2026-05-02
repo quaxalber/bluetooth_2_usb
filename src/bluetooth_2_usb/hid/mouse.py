@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
-from .hid_bounds import clamp_hid_i8, clamp_hid_i16
-from .logging import get_logger
+from ..logging import get_logger
+from . import timing
+from .bounds import clamp_hid_i8, clamp_hid_i16
+from .descriptors import MOUSE_IN_REPORT_LENGTH
 
 logger = get_logger(__name__)
 
@@ -11,18 +13,28 @@ logger = get_logger(__name__)
 class ExtendedMouse:
     """Small mouse report writer with horizontal pan support."""
 
-    REPORT_WRITE_MAX_TRIES = 3
-    REPORT_WRITE_RETRY_DELAY_SEC = 0.001
-    CHUNK_REPORT_INTERVAL_SEC = 0.002
+    REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
+    REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
+    REPORT_INTERVAL_SEC = timing.REPORT_INTERVAL_SEC
 
-    LEFT = LEFT_BUTTON = 0x01
-    RIGHT = RIGHT_BUTTON = 0x02
-    MIDDLE = MIDDLE_BUTTON = 0x04
-    SIDE = SIDE_BUTTON = 0x08
-    EXTRA = EXTRA_BUTTON = 0x10
-    FORWARD = FORWARD_BUTTON = 0x20
-    BACK = BACK_BUTTON = 0x40
-    TASK = TASK_BUTTON = 0x80
+    from .buttons import (
+        BACK,
+        BACK_BUTTON,
+        EXTRA,
+        EXTRA_BUTTON,
+        FORWARD,
+        FORWARD_BUTTON,
+        LEFT,
+        LEFT_BUTTON,
+        MIDDLE,
+        MIDDLE_BUTTON,
+        RIGHT,
+        RIGHT_BUTTON,
+        SIDE,
+        SIDE_BUTTON,
+        TASK,
+        TASK_BUTTON,
+    )
 
     def __init__(self, devices) -> None:
         from adafruit_hid import find_device
@@ -30,7 +42,7 @@ class ExtendedMouse:
         self._mouse_device = find_device(devices, usage_page=0x1, usage=0x02)
         if not self._mouse_device:
             raise ValueError("Could not find matching mouse HID device.")
-        self.report = bytearray(7)
+        self.report = bytearray(MOUSE_IN_REPORT_LENGTH)
         self._wheel_remainder = 0.0
         self._pan_remainder = 0.0
 
@@ -40,14 +52,17 @@ class ExtendedMouse:
     async def press(self, buttons: int) -> None:
         self.report[0] |= buttons
         await self._send_no_move()
+        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release(self, buttons: int) -> None:
         self.report[0] &= ~buttons
         await self._send_no_move()
+        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def release_all(self) -> None:
         self.report[0] = 0
         await self._send_no_move()
+        await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def move(self, x: int = 0, y: int = 0, wheel: float = 0, pan: float = 0) -> None:
         wheel_total = self._wheel_remainder + wheel
@@ -82,7 +97,7 @@ class ExtendedMouse:
             wheel -= partial_wheel
             pan -= partial_pan
             if pace_reports:
-                await asyncio.sleep(self.CHUNK_REPORT_INTERVAL_SEC)
+                await asyncio.sleep(self.REPORT_INTERVAL_SEC)
 
     async def _send_no_move(self) -> None:
         self.report[1:7] = b"\x00" * 6

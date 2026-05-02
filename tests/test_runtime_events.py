@@ -1,6 +1,6 @@
 import unittest
 
-from bluetooth_2_usb.runtime_events import (
+from bluetooth_2_usb.runtime.events import (
     DeviceAdded,
     DeviceRemoved,
     ShutdownRequested,

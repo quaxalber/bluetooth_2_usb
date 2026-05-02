@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import errno
 
-from .evdev_types import InputDevice
-from .hid_dispatch import HidDispatcher
-from .hid_gadgets import HidGadgets
-from .logging import get_logger
-from .relay_gate import RelayGate
-from .shortcut_toggler import ShortcutToggler
+from ..evdev.types import InputDevice
+from ..gadgets.manager import HidGadgets
+from ..hid.dispatch import HidDispatcher
+from ..logging import get_logger
+from .gate import RelayGate
+from .shortcut import ShortcutToggler
 
 logger = get_logger(__name__)
 

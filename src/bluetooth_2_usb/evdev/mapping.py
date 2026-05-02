@@ -1,10 +1,10 @@
 from functools import lru_cache
 from importlib import import_module
 
-from .evdev_ecodes import ecodes
-from .evdev_types import InputEvent, KeyEvent, RelEvent
-from .extended_mouse import ExtendedMouse
-from .logging import get_logger
+from ..hid import buttons as MouseButtons
+from ..logging import get_logger
+from .ecodes import ecodes
+from .types import InputEvent, KeyEvent, RelEvent
 
 logger = get_logger(__name__)
 
@@ -223,7 +223,7 @@ def _get_hid_code_type(event: KeyEvent) -> type:
     if is_consumer_key(event):
         return _consumer_control_code_type()
     if is_mouse_button(event):
-        return ExtendedMouse
+        return MouseButtons
     return _keycode_type()
 
 
@@ -388,14 +388,14 @@ def _evdev_to_usb_hid_map() -> dict[int, int]:
         ecodes.KEY_RIGHTSHIFT: Keycode.RIGHT_SHIFT,
         ecodes.KEY_RIGHTALT: Keycode.RIGHT_ALT,
         ecodes.KEY_RIGHTMETA: Keycode.RIGHT_GUI,
-        ecodes.BTN_LEFT: ExtendedMouse.LEFT,
-        ecodes.BTN_RIGHT: ExtendedMouse.RIGHT,
-        ecodes.BTN_MIDDLE: ExtendedMouse.MIDDLE,
-        ecodes.BTN_SIDE: ExtendedMouse.SIDE,
-        ecodes.BTN_EXTRA: ExtendedMouse.EXTRA,
-        ecodes.BTN_FORWARD: ExtendedMouse.FORWARD,
-        ecodes.BTN_BACK: ExtendedMouse.BACK,
-        ecodes.BTN_TASK: ExtendedMouse.TASK,
+        ecodes.BTN_LEFT: MouseButtons.LEFT,
+        ecodes.BTN_RIGHT: MouseButtons.RIGHT,
+        ecodes.BTN_MIDDLE: MouseButtons.MIDDLE,
+        ecodes.BTN_SIDE: MouseButtons.SIDE,
+        ecodes.BTN_EXTRA: MouseButtons.EXTRA,
+        ecodes.BTN_FORWARD: MouseButtons.FORWARD,
+        ecodes.BTN_BACK: MouseButtons.BACK,
+        ecodes.BTN_TASK: MouseButtons.TASK,
         ecodes.KEY_POWER: ConsumerControlCode.POWER,
         ecodes.KEY_RESTART: ConsumerControlCode.RESET,
         ecodes.KEY_SLEEP: ConsumerControlCode.SLEEP,

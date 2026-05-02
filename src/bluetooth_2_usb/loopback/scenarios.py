@@ -91,6 +91,7 @@ class ScenarioDefinition:
     mouse_coalesced_tail_count: int = 0
     default_event_gap_ms: int = 40
     default_post_delay_ms: int = 250
+    default_capture_timeout_sec: float = 10.0
 
     @property
     def keyboard_enabled(self) -> bool:
@@ -116,30 +117,7 @@ class ScenarioDefinition:
         return tuple(nodes)
 
 
-KEYBOARD_STEPS = (
-    ExpectedEvent(EV_KEY, KEY_F13, 1),
-    ExpectedEvent(EV_KEY, KEY_F13, 0),
-    ExpectedEvent(EV_KEY, KEY_F14, 1),
-    ExpectedEvent(EV_KEY, KEY_F14, 0),
-    ExpectedEvent(EV_KEY, KEY_F15, 1),
-    ExpectedEvent(EV_KEY, KEY_F15, 0),
-)
-
 MOUSE_REL_STEPS = (
-    ExpectedEvent(EV_REL, REL_X, 1),
-    ExpectedEvent(EV_REL, REL_X, -1),
-    ExpectedEvent(EV_REL, REL_Y, 1),
-    ExpectedEvent(EV_REL, REL_Y, -1),
-    ExpectedEvent(EV_REL, REL_WHEEL, 1),
-    ExpectedEvent(EV_REL, REL_WHEEL, -1),
-    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
-    ExpectedEvent(EV_REL, REL_HWHEEL, -1),
-    ExpectedEvent(EV_REL, REL_X, 2),
-    ExpectedEvent(EV_REL, REL_Y, -3),
-    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
-)
-
-FAST_MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, 180000),
     ExpectedEvent(EV_REL, REL_Y, -180000),
     ExpectedEvent(EV_REL, REL_X, -210000),
@@ -167,13 +145,6 @@ MOUSE_BUTTON_STEPS = (
     ExpectedEvent(EV_KEY, BTN_BACK, 0),
     ExpectedEvent(EV_KEY, BTN_TASK, 1),
     ExpectedEvent(EV_KEY, BTN_TASK, 0),
-)
-
-SAFE_MOUSE_BUTTON_STEPS = (
-    ExpectedEvent(EV_KEY, BTN_SIDE, 1),
-    ExpectedEvent(EV_KEY, BTN_SIDE, 0),
-    ExpectedEvent(EV_KEY, BTN_EXTRA, 1),
-    ExpectedEvent(EV_KEY, BTN_EXTRA, 0),
 )
 
 CONSUMER_STEPS = (
@@ -226,10 +197,10 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
         steps.extend((ExpectedEvent(EV_KEY, key_code, 1), ExpectedEvent(EV_KEY, key_code, 0)))
 
 
-_TEXT_BURST_STEPS: list[ExpectedEvent] = []
+_KEYBOARD_STEPS: list[ExpectedEvent] = []
 for _ in range(9):
-    _append_text_steps(_TEXT_BURST_STEPS, "kEyBoArD")
-TEXT_BURST_STEPS = tuple(_TEXT_BURST_STEPS)
+    _append_text_steps(_KEYBOARD_STEPS, "kEyBoArD")
+KEYBOARD_STEPS = tuple(_KEYBOARD_STEPS)
 
 SCENARIOS = {
     "keyboard": ScenarioDefinition(
@@ -238,38 +209,18 @@ SCENARIOS = {
         mouse_rel_steps=(),
         mouse_button_steps=(),
         consumer_steps=(),
+        default_event_gap_ms=20,
+        default_post_delay_ms=6000,
+        default_capture_timeout_sec=15.0,
     ),
     "mouse": ScenarioDefinition(
         name="mouse",
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=SAFE_MOUSE_BUTTON_STEPS,
-        consumer_steps=(),
-        mouse_coalesced_tail_count=3,
-    ),
-    "mouse_fast": ScenarioDefinition(
-        name="mouse_fast",
-        keyboard_steps=(),
-        mouse_rel_steps=FAST_MOUSE_REL_STEPS,
-        mouse_button_steps=(),
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
         default_event_gap_ms=0,
         default_post_delay_ms=1000,
-    ),
-    "mouse_buttons_intrusive": ScenarioDefinition(
-        name="mouse_buttons_intrusive",
-        keyboard_steps=(),
-        mouse_rel_steps=(),
-        mouse_button_steps=MOUSE_BUTTON_STEPS,
-        consumer_steps=(),
-    ),
-    "combo": ScenarioDefinition(
-        name="combo",
-        keyboard_steps=KEYBOARD_STEPS,
-        mouse_rel_steps=MOUSE_REL_STEPS,
-        mouse_button_steps=SAFE_MOUSE_BUTTON_STEPS,
-        consumer_steps=(),
-        mouse_coalesced_tail_count=3,
     ),
     "consumer": ScenarioDefinition(
         name="consumer",
@@ -278,14 +229,15 @@ SCENARIOS = {
         mouse_button_steps=(),
         consumer_steps=CONSUMER_STEPS,
     ),
-    "text_burst": ScenarioDefinition(
-        name="text_burst",
-        keyboard_steps=TEXT_BURST_STEPS,
-        mouse_rel_steps=(),
-        mouse_button_steps=(),
-        consumer_steps=(),
+    "combo": ScenarioDefinition(
+        name="combo",
+        keyboard_steps=KEYBOARD_STEPS,
+        mouse_rel_steps=MOUSE_REL_STEPS,
+        mouse_button_steps=MOUSE_BUTTON_STEPS,
+        consumer_steps=CONSUMER_STEPS,
         default_event_gap_ms=20,
         default_post_delay_ms=6000,
+        default_capture_timeout_sec=30.0,
     ),
 }
 
@@ -319,4 +271,5 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
         "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
         "default_event_gap_ms": scenario.default_event_gap_ms,
         "default_post_delay_ms": scenario.default_post_delay_ms,
+        "default_capture_timeout_sec": scenario.default_capture_timeout_sec,
     }

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from .logging import get_logger
+from ..logging import get_logger
 
 logger = get_logger(__name__)
 

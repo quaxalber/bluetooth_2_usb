@@ -5,10 +5,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from bluetooth_2_usb.relay_gate import RelayGate
-from bluetooth_2_usb.runtime import Runtime, _handled_shutdown_signals
-from bluetooth_2_usb.runtime_config import runtime_config_from_args
-from bluetooth_2_usb.runtime_events import ShutdownRequested
+from bluetooth_2_usb.relay.gate import RelayGate
+from bluetooth_2_usb.runtime.app import Runtime, _handled_shutdown_signals
+from bluetooth_2_usb.runtime.config import runtime_config_from_args
+from bluetooth_2_usb.runtime.events import ShutdownRequested
 
 
 class RuntimeConfigTest(unittest.TestCase):
@@ -65,9 +65,9 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         loop = asyncio.get_running_loop()
 
         with patch.object(loop, "add_signal_handler", side_effect=NotImplementedError):
-            with patch("bluetooth_2_usb.runtime.signal.getsignal", side_effect=str):
+            with patch("bluetooth_2_usb.runtime.app.signal.getsignal", side_effect=str):
                 with patch(
-                    "bluetooth_2_usb.runtime.signal.signal",
+                    "bluetooth_2_usb.runtime.app.signal.signal",
                     side_effect=lambda sig, handler: registered_handlers.setdefault(sig, handler),
                 ):
                     handlers = runtime._install_signal_handlers()
@@ -80,7 +80,7 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                 ShutdownRequested("SIGTERM"),
             )
         finally:
-            with patch("bluetooth_2_usb.runtime.signal.signal"):
+            with patch("bluetooth_2_usb.runtime.app.signal.signal"):
                 runtime._restore_signal_handlers(handlers)
 
     async def test_runtime_awaits_hid_gadget_enable_before_starting_tasks(self) -> None:
@@ -90,8 +90,8 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         async def stop_after_enable(_event_source, enabled_gadgets, _relay_gate, _shortcut):
             self.assertIs(enabled_gadgets, hid_gadgets)
 
-        with patch("bluetooth_2_usb.runtime.HidGadgets", return_value=hid_gadgets):
-            with patch("bluetooth_2_usb.runtime.RuntimeEventSource"):
+        with patch("bluetooth_2_usb.runtime.app.HidGadgets", return_value=hid_gadgets):
+            with patch("bluetooth_2_usb.runtime.app.RuntimeEventSource"):
                 runtime._run_tasks = AsyncMock(side_effect=stop_after_enable)
 
                 await runtime.run()

@@ -769,7 +769,7 @@ def _capture_once(
 
 def run_capture(
     scenario_name: str,
-    timeout_sec: float = 5.0,
+    timeout_sec: float | None = None,
     device_substring: str = DEFAULT_DEVICE_SUBSTRING,
     keyboard_node: str | None = None,
     mouse_node: str | None = None,
@@ -780,6 +780,9 @@ def run_capture(
     # for CLI parity with other backends.
     _ = grab_devices
     scenario = get_scenario(scenario_name)
+    resolved_timeout_sec = (
+        scenario.default_capture_timeout_sec if timeout_sec is None else timeout_sec
+    )
 
     try:
         hid_module = _load_hidapi()
@@ -804,14 +807,16 @@ def run_capture(
         from .capture_windows import run_windows_raw_input_capture
 
         result = run_windows_raw_input_capture(
-            scenario_name=scenario_name, timeout_sec=timeout_sec, candidate_nodes=candidate_nodes
+            scenario_name=scenario_name,
+            timeout_sec=resolved_timeout_sec,
+            candidate_nodes=candidate_nodes,
         )
         result.details["candidates"] = candidate_nodes.to_dict()
         return result
 
     result = _capture_once(
         scenario_name=scenario_name,
-        timeout_sec=timeout_sec,
+        timeout_sec=resolved_timeout_sec,
         candidate_nodes=candidate_nodes,
         hid_module=hid_module,
     )

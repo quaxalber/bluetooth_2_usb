@@ -5,7 +5,7 @@ from pathlib import Path
 
 import usb_hid
 
-from .hid_gadget_layout import GadgetHidDevice, GadgetLayout
+from .layout import GadgetHidDevice, GadgetLayout
 
 GADGET_ROOT = Path(usb_hid.gadget_root)
 CONFIG_NAME = "c.1"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 
-from .evdev_types import InputDevice
+from ..evdev.types import InputDevice
 
 
 class DeviceIdentifierType(StrEnum):

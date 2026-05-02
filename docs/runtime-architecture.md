@@ -16,9 +16,9 @@ The service runtime is intentionally centered on one asyncio event flow:
   writers own report shaping, pacing, and short transient write retry for their
   own gadget type.
 - `HidGadgets` owns the configured keyboard, mouse, and consumer-control HID
-  handles created from `hid_gadget_config.py` and `hid_gadget_layout.py`.
+  handles created from `gadgets.config` and `gadgets.layout`.
 
-Runtime events are plain value objects from `runtime_events.py`:
+Runtime events are plain value objects from `runtime.events`:
 
 - `DeviceAdded`
 - `DeviceRemoved`

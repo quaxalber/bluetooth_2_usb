@@ -18,6 +18,7 @@ from bluetooth_2_usb.loopback.capture import (
     MouseSequenceMatcher,
     discover_gadget_node_candidates,
     discover_gadget_nodes,
+    run_capture,
 )
 from bluetooth_2_usb.loopback.capture_windows import (
     RAWMOUSE,
@@ -48,7 +49,6 @@ from bluetooth_2_usb.loopback.scenarios import (
     CONSUMER_STEPS,
     EV_KEY,
     EV_REL,
-    FAST_MOUSE_REL_STEPS,
     KEY_K,
     KEY_LEFTSHIFT,
     MOUSE_BUTTON_STEPS,
@@ -57,9 +57,7 @@ from bluetooth_2_usb.loopback.scenarios import (
     REL_WHEEL,
     REL_X,
     REL_Y,
-    SAFE_MOUSE_BUTTON_STEPS,
     SCENARIOS,
-    TEXT_BURST_STEPS,
     ExpectedEvent,
     get_scenario,
 )
@@ -76,6 +74,26 @@ def _mouse_report_count(steps: tuple[ExpectedEvent, ...]) -> int:
         report_limit = 127 if step.code in (REL_WHEEL, REL_HWHEEL) else 32767
         total += _chunk_count(step.value, report_limit)
     return total
+
+
+SIMPLE_KEYBOARD_STEPS = (
+    ExpectedEvent(EV_KEY, KEY_K, 1),
+    ExpectedEvent(EV_KEY, KEY_K, 0),
+)
+
+SMALL_MOUSE_REL_STEPS = (
+    ExpectedEvent(EV_REL, REL_X, 1),
+    ExpectedEvent(EV_REL, REL_X, -1),
+    ExpectedEvent(EV_REL, REL_Y, 1),
+    ExpectedEvent(EV_REL, REL_Y, -1),
+    ExpectedEvent(EV_REL, REL_WHEEL, 1),
+    ExpectedEvent(EV_REL, REL_WHEEL, -1),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -1),
+    ExpectedEvent(EV_REL, REL_X, 2),
+    ExpectedEvent(EV_REL, REL_Y, -3),
+    ExpectedEvent(EV_REL, REL_HWHEEL, 1),
+)
 
 
 def _hid_entry(
@@ -112,38 +130,48 @@ class _FakeHidModule:
 
 
 class ScenarioDefinitionTest(unittest.TestCase):
-    def test_combo_scenario_contains_keyboard_and_mouse_sequences(self) -> None:
-        combo = SCENARIOS["combo"]
+    def test_public_scenarios_are_small_and_intentional(self) -> None:
+        self.assertEqual(tuple(SCENARIOS), ("keyboard", "mouse", "consumer", "combo"))
 
-        self.assertEqual(combo.required_nodes, ("keyboard", "mouse"))
-        self.assertEqual(len(combo.keyboard_steps), 6)
-        self.assertEqual(len(combo.mouse_rel_steps), 11)
-        self.assertEqual(combo.mouse_button_steps, SAFE_MOUSE_BUTTON_STEPS)
-        self.assertEqual(len(combo.mouse_button_steps), 4)
-        self.assertEqual(combo.mouse_coalesced_tail_count, 3)
+    def test_keyboard_scenario_contains_full_modifier_burst(self) -> None:
+        scenario = SCENARIOS["keyboard"]
 
-    def test_intrusive_mouse_button_scenario_contains_all_button_bits(self) -> None:
-        scenario = SCENARIOS["mouse_buttons_intrusive"]
+        self.assertEqual(scenario.required_nodes, ("keyboard",))
+        self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
+        self.assertEqual(scenario.default_event_gap_ms, 20)
+        self.assertEqual(scenario.default_post_delay_ms, 6000)
+        self.assertEqual(scenario.default_capture_timeout_sec, 15.0)
+        self.assertEqual(len(scenario.keyboard_steps), 216)
+
+    def test_mouse_scenario_contains_fast_motion_and_all_button_bits(self) -> None:
+        scenario = SCENARIOS["mouse"]
 
         self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertEqual(scenario.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, MOUSE_BUTTON_STEPS)
         self.assertEqual(len(scenario.mouse_button_steps), 16)
+        self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
+        self.assertEqual(scenario.default_event_gap_ms, 0)
+        self.assertEqual(scenario.default_post_delay_ms, 1000)
+        self.assertEqual(scenario.default_capture_timeout_sec, 10.0)
+        self.assertGreaterEqual(_mouse_report_count(scenario.mouse_rel_steps), 80)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
 
         self.assertEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
+        self.assertEqual(consumer.default_capture_timeout_sec, 10.0)
 
-    def test_fast_mouse_scenario_contains_large_relative_motion(self) -> None:
-        scenario = SCENARIOS["mouse_fast"]
+    def test_combo_scenario_contains_keyboard_mouse_and_consumer_sequences(self) -> None:
+        combo = SCENARIOS["combo"]
 
-        self.assertEqual(scenario.required_nodes, ("mouse",))
-        self.assertEqual(scenario.mouse_rel_steps, FAST_MOUSE_REL_STEPS)
-        self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
-        self.assertEqual(scenario.default_event_gap_ms, 0)
-        self.assertEqual(scenario.default_post_delay_ms, 1000)
-        self.assertGreaterEqual(_mouse_report_count(scenario.mouse_rel_steps), 80)
+        self.assertEqual(combo.required_nodes, ("keyboard", "mouse", "consumer"))
+        self.assertEqual(len(combo.keyboard_steps), 216)
+        self.assertEqual(combo.mouse_rel_steps, MOUSE_REL_STEPS)
+        self.assertEqual(combo.mouse_button_steps, MOUSE_BUTTON_STEPS)
+        self.assertEqual(combo.consumer_steps, CONSUMER_STEPS)
+        self.assertEqual(combo.default_capture_timeout_sec, 30.0)
 
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaises(ValueError) as error:
@@ -154,15 +182,12 @@ class ScenarioDefinitionTest(unittest.TestCase):
             f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}",
         )
 
-    def test_text_burst_scenario_is_keyboard_only_and_contains_modifier_burst(self) -> None:
-        scenario = SCENARIOS["text_burst"]
-
-        self.assertEqual(scenario.required_nodes, ("keyboard",))
-        self.assertEqual(scenario.keyboard_steps, TEXT_BURST_STEPS)
-        self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
-        self.assertEqual(scenario.default_event_gap_ms, 20)
-        self.assertEqual(scenario.default_post_delay_ms, 6000)
-        self.assertEqual(len(scenario.keyboard_steps), 216)
+    def test_removed_scenario_names_are_not_supported(self) -> None:
+        removed_names = ("mouse" + "_fast", "mouse_buttons" + "_intrusive", "text" + "_burst")
+        for scenario_name in removed_names:
+            with self.subTest(scenario_name=scenario_name):
+                with self.assertRaises(ValueError):
+                    get_scenario(scenario_name)
 
 
 class GadgetNodeDiscoveryTest(unittest.TestCase):
@@ -363,14 +388,10 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_eight_byte_keyboard_reports(self) -> None:
-        matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
+        matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
         reports = (
-            bytes([0x00, 0x00, 0x68, 0, 0, 0, 0, 0]),
-            bytes([0x00] * 8),
-            bytes([0x00, 0x00, 0x69, 0, 0, 0, 0, 0]),
-            bytes([0x00] * 8),
-            bytes([0x00, 0x00, 0x6A, 0, 0, 0, 0, 0]),
+            bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]),
             bytes([0x00] * 8),
         )
         for report in reports:
@@ -379,14 +400,10 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_keyboard_matcher_accepts_report_id_keyboard_reports(self) -> None:
-        matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
+        matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
         reports = (
-            bytes([0x01, 0x00, 0x00, 0x68, 0, 0, 0, 0, 0]),
-            bytes([0x01] + [0x00] * 8),
-            bytes([0x01, 0x00, 0x00, 0x69, 0, 0, 0, 0, 0]),
-            bytes([0x01] + [0x00] * 8),
-            bytes([0x01, 0x00, 0x00, 0x6A, 0, 0, 0, 0, 0]),
+            bytes([0x01, 0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]),
             bytes([0x01] + [0x00] * 8),
         )
         for report in reports:
@@ -395,20 +412,13 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_keyboard_matcher_ignores_single_zero_reports_between_steps(self) -> None:
-        matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
+        matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
         reports = (
-            bytes([0x00, 0x00, 0x68, 0, 0, 0, 0, 0]),
+            bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]),
             bytes([0x00]),
             bytes([0x00] * 8),
             bytes([0x00]),
-            bytes([0x00, 0x00, 0x69, 0, 0, 0, 0, 0]),
-            bytes([0x00]),
-            bytes([0x00] * 8),
-            bytes([0x00]),
-            bytes([0x00, 0x00, 0x6A, 0, 0, 0, 0, 0]),
-            bytes([0x00]),
-            bytes([0x00] * 8),
         )
         for report in reports:
             matcher.handle(report)
@@ -439,7 +449,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_keyboard_matcher_rejects_unexpected_report(self) -> None:
-        matcher = KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps)
+        matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
         with self.assertRaises(CaptureMismatchError):
             matcher.handle(bytes([0x00] * 8))
@@ -481,7 +491,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         return reports
 
     def test_mouse_matcher_accepts_small_relative_motion_only(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], ())
 
         matcher.handle(self._extended_mouse_report(x=1))
         matcher.handle(self._extended_mouse_report(x=-1))
@@ -491,34 +501,34 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_zero_prefixed_hidapi_report(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:1], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:1], ())
 
         matcher.handle(bytes([0x00]) + self._extended_mouse_report(x=1))
 
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_report_id_prefixed_hidapi_report(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:1], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:1], ())
 
         matcher.handle(bytes([0x02]) + self._extended_mouse_report(x=1))
 
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_two_byte_prefixed_hidapi_report(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:1], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:1], ())
 
         matcher.handle(bytes([0x00, 0x02]) + self._extended_mouse_report(x=1))
 
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_rejects_unexpected_button_bits(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
             matcher.handle(self._extended_mouse_report(buttons=0x02, x=1))
 
     def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], SAFE_MOUSE_BUTTON_STEPS)
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], MOUSE_BUTTON_STEPS[:2])
 
         with self.assertRaisesRegex(
             CaptureMismatchError, "Mouse button report arrived before movement"
@@ -526,19 +536,19 @@ class MouseSequenceMatcherTest(unittest.TestCase):
             matcher.handle(self._extended_mouse_report(buttons=0x08, x=1))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
             matcher.handle(self._extended_mouse_report(x=-1))
 
     def test_mouse_matcher_rejects_cross_axis_reordering_between_reports(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS[:4], ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "expected REL_X=1"):
             matcher.handle(self._extended_mouse_report(y=1))
 
     def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
-        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS, ())
 
         matcher.handle(bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
         matcher.handle(bytes([0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]))
@@ -553,10 +563,10 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_chunked_fast_motion(self) -> None:
-        matcher = MouseSequenceMatcher.create(FAST_MOUSE_REL_STEPS, ())
+        matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 
         reports = [
-            report for step in FAST_MOUSE_REL_STEPS for report in self._reports_for_rel_step(step)
+            report for step in MOUSE_REL_STEPS for report in self._reports_for_rel_step(step)
         ]
         self.assertGreaterEqual(len(reports), 80)
         for report in reports:
@@ -831,20 +841,13 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 ),
             )
 
-    def test_windows_backend_reports_unsupported_intrusive_mouse_buttons(self) -> None:
-        with patch("bluetooth_2_usb.loopback.capture_windows.IS_WINDOWS", True):
-            result = capture_windows.run_windows_raw_input_capture(
-                scenario_name="mouse_buttons_intrusive",
-                timeout_sec=1.0,
-                candidate_nodes=capture_windows.GadgetNodeCandidates(
-                    keyboard_nodes=(), mouse_nodes=(), consumer_nodes=()
-                ),
-            )
+    def test_windows_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
+        steps, skipped = capture_windows._windows_mouse_button_expectations(SCENARIOS["mouse"])
 
-        self.assertFalse(result.success)
-        self.assertEqual(result.exit_code, EXIT_PREREQUISITE)
-        self.assertEqual(
-            result.details["unsupported_mouse_buttons"], ["BTN_FORWARD", "BTN_BACK", "BTN_TASK"]
+        self.assertEqual(skipped, ("BTN_FORWARD", "BTN_BACK", "BTN_TASK"))
+        self.assertEqual(len(steps), 10)
+        self.assertTrue(
+            all(step.code in capture_windows.WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES for step in steps)
         )
 
     def test_windows_backend_imports_with_missing_non_windows_handle_aliases(self) -> None:
@@ -929,7 +932,7 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.inject.UInput", return_value=keyboard),
             patch("bluetooth_2_usb.loopback.inject.time.sleep"),
         ):
-            result = run_inject("text_burst", pre_delay_ms=0)
+            result = run_inject("keyboard", pre_delay_ms=0)
 
         self.assertTrue(result.success)
         self.assertEqual(result.details["event_gap_ms"], 20)
@@ -983,6 +986,50 @@ class LoopbackInjectTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(stdout.getvalue())["details"]["keyboard_steps_seen"], 6)
+
+    def test_capture_cli_uses_scenario_default_timeout(self) -> None:
+        result = SimpleNamespace(
+            exit_code=0,
+            to_dict=lambda: {},
+            to_text=lambda: "ok",
+        )
+
+        with patch("bluetooth_2_usb.loopback.capture.run_capture", return_value=result) as run:
+            exit_code = run_loopback(["capture", "--scenario", "keyboard"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(run.call_args.kwargs["timeout_sec"])
+
+    def test_capture_uses_scenario_default_timeout(self) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry(
+                    "kbd0",
+                    vendor_id=0x1D6B,
+                    product_id=0x0104,
+                    interface_number=0,
+                    usage_page=0x01,
+                    usage=0x06,
+                )
+            ]
+        )
+        result = LoopbackResult(
+            command="capture",
+            scenario="keyboard",
+            success=True,
+            exit_code=0,
+            message="ok",
+            details={},
+        )
+
+        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
+            with patch(
+                "bluetooth_2_usb.loopback.capture._capture_once", return_value=result
+            ) as run:
+                capture_result = run_capture("keyboard")
+
+        self.assertIs(capture_result, result)
+        self.assertEqual(run.call_args.kwargs["timeout_sec"], 15.0)
 
     def test_capture_missing_nodes_returns_prerequisite_exit(self) -> None:
         stdout = io.StringIO()
@@ -1041,6 +1088,14 @@ class LoopbackInjectTest(unittest.TestCase):
                         usage_page=0x01,
                         usage=0x02,
                     ),
+                    _hid_entry(
+                        "consumer0",
+                        vendor_id=0x1D6B,
+                        product_id=0x0104,
+                        interface_number=2,
+                        usage_page=0x0C,
+                        usage=0x01,
+                    ),
                 ]
             ),
         )
@@ -1065,6 +1120,14 @@ class LoopbackInjectTest(unittest.TestCase):
                             interface_number=1,
                             usage_page=0x01,
                             usage=0x02,
+                        ),
+                        _hid_entry(
+                            "consumer0",
+                            vendor_id=0x1D6B,
+                            product_id=0x0104,
+                            interface_number=2,
+                            usage_page=0x0C,
+                            usage=0x01,
                         ),
                     ]
                 ),

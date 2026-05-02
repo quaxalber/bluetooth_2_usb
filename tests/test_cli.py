@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from bluetooth_2_usb import cli
-from bluetooth_2_usb.inventory import DeviceEnumerationError, InputDeviceMetadata
-from bluetooth_2_usb.runtime import GRACEFUL_SHUTDOWN_TIMEOUT_SEC
+from bluetooth_2_usb.inputs.inventory import DeviceEnumerationError, InputDeviceMetadata
+from bluetooth_2_usb.runtime.app import GRACEFUL_SHUTDOWN_TIMEOUT_SEC
 
 
 class CliTest(unittest.TestCase):
@@ -16,7 +16,7 @@ class CliTest(unittest.TestCase):
 
     def test_list_devices_error_returns_environment_exit(self) -> None:
         with patch(
-            "bluetooth_2_usb.inventory.describe_input_devices",
+            "bluetooth_2_usb.inputs.inventory.describe_input_devices",
             side_effect=DeviceEnumerationError("denied"),
         ):
             exit_code = cli.run(["--list_devices"])
@@ -75,7 +75,7 @@ class CliTest(unittest.TestCase):
             )
         ]
 
-        with patch("bluetooth_2_usb.inventory.describe_input_devices", return_value=devices):
+        with patch("bluetooth_2_usb.inputs.inventory.describe_input_devices", return_value=devices):
             with redirect_stdout(stdout):
                 exit_code = cli.run(["--list_devices", "--output", "json"])
 
@@ -101,7 +101,7 @@ class CliTest(unittest.TestCase):
         env_status = cli.EnvironmentStatus(configfs=True, udc_present=True, udc_path=None)
 
         with patch("bluetooth_2_usb.cli.validate_environment", return_value=env_status):
-            with patch("bluetooth_2_usb.runtime.Runtime", return_value=runtime) as runtime_cls:
+            with patch("bluetooth_2_usb.runtime.app.Runtime", return_value=runtime) as runtime_cls:
                 exit_code = cli.asyncio.run(cli.async_run(args))
 
         self.assertEqual(exit_code, cli.EXIT_OK)

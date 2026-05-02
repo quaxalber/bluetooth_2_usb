@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from .evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
-from .evdev_types import InputEvent, KeyEvent, RelEvent, categorize
-from .hid_gadgets import HidGadgets
-from .logging import get_logger
+from ..evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
+from ..evdev.types import InputEvent, KeyEvent, RelEvent, categorize
+from ..gadgets.manager import HidGadgets
+from ..logging import get_logger
+from ..relay.gate import RelayGate
+from ..relay.shortcut import ShortcutToggler
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator
-from .relay_gate import RelayGate
-from .shortcut_toggler import ShortcutToggler
 
 logger = get_logger(__name__)
 

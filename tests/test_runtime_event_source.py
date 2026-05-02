@@ -6,8 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.runtime_event_source import RuntimeEventSource
-from bluetooth_2_usb.runtime_events import DeviceAdded, DeviceRemoved, UdcState, UdcStateChanged
+from bluetooth_2_usb.runtime.event_source import RuntimeEventSource
+from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, UdcState, UdcStateChanged
 
 
 class _FakeMonitor:
@@ -46,9 +46,9 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         udc_path: Path | None = None,
         poll_interval: float = 0.01,
     ) -> RuntimeEventSource:
-        with patch("bluetooth_2_usb.runtime_event_source.pyudev.Context", return_value=object()):
+        with patch("bluetooth_2_usb.runtime.event_source.pyudev.Context", return_value=object()):
             with patch(
-                "bluetooth_2_usb.runtime_event_source.pyudev.Monitor.from_netlink",
+                "bluetooth_2_usb.runtime.event_source.pyudev.Monitor.from_netlink",
                 return_value=monitor,
             ):
                 return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)

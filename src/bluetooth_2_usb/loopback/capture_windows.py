@@ -15,7 +15,7 @@ from .capture import (
     MissingNodeError,
     MouseSequenceMatcher,
 )
-from .constants import EXIT_OK, EXIT_PREREQUISITE
+from .constants import EXIT_OK
 from .result import GadgetNodes, LoopbackResult
 from .scenarios import (
     BTN_EXTRA,
@@ -523,6 +523,17 @@ def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
     )
 
 
+def _windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
+    skipped_codes = _unsupported_windows_mouse_button_codes(scenario)
+    skipped_names = tuple(EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in skipped_codes)
+    supported_steps = tuple(
+        step
+        for step in scenario.mouse_button_steps
+        if step.code in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
+    )
+    return supported_steps, skipped_names
+
+
 def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
     reports: list[bytes] = []
     button_flags = raw_mouse.ulButtons & 0xFFFF
@@ -736,8 +747,13 @@ def _pump_raw_input(
     mouse_candidate_identities: tuple[str, ...],
     consumer_candidate_identities: tuple[str, ...],
     scenario_name: str,
+    mouse_button_steps: tuple | None = None,
+    windows_skipped_mouse_buttons: tuple[str, ...] = (),
 ) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
+    expected_mouse_button_steps = (
+        scenario.mouse_button_steps if mouse_button_steps is None else mouse_button_steps
+    )
     _reset_mouse_button_state()
     keyboard_candidate = (
         _RawInputCandidate(
@@ -752,7 +768,7 @@ def _pump_raw_input(
         _RawInputCandidate(
             "mouse",
             mouse_candidate_identities,
-            MouseSequenceMatcher.create(scenario.mouse_rel_steps, scenario.mouse_button_steps),
+            MouseSequenceMatcher.create(scenario.mouse_rel_steps, expected_mouse_button_steps),
         )
         if scenario.mouse_enabled
         else None
@@ -877,6 +893,10 @@ def _pump_raw_input(
                     details["mouse_rel_steps_seen"] = mouse_candidate.matcher.rel_index
                     details["mouse_button_steps_seen"] = mouse_candidate.matcher.button_index
                     details["mouse_reports_seen"] = list(mouse_candidate.matched_reports)
+                    if windows_skipped_mouse_buttons:
+                        details["windows_skipped_mouse_buttons"] = list(
+                            windows_skipped_mouse_buttons
+                        )
                 if consumer_candidate is not None:
                     details["consumer_steps_seen"] = consumer_candidate.matcher.index
                     details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
@@ -902,6 +922,7 @@ def _pump_raw_input(
                 "timeout_sec": timeout_sec,
                 "nodes": GadgetNodes(None, None, None).to_dict(),
                 "raw_input_debug": debug.to_dict(),
+                "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
             },
         )
     finally:
@@ -918,6 +939,7 @@ def _pump_raw_input(
             "timeout_sec": timeout_sec,
             "nodes": GadgetNodes(None, None, None).to_dict(),
             "raw_input_debug": debug.to_dict(),
+            "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
         },
     )
 
@@ -929,26 +951,7 @@ def run_windows_raw_input_capture(
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
-    unsupported_mouse_buttons = _unsupported_windows_mouse_button_codes(scenario)
-    if unsupported_mouse_buttons:
-        unsupported_names = [
-            EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in unsupported_mouse_buttons
-        ]
-        return LoopbackResult(
-            command="capture",
-            scenario=scenario.name,
-            success=False,
-            exit_code=EXIT_PREREQUISITE,
-            message=(
-                "Windows Raw Input capture only exposes mouse buttons through "
-                f"{EVENT_CODE_NAMES[EV_KEY][BTN_EXTRA]}; unsupported scenario "
-                f"buttons: {', '.join(unsupported_names)}"
-            ),
-            details={
-                "capture_backend": "raw_input",
-                "unsupported_mouse_buttons": unsupported_names,
-            },
-        )
+    mouse_button_steps, windows_skipped_mouse_buttons = _windows_mouse_button_expectations(scenario)
 
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
@@ -978,6 +981,8 @@ def run_windows_raw_input_capture(
         mouse_candidate_identities=mouse_candidate_identities,
         consumer_candidate_identities=consumer_candidate_identities,
         scenario_name=scenario_name,
+        mouse_button_steps=mouse_button_steps,
+        windows_skipped_mouse_buttons=windows_skipped_mouse_buttons,
     )
     result.details.setdefault("candidates", candidate_nodes.to_dict())
     return result

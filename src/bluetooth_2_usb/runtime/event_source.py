@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from .logging import get_logger
-from .runtime_events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcState, UdcStateChanged
+from ..logging import get_logger
+from .events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcState, UdcStateChanged
 
 logger = get_logger(__name__)
 

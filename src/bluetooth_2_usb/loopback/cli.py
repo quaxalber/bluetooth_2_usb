@@ -87,8 +87,8 @@ def _build_parser() -> argparse.ArgumentParser:
     capture.add_argument(
         "--timeout-sec",
         type=float,
-        default=5.0,
-        help="Timeout waiting for relay events. Default: 5",
+        default=None,
+        help="Timeout waiting for relay events. Default: scenario-specific",
     )
     capture.add_argument(
         "--device-substring",
@@ -141,7 +141,7 @@ def _validate_args(args: argparse.Namespace) -> LoopbackResult | None:
                 details={},
             )
 
-    if args.command == "capture" and args.timeout_sec <= 0:
+    if args.command == "capture" and args.timeout_sec is not None and args.timeout_sec <= 0:
         return LoopbackResult(
             command="capture",
             scenario=args.scenario,

@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 
+from . import timing
+
 
 class ExtendedKeyboard:
     """Keyboard report writer with pacing for host-visible state transitions."""
 
-    REPORT_WRITE_MAX_TRIES = 3
-    REPORT_WRITE_RETRY_DELAY_SEC = 0.001
-    REPORT_INTERVAL_SEC = 0.015
+    REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
+    REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
+    REPORT_INTERVAL_SEC = timing.REPORT_INTERVAL_SEC
 
     def __init__(self, devices) -> None:
         from adafruit_hid.keyboard import Keyboard

@@ -5,12 +5,12 @@ import os
 import stat
 from pathlib import Path
 
-from .extended_consumer_control import ExtendedConsumerControl
-from .extended_keyboard import ExtendedKeyboard
-from .extended_mouse import ExtendedMouse
-from .hid_gadget_config import rebuild_gadget
-from .hid_gadget_layout import build_default_layout
-from .logging import get_logger
+from ..hid.consumer import ExtendedConsumerControl
+from ..hid.keyboard import ExtendedKeyboard
+from ..hid.mouse import ExtendedMouse
+from ..logging import get_logger
+from .config import rebuild_gadget
+from .layout import build_default_layout
 
 logger = get_logger(__name__)
 

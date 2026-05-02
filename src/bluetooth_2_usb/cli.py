@@ -122,7 +122,11 @@ async def async_run(args: Arguments) -> int:
         return print_version()
 
     if args.list_devices:
-        from .inventory import DeviceEnumerationError, describe_input_devices, inventory_to_text
+        from .inputs.inventory import (
+            DeviceEnumerationError,
+            describe_input_devices,
+            inventory_to_text,
+        )
 
         try:
             devices = describe_input_devices()
@@ -155,8 +159,8 @@ async def async_run(args: Arguments) -> int:
 
     logger.debug("Detected UDC state file: %s", env_status.udc_path)
 
-    from .runtime import Runtime
-    from .runtime_config import runtime_config_from_args
+    from .runtime.app import Runtime
+    from .runtime.config import runtime_config_from_args
 
     runtime = Runtime(runtime_config_from_args(args, udc_path=env_status.udc_path))
     await runtime.run()

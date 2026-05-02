@@ -4,14 +4,14 @@ import asyncio
 import signal
 from dataclasses import dataclass
 
-from .hid_gadgets import HidGadgets
-from .logging import get_logger
-from .relay_gate import RelayGate
-from .relay_supervisor import RelaySupervisor
-from .runtime_config import RuntimeConfig
-from .runtime_event_source import RuntimeEventSource
-from .runtime_events import RuntimeEvent, ShutdownRequested
-from .shortcut_toggler import ShortcutToggler
+from ..gadgets.manager import HidGadgets
+from ..logging import get_logger
+from ..relay.gate import RelayGate
+from ..relay.shortcut import ShortcutToggler
+from ..relay.supervisor import RelaySupervisor
+from .config import RuntimeConfig
+from .event_source import RuntimeEventSource
+from .events import RuntimeEvent, ShutdownRequested
 
 logger = get_logger(__name__)
 

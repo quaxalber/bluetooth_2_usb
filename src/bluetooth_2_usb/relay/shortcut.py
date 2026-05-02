@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from .evdev import find_key_name
-from .evdev_types import KeyEvent
-from .logging import get_logger
-from .relay_gate import RelayGate
+from ..evdev import find_key_name
+from ..evdev.types import KeyEvent
+from ..logging import get_logger
+from .gate import RelayGate
 
 logger = get_logger(__name__)
 

@@ -6,19 +6,17 @@ from asyncio import TaskGroup
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from .device_identifier import DeviceIdentifier
-from .evdev_types import InputDevice
-from .hid_gadgets import HidGadgets
-from .input_relay import InputRelay
-from .inventory import (
+from ..evdev.types import InputDevice
+from ..gadgets.manager import HidGadgets
+from ..inputs.identifier import DeviceIdentifier
+from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
     auto_discover_exclusion_reason,
     list_input_devices,
 )
-from .logging import get_logger
-from .relay_gate import RelayGate
-from .runtime_events import (
+from ..logging import get_logger
+from ..runtime.events import (
     DeviceAdded,
     DeviceRemoved,
     RuntimeEvent,
@@ -26,7 +24,9 @@ from .runtime_events import (
     UdcState,
     UdcStateChanged,
 )
-from .shortcut_toggler import ShortcutToggler
+from .gate import RelayGate
+from .input import InputRelay
+from .shortcut import ShortcutToggler
 
 logger = get_logger(__name__)
 
