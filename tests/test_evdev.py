@@ -17,10 +17,20 @@ class ExtendedMouseButtonMappingTest(unittest.TestCase):
             ecodes.BTN_BACK: MouseButtons.BACK,
             ecodes.BTN_TASK: MouseButtons.TASK,
         }
+        expected_names = {
+            ecodes.BTN_LEFT: "LEFT",
+            ecodes.BTN_RIGHT: "RIGHT",
+            ecodes.BTN_MIDDLE: "MIDDLE",
+            ecodes.BTN_SIDE: "SIDE",
+            ecodes.BTN_EXTRA: "EXTRA",
+            ecodes.BTN_FORWARD: "FORWARD",
+            ecodes.BTN_BACK: "BACK",
+            ecodes.BTN_TASK: "TASK",
+        }
 
         for scancode, button in expected_buttons.items():
             with self.subTest(scancode=scancode):
                 hid_code, hid_name = evdev_to_usb_hid(SimpleNamespace(scancode=scancode, keystate=1))
 
                 self.assertEqual(hid_code, button)
-                self.assertIsNotNone(hid_name)
+                self.assertEqual(hid_name, expected_names[scancode])

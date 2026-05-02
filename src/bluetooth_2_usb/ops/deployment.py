@@ -79,30 +79,35 @@ def repair_venv_shebangs(venv_dir: Path, staging_dir: Path) -> None:
 def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
     staging_dir = venv_dir.with_name(f"{venv_dir.name}.new")
     previous_dir = venv_dir.with_name(f"{venv_dir.name}.old.{os.getpid()}")
+    moved_previous = False
+    swap_succeeded = False
+    restore_succeeded = False
     shutil.rmtree(staging_dir, ignore_errors=True)
     shutil.rmtree(previous_dir, ignore_errors=True)
     try:
         recreate_venv(staging_dir)
         run([staging_dir / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
         run([staging_dir / "bin/pip", "install", "--upgrade", package_dir])
-        moved_previous = False
         if venv_dir.exists():
             venv_dir.rename(previous_dir)
             moved_previous = True
         try:
             staging_dir.rename(venv_dir)
             repair_venv_shebangs(venv_dir, staging_dir)
+            swap_succeeded = True
         except Exception:
             warn("Failed to activate the new virtual environment.")
             shutil.rmtree(venv_dir, ignore_errors=True)
             if moved_previous and previous_dir.exists():
                 previous_dir.rename(venv_dir)
+                restore_succeeded = True
             raise
     except Exception:
         shutil.rmtree(staging_dir, ignore_errors=True)
         raise
     finally:
-        shutil.rmtree(previous_dir, ignore_errors=True)
+        if not moved_previous or swap_succeeded or restore_succeeded:
+            shutil.rmtree(previous_dir, ignore_errors=True)
 
 
 def service_installed() -> bool | None:

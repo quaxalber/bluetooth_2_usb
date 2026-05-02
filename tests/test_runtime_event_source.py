@@ -113,7 +113,7 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(task, timeout=1)
         monitor.close()
 
-    async def test_udc_read_error_preserves_last_state(self) -> None:
+    async def test_udc_read_error_reports_not_attached(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -125,7 +125,7 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged(UdcState.CONFIGURED))
 
             udc_path.unlink()
-            await asyncio.sleep(0.03)
+            self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged(UdcState.NOT_ATTACHED))
 
             source.stop()
             await asyncio.wait_for(task, timeout=1)

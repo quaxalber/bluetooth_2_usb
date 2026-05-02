@@ -166,13 +166,8 @@ def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
             )
             try:
                 process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
+            except (subprocess.TimeoutExpired, KeyboardInterrupt):
+                _terminate_process_group(process)
             output_file.seek(0)
             debug_output = output_file.read()
     finally:
@@ -185,3 +180,12 @@ def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
                     + "]"
                 )
     return redact(debug_output, hostname) or "<no output>"
+
+
+def _terminate_process_group(process: subprocess.Popen) -> None:
+    os.killpg(process.pid, signal.SIGTERM)
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()

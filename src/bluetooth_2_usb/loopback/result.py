@@ -26,7 +26,14 @@ class LoopbackResult:
     details: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
-        return asdict(self)
+        return {
+            "command": self.command,
+            "scenario": self.scenario,
+            "success": self.success,
+            "exit_code": self.exit_code,
+            "message": self.message,
+            "details": _normalize_detail(self.details),
+        }
 
     def to_text(self) -> str:
         lines = [

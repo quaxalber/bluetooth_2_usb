@@ -14,7 +14,9 @@ from bluetooth_2_usb.ops.readonly import (
     bluetooth_state_persistent,
     enable_readonly,
     load_readonly_config,
+    overlay_configured_status,
     overlay_status,
+    package_status,
     print_readonly_status,
     restart_b2u_if_installed,
     stop_b2u_if_installed,
@@ -114,6 +116,20 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         self.assertEqual(calls[0], ["raspi-config", "nonint", "get_overlay_now"])
 
+    def test_overlay_status_returns_unknown_when_raspi_config_probe_fails(self) -> None:
+        with patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"):
+            with patch(f"{READONLY_STATUS}.run", side_effect=OpsError("raspi-config failed")):
+                self.assertEqual(overlay_status(), "unknown")
+
+    def test_overlay_configured_status_returns_unknown_when_probe_fails(self) -> None:
+        with patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"):
+            with patch(f"{READONLY_STATUS}.run", side_effect=OSError("raspi-config unavailable")):
+                self.assertEqual(overlay_configured_status(), "unknown")
+
+    def test_package_status_returns_empty_when_dpkg_probe_fails(self) -> None:
+        with patch(f"{READONLY_STATUS}.run", side_effect=OpsError("dpkg unavailable")):
+            self.assertEqual(package_status("overlayroot"), "")
+
     def test_readonly_config_round_trips_supported_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"
@@ -154,7 +170,12 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_readonly_config_defaults_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            self.assertEqual(load_readonly_config(Path(tmpdir) / "missing").mode, "disabled")
+            paths = ManagedPaths(persist_mount=Path("/tmp/persist"), persist_bluetooth_subdir="bt-state")
+            with patch(f"{READONLY_CONFIG}.PATHS", paths):
+                config = load_readonly_config(Path(tmpdir) / "missing")
+
+        self.assertEqual(config.mode, "disabled")
+        self.assertEqual(config.persist_bluetooth_dir, Path("/tmp/persist/bt-state"))
 
     def test_bluetooth_state_persistent_rejects_bluetooth_dir_outside_persist_mount(self) -> None:
         config = ReadonlyConfig(

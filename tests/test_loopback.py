@@ -1081,3 +1081,28 @@ class LoopbackResultTest(unittest.TestCase):
 
         self.assertIn('paths: ["two", 1]', text)
         self.assertIn("node: namespace(value=PosixPath('/tmp/hid'))", text)
+
+    def test_to_dict_normalizes_details_for_json_output(self) -> None:
+        result = LoopbackResult(
+            command="capture",
+            scenario="combo",
+            success=True,
+            exit_code=0,
+            message="ok",
+            details={
+                "path": Path("/tmp/hidg0"),
+                "nodes": {"keyboard": Path("/dev/hidg0")},
+                "values": ("a", Path("/tmp/b")),
+                "set": {2, "one"},
+                "object": SimpleNamespace(value=Path("/tmp/hid")),
+            },
+        )
+
+        output = result.to_dict()
+
+        json.dumps(output, sort_keys=True)
+        self.assertEqual(output["details"]["path"], "/tmp/hidg0")
+        self.assertEqual(output["details"]["nodes"], {"keyboard": "/dev/hidg0"})
+        self.assertEqual(output["details"]["values"], ["a", "/tmp/b"])
+        self.assertEqual(output["details"]["set"], ["one", 2])
+        self.assertEqual(output["details"]["object"], "namespace(value=PosixPath('/tmp/hid'))")

@@ -21,7 +21,7 @@ class OpsCliTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 2)
 
-    def test_nested_operational_commands_dispatch_without_dash_aliases(self) -> None:
+    def test_nested_operational_commands_dispatch_correctly(self) -> None:
         with patch("bluetooth_2_usb.ops.cli.ensure_root"):
             with patch("bluetooth_2_usb.ops.cli.prepare_log"):
                 with patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup:

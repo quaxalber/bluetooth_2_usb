@@ -74,7 +74,7 @@ class RuntimeEventSource:
         """
         Read and normalize the current USB device controller state.
 
-        :return: The normalized UDC state, or the previous state when the state file cannot be read.
+        :return: The normalized UDC state, or UdcState.NOT_ATTACHED when the state file cannot be read.
         """
         if self._udc_path is None:
             return UdcState.NOT_ATTACHED
@@ -84,7 +84,7 @@ class RuntimeEventSource:
                 return UdcState.from_raw(handle.read())
         except OSError:
             logger.debug("Unable to read UDC state from %s", self._udc_path)
-            return self._last_state or UdcState.NOT_ATTACHED
+            return UdcState.NOT_ATTACHED
 
     def drain_udev_events(self) -> None:
         """

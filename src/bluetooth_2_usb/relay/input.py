@@ -76,8 +76,8 @@ class InputRelay:
                 self._input_device.ungrab()
                 self._currently_grabbed = False
             except Exception as ex:
-                self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
+                    self._currently_grabbed = False
                     logger.debug(
                         "Skipping ungrab for %s because the device is no longer available.", self._input_device.path
                     )
@@ -108,8 +108,8 @@ class InputRelay:
                 self._currently_grabbed = False
                 logger.debug("Ungrabbed %s", self._input_device)
             except Exception as ex:
-                self._currently_grabbed = False
                 if self._should_ignore_ungrab_error(ex):
+                    self._currently_grabbed = False
                     logger.debug(
                         "Skipping ungrab for %s because the device is no longer available.", self._input_device.path
                     )

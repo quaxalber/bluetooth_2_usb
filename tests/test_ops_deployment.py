@@ -14,9 +14,13 @@ BOOT_CONFIG = "bluetooth_2_usb.ops.deployment.boot_config"
 
 class OpsDeploymentTest(unittest.TestCase):
     def test_managed_paths_derives_paths_from_overrides(self) -> None:
-        paths = ManagedPaths(persist_mount=Path("/tmp/persist"), bluetooth_service_dropin_dir=Path("/tmp/dropins"))
+        paths = ManagedPaths(
+            persist_mount=Path("/tmp/persist"),
+            persist_bluetooth_subdir="bt-state",
+            bluetooth_service_dropin_dir=Path("/tmp/dropins"),
+        )
 
-        self.assertEqual(paths.persist_bluetooth_dir, Path("/tmp/persist/bluetooth"))
+        self.assertEqual(paths.default_persist_bluetooth_dir, Path("/tmp/persist/bt-state"))
         self.assertEqual(paths.bluetooth_service_dropin, Path("/tmp/dropins/bluetooth_2_usb_persist.conf"))
 
     def test_install_cli_links_exposes_main_command(self) -> None:
@@ -70,6 +74,37 @@ class OpsDeploymentTest(unittest.TestCase):
             self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "previous")
             self.assertFalse(any(root.glob("venv.new")))
             self.assertFalse(any(root.glob("venv.old.*")))
+
+    def test_rebuild_venv_keeps_previous_environment_when_restore_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            venv = root / "venv"
+            (venv / "bin").mkdir(parents=True)
+            (venv / "marker").write_text("previous", encoding="utf-8")
+            original_rename = Path.rename
+
+            def fake_recreate_venv(staging: Path) -> None:
+                (staging / "bin").mkdir(parents=True)
+                (staging / "marker").write_text("new", encoding="utf-8")
+
+            def fail_repair(_venv: Path, _staging: Path) -> None:
+                raise RuntimeError("activation failed")
+
+            def maybe_fail_restore(source: Path, target: Path) -> Path:
+                if source.name.startswith("venv.old.") and target == venv:
+                    raise RuntimeError("restore failed")
+                return original_rename(source, target)
+
+            with patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv):
+                with patch("bluetooth_2_usb.ops.deployment.repair_venv_shebangs", side_effect=fail_repair):
+                    with patch("pathlib.Path.rename", autospec=True, side_effect=maybe_fail_restore):
+                        with patch("bluetooth_2_usb.ops.deployment.run"):
+                            with self.assertRaisesRegex(RuntimeError, "restore failed"):
+                                rebuild_venv_atomically(venv, root)
+
+            backups = list(root.glob("venv.old.*"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual((backups[0] / "marker").read_text(encoding="utf-8"), "previous")
 
     def test_install_stops_active_service_before_rebuild_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

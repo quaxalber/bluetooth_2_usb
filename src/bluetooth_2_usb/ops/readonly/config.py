@@ -12,15 +12,16 @@ from ..paths import PATHS
 class ReadonlyConfig:
     mode: str = "disabled"
     persist_mount: Path = PATHS.persist_mount
-    persist_bluetooth_dir: Path = PATHS.persist_bluetooth_dir
+    persist_bluetooth_dir: Path = PATHS.default_persist_bluetooth_dir
     persist_spec: str = ""
     persist_device: str = ""
 
 
 def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig:
-    config = ReadonlyConfig()
     if not path.is_file():
-        return config
+        return ReadonlyConfig(
+            persist_mount=PATHS.persist_mount, persist_bluetooth_dir=PATHS.default_persist_bluetooth_dir
+        )
 
     allowed = {
         "B2U_READONLY_MODE",
@@ -46,7 +47,9 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount)), "B2U_PERSIST_MOUNT", path
     )
     persist_bluetooth_dir = _required_absolute_path(
-        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.persist_bluetooth_dir)), "B2U_PERSIST_BLUETOOTH_DIR", path
+        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.default_persist_bluetooth_dir)),
+        "B2U_PERSIST_BLUETOOTH_DIR",
+        path,
     )
 
     return ReadonlyConfig(

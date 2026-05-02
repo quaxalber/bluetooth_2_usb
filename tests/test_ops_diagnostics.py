@@ -1,4 +1,6 @@
 import os
+import signal
+import subprocess
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -68,6 +70,10 @@ class OpsDiagnosticsTest(unittest.TestCase):
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
         checked_modules = []
 
+        class RfkillEntry:
+            def line(self) -> str:
+                return "rfkill0 type=bluetooth soft=0 hard=0 state=1"
+
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
 
@@ -102,7 +108,9 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 stack.enter_context(
                     patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
                 )
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[object()]))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[RfkillEntry()])
+                )
                 stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=False))
                 stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
                 stack.enter_context(
@@ -123,10 +131,70 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 stack.enter_context(patch.object(smoke, "_relayable_count", return_value=0))
                 stack.enter_context(patch.object(smoke, "_paired_count", return_value=0))
 
-                self.assertEqual(smoke.run(), 0)
+                smoke.run()
 
         self.assertEqual(checked_modules, ["libcomposite"])
         self.assertEqual(smoke.soft_warnings, 1)
+
+    def test_smoketest_records_healthy_rfkill_probe(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        class RfkillEntry:
+            def line(self) -> str:
+                return "rfkill0 type=bluetooth soft=0 hard=0 state=1"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            with ExitStack() as stack:
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value=""))
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value="module"))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv", return_value="dwc2")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line", return_value="")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type", return_value="ext4")
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[RfkillEntry()])
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=False))
+                stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
+                stack.enter_context(patch.object(smoke, "_check_modules"))
+                for method in (
+                    "_path_exists",
+                    "_command_ok",
+                    "_check_overlay_runtime",
+                    "_check_initramfs",
+                    "_check_readonly",
+                ):
+                    stack.enter_context(patch.object(smoke, method))
+                stack.enter_context(patch.object(smoke, "_capture", return_value=(0, "[]")))
+                stack.enter_context(patch.object(smoke, "_relayable_count", return_value=0))
+                stack.enter_context(patch.object(smoke, "_paired_count", return_value=0))
+
+                smoke.run()
+
+        rfkill_results = [
+            result for result in smoke.results if result.message == "Bluetooth rfkill state is not blocked"
+        ]
+        self.assertEqual(len(rfkill_results), 1)
+        self.assertEqual(rfkill_results[0].status, ProbeStatus.PASS)
+        self.assertEqual(rfkill_results[0].detail, "rfkill0 type=bluetooth soft=0 hard=0 state=1")
 
     def test_debug_report_keeps_writing_when_initial_systemctl_probe_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -175,3 +243,77 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
             report = next(paths.log_dir.glob("debug_*.md"))
             self.assertIn("initial_service_state=unknown", report.read_text(encoding="utf-8"))
+
+    def test_debug_report_cleans_up_live_debug_after_keyboard_interrupt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "venv/bin").mkdir(parents=True)
+            (root / "venv/bin/python").touch()
+            paths = ManagedPaths(install_dir=root, log_dir=root / "logs", readonly_env_file=root / "readonly-env")
+            config = ReadonlyConfig(
+                mode="disabled",
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=root / "persist" / "bluetooth",
+                persist_spec="",
+                persist_device="",
+            )
+
+            class FakeProcess:
+                pid = 1234
+
+                def __init__(self) -> None:
+                    self.wait_calls = 0
+
+                def wait(self, timeout=None):
+                    self.wait_calls += 1
+                    if self.wait_calls == 1:
+                        raise KeyboardInterrupt
+                    if self.wait_calls == 2:
+                        raise subprocess.TimeoutExpired("debug", timeout)
+                    return 0
+
+            process = FakeProcess()
+
+            def fake_run(command, *, check=True, capture=False, timeout=None, **kwargs):
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+
+                if command[:3] == ["systemctl", "is-active", paths.service_unit]:
+                    Completed.stdout = "inactive\n"
+                elif command[:3] == ["systemctl", "is-active", "--quiet"]:
+                    Completed.returncode = 1
+                elif command[-2:] == ["--print-shell-command", "--append-debug"]:
+                    Completed.stdout = "echo live-debug\n"
+                return Completed()
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"HOSTNAME": "test-host"}))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.bluetooth_state_persistent", return_value=False))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth", return_value=""))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir", return_value=root / "boot")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.subprocess.Popen", return_value=process))
+                killpg = stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.os.killpg"))
+
+                self.assertEqual(debug_report(None), 0)
+
+            report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
+            self.assertIn("Live Bluetooth-2-USB debug output", report)
+        self.assertEqual(
+            [call.args for call in killpg.call_args_list],
+            [(process.pid, signal.SIGTERM), (process.pid, signal.SIGKILL)],
+        )

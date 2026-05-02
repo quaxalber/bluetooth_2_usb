@@ -15,7 +15,10 @@ def overlay_status() -> str:
     if shutil.which("raspi-config") is None:
         return "unknown"
     for command in (["raspi-config", "nonint", "get_overlay_now"], ["raspi-config", "nonint", "get_overlay_conf"]):
-        completed = run(command, check=False, capture=True)
+        try:
+            completed = run(command, check=False, capture=True)
+        except (OpsError, OSError):
+            return "unknown"
         if completed.returncode == 0:
             return _overlay_state_from_code(completed.stdout.strip())
     return "unknown"
@@ -24,7 +27,10 @@ def overlay_status() -> str:
 def overlay_configured_status() -> str:
     if shutil.which("raspi-config") is None:
         return "unknown"
-    completed = run(["raspi-config", "nonint", "get_overlay_conf"], check=False, capture=True)
+    try:
+        completed = run(["raspi-config", "nonint", "get_overlay_conf"], check=False, capture=True)
+    except (OpsError, OSError):
+        return "unknown"
     if completed.returncode != 0:
         return "unknown"
     return _overlay_state_from_code(completed.stdout.strip())
@@ -40,7 +46,10 @@ def _overlay_state_from_code(raw: str) -> str:
 
 
 def package_status(package: str) -> str:
-    completed = run(["dpkg-query", "-W", "-f=${Status}", package], check=False, capture=True)
+    try:
+        completed = run(["dpkg-query", "-W", "-f=${Status}", package], check=False, capture=True)
+    except (OpsError, OSError):
+        return ""
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 

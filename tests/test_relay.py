@@ -359,6 +359,19 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(input_device.ungrab_calls, 0)
         self.assertEqual(input_device.close_calls, 0)
 
+    async def test_unexpected_ungrab_error_preserves_grab_tracking_for_retry(self) -> None:
+        gate = _active_gate()
+        input_device = _FakeGrabInputDevice(ungrab_errno=errno.EIO)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+
+        async with relay:
+            with self.assertLogs("bluetooth_2_usb", level="WARNING"):
+                gate.set_user_enabled(False)
+            gate.set_user_enabled(True)
+
+        self.assertEqual(input_device.grab_calls, 1)
+        self.assertEqual(input_device.ungrab_calls, 2)
+
     async def test_aexit_does_not_release_shared_gadget_state(self) -> None:
         gate = _active_gate()
         hid_gadgets = _FakeHidGadgets()

@@ -108,10 +108,14 @@ class SmokeTest:
         self.record_bool(btmgmt[0] == 0, "btmgmt info succeeded", "btmgmt info failed", btmgmt[1])
         entries = bluetooth_rfkill_entries()
         if entries:
+            detail = "\n".join(entry.line() for entry in entries)
             if bluetooth_rfkill_blocked():
                 self.warn_fail("Bluetooth rfkill is blocking the controller")
-                print("\n".join(entry.line() for entry in entries))
+                print(detail)
             else:
+                self.record_bool(
+                    True, "Bluetooth rfkill state is not blocked", "Bluetooth rfkill is blocking the controller", detail
+                )
                 ok("Bluetooth rfkill state is not blocked")
         else:
             self.soft_warn("No bluetooth rfkill entries found")
@@ -309,13 +313,13 @@ class SmokeTest:
 
     def record_bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
         if condition:
-            self.pass_probe(success)
+            self.pass_probe(success, detail)
         else:
             self.warn_fail(failure, detail)
 
-    def pass_probe(self, message: str) -> None:
+    def pass_probe(self, message: str, detail: str = "") -> None:
         ok(message)
-        self.results.append(ProbeResult(ProbeStatus.PASS, message))
+        self.results.append(ProbeResult(ProbeStatus.PASS, message, detail))
 
     def soft_warn(self, message: str) -> None:
         warn(message)
