@@ -11,7 +11,12 @@ from .. import boot_config
 from ..bluetooth import rfkill_list_bluetooth
 from ..commands import OpsError, ok, output, run, timestamp
 from ..paths import PATHS
-from ..readonly import bluetooth_state_persistent, load_readonly_config, overlay_status, readonly_mode
+from ..readonly import (
+    bluetooth_state_persistent,
+    load_readonly_config,
+    overlay_status,
+    readonly_mode,
+)
 from .redaction import redact
 
 
@@ -34,7 +39,11 @@ def debug_report(duration: int | None) -> int:
         try:
             completed = run(command, check=False, capture=True, timeout=timeout)
             text = completed.stdout + completed.stderr
-            suffix = "" if completed.returncode == 0 else f"\n[command exited with status {completed.returncode}]"
+            suffix = (
+                ""
+                if completed.returncode == 0
+                else f"\n[command exited with status {completed.returncode}]"
+            )
         except (FileNotFoundError, OpsError) as exc:
             text = str(exc)
             suffix = "\n[command failed]"
@@ -45,7 +54,10 @@ def debug_report(duration: int | None) -> int:
 
     try:
         initial_service_state = (
-            run(["systemctl", "is-active", PATHS.service_unit], check=False, capture=True).stdout.strip() or "unknown"
+            run(
+                ["systemctl", "is-active", PATHS.service_unit], check=False, capture=True
+            ).stdout.strip()
+            or "unknown"
         )
     except OpsError:
         initial_service_state = "unknown"
@@ -64,9 +76,15 @@ def debug_report(duration: int | None) -> int:
     )
     command_block("Kernel", ["uname", "-a"], 5)
     command_block(
-        "OS release", ["bash", "-lc", "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"], 5
+        "OS release",
+        ["bash", "-lc", "grep -E '^(PRETTY_NAME|ID|VERSION|VERSION_CODENAME)=' /etc/os-release"],
+        5,
     )
-    command_block("Hardware model", ["bash", "-lc", "tr -d '\\0' </proc/device-tree/model 2>/dev/null || true"], 5)
+    command_block(
+        "Hardware model",
+        ["bash", "-lc", "tr -d '\\0' </proc/device-tree/model 2>/dev/null || true"],
+        5,
+    )
     command_block(
         "config.txt dwc2 lines",
         [
@@ -83,11 +101,19 @@ def debug_report(duration: int | None) -> int:
     command_block("Persistent mount target", ["findmnt", "-n", config.persist_mount], 5)
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
-    command_block("Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8)
     command_block(
-        "Recent service journal", ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "200", "--no-pager"], 8
+        "Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8
     )
-    command_block("bluetooth.service status", ["systemctl", "--no-pager", "--full", "status", "bluetooth.service"], 8)
+    command_block(
+        "Recent service journal",
+        ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "200", "--no-pager"],
+        8,
+    )
+    command_block(
+        "bluetooth.service status",
+        ["systemctl", "--no-pager", "--full", "status", "bluetooth.service"],
+        8,
+    )
     command_block(
         "Relevant kernel log lines",
         ["bash", "-lc", "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"],
@@ -99,7 +125,11 @@ def debug_report(duration: int | None) -> int:
     text_block("rfkill bluetooth state", rfkill_list_bluetooth())
     if PATHS.venv_python.exists():
         command_block("CLI version", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--version"], 5)
-        command_block("CLI environment validation", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], 5)
+        command_block(
+            "CLI environment validation",
+            [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"],
+            5,
+        )
         command_block(
             "Service settings summary",
             [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--print-summary-json"],
@@ -111,7 +141,13 @@ def debug_report(duration: int | None) -> int:
             8,
         )
         debug_command = run(
-            [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--print-shell-command", "--append-debug"],
+            [
+                PATHS.venv_python,
+                "-m",
+                "bluetooth_2_usb.service_settings",
+                "--print-shell-command",
+                "--append-debug",
+            ],
             check=False,
             capture=True,
         ).stdout.strip()
@@ -121,12 +157,18 @@ def debug_report(duration: int | None) -> int:
             + f"live_debug_command={debug_command or '<missing>'}",
         )
         if debug_command:
-            text_block("Live Bluetooth-2-USB debug output", _run_live_debug(debug_command, duration, hostname))
+            text_block(
+                "Live Bluetooth-2-USB debug output",
+                _run_live_debug(debug_command, duration, hostname),
+            )
     else:
         text_block("CLI runtime", f"missing virtualenv at {PATHS.venv_python}")
 
-    header = f"# bluetooth_2_usb debug report\n\n_Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}_\n\n"
-    report_file.write_text(header + "\n".join(body), encoding="utf-8")
+    report_file.write_text(
+        "# bluetooth_2_usb debug report\n\n"
+        f"_Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}_\n\n" + "\n".join(body),
+        encoding="utf-8",
+    )
     ok(f"Wrote: {report_file}")
     return 0
 

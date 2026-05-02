@@ -13,7 +13,11 @@ class GadgetNodes:
     consumer_node: str | None
 
     def to_dict(self) -> dict[str, str | None]:
-        return {"keyboard_node": self.keyboard_node, "mouse_node": self.mouse_node, "consumer_node": self.consumer_node}
+        return {
+            "keyboard_node": self.keyboard_node,
+            "mouse_node": self.mouse_node,
+            "consumer_node": self.consumer_node,
+        }
 
 
 @dataclass(slots=True)

@@ -94,7 +94,11 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_release_all_releases_keyboard_mouse_and_consumer(self) -> None:
         hid_gadgets = HidGadgets()
-        hid_gadgets._gadgets = {"keyboard": _FakeKeyboard(), "mouse": _FakeMouse(), "consumer": _FakeConsumer()}
+        hid_gadgets._gadgets = {
+            "keyboard": _FakeKeyboard(),
+            "mouse": _FakeMouse(),
+            "consumer": _FakeConsumer(),
+        }
 
         await hid_gadgets.release_all()
 
@@ -118,11 +122,18 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_enable_clears_published_refs_before_rebuild(self) -> None:
         hid_gadgets = HidGadgets()
-        hid_gadgets._gadgets = {"keyboard": _FakeKeyboard(), "mouse": _FakeMouse(), "consumer": _FakeConsumer()}
+        hid_gadgets._gadgets = {
+            "keyboard": _FakeKeyboard(),
+            "mouse": _FakeMouse(),
+            "consumer": _FakeConsumer(),
+        }
         hid_gadgets._enabled = True
 
         with patch.object(hid_gadgets, "_prune_stale_hidg_nodes"):
-            with patch("bluetooth_2_usb.gadgets.manager.rebuild_gadget", side_effect=RuntimeError("rebuild failed")):
+            with patch(
+                "bluetooth_2_usb.gadgets.manager.rebuild_gadget",
+                side_effect=RuntimeError("rebuild failed"),
+            ):
                 with self.assertRaisesRegex(RuntimeError, "rebuild failed"):
                     await hid_gadgets.enable()
 
@@ -132,7 +143,8 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
     async def test_expected_hidg_paths_use_declared_function_indexes(self) -> None:
         devices = (SimpleNamespace(function_index=2), SimpleNamespace(function_index=7))
         with patch(
-            "bluetooth_2_usb.gadgets.manager.build_default_layout", return_value=SimpleNamespace(devices=devices)
+            "bluetooth_2_usb.gadgets.manager.build_default_layout",
+            return_value=SimpleNamespace(devices=devices),
         ):
             paths = HidGadgets()._expected_hidg_paths()
 
@@ -149,7 +161,9 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(layout.devices[1].in_report_lengths), (7,))
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
         self.assertEqual(layout.devices[1].configfs_report_length, 8)
-        self.assertEqual(bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor))
+        self.assertEqual(
+            bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor)
+        )
         self.assertEqual(layout.bcd_device, "0x0205")
         self.assertEqual(layout.product_name, "USB Combo Device")
         self.assertEqual(layout.serial_number, "213374badcafe")
@@ -167,11 +181,14 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             init_calls.append(kwargs)
             if "subclass" not in kwargs or "protocol" not in kwargs:
                 raise TypeError(
-                    "Device.__init__() missing 2 required keyword-only arguments: " + "'subclass' and 'protocol'"
+                    "Device.__init__() missing 2 required keyword-only arguments: "
+                    + "'subclass' and 'protocol'"
                 )
 
         with patch.object(usb_hid.Device, "__init__", fake_device_init):
-            GadgetHidDevice.from_existing(usb_hid.Device.BOOT_KEYBOARD, function_index=0, protocol=1, subclass=1)
+            GadgetHidDevice.from_existing(
+                usb_hid.Device.BOOT_KEYBOARD, function_index=0, protocol=1, subclass=1
+            )
 
         self.assertEqual(len(init_calls), 1)
         self.assertEqual(init_calls[0]["protocol"], 1)
@@ -238,32 +255,56 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
             with patch("bluetooth_2_usb.gadgets.config.GADGET_ROOT", gadget_root):
-                with patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"):
+                with patch(
+                    "bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"
+                ):
                     with patch.object(usb_hid, "gadget_root", str(gadget_root)):
                         rebuild_gadget(layout)
 
             self.assertEqual(
-                (gadget_root / "strings/0x409/product").read_text(encoding="utf-8").strip(), "USB Combo Device"
+                (gadget_root / "strings/0x409/product").read_text(encoding="utf-8").strip(),
+                "USB Combo Device",
             )
             self.assertEqual(
-                (gadget_root / "strings/0x409/serialnumber").read_text(encoding="utf-8").strip(), "213374badcafe"
+                (gadget_root / "strings/0x409/serialnumber").read_text(encoding="utf-8").strip(),
+                "213374badcafe",
             )
-            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), "0x0205")
-            self.assertEqual((gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(), "100")
-            self.assertEqual((gadget_root / "configs/c.1/bmAttributes").read_text(encoding="utf-8").strip(), "0xa0")
             self.assertEqual(
-                (gadget_root / "configs/c.1/strings/0x409/configuration").read_text(encoding="utf-8").strip(),
+                (gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), "0x0205"
+            )
+            self.assertEqual(
+                (gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(), "100"
+            )
+            self.assertEqual(
+                (gadget_root / "configs/c.1/bmAttributes").read_text(encoding="utf-8").strip(),
+                "0xa0",
+            )
+            self.assertEqual(
+                (gadget_root / "configs/c.1/strings/0x409/configuration")
+                .read_text(encoding="utf-8")
+                .strip(),
                 "Config 1: HID relay",
             )
-            self.assertEqual((gadget_root / "max_speed").read_text(encoding="utf-8").strip(), "high-speed")
             self.assertEqual(
-                (gadget_root / "functions/hid.usb0/report_length").read_text(encoding="utf-8").strip(), "8"
+                (gadget_root / "max_speed").read_text(encoding="utf-8").strip(), "high-speed"
             )
             self.assertEqual(
-                (gadget_root / "functions/hid.usb1/report_length").read_text(encoding="utf-8").strip(), "8"
+                (gadget_root / "functions/hid.usb0/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "8",
             )
             self.assertEqual(
-                (gadget_root / "functions/hid.usb2/report_length").read_text(encoding="utf-8").strip(), "2"
+                (gadget_root / "functions/hid.usb1/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "8",
+            )
+            self.assertEqual(
+                (gadget_root / "functions/hid.usb2/report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                "2",
             )
 
     async def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:
@@ -281,7 +322,9 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             original_exists = type(keyboard_wakeup).exists
 
             with patch("bluetooth_2_usb.gadgets.config.GADGET_ROOT", gadget_root):
-                with patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"):
+                with patch(
+                    "bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"
+                ):
                     with patch.object(usb_hid, "gadget_root", str(gadget_root)):
                         with patch.object(type(keyboard_wakeup), "exists", fake_exists):
                             rebuild_gadget(layout)
@@ -319,7 +362,9 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             wakeup_on_write=True,
         )
 
-        cloned = GadgetHidDevice.from_existing(base_device, function_index=1, protocol=0, subclass=0)
+        cloned = GadgetHidDevice.from_existing(
+            base_device, function_index=1, protocol=0, subclass=0
+        )
 
         self.assertTrue(cloned.wakeup_on_write)
         self.assertEqual(cloned.configfs_report_length, 8)

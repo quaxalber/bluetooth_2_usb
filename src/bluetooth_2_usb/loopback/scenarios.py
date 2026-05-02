@@ -56,7 +56,10 @@ def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
     return names
 
 
-EVENT_CODE_NAMES = {EV_KEY: _event_code_names(("KEY_", "BTN_")), EV_REL: _event_code_names(("REL_",))}
+EVENT_CODE_NAMES = {
+    EV_KEY: _event_code_names(("KEY_", "BTN_")),
+    EV_REL: _event_code_names(("REL_",)),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +223,11 @@ SCENARIOS = {
         default_post_delay_ms=1000,
     ),
     "consumer": ScenarioDefinition(
-        name="consumer", keyboard_steps=(), mouse_rel_steps=(), mouse_button_steps=(), consumer_steps=CONSUMER_STEPS
+        name="consumer",
+        keyboard_steps=(),
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=CONSUMER_STEPS,
     ),
     "combo": ScenarioDefinition(
         name="combo",

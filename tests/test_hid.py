@@ -145,9 +145,13 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(BlockingIOError):
                 await keyboard.release(1)
 
-        self.assertEqual(keyboard_device.release.mock_calls, [call(1)] * keyboard.REPORT_WRITE_MAX_TRIES)
         self.assertEqual(
-            sleep.mock_calls, [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC)] * (keyboard.REPORT_WRITE_MAX_TRIES - 1)
+            keyboard_device.release.mock_calls,
+            [call(1)] * keyboard.REPORT_WRITE_MAX_TRIES,
+        )
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(keyboard.REPORT_WRITE_RETRY_DELAY_SEC)] * (keyboard.REPORT_WRITE_MAX_TRIES - 1),
         )
 
 
@@ -193,9 +197,13 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(BlockingIOError):
                 await consumer.release()
 
-        self.assertEqual(consumer_device.release.mock_calls, [call()] * consumer.REPORT_WRITE_MAX_TRIES)
         self.assertEqual(
-            sleep.mock_calls, [call(consumer.REPORT_WRITE_RETRY_DELAY_SEC)] * (consumer.REPORT_WRITE_MAX_TRIES - 1)
+            consumer_device.release.mock_calls,
+            [call()] * consumer.REPORT_WRITE_MAX_TRIES,
+        )
+        self.assertEqual(
+            sleep.mock_calls,
+            [call(consumer.REPORT_WRITE_RETRY_DELAY_SEC)] * (consumer.REPORT_WRITE_MAX_TRIES - 1),
         )
 
 
@@ -219,7 +227,11 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             device.sent,
-            [bytes([mouse.LEFT_BUTTON, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0])],
+            [
+                bytes([mouse.LEFT_BUTTON, 0, 0, 0, 0, 0, 0]),
+                bytes([0, 0, 0, 0, 0, 0, 0]),
+                bytes([0, 0, 0, 0, 0, 0, 0]),
+            ],
         )
         sleep.assert_not_called()
 
@@ -254,7 +266,10 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             device.sent,
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]), bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+            [
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]),
+            ],
         )
 
     async def test_move_accumulates_fractional_wheel_across_calls(self) -> None:
@@ -274,7 +289,10 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             device.sent,
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]), bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00])],
+            [
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]),
+            ],
         )
 
     async def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
@@ -291,7 +309,10 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             device.sent,
-            [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x7F, 0x81]), bytes([0x00, 0x41, 0x1C, 0xBF, 0xE3, 0x49, 0xB7])],
+            [
+                bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x7F, 0x81]),
+                bytes([0x00, 0x41, 0x1C, 0xBF, 0xE3, 0x49, 0xB7]),
+            ],
         )
 
     async def test_move_chunks_large_reports_without_sleep(self) -> None:
@@ -364,7 +385,8 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
         self.assertEqual(device.attempts, [expected_report] * mouse.REPORT_WRITE_MAX_TRIES)
         self.assertEqual(
-            sleep.mock_calls, [call(mouse.REPORT_WRITE_RETRY_DELAY_SEC)] * (mouse.REPORT_WRITE_MAX_TRIES - 1)
+            sleep.mock_calls,
+            [call(mouse.REPORT_WRITE_RETRY_DELAY_SEC)] * (mouse.REPORT_WRITE_MAX_TRIES - 1),
         )
 
     async def test_move_debug_logs_reports_sent_to_gadget(self) -> None:
@@ -409,7 +431,10 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             device.sent,
-            [bytes([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            [
+                bytes([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+                bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            ],
         )
 
 
@@ -418,7 +443,9 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
-        await dispatcher._dispatch_key_event(SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0))
+        await dispatcher._dispatch_key_event(
+            SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0)
+        )
 
         self.assertEqual(hid_gadgets.consumer.release_calls, 1)
         self.assertEqual(hid_gadgets.mouse.releases, [])
@@ -428,7 +455,9 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         raw_event = object()
         categorized = _TestSynEvent()
 
-        with patch("bluetooth_2_usb.hid.dispatch.categorize", return_value=categorized) as categorize:
+        with patch(
+            "bluetooth_2_usb.hid.dispatch.categorize", return_value=categorized
+        ) as categorize:
             await dispatcher.dispatch(raw_event)
 
         categorize.assert_called_once_with(raw_event)

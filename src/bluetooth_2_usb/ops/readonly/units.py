@@ -95,7 +95,9 @@ def remove_bluetooth_persist_dropin() -> None:
 
 
 def persist_spec_from_device(device: str) -> str:
-    uuid = run(["blkid", "-s", "UUID", "-o", "value", device], check=False, capture=True).stdout.strip()
+    uuid = run(
+        ["blkid", "-s", "UUID", "-o", "value", device], check=False, capture=True
+    ).stdout.strip()
     if not uuid:
         fail(f"Could not determine UUID for {device}")
     return f"/dev/disk/by-uuid/{uuid}"

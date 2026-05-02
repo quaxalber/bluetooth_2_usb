@@ -13,17 +13,24 @@ from .constants import (
 )
 from .result import LoopbackResult
 from .scenarios import SCENARIO_NAMES
-from .session import LOOPBACK_LOCK_PATH, LoopbackBusyError, LoopbackInterrupted, loopback_session
+from .session import (
+    LOOPBACK_LOCK_PATH,
+    LoopbackBusyError,
+    LoopbackInterrupted,
+    loopback_session,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="bluetooth_2_usb loopback", description="Loopback validation for Bluetooth-2-USB relay testing."
+        prog="bluetooth_2_usb loopback",
+        description="Loopback validation for Bluetooth-2-USB relay testing.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inject = subparsers.add_parser(
-        "inject", help="Create virtual input devices on the Pi and inject a deterministic test sequence."
+        "inject",
+        help="Create virtual input devices on the Pi and inject a deterministic test sequence.",
     )
     inject.add_argument(
         "--scenario",
@@ -38,7 +45,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Delay after virtual device creation before injection. Default: 1000",
     )
     inject.add_argument(
-        "--event-gap-ms", type=int, default=None, help="Delay between emitted events. Default: scenario-specific"
+        "--event-gap-ms",
+        type=int,
+        default=None,
+        help="Delay between emitted events. Default: scenario-specific",
     )
     inject.add_argument(
         "--post-delay-ms",
@@ -52,31 +62,51 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Virtual keyboard name. Default: {DEFAULT_KEYBOARD_NAME}",
     )
     inject.add_argument(
-        "--mouse-name", default=DEFAULT_MOUSE_NAME, help=f"Virtual mouse name. Default: {DEFAULT_MOUSE_NAME}"
+        "--mouse-name",
+        default=DEFAULT_MOUSE_NAME,
+        help=f"Virtual mouse name. Default: {DEFAULT_MOUSE_NAME}",
     )
     inject.add_argument(
         "--consumer-name",
         default=DEFAULT_CONSUMER_NAME,
         help=f"Virtual consumer-control device name. Default: {DEFAULT_CONSUMER_NAME}",
     )
-    inject.add_argument("--output", choices=["text", "json"], default="text", help="Output format. Default: text")
+    inject.add_argument(
+        "--output", choices=["text", "json"], default="text", help="Output format. Default: text"
+    )
 
-    capture = subparsers.add_parser("capture", help="Capture relay reports from the host-side gadget HID devices.")
-    capture.add_argument(
-        "--scenario", choices=SCENARIO_NAMES, default="combo", help="Expected input scenario. Default: combo"
+    capture = subparsers.add_parser(
+        "capture", help="Capture relay reports from the host-side gadget HID devices."
     )
     capture.add_argument(
-        "--timeout-sec", type=float, default=None, help="Timeout waiting for relay events. Default: scenario-specific"
+        "--scenario",
+        choices=SCENARIO_NAMES,
+        default="combo",
+        help="Expected input scenario. Default: combo",
+    )
+    capture.add_argument(
+        "--timeout-sec",
+        type=float,
+        default=None,
+        help="Timeout waiting for relay events. Default: scenario-specific",
     )
     capture.add_argument(
         "--device-substring",
         default=DEFAULT_DEVICE_SUBSTRING,
         help=f"Substring used to detect gadget HID devices. Default: {DEFAULT_DEVICE_SUBSTRING}",
     )
-    capture.add_argument("--keyboard-node", default=None, help="Explicit keyboard HID device path override.")
-    capture.add_argument("--mouse-node", default=None, help="Explicit mouse HID device path override.")
-    capture.add_argument("--consumer-node", default=None, help="Explicit consumer-control HID device path override.")
-    capture.add_argument("--output", choices=["text", "json"], default="text", help="Output format. Default: text")
+    capture.add_argument(
+        "--keyboard-node", default=None, help="Explicit keyboard HID device path override."
+    )
+    capture.add_argument(
+        "--mouse-node", default=None, help="Explicit mouse HID device path override."
+    )
+    capture.add_argument(
+        "--consumer-node", default=None, help="Explicit consumer-control HID device path override."
+    )
+    capture.add_argument(
+        "--output", choices=["text", "json"], default="text", help="Output format. Default: text"
+    )
 
     return parser
 

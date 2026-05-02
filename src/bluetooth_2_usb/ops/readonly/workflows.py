@@ -38,10 +38,16 @@ from .units import (
 def setup_persistent_bluetooth_state(device: str) -> None:
     require_commands(["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"])
     if not machine_id_valid():
-        fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
-    detected_type = run(["blkid", "-s", "TYPE", "-o", "value", device], check=False, capture=True).stdout.strip()
+        fail(
+            "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
+        )
+    detected_type = run(
+        ["blkid", "-s", "TYPE", "-o", "value", device], check=False, capture=True
+    ).stdout.strip()
     if not detected_type:
-        fail(f"No filesystem detected on {device}. Create an ext4 filesystem first, then rerun this command.")
+        fail(
+            f"No filesystem detected on {device}. Create an ext4 filesystem first, then rerun this command."
+        )
     if detected_type != "ext4":
         fail(f"Expected ext4 on {device}, got {detected_type}")
 
@@ -77,7 +83,9 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         _seed_bluetooth_state(persist_bluetooth_dir)
 
         if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode == 0:
-            current_source = output(["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"])
+            current_source = output(
+                ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"]
+            )
             if current_source != str(persist_bluetooth_dir):
                 run(["umount", "/var/lib/bluetooth"])
         Path("/var/lib/bluetooth").mkdir(parents=True, exist_ok=True)
@@ -98,15 +106,21 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
         return
     lock_dir = persist_bluetooth_dir / ".b2u-seed.lock"
     marker = persist_bluetooth_dir / ".b2u-seeded"
-    temp_dir = persist_bluetooth_dir.with_name(f"{persist_bluetooth_dir.name}.tmp-{uuid.uuid4().hex}")
-    backup_dir = persist_bluetooth_dir.with_name(f"{persist_bluetooth_dir.name}.backup-{uuid.uuid4().hex}")
+    temp_dir = persist_bluetooth_dir.with_name(
+        f"{persist_bluetooth_dir.name}.tmp-{uuid.uuid4().hex}"
+    )
+    backup_dir = persist_bluetooth_dir.with_name(
+        f"{persist_bluetooth_dir.name}.backup-{uuid.uuid4().hex}"
+    )
     try:
         lock_dir.mkdir()
     except OSError:
         fail(f"Failed to acquire seed lock {lock_dir} for {persist_bluetooth_dir}")
     try:
         ignored = {".b2u-seed.lock", ".b2u-seeded", ".b2u-persistent-state"}
-        if not marker.exists() and not any(child.name not in ignored for child in persist_bluetooth_dir.iterdir()):
+        if not marker.exists() and not any(
+            child.name not in ignored for child in persist_bluetooth_dir.iterdir()
+        ):
             temp_dir.mkdir(parents=True)
             for child in source.iterdir():
                 destination = temp_dir / child.name
@@ -139,11 +153,15 @@ def enable_readonly() -> None:
     require_commands(["dpkg-query", "raspi-config"])
     config = load_readonly_config()
     if not machine_id_valid():
-        fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
+        fail(
+            "/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id."
+        )
     if not config.persist_spec:
         fail("Run bluetooth_2_usb readonly setup --device /dev/... before enabling read-only mode.")
     if not bluetooth_state_persistent(config):
-        fail("Persistent Bluetooth state is not active. Run bluetooth_2_usb readonly setup --device /dev/... first.")
+        fail(
+            "Persistent Bluetooth state is not active. Run bluetooth_2_usb readonly setup --device /dev/... first."
+        )
     if not readonly_stack_packages_bootstrap_safe():
         warn("OverlayFS package state is incomplete:")
         print(readonly_stack_package_report())
@@ -188,7 +206,9 @@ def enable_readonly() -> None:
                 else ""
             )
             if overlay_configured_status() == "enabled":
-                warn("OverlayFS is configured for the next boot, but the live root is still writable until reboot.")
+                warn(
+                    "OverlayFS is configured for the next boot, but the live root is still writable until reboot."
+                )
             elif re.search(r"(^| )overlayroot=tmpfs($| )", cmdline):
                 warn(
                     f"OverlayFS enablement is pending reboot; {boot_cmdline_path()} contains overlayroot=tmpfs "
@@ -220,4 +240,6 @@ def disable_readonly() -> None:
     config.mode = "disabled"
     write_readonly_config(config)
     ok("OverlayFS has been disabled")
-    warn("Persistent Bluetooth mount configuration was kept. Reboot to return to a writable root filesystem.")
+    warn(
+        "Persistent Bluetooth mount configuration was kept. Reboot to return to a writable root filesystem."
+    )

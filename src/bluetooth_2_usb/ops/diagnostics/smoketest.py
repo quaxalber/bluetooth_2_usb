@@ -35,7 +35,9 @@ class SmokeTest:
         modules_load_value = _first_modules_load(cmdline_txt)
         dwc2_mode = _try(boot_config.dwc2_mode, "unknown")
         required_modules = (
-            boot_config.required_boot_modules_csv(dwc2_mode).split(",") if dwc2_mode != "unknown" else ["libcomposite"]
+            boot_config.required_boot_modules_csv(dwc2_mode).split(",")
+            if dwc2_mode != "unknown"
+            else ["libcomposite"]
         )
         expected_overlay = _try(boot_config.expected_dwc2_overlay_line)
         root_filesystem_type = _try(boot_config.current_root_filesystem_type, "unknown")
@@ -45,7 +47,9 @@ class SmokeTest:
         bluetooth_persistent = bluetooth_state_persistent()
         expected_initramfs_file = boot_config.expected_boot_initramfs_file()
         expected_initramfs_path = (
-            str(boot_config.boot_initramfs_target_path(expected_initramfs_file)) if expected_initramfs_file else ""
+            str(boot_config.boot_initramfs_target_path(expected_initramfs_file))
+            if expected_initramfs_file
+            else ""
         )
 
         self._check_boot_overlay(config_txt, expected_overlay)
@@ -55,7 +59,9 @@ class SmokeTest:
                 "Could not determine whether dwc2 is built-in or modular; boot module validation is heuristic"
             )
         self._path_exists(
-            Path("/sys/kernel/config/usb_gadget"), "configfs gadget path is present", "configfs gadget path is missing"
+            Path("/sys/kernel/config/usb_gadget"),
+            "configfs gadget path is present",
+            "configfs gadget path is missing",
         )
         udc_list = " ".join(path.name for path in Path("/sys/class/udc").glob("*"))
         self._bool(bool(udc_list), f"UDC is present ({udc_list})", "No UDC detected")
@@ -70,9 +76,15 @@ class SmokeTest:
             f"{PATHS.service_unit} is not active",
         )
         venv_present = PATHS.venv_python.is_file()
-        self._path_exists(PATHS.venv_python, "Virtualenv interpreter is present", "Virtualenv interpreter is missing")
+        self._path_exists(
+            PATHS.venv_python,
+            "Virtualenv interpreter is present",
+            "Virtualenv interpreter is missing",
+        )
         if venv_present:
-            validate_log = self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"])
+            validate_log = self._capture(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"]
+            )
             self._bool(
                 validate_log[0] == 0,
                 "CLI environment validation passed",
@@ -116,18 +128,24 @@ class SmokeTest:
         else:
             self.soft_warn("No bluetooth rfkill entries found")
         inventory = (
-            self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"])
+            self._capture(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"]
+            )
             if venv_present
             else (127, missing_venv)
         )
         relayable_count = self._relayable_count(inventory)
         paired_count = self._paired_count()
         self._path_exists(
-            Path("/var/lib/bluetooth"), "Bluetooth state directory exists", "Bluetooth state directory is missing"
+            Path("/var/lib/bluetooth"),
+            "Bluetooth state directory exists",
+            "Bluetooth state directory is missing",
         )
         self._check_overlay_runtime(overlay, root_overlay_active, post_reboot)
         self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
-        self._check_readonly(readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot)
+        self._check_readonly(
+            readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot
+        )
 
         self.summary = {
             "Boot config": str(config_txt),
@@ -176,7 +194,8 @@ class SmokeTest:
             return
         if (
             config_txt.is_file()
-            and expected_overlay in config_txt.read_text(encoding="utf-8", errors="replace").splitlines()
+            and expected_overlay
+            in config_txt.read_text(encoding="utf-8", errors="replace").splitlines()
         ):
             ok(f"config.txt contains expected overlay ({expected_overlay})")
         else:
@@ -192,7 +211,9 @@ class SmokeTest:
         else:
             ok(f"cmdline.txt contains required modules-load ({token or '<missing>'})")
 
-    def _check_overlay_runtime(self, overlay: str, root_overlay_active: str, post_reboot: bool) -> None:
+    def _check_overlay_runtime(
+        self, overlay: str, root_overlay_active: str, post_reboot: bool
+    ) -> None:
         if overlay in {"enabled", "disabled"}:
             ok(f"OverlayFS boot configuration is {overlay}")
         else:
@@ -221,8 +242,12 @@ class SmokeTest:
         else:
             ok("Root overlay is inactive")
 
-    def _check_initramfs(self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str) -> None:
-        should_require = overlay == "enabled" or root_overlay_active == "yes" or readonly == "persistent"
+    def _check_initramfs(
+        self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str
+    ) -> None:
+        should_require = (
+            overlay == "enabled" or root_overlay_active == "yes" or readonly == "persistent"
+        )
         if not expected_path:
             if should_require:
                 self.warn_fail("Boot initramfs target could not be determined")
@@ -237,7 +262,12 @@ class SmokeTest:
             self.soft_warn(f"Boot initramfs is not present yet ({path})")
 
     def _check_readonly(
-        self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_persistent: bool, post_reboot: bool
+        self,
+        readonly: str,
+        overlay: str,
+        root_overlay_active: str,
+        bluetooth_persistent: bool,
+        post_reboot: bool,
     ) -> None:
         if bluetooth_persistent:
             ok(
@@ -356,10 +386,16 @@ class SmokeTest:
         print(self._capture(["findmnt", "-n", "-T", "/"])[1] or "<no output>")
         print(self._capture(["findmnt", "-n", "-T", "/var/lib/bluetooth"])[1] or "<no output>")
         print("\n## Service status")
-        print(self._capture(["systemctl", "--no-pager", "--full", "status", PATHS.service_unit])[1] or "<no output>")
+        print(
+            self._capture(["systemctl", "--no-pager", "--full", "status", PATHS.service_unit])[1]
+            or "<no output>"
+        )
         print("\n## Journal")
         print(
-            self._capture(["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"])[1] or "<no output>"
+            self._capture(
+                ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"]
+            )[1]
+            or "<no output>"
         )
 
 

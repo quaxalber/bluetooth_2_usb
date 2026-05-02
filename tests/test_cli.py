@@ -16,7 +16,8 @@ class CliTest(unittest.TestCase):
 
     def test_list_devices_error_returns_environment_exit(self) -> None:
         with patch(
-            "bluetooth_2_usb.inputs.inventory.describe_input_devices", side_effect=DeviceEnumerationError("denied")
+            "bluetooth_2_usb.inputs.inventory.describe_input_devices",
+            side_effect=DeviceEnumerationError("denied"),
         ):
             exit_code = cli.run(["--list_devices"])
 
@@ -56,7 +57,8 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(exit_code, cli.EXIT_OK)
         self.assertEqual(
-            json.loads(stdout.getvalue()), {"configfs": True, "ok": True, "udc_path": None, "udc_present": True}
+            json.loads(stdout.getvalue()),
+            {"configfs": True, "ok": True, "udc_path": None, "udc_present": True},
         )
 
     def test_list_devices_json_output(self) -> None:

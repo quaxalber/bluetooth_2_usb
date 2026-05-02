@@ -20,7 +20,9 @@ class ExtendedMouseButtonMappingTest(unittest.TestCase):
 
         for scancode, button in expected_buttons.items():
             with self.subTest(scancode=scancode):
-                hid_code, hid_name = evdev_to_usb_hid(SimpleNamespace(scancode=scancode, keystate=1))
+                hid_code, hid_name = evdev_to_usb_hid(
+                    SimpleNamespace(scancode=scancode, keystate=1)
+                )
 
                 self.assertEqual(hid_code, button)
                 self.assertIsNotNone(hid_name)

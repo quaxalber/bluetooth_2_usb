@@ -43,7 +43,11 @@ def root_overlay_state() -> str:
 
 
 def root_overlay_report() -> str:
-    completed = run(["findmnt", "-n", "-o", "TARGET,SOURCE,FSTYPE,OPTIONS", "--target", "/"], check=False, capture=True)
+    completed = run(
+        ["findmnt", "-n", "-o", "TARGET,SOURCE,FSTYPE,OPTIONS", "--target", "/"],
+        check=False,
+        capture=True,
+    )
     return completed.stdout.strip()
 
 
@@ -113,9 +117,15 @@ def effective_arm_64bit() -> str:
 def default_kernel_image(model: str | None = None) -> str:
     resolved_model = model if model is not None else _try_current_pi_model()
     arm_64bit = effective_arm_64bit()
-    if any(value in resolved_model for value in ("Raspberry Pi 500", "Raspberry Pi 5", "Compute Module 5")):
+    if any(
+        value in resolved_model
+        for value in ("Raspberry Pi 500", "Raspberry Pi 5", "Compute Module 5")
+    ):
         return "kernel_2712.img"
-    if any(value in resolved_model for value in ("Raspberry Pi 400", "Raspberry Pi 4", "Compute Module 4")):
+    if any(
+        value in resolved_model
+        for value in ("Raspberry Pi 400", "Raspberry Pi 4", "Compute Module 4")
+    ):
         return "kernel8.img" if arm_64bit == "1" else "kernel7l.img"
     if any(
         value in resolved_model
@@ -126,7 +136,11 @@ def default_kernel_image(model: str | None = None) -> str:
         return "kernel8.img"
     if platform.machine() == "armv7l":
         cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
-        return "kernel7l.img" if re.search(r"^Features.*\blpae\b", cpuinfo, re.MULTILINE) else "kernel7.img"
+        return (
+            "kernel7l.img"
+            if re.search(r"^Features.*\blpae\b", cpuinfo, re.MULTILINE)
+            else "kernel7.img"
+        )
     return "kernel.img"
 
 
@@ -218,14 +232,19 @@ def find_versioned_initramfs_image(kernel_release: str | None = None) -> Path | 
 
 def ensure_initramfs_tools_ready() -> None:
     require_commands(["install", "python3", "update-initramfs"])
-    if not any(Path(path, "mkinitramfs").exists() for path in os.environ.get("PATH", "").split(os.pathsep)):
+    if not any(
+        Path(path, "mkinitramfs").exists() for path in os.environ.get("PATH", "").split(os.pathsep)
+    ):
         fail("mkinitramfs is missing. Install initramfs-tools before enabling read-only mode.")
 
 
 def ensure_kernel_artifacts_present_for_initramfs(kernel_release: str) -> None:
     if not Path(f"/lib/modules/{kernel_release}").is_dir():
         fail(f"Kernel modules for {kernel_release} are missing at /lib/modules/{kernel_release}.")
-    if not Path(f"/boot/config-{kernel_release}").is_file() and not Path("/proc/config.gz").is_file():
+    if (
+        not Path(f"/boot/config-{kernel_release}").is_file()
+        and not Path("/proc/config.gz").is_file()
+    ):
         fail(
             f"Kernel configuration for {kernel_release} is unavailable. "
             + f"Expected /boot/config-{kernel_release} or /proc/config.gz."
@@ -249,13 +268,17 @@ def build_or_refresh_initramfs_for_running_kernel(kernel_release: str, target_pa
     if existing and existing == target_path and target_path.is_file():
         backup_file(target_path)
     if existing:
-        if not run_update_initramfs("-u", kernel_release) and not run_update_initramfs("-c", kernel_release):
+        if not run_update_initramfs("-u", kernel_release) and not run_update_initramfs(
+            "-c", kernel_release
+        ):
             fail(f"update-initramfs failed for kernel {kernel_release}.")
     elif not run_update_initramfs("-c", kernel_release):
         fail(f"update-initramfs failed for kernel {kernel_release}.")
     image = find_versioned_initramfs_image(kernel_release)
     if image is None:
-        fail(f"update-initramfs completed, but no initramfs image was found for kernel {kernel_release}.")
+        fail(
+            f"update-initramfs completed, but no initramfs image was found for kernel {kernel_release}."
+        )
     return image
 
 
@@ -300,7 +323,9 @@ def kernel_config_snippet() -> str:
     else:
         return ""
     return "\n".join(
-        line for line in text.splitlines() if line.startswith(("CONFIG_USB_DWC2=", "CONFIG_USB_LIBCOMPOSITE="))
+        line
+        for line in text.splitlines()
+        if line.startswith(("CONFIG_USB_DWC2=", "CONFIG_USB_LIBCOMPOSITE="))
     )
 
 

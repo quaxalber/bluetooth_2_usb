@@ -207,9 +207,13 @@ class _TestInputDevice:
 class ShortcutTogglerTest(unittest.TestCase):
     def test_shortcut_events_are_suppressed_and_toggle_relays(self) -> None:
         gate = RelayGate()
-        toggler = ShortcutToggler(shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"}, relay_gate=gate)
+        toggler = ShortcutToggler(
+            shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"}, relay_gate=gate
+        )
 
-        make_event = lambda scancode, keystate: SimpleNamespace(scancode=scancode, keystate=keystate)
+        make_event = lambda scancode, keystate: SimpleNamespace(
+            scancode=scancode, keystate=keystate
+        )
 
         self.assertFalse(toggler.handle_key_event(make_event(29, 1)))
         self.assertFalse(toggler.handle_key_event(make_event(42, 1)))
@@ -226,7 +230,9 @@ class ShortcutTogglerTest(unittest.TestCase):
 
     def test_toggle_only_changes_user_enabled_state(self) -> None:
         gate = _active_gate()
-        toggler = ShortcutToggler(shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"}, relay_gate=gate)
+        toggler = ShortcutToggler(
+            shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"}, relay_gate=gate
+        )
 
         toggler.toggle_relaying()
 
@@ -374,9 +380,19 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         toggler = ShortcutToggler(shortcut_keys={"KEY_F12"}, relay_gate=gate)
         input_device = _FakeGrabInputDevice(
-            [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(88, _TestKeyEvent.key_down), _TestSynEvent()]
+            [
+                _TestRelEvent(ecodes.REL_X, 5),
+                _TestKeyEvent(88, _TestKeyEvent.key_down),
+                _TestSynEvent(),
+            ]
         )
-        relay = InputRelay(input_device, hid_gadgets, grab_device=True, relay_gate=gate, shortcut_toggler=toggler)
+        relay = InputRelay(
+            input_device,
+            hid_gadgets,
+            grab_device=True,
+            relay_gate=gate,
+            shortcut_toggler=toggler,
+        )
 
         async with relay:
             await relay.async_relay_events_loop()
@@ -419,7 +435,11 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice([], removal_errno=errno.ENODEV)
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        with patch.object(relay._dispatcher, "flush", side_effect=OSError(errno.ENODEV, "No such device")):
+        with patch.object(
+            relay._dispatcher,
+            "flush",
+            side_effect=OSError(errno.ENODEV, "No such device"),
+        ):
             async with relay:
                 await relay.async_relay_events_loop()
 
@@ -428,7 +448,11 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice([])
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        with patch.object(relay._dispatcher, "flush", side_effect=OSError(errno.ENODEV, "No such device")):
+        with patch.object(
+            relay._dispatcher,
+            "flush",
+            side_effect=OSError(errno.ENODEV, "No such device"),
+        ):
             async with relay:
                 with self.assertRaises(OSError):
                     await relay.async_relay_events_loop()
@@ -451,7 +475,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(_FakeHidGadgets(), gate)
         event = _TestKeyEvent(183, _TestKeyEvent.key_down)
 
-        with patch.object(dispatcher, "_dispatch_key_event", side_effect=BlockingIOError()) as dispatch:
+        with patch.object(
+            dispatcher, "_dispatch_key_event", side_effect=BlockingIOError()
+        ) as dispatch:
             await dispatcher._process_key_event(event)
 
         dispatch.assert_called_once_with(event)
@@ -463,7 +489,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
         relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
 
-        with patch.object(relay._dispatcher, "_dispatch_key_event", side_effect=RuntimeError("dispatch bug")):
+        with patch.object(
+            relay._dispatcher, "_dispatch_key_event", side_effect=RuntimeError("dispatch bug")
+        ):
             async with relay:
                 with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
                     await relay.async_relay_events_loop()
@@ -492,7 +520,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_pending_mouse_delta_flushes_before_later_key_event(self) -> None:
         gate = _active_gate()
-        input_device = _TestInputDevice([_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(183, _TestKeyEvent.key_down)])
+        input_device = _TestInputDevice(
+            [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(183, _TestKeyEvent.key_down)]
+        )
         hid_gadgets = _FakeHidGadgets()
         order = []
 
@@ -782,7 +812,9 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
         supervisor._state = _SupervisorState.RUNNING
         active_device = _FakeInputHandle()
         duplicate_device = _FakeInputHandle()
-        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(active_device, _FakeTaskHandle())
+        supervisor._active_relays["/dev/input/event7"] = _ActiveRelay(
+            active_device, _FakeTaskHandle()
+        )
 
         supervisor._start_open_device(duplicate_device)
 
@@ -809,7 +841,9 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
         supervisor._state = _SupervisorState.RUNNING
         device = _FakeInputHandle()
 
-        with patch("bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device) as input_device:
+        with patch(
+            "bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device
+        ) as input_device:
             asyncio.run(supervisor._run_hotplug_probe("/dev/input/event7"))
 
         input_device.assert_called_once_with("/dev/input/event7")
@@ -972,7 +1006,11 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 events: asyncio.Queue = asyncio.Queue()
                 await events.put(DeviceAdded("/dev/input/event7"))
                 async with asyncio.TaskGroup() as task_group:
-                    supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group)
+                    supervisor = _relay_supervisor(
+                        hid_gadgets=hid_gadgets,
+                        relay_gate=gate,
+                        task_group=task_group,
+                    )
                     supervisor._handle_runtime_event = Mock(side_effect=RuntimeError("boom"))
                     await supervisor.run(events)
 

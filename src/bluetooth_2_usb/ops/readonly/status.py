@@ -14,7 +14,10 @@ READONLY_PACKAGES = ("overlayroot", "cryptsetup", "cryptsetup-bin", "initramfs-t
 def overlay_status() -> str:
     if shutil.which("raspi-config") is None:
         return "unknown"
-    for command in (["raspi-config", "nonint", "get_overlay_now"], ["raspi-config", "nonint", "get_overlay_conf"]):
+    for command in (
+        ["raspi-config", "nonint", "get_overlay_now"],
+        ["raspi-config", "nonint", "get_overlay_conf"],
+    ):
         completed = run(command, check=False, capture=True)
         if completed.returncode == 0:
             return _overlay_state_from_code(completed.stdout.strip())
@@ -49,7 +52,9 @@ def readonly_stack_packages_healthy() -> bool:
 
 
 def readonly_stack_packages_bootstrap_safe() -> bool:
-    return all(package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES)
+    return all(
+        package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES
+    )
 
 
 def readonly_stack_packages_missing() -> bool:
@@ -68,7 +73,8 @@ def machine_id_valid() -> bool:
     machine_id = Path("/etc/machine-id")
     return (
         machine_id.is_file()
-        and re.fullmatch(r"[0-9a-f]{32}", machine_id.read_text(encoding="utf-8").strip()) is not None
+        and re.fullmatch(r"[0-9a-f]{32}", machine_id.read_text(encoding="utf-8").strip())
+        is not None
     )
 
 
@@ -81,13 +87,17 @@ def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
             return False
 
         mount_source = run(
-            ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"], check=False, capture=True
+            ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"],
+            check=False,
+            capture=True,
         ).stdout.strip()
         if mount_source == str(resolved.persist_bluetooth_dir):
             return True
 
         persist_mount_source = run(
-            ["findmnt", "-n", "-o", "SOURCE", "--target", resolved.persist_mount], check=False, capture=True
+            ["findmnt", "-n", "-o", "SOURCE", "--target", resolved.persist_mount],
+            check=False,
+            capture=True,
         ).stdout.strip()
         if not persist_mount_source:
             return False
@@ -132,7 +142,11 @@ def _root_filesystem_type() -> str:
 
 
 def _findmnt_value(target: str | Path, field: str) -> str:
-    completed = run(["findmnt", "-n", "-o", field, "--target", target], check=False, capture=True)
+    completed = run(
+        ["findmnt", "-n", "-o", field, "--target", target],
+        check=False,
+        capture=True,
+    )
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 

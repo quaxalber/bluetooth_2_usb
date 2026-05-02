@@ -101,7 +101,9 @@ class ServiceSettingsTest(unittest.TestCase):
 
             settings = load_service_settings(env_file)
             argv = build_runtime_argv(settings, append_debug=True)
-            command = build_runtime_shell_command("python -m bluetooth_2_usb", settings=settings, append_debug=True)
+            command = build_runtime_shell_command(
+                "python -m bluetooth_2_usb", settings=settings, append_debug=True
+            )
 
         self.assertIn("--auto_discover", argv)
         self.assertIn("--grab_devices", argv)
@@ -133,7 +135,9 @@ class ServiceSettingsTest(unittest.TestCase):
         self.assertNotIn("/tmp/udc-state", argv)
 
     def test_shell_command_emits_internal_udc_path_as_environment_assignment(self) -> None:
-        command = build_runtime_shell_command("bluetooth_2_usb", settings=ServiceSettings(udc_path="/tmp/udc-state"))
+        command = build_runtime_shell_command(
+            "bluetooth_2_usb", settings=ServiceSettings(udc_path="/tmp/udc-state")
+        )
 
         self.assertTrue(command.startswith("BLUETOOTH_2_USB_UDC_PATH=/tmp/udc-state "))
         self.assertNotIn("--udc_path", command)
@@ -159,12 +163,23 @@ class ServiceSettingsTest(unittest.TestCase):
     def test_canonicalize_service_settings_quotes_interrupt_shortcut_when_needed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
-            env_file.write_text("\n".join(["B2U_INTERRUPT_SHORTCUT='CTRL + SHIFT + F12'"]) + "\n", encoding="utf-8")
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "B2U_INTERRUPT_SHORTCUT='CTRL + SHIFT + F12'",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
             changed = canonicalize_service_settings_bools(env_file)
 
             self.assertTrue(changed)
-            self.assertIn("B2U_INTERRUPT_SHORTCUT='CTRL + SHIFT + F12'", env_file.read_text(encoding="utf-8"))
+            self.assertIn(
+                "B2U_INTERRUPT_SHORTCUT='CTRL + SHIFT + F12'",
+                env_file.read_text(encoding="utf-8"),
+            )
 
     def test_canonicalize_service_settings_bools_rewrites_bool_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

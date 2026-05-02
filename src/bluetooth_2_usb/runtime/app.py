@@ -92,10 +92,16 @@ class Runtime:
         supervisor: RelaySupervisor | None = None
         try:
             async with asyncio.TaskGroup() as task_group:
-                supervisor = self._build_supervisor(hid_gadgets, relay_gate, shortcut_toggler, task_group)
+                supervisor = self._build_supervisor(
+                    hid_gadgets, relay_gate, shortcut_toggler, task_group
+                )
                 self._supervisor = supervisor
-                event_source_task = task_group.create_task(event_source.run(), name="runtime event source")
-                supervisor_task = task_group.create_task(supervisor.run(self._events), name="relay supervisor")
+                event_source_task = task_group.create_task(
+                    event_source.run(), name="runtime event source"
+                )
+                supervisor_task = task_group.create_task(
+                    supervisor.run(self._events), name="relay supervisor"
+                )
                 done, pending = await asyncio.wait(
                     {event_source_task, supervisor_task}, return_when=asyncio.FIRST_COMPLETED
                 )
@@ -120,7 +126,9 @@ class Runtime:
             await self._wait_for_shutdown(supervisor_task, event_source_task)
 
     async def _wait_for_shutdown(
-        self, supervisor_task: asyncio.Task[None] | None, event_source_task: asyncio.Task[None] | None
+        self,
+        supervisor_task: asyncio.Task[None] | None,
+        event_source_task: asyncio.Task[None] | None,
     ) -> None:
         tasks = [task for task in (supervisor_task, event_source_task) if task]
         if not tasks:
@@ -128,11 +136,13 @@ class Runtime:
 
         try:
             await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True), timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
             )
         except TimeoutError:
             logger.warning(
-                "Runtime shutdown exceeded %.1fs; cancelling remaining tasks.", GRACEFUL_SHUTDOWN_TIMEOUT_SEC
+                "Runtime shutdown exceeded %.1fs; cancelling remaining tasks.",
+                GRACEFUL_SHUTDOWN_TIMEOUT_SEC,
             )
             for task in tasks:
                 task.cancel()
