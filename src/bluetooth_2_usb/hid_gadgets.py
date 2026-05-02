@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import stat
-import time
 from pathlib import Path
 
 from .extended_consumer_control import ExtendedConsumerControl
@@ -87,26 +87,26 @@ class HidGadgets:
             os.close(fd)
         return invalid_paths
 
-    def _validate_hidg_nodes(
+    async def _validate_hidg_nodes(
         self, timeout_sec: float | None = None, poll_interval_sec: float | None = None
     ) -> None:
         timeout_sec = self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
         poll_interval_sec = (
             self.HIDG_NODE_POLL_INTERVAL_SEC if poll_interval_sec is None else poll_interval_sec
         )
-        deadline = time.monotonic() + max(timeout_sec, 0.0)
+        deadline = asyncio.get_running_loop().time() + max(timeout_sec, 0.0)
 
         while True:
             invalid_paths = self._collect_invalid_hidg_nodes()
             if not invalid_paths:
                 return
-            if time.monotonic() >= deadline:
+            if asyncio.get_running_loop().time() >= deadline:
                 raise RuntimeError(
                     "USB HID gadget nodes are not healthy: " + ", ".join(invalid_paths)
                 )
-            time.sleep(poll_interval_sec)
+            await asyncio.sleep(poll_interval_sec)
 
-    def enable(self) -> None:
+    async def enable(self) -> None:
         """
         Disable and re-enable usb_hid devices, then store references
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
@@ -115,12 +115,12 @@ class HidGadgets:
         self._prune_stale_hidg_nodes(remove_character_devices=True)
         enabled_devices = list(rebuild_gadget(build_default_layout()))
         try:
-            self._validate_hidg_nodes()
+            await self._validate_hidg_nodes()
         except RuntimeError:
             logger.warning("Retrying HID gadget initialization after stale node validation failure")
             self._prune_stale_hidg_nodes(remove_character_devices=True)
             enabled_devices = list(rebuild_gadget(build_default_layout()))
-            self._validate_hidg_nodes()
+            await self._validate_hidg_nodes()
 
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
@@ -159,7 +159,7 @@ class HidGadgets:
         """
         return self._gadgets["consumer"]
 
-    def release_all(self) -> None:
+    async def release_all(self) -> None:
         """
         Best-effort release of any pressed/active state on all HID gadgets.
 
@@ -173,8 +173,8 @@ class HidGadgets:
             seen.add(id(gadget))
             try:
                 if hasattr(gadget, "release_all"):
-                    gadget.release_all()
+                    await gadget.release_all()
                 elif hasattr(gadget, "release"):
-                    gadget.release()
+                    await gadget.release()
             except Exception:
                 logger.debug("Ignoring %s gadget release failure", name)

@@ -39,11 +39,11 @@ handling remains predictable.
 
 ## Cable State
 
-`UdcStateChanged("configured")` marks the host side configured. Any other UDC
-state marks the host side inactive and releases current HID gadget state. User
-pause state is independent, so reconnecting the USB cable does not undo a manual
-pause. A HID `BrokenPipeError` suspends writes until a fresh configured
-transition arrives.
+`UdcStateChanged(UdcState.CONFIGURED)` marks the host side configured. Any other
+UDC state marks the host side inactive and releases current HID gadget state.
+User pause state is independent, so reconnecting the USB cable does not undo a
+manual pause. A HID `BrokenPipeError` suspends writes until a fresh
+`UdcStateChanged(UdcState.CONFIGURED)` transition arrives.
 
 ## Hotplug
 

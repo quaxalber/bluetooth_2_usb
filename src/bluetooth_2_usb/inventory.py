@@ -103,29 +103,31 @@ def describe_input_devices(
     metadata: list[InputDeviceMetadata] = []
     for device in list_input_devices():
         try:
-            capabilities = sorted(
-                EVENT_TYPE_NAMES[code]
-                for code in device.capabilities(verbose=False)
-                if code in EVENT_TYPE_NAMES
-            )
-        except OSError as exc:
-            capabilities = []
-            exclusion_reason = f"failed to read capabilities ({exc})"
-        else:
-            exclusion_reason = auto_discover_exclusion_reason(device, skip_name_prefixes)
+            try:
+                capabilities = sorted(
+                    EVENT_TYPE_NAMES[code]
+                    for code in device.capabilities(verbose=False)
+                    if code in EVENT_TYPE_NAMES
+                )
+            except OSError as exc:
+                capabilities = []
+                exclusion_reason = f"failed to read capabilities ({exc})"
+            else:
+                exclusion_reason = auto_discover_exclusion_reason(device, skip_name_prefixes)
 
-        metadata.append(
-            InputDeviceMetadata(
-                path=device.path,
-                name=device.name,
-                phys=device.phys,
-                uniq=device.uniq or "",
-                capabilities=capabilities,
-                relay_candidate=exclusion_reason is None,
-                exclusion_reason=exclusion_reason,
+            metadata.append(
+                InputDeviceMetadata(
+                    path=device.path,
+                    name=device.name,
+                    phys=device.phys,
+                    uniq=device.uniq or "",
+                    capabilities=capabilities,
+                    relay_candidate=exclusion_reason is None,
+                    exclusion_reason=exclusion_reason,
+                )
             )
-        )
-        device.close()
+        finally:
+            device.close()
     return metadata
 
 

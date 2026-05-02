@@ -4,6 +4,7 @@ import json
 import sys
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -13,6 +14,7 @@ from bluetooth_2_usb.loopback.capture import (
     CaptureMismatchError,
     ConsumerSequenceMatcher,
     KeyboardSequenceMatcher,
+    MissingNodeError,
     MouseSequenceMatcher,
     discover_gadget_node_candidates,
     discover_gadget_nodes,
@@ -314,7 +316,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
         self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
-    def test_explicit_override_accepts_default_linux_gadget_interfaces(self) -> None:
+    def test_explicit_override_rejects_default_linux_gadget_interface_role_mismatch(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
@@ -350,16 +352,13 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        nodes = discover_gadget_nodes(
-            keyboard_node="1-2.1.2:1.1",
-            mouse_node="1-2.1.2:1.0",
-            consumer_node="1-2.1.2:1.2",
-            hid_module=hid_module,
-        )
-
-        self.assertEqual(nodes.keyboard_node, "1-2.1.2:1.1")
-        self.assertEqual(nodes.mouse_node, "1-2.1.2:1.0")
-        self.assertEqual(nodes.consumer_node, "1-2.1.2:1.2")
+        with self.assertRaisesRegex(MissingNodeError, "Keyboard HID device has role mouse"):
+            discover_gadget_nodes(
+                keyboard_node="1-2.1.2:1.1",
+                mouse_node="1-2.1.2:1.0",
+                consumer_node="1-2.1.2:1.2",
+                hid_module=hid_module,
+            )
 
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
@@ -883,7 +882,7 @@ class LoopbackInjectTest(unittest.TestCase):
             self.assertEqual(_configured_service_settle_sec(), 0)
 
     def test_configured_service_settle_defaults_for_invalid_values(self) -> None:
-        for value in ("not-a-number", "-1"):
+        for value in ("not-a-number", "-1", "inf", "nan"):
             with self.subTest(value=value):
                 with patch.dict("os.environ", {SERVICE_SETTLE_ENV: value}):
                     self.assertEqual(_configured_service_settle_sec(), DEFAULT_SERVICE_SETTLE_SEC)
@@ -893,6 +892,10 @@ class LoopbackInjectTest(unittest.TestCase):
             _wait_for_service_settle(0)
 
         run.assert_not_called()
+
+    def test_wait_for_service_settle_ignores_missing_systemctl(self) -> None:
+        with patch("bluetooth_2_usb.loopback.inject.subprocess.run", side_effect=OSError):
+            _wait_for_service_settle(1)
 
     def test_run_inject_rejects_negative_timing_before_sleeping(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.time.sleep") as sleep:
@@ -1115,3 +1118,20 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
         capture_once.assert_not_called()
+
+
+class LoopbackResultTest(unittest.TestCase):
+    def test_to_text_renders_non_json_details_deterministically(self) -> None:
+        result = LoopbackResult(
+            command="capture",
+            scenario="combo",
+            success=False,
+            exit_code=1,
+            message="failed",
+            details={"node": SimpleNamespace(value=Path("/tmp/hid")), "paths": {1, "two"}},
+        )
+
+        text = result.to_text()
+
+        self.assertIn('paths: ["two", 1]', text)
+        self.assertIn("node: namespace(value=PosixPath('/tmp/hid'))", text)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import time
@@ -93,34 +94,40 @@ def _configured_service_settle_sec() -> float:
         settle = float(raw)
     except ValueError:
         return DEFAULT_SERVICE_SETTLE_SEC
-    if settle < 0:
+    if not math.isfinite(settle) or settle < 0:
         return DEFAULT_SERVICE_SETTLE_SEC
     return settle
 
 
 def _wait_for_service_settle(settle_seconds: float) -> None:
-    if settle_seconds == 0:
+    if settle_seconds == 0 or not math.isfinite(settle_seconds):
         return
-    active = subprocess.run(
-        ["systemctl", "is-active", "--quiet", "bluetooth_2_usb.service"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        active = subprocess.run(
+            ["systemctl", "is-active", "--quiet", "bluetooth_2_usb.service"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return
     if active.returncode != 0:
         return
-    completed = subprocess.run(
-        [
-            "systemctl",
-            "show",
-            "bluetooth_2_usb.service",
-            "--property=ActiveEnterTimestampMonotonic",
-            "--value",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            [
+                "systemctl",
+                "show",
+                "bluetooth_2_usb.service",
+                "--property=ActiveEnterTimestampMonotonic",
+                "--value",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return
     raw = completed.stdout.strip()
     if completed.returncode != 0 or not raw or raw == "0":
         return
@@ -133,7 +140,10 @@ def _wait_for_service_settle(settle_seconds: float) -> None:
         now_us = int(float(uptime) * 1_000_000)
     except (OSError, ValueError, IndexError):
         return
-    settle_us = int(settle_seconds * 1_000_000)
+    try:
+        settle_us = int(settle_seconds * 1_000_000)
+    except (OverflowError, ValueError):
+        return
     age_us = now_us - active_since_us
     if age_us < settle_us:
         time.sleep((settle_us - age_us) / 1_000_000)

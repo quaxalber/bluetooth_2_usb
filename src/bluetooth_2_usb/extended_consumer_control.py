@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time
+import asyncio
 
 
 class ExtendedConsumerControl:
@@ -17,13 +17,13 @@ class ExtendedConsumerControl:
     def __str__(self):
         return str(self._consumer_control)
 
-    def press(self, consumer_code: int) -> None:
-        self._write(self._consumer_control.press, consumer_code)
+    async def press(self, consumer_code: int) -> None:
+        await self._write(self._consumer_control.press, consumer_code)
 
-    def release(self) -> None:
-        self._write(self._consumer_control.release)
+    async def release(self) -> None:
+        await self._write(self._consumer_control.release)
 
-    def _write(self, operation, *args) -> None:
+    async def _write(self, operation, *args) -> None:
         max_tries = self.REPORT_WRITE_MAX_TRIES
         for attempt in range(1, max_tries + 1):
             try:
@@ -32,4 +32,4 @@ class ExtendedConsumerControl:
             except BlockingIOError:
                 if attempt >= max_tries:
                     raise
-                time.sleep(self.REPORT_WRITE_RETRY_DELAY_SEC)
+                await asyncio.sleep(self.REPORT_WRITE_RETRY_DELAY_SEC)

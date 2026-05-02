@@ -11,7 +11,7 @@ from ..bluetooth import (
     bluetooth_rfkill_blocked,
     bluetooth_rfkill_entries,
 )
-from ..commands import OpsError, fail, ok, run, warn
+from ..commands import OpsError, ok, run, warn
 from ..paths import PATHS
 from ..readonly import bluetooth_state_persistent, overlay_status, readonly_mode
 from .types import ProbeResult, ProbeStatus
@@ -172,7 +172,7 @@ class SmokeTest:
         if self.exit_code == 0:
             ok("Smoke test PASSED (with warnings)" if self.soft_warnings else "Smoke test PASSED")
         else:
-            fail("Smoke test FAILED")
+            print("[!] Smoke test FAILED")
         return self.exit_code
 
     def result_dict(self) -> dict[str, object]:

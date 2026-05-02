@@ -298,17 +298,25 @@ def uninstall() -> None:
     bluetooth_was_active = (
         run(["systemctl", "is-active", "--quiet", "bluetooth.service"], check=False).returncode == 0
     )
-    if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
-        run(["systemctl", "stop", "bluetooth.service"])
+    try:
         if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
-            run(["umount", "/var/lib/bluetooth"])
-    if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
-        unit = output(["systemd-escape", "--path", "--suffix=mount", config.persist_mount])
-        run(["systemctl", "disable", "--now", unit], check=False)
+            run(["systemctl", "stop", "bluetooth.service"])
+            if (
+                run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode
+                == 0
+            ):
+                run(["umount", "/var/lib/bluetooth"])
         if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
-            run(["umount", config.persist_mount])
-    if bluetooth_was_active:
-        run(["systemctl", "start", "bluetooth.service"], check=False)
+            unit = output(["systemd-escape", "--path", "--suffix=mount", config.persist_mount])
+            run(["systemctl", "disable", "--now", unit], check=False)
+            if (
+                run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode
+                == 0
+            ):
+                run(["umount", config.persist_mount])
+    finally:
+        if bluetooth_was_active:
+            run(["systemctl", "start", "bluetooth.service"], check=False)
     remove_owned_gadgets()
     run(["systemctl", "daemon-reload"])
     _assert_absent(

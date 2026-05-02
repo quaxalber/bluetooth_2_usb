@@ -139,7 +139,7 @@ class InputRelay:
             )
             self._dispatcher.discard_pending()
         try:
-            self._dispatcher.flush()
+            await self._dispatcher.flush()
         except OSError as ex:
             if not input_disappeared or ex.errno != errno.ENODEV:
                 raise
@@ -151,5 +151,5 @@ class InputRelay:
         logger.debug(
             "Relay stats for %s: hid_write_failures=%s",
             self._input_device.path,
-            self._dispatcher.stats.write_failures,
+            self._dispatcher.write_failures,
         )

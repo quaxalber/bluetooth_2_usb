@@ -104,7 +104,7 @@ class RuntimeEventSource:
                 return UdcState.from_raw(handle.read())
         except OSError:
             logger.debug("Unable to read UDC state from %s", self._udc_path)
-            return UdcState.NOT_ATTACHED
+            return self._last_state or UdcState.NOT_ATTACHED
 
     def _drain_udev_events(self) -> None:
         while True:

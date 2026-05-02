@@ -141,7 +141,7 @@ class RelaySupervisor:
                 self._relay_task_done(device_path, active_relay.task)
             self._relay_gate.remove_listener(self._relay_gate_changed)
             self._relay_gate.set_host_configured(False)
-            self._release_all_once()
+            await self._release_all_once()
             logger.debug("Task group exited.")
 
     async def _run(
@@ -182,7 +182,7 @@ class RelaySupervisor:
                     return
 
                 event = event_task.result()
-                self._handle_runtime_event(event)
+                await self._handle_runtime_event(event)
             finally:
                 tasks = [task for task in (event_task, shutdown_task) if not task.done()]
                 for task in tasks:
@@ -190,7 +190,7 @@ class RelaySupervisor:
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
-    def _handle_runtime_event(self, event: RuntimeEvent) -> None:
+    async def _handle_runtime_event(self, event: RuntimeEvent) -> None:
         if isinstance(event, DeviceAdded):
             self._device_added(event.path)
         elif isinstance(event, DeviceRemoved):
@@ -199,15 +199,15 @@ class RelaySupervisor:
             self._relay_gate.set_host_configured(event.state is UdcState.CONFIGURED)
         elif isinstance(event, ShutdownRequested):
             logger.debug("Runtime shutdown requested: %s", event.reason)
-            self._begin_shutdown()
+            await self._begin_shutdown()
 
     def _relay_gate_changed(self, active: bool) -> None:
         if active:
             self._gadgets_released = False
             return
-        self._release_all_once()
+        self._schedule_release_all_once()
 
-    def _begin_shutdown(self) -> None:
+    async def _begin_shutdown(self) -> None:
         """
         Stop scheduling new relay work and actively unwind existing device tasks.
 
@@ -222,7 +222,7 @@ class RelaySupervisor:
         self._cancel_all_pending_hotplug_probes()
 
         self._relay_gate.set_host_configured(False)
-        self._release_all_once()
+        await self._release_all_once()
 
         tasks = [active_relay.task for active_relay in self._active_relays.values()]
         for device_path in list(self._active_relays):
@@ -367,22 +367,34 @@ class RelaySupervisor:
     def _release_gadgets_after_relay_tasks_stop(self, tasks: list[asyncio.Task[None]]) -> None:
         pending_tasks = {task for task in tasks if not task.done()}
         if not pending_tasks:
-            self._release_all_once()
+            self._schedule_release_all_once()
             return
 
         def _release_when_last_task_stops(done_task: asyncio.Task[None]) -> None:
             pending_tasks.discard(done_task)
             if not pending_tasks:
-                self._release_all_once()
+                self._schedule_release_all_once()
 
         for task in pending_tasks:
             task.add_done_callback(_release_when_last_task_stops)
 
-    def _release_all_once(self) -> None:
+    def _schedule_release_all_once(self) -> None:
+        if self._gadgets_released:
+            return
+        release = self._hid_gadgets.release_all()
+        try:
+            self._task_group.create_task(release, name="hid gadget release")
+        except RuntimeError:
+            release.close()
+            logger.debug("Ignoring HID gadget release scheduling during TaskGroup shutdown.")
+        else:
+            self._gadgets_released = True
+
+    async def _release_all_once(self) -> None:
         if self._gadgets_released:
             return
         self._gadgets_released = True
-        self._hid_gadgets.release_all()
+        await self._hid_gadgets.release_all()
 
     def _relay_task_done(self, device_path: str, task: asyncio.Task[None]) -> None:
         active_relay = self._active_relays.get(device_path)

@@ -6,7 +6,7 @@ import re
 def redact(text: str, hostname: str) -> str:
     patterns = [
         (r"PARTUUID=[^\s]+", "PARTUUID=<<REDACTED_PARTUUID>>"),
-        (r"UUID=[^\s]+", "UUID=<<REDACTED_UUID>>"),
+        (r"(?<!PART)UUID=[^\s]+", "UUID=<<REDACTED_UUID>>"),
         (r"/dev/disk/by-uuid/[^\s]+", "/dev/disk/by-uuid/<<REDACTED_UUID>>"),
         (r"/dev/disk/by-partuuid/[^\s]+", "/dev/disk/by-partuuid/<<REDACTED_PARTUUID>>"),
         (r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", "<<REDACTED_UUID>>"),

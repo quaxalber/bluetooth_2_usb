@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import uuid
 from pathlib import Path
 
 from ..boot_config import (
@@ -68,27 +69,34 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         )
     )
 
+    bluetooth_was_active = _systemctl_active("bluetooth.service")
     b2u_was_active = _stop_b2u_if_installed("before migrating Bluetooth state")
-    run(["systemctl", "stop", "bluetooth.service"])
-    run(["systemctl", "daemon-reload"])
-    if run(["mountpoint", "-q", persist_mount], check=False).returncode == 0:
-        run(["systemctl", "stop", persist_mount_unit], check=False)
+    try:
+        run(["systemctl", "stop", "bluetooth.service"])
+        run(["systemctl", "daemon-reload"])
         if run(["mountpoint", "-q", persist_mount], check=False).returncode == 0:
-            run(["umount", persist_mount])
-    run(["systemctl", "enable", "--now", persist_mount_unit])
-    persist_bluetooth_dir.mkdir(parents=True, exist_ok=True)
-    _seed_bluetooth_state(persist_bluetooth_dir)
+            run(["systemctl", "stop", persist_mount_unit], check=False)
+            if run(["mountpoint", "-q", persist_mount], check=False).returncode == 0:
+                run(["umount", persist_mount])
+        run(["systemctl", "enable", "--now", persist_mount_unit])
+        persist_bluetooth_dir.mkdir(parents=True, exist_ok=True)
+        _seed_bluetooth_state(persist_bluetooth_dir)
 
-    if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode == 0:
-        current_source = output(["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"])
-        if current_source != str(persist_bluetooth_dir):
-            run(["umount", "/var/lib/bluetooth"])
-    Path("/var/lib/bluetooth").mkdir(parents=True, exist_ok=True)
-    run(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"])
-    run(["systemctl", "start", "bluetooth.service"])
-    if not _systemctl_active("bluetooth.service"):
-        fail("bluetooth.service did not come back up after enabling the persistent bind mount")
-    _restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
+        if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode == 0:
+            current_source = output(
+                ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"]
+            )
+            if current_source != str(persist_bluetooth_dir):
+                run(["umount", "/var/lib/bluetooth"])
+        Path("/var/lib/bluetooth").mkdir(parents=True, exist_ok=True)
+        run(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"])
+        run(["systemctl", "start", "bluetooth.service"])
+        if not _systemctl_active("bluetooth.service"):
+            fail("bluetooth.service did not come back up after enabling the persistent bind mount")
+    finally:
+        if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
+            run(["systemctl", "start", "bluetooth.service"], check=False)
+        _restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
     ok(f"Persistent Bluetooth state is active at {persist_bluetooth_dir}")
 
 
@@ -98,6 +106,12 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
         return
     lock_dir = persist_bluetooth_dir / ".b2u-seed.lock"
     marker = persist_bluetooth_dir / ".b2u-seeded"
+    temp_dir = persist_bluetooth_dir.with_name(
+        f"{persist_bluetooth_dir.name}.tmp-{uuid.uuid4().hex}"
+    )
+    backup_dir = persist_bluetooth_dir.with_name(
+        f"{persist_bluetooth_dir.name}.backup-{uuid.uuid4().hex}"
+    )
     try:
         lock_dir.mkdir()
     except OSError:
@@ -107,14 +121,27 @@ def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
         if not marker.exists() and not any(
             child.name not in ignored for child in persist_bluetooth_dir.iterdir()
         ):
+            temp_dir.mkdir(parents=True)
             for child in source.iterdir():
-                destination = persist_bluetooth_dir / child.name
+                destination = temp_dir / child.name
                 if child.is_dir():
                     shutil.copytree(child, destination, symlinks=True, dirs_exist_ok=True)
                 else:
                     shutil.copy2(child, destination)
-            marker.touch()
+            persist_bluetooth_dir.rename(backup_dir)
+            try:
+                temp_dir.rename(persist_bluetooth_dir)
+                marker.touch()
+            except Exception:
+                if persist_bluetooth_dir.exists():
+                    shutil.rmtree(persist_bluetooth_dir)
+                backup_dir.rename(persist_bluetooth_dir)
+                raise
+            else:
+                shutil.rmtree(backup_dir, ignore_errors=True)
     finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(backup_dir, ignore_errors=True)
         try:
             lock_dir.rmdir()
         except OSError:

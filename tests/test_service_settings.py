@@ -134,6 +134,14 @@ class ServiceSettingsTest(unittest.TestCase):
         self.assertNotIn("--udc_path", argv)
         self.assertNotIn("/tmp/udc-state", argv)
 
+    def test_shell_command_emits_internal_udc_path_as_environment_assignment(self) -> None:
+        command = build_runtime_shell_command(
+            "bluetooth_2_usb", settings=ServiceSettings(udc_path="/tmp/udc-state")
+        )
+
+        self.assertTrue(command.startswith("BLUETOOTH_2_USB_UDC_PATH=/tmp/udc-state "))
+        self.assertNotIn("--udc_path", command)
+
     def test_generated_runtime_argv_is_accepted_by_runtime_parser(self) -> None:
         settings = ServiceSettings(
             auto_discover=True,

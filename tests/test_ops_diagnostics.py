@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from bluetooth_2_usb.ops.commands import OpsError
 from bluetooth_2_usb.ops.diagnostics import ProbeStatus, SmokeTest, debug_report
+from bluetooth_2_usb.ops.diagnostics.redaction import redact
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
@@ -46,6 +47,18 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 ],
             },
         )
+
+    def test_redaction_keeps_partuuid_and_uuid_patterns_distinct(self) -> None:
+        redacted = redact(
+            "root=PARTUUID=1111-2222 boot=UUID=3333-4444 "
+            + "/dev/disk/by-partuuid/aaaa /dev/disk/by-uuid/bbbb",
+            hostname="",
+        )
+
+        self.assertIn("PARTUUID=<<REDACTED_PARTUUID>>", redacted)
+        self.assertIn("UUID=<<REDACTED_UUID>>", redacted)
+        self.assertIn("/dev/disk/by-partuuid/<<REDACTED_PARTUUID>>", redacted)
+        self.assertIn("/dev/disk/by-uuid/<<REDACTED_UUID>>", redacted)
 
     def test_smoketest_downgrades_unknown_dwc2_mode_to_heuristic_warning(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)

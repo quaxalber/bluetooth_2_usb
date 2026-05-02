@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time
+import asyncio
 
 from .hid_bounds import clamp_hid_i8, clamp_hid_i16
 from .logging import get_logger
@@ -37,19 +37,19 @@ class ExtendedMouse:
     def __str__(self):
         return str(self._mouse_device)
 
-    def press(self, buttons: int) -> None:
+    async def press(self, buttons: int) -> None:
         self.report[0] |= buttons
-        self._send_no_move()
+        await self._send_no_move()
 
-    def release(self, buttons: int) -> None:
+    async def release(self, buttons: int) -> None:
         self.report[0] &= ~buttons
-        self._send_no_move()
+        await self._send_no_move()
 
-    def release_all(self) -> None:
+    async def release_all(self) -> None:
         self.report[0] = 0
-        self._send_no_move()
+        await self._send_no_move()
 
-    def move(self, x: int = 0, y: int = 0, wheel: float = 0, pan: float = 0) -> None:
+    async def move(self, x: int = 0, y: int = 0, wheel: float = 0, pan: float = 0) -> None:
         wheel_total = self._wheel_remainder + wheel
         wheel = int(wheel_total)
         self._wheel_remainder = wheel_total - wheel
@@ -76,19 +76,19 @@ class ExtendedMouse:
                 partial_pan,
                 self.report.hex(" "),
             )
-            self._send_report()
+            await self._send_report()
             x -= partial_x
             y -= partial_y
             wheel -= partial_wheel
             pan -= partial_pan
             if pace_reports:
-                time.sleep(self.CHUNK_REPORT_INTERVAL_SEC)
+                await asyncio.sleep(self.CHUNK_REPORT_INTERVAL_SEC)
 
-    def _send_no_move(self) -> None:
+    async def _send_no_move(self) -> None:
         self.report[1:7] = b"\x00" * 6
-        self._send_report()
+        await self._send_report()
 
-    def _send_report(self) -> None:
+    async def _send_report(self) -> None:
         max_tries = self.REPORT_WRITE_MAX_TRIES
         for attempt in range(1, max_tries + 1):
             try:
@@ -97,4 +97,4 @@ class ExtendedMouse:
             except BlockingIOError:
                 if attempt >= max_tries:
                     raise
-                time.sleep(self.REPORT_WRITE_RETRY_DELAY_SEC)
+                await asyncio.sleep(self.REPORT_WRITE_RETRY_DELAY_SEC)

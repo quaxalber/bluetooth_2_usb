@@ -127,3 +127,12 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         source.stop()
         await asyncio.wait_for(task, timeout=1)
         monitor.close()
+
+    async def test_udc_read_error_preserves_last_state(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
+        source = self._build_source(queue, monitor=monitor, udc_path=Path("/missing/state"))
+        source._last_state = UdcState.CONFIGURED
+
+        self.assertIs(source._read_udc_state(), UdcState.CONFIGURED)
+        monitor.close()

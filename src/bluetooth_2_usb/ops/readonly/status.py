@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 from ..boot_config import current_root_filesystem_type
-from ..commands import run
+from ..commands import OpsError, run
 from .config import ReadonlyConfig, load_readonly_config
 
 READONLY_PACKAGES = ("overlayroot", "cryptsetup", "cryptsetup-bin", "initramfs-tools")
@@ -80,29 +80,29 @@ def machine_id_valid() -> bool:
 
 def bluetooth_state_persistent(config: ReadonlyConfig | None = None) -> bool:
     resolved = load_readonly_config() if config is None else config
-    if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode != 0:
-        return False
-    if not resolved.persist_bluetooth_dir.is_dir():
-        return False
-
-    mount_source = run(
-        ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"],
-        check=False,
-        capture=True,
-    ).stdout.strip()
-    if mount_source == str(resolved.persist_bluetooth_dir):
-        return True
-
-    persist_mount_source = run(
-        ["findmnt", "-n", "-o", "SOURCE", "--target", resolved.persist_mount],
-        check=False,
-        capture=True,
-    ).stdout.strip()
-    if not persist_mount_source:
-        return False
     try:
+        if run(["mountpoint", "-q", "/var/lib/bluetooth"], check=False).returncode != 0:
+            return False
+        if not resolved.persist_bluetooth_dir.is_dir():
+            return False
+
+        mount_source = run(
+            ["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"],
+            check=False,
+            capture=True,
+        ).stdout.strip()
+        if mount_source == str(resolved.persist_bluetooth_dir):
+            return True
+
+        persist_mount_source = run(
+            ["findmnt", "-n", "-o", "SOURCE", "--target", resolved.persist_mount],
+            check=False,
+            capture=True,
+        ).stdout.strip()
+        if not persist_mount_source:
+            return False
         relative = "/" + str(resolved.persist_bluetooth_dir.relative_to(resolved.persist_mount))
-    except ValueError:
+    except (OpsError, OSError, ValueError):
         return False
     return mount_source == f"{persist_mount_source}[{relative}]"
 

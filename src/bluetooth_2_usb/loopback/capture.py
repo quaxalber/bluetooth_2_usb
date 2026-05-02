@@ -467,13 +467,16 @@ def _iter_hid_infos(hid_module: Any) -> list[HidDeviceInfo]:
 
 
 def _filter_explicit_override(
-    infos: list[HidDeviceInfo], override: str | None, label: str
+    infos: list[HidDeviceInfo], override: str | None, label: str, expected_role: str
 ) -> list[HidDeviceInfo]:
     if override is None:
         return infos
     matched = [info for info in infos if info.node == override]
     if not matched:
         raise MissingNodeError(f"{label} HID device was not found: {override}")
+    role = _role_for_device(matched[0])
+    if role != expected_role:
+        raise MissingNodeError(f"{label} HID device has role {role or 'unknown'}: {override}")
     return matched
 
 
@@ -507,11 +510,13 @@ def discover_gadget_node_candidates(
             consumer_nodes.append(info)
 
     if keyboard_node is not None:
-        keyboard_nodes = _filter_explicit_override(infos, keyboard_node, "Keyboard")
+        keyboard_nodes = _filter_explicit_override(infos, keyboard_node, "Keyboard", "keyboard")
     if mouse_node is not None:
-        mouse_nodes = _filter_explicit_override(infos, mouse_node, "Mouse")
+        mouse_nodes = _filter_explicit_override(infos, mouse_node, "Mouse", "mouse")
     if consumer_node is not None:
-        consumer_nodes = _filter_explicit_override(infos, consumer_node, "Consumer-control")
+        consumer_nodes = _filter_explicit_override(
+            infos, consumer_node, "Consumer-control", "consumer"
+        )
 
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
         raise MissingNodeError(

@@ -44,7 +44,7 @@ class Runtime:
     async def run(self) -> None:
         relay_gate = RelayGate()
         hid_gadgets = HidGadgets()
-        hid_gadgets.enable()
+        await hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(relay_gate)
         self._event_source = RuntimeEventSource(self._events, udc_path=self._config.udc_path)

@@ -146,6 +146,21 @@ class ReadonlyConfigTest(unittest.TestCase):
             with self.assertRaises(OpsError):
                 load_readonly_config(path)
 
+    def test_readonly_config_rejects_empty_or_relative_persist_paths(self) -> None:
+        cases = [
+            'B2U_PERSIST_MOUNT=""\nB2U_PERSIST_BLUETOOTH_DIR="/persist/bluetooth"\n',
+            'B2U_PERSIST_MOUNT="persist"\nB2U_PERSIST_BLUETOOTH_DIR="/persist/bluetooth"\n',
+            'B2U_PERSIST_MOUNT="/persist"\nB2U_PERSIST_BLUETOOTH_DIR="bluetooth"\n',
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "readonly.env"
+            for content in cases:
+                with self.subTest(content=content):
+                    path.write_text(content, encoding="utf-8")
+
+                    with self.assertRaises(OpsError):
+                        load_readonly_config(path)
+
     def test_readonly_config_defaults_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             self.assertEqual(load_readonly_config(Path(tmpdir) / "missing").mode, "disabled")
@@ -169,6 +184,18 @@ class ReadonlyConfigTest(unittest.TestCase):
         with patch(f"{READONLY_STATUS}.run", side_effect=fake_run):
             with patch("pathlib.Path.is_dir", return_value=True):
                 self.assertFalse(bluetooth_state_persistent(config))
+
+    def test_bluetooth_state_persistent_returns_false_when_findmnt_fails(self) -> None:
+        config = ReadonlyConfig(
+            mode="persistent",
+            persist_mount=Path("/mnt/persist"),
+            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
+            persist_spec="/dev/sda1",
+            persist_device="/dev/sda1",
+        )
+
+        with patch(f"{READONLY_STATUS}.run", side_effect=OpsError("findmnt unavailable")):
+            self.assertFalse(bluetooth_state_persistent(config))
 
     def test_print_readonly_status_reports_configured_and_live_state(self) -> None:
         config = ReadonlyConfig(

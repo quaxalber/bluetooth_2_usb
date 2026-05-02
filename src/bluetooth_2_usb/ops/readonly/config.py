@@ -44,9 +44,13 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
             fail(f"Refusing to load unexpected key from {path}: {key}")
         values[key] = value
 
-    persist_mount = Path(values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount)))
-    persist_bluetooth_dir = Path(
-        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.persist_bluetooth_dir))
+    persist_mount = _required_absolute_path(
+        values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount)), "B2U_PERSIST_MOUNT", path
+    )
+    persist_bluetooth_dir = _required_absolute_path(
+        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.persist_bluetooth_dir)),
+        "B2U_PERSIST_BLUETOOTH_DIR",
+        path,
     )
 
     return ReadonlyConfig(
@@ -56,6 +60,15 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),
         persist_device=values.get("B2U_PERSIST_DEVICE", ""),
     )
+
+
+def _required_absolute_path(raw_value: str, key: str, config_path: Path) -> Path:
+    if not raw_value:
+        fail(f"Refusing to load empty {key} from {config_path}")
+    value = Path(raw_value)
+    if not value.is_absolute():
+        fail(f"Refusing to load relative {key} from {config_path}: {raw_value}")
+    return value
 
 
 def write_readonly_config(config: ReadonlyConfig, path: Path = PATHS.readonly_env_file) -> None:

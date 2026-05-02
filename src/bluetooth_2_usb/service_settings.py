@@ -231,6 +231,8 @@ def build_runtime_shell_command(
     command = shlex.split(executable) + build_runtime_argv(
         resolved_settings, append_debug=append_debug
     )
+    if resolved_settings.udc_path:
+        command = [f"BLUETOOTH_2_USB_UDC_PATH={resolved_settings.udc_path}", *command]
     return shlex.join(command)
 
 

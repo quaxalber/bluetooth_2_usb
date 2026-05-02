@@ -289,7 +289,7 @@ Bluetooth-state configuration available.
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
 | `/etc/default/bluetooth_2_usb` | Structured runtime settings |
 | `/etc/default/bluetooth_2_usb_readonly` | Persistent read-only configuration |
-| `/var/log/bluetooth_2_usb` | Script and report output |
+| `/var/log/bluetooth_2_usb` | Operational command and runtime diagnostic output |
 | `/mnt/b2u-persist` | Default persistent mount target |
 | `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |
 | `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |

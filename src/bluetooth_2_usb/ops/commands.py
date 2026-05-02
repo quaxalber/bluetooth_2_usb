@@ -165,3 +165,9 @@ class _Tee:
     def flush(self) -> None:
         for stream in self._streams:
             stream.flush()  # type: ignore[attr-defined]
+
+    def isatty(self) -> bool:
+        return bool(getattr(self._streams[0], "isatty", lambda: False)())
+
+    def __getattr__(self, name: str):
+        return getattr(self._streams[0], name)

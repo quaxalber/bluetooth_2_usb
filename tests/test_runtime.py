@@ -3,7 +3,7 @@ import signal
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from bluetooth_2_usb.relay_gate import RelayGate
 from bluetooth_2_usb.runtime import Runtime, _handled_shutdown_signals
@@ -82,6 +82,21 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         finally:
             with patch("bluetooth_2_usb.runtime.signal.signal"):
                 runtime._restore_signal_handlers(handlers)
+
+    async def test_runtime_awaits_hid_gadget_enable_before_starting_tasks(self) -> None:
+        runtime = self._runtime()
+        hid_gadgets = AsyncMock()
+
+        async def stop_after_enable(_event_source, enabled_gadgets, _relay_gate, _shortcut):
+            self.assertIs(enabled_gadgets, hid_gadgets)
+
+        with patch("bluetooth_2_usb.runtime.HidGadgets", return_value=hid_gadgets):
+            with patch("bluetooth_2_usb.runtime.RuntimeEventSource"):
+                runtime._run_tasks = AsyncMock(side_effect=stop_after_enable)
+
+                await runtime.run()
+
+        hid_gadgets.enable.assert_awaited_once_with()
 
     async def test_runtime_builds_supervisor_inside_root_task_group(self) -> None:
         class CompletingEventSource:

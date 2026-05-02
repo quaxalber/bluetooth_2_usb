@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
 
-from .evdev import ecodes, evdev_to_usb_hid, get_mouse_movement, is_consumer_key, is_mouse_button
+from .evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from .evdev_types import InputEvent, KeyEvent, RelEvent, categorize
-from .extended_consumer_control import ExtendedConsumerControl
-from .extended_keyboard import ExtendedKeyboard
-from .extended_mouse import ExtendedMouse
 from .hid_gadgets import HidGadgets
 from .logging import get_logger
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator
@@ -14,11 +11,6 @@ from .relay_gate import RelayGate
 from .shortcut_toggler import ShortcutToggler
 
 logger = get_logger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class HidDispatchStats:
-    write_failures: int
 
 
 class HidDispatcher:
@@ -42,8 +34,8 @@ class HidDispatcher:
         self._hid_write_failures = 0
 
     @property
-    def stats(self) -> HidDispatchStats:
-        return HidDispatchStats(write_failures=self._hid_write_failures)
+    def write_failures(self) -> int:
+        return self._hid_write_failures
 
     async def dispatch(self, raw_event: InputEvent) -> None:
         event = categorize(raw_event)
@@ -57,116 +49,94 @@ class HidDispatcher:
             return
 
         if isinstance(event, RelEvent):
-            self._accumulate_mouse_movement(event)
+            self._mouse_delta.add_event(event)
             return
 
-        if self._is_syn_report(event):
-            self.flush()
+        if (
+            getattr(event, "type", None) == ecodes.EV_SYN
+            and getattr(event, "code", None) == ecodes.SYN_REPORT
+        ):
+            await self.flush()
             return
 
         # Preserve cross-gadget event order if another event arrives before SYN_REPORT.
-        self.flush()
+        await self.flush()
         if isinstance(event, KeyEvent):
-            self._process_key_event(event)
-
-    @staticmethod
-    def _is_syn_report(event: InputEvent) -> bool:
-        return (
-            getattr(event, "type", None) == ecodes.EV_SYN
-            and getattr(event, "code", None) == ecodes.SYN_REPORT
-        )
+            await self._process_key_event(event)
 
     def discard_pending(self) -> None:
         self._mouse_delta.discard()
 
-    def flush(self) -> None:
+    async def flush(self) -> None:
         if not self._relay_gate.active:
             self.discard_pending()
             return
         delta = self._mouse_delta.flush()
         if delta is None:
             return
-        self._process_mouse_delta(delta)
+        await self._process_mouse_delta(delta)
 
-    def _accumulate_mouse_movement(self, event: RelEvent) -> None:
-        x, y, wheel, pan = get_mouse_movement(event)
-        logger.debug(
-            "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
-            event.event.code,
-            event.event.value,
-            x,
-            y,
-            wheel,
-            pan,
-        )
-        self._mouse_delta.add_event(event)
-
-    def _process_mouse_delta(self, delta: MouseDelta) -> None:
+    async def _process_mouse_delta(self, delta: MouseDelta) -> None:
         mouse = self._hid_gadgets.mouse
         if mouse is None:
             raise RuntimeError("Mouse gadget is not available; HID gadgets are not enabled.")
         if not self._relay_gate.active:
             return
-        try:
-            mouse.move(*delta)
-        except BlockingIOError:
-            self._hid_write_failures += 1
-            logger.debug("Mouse movement HID write blocked; dropping delta %s", delta)
-        except BrokenPipeError:
-            self._handle_broken_pipe()
-        except Exception:
-            self._hid_write_failures += 1
-            logger.exception("Unexpected error processing mouse movement")
-            raise
+        await self._write_hid_report(mouse.move, "Mouse movement", delta, *delta)
 
-    def _process_key_event(self, event: KeyEvent) -> None:
+    async def _process_key_event(self, event: KeyEvent) -> None:
         if not self._relay_gate.active:
             return
+        await self._write_hid_report(self._dispatch_key_event, "Key event", event, event)
+
+    async def _write_hid_report(
+        self,
+        operation: Callable[..., Awaitable[None]],
+        description: str,
+        context: object,
+        *args: object,
+    ) -> None:
         try:
-            self._dispatch_key_event(event)
+            await operation(*args)
         except BlockingIOError:
             self._hid_write_failures += 1
-            logger.debug("Key HID write blocked; dropping event %s", event)
+            logger.debug("%s HID write blocked; dropping %s", description, context)
         except BrokenPipeError:
             self._handle_broken_pipe()
         except Exception:
             self._hid_write_failures += 1
-            logger.exception("Unexpected error processing %s", event)
+            logger.exception("Unexpected error processing %s", context)
             raise
 
-    def _dispatch_key_event(self, event: KeyEvent) -> None:
+    async def _dispatch_key_event(self, event: KeyEvent) -> None:
         key_id, key_name = evdev_to_usb_hid(event)
         if key_id is None or key_name is None:
             return
 
-        output_gadget = self._select_gadget(event)
+        if is_consumer_key(event):
+            output_gadget = self._hid_gadgets.consumer
+        elif is_mouse_button(event):
+            output_gadget = self._hid_gadgets.mouse
+        else:
+            output_gadget = self._hid_gadgets.keyboard
         if output_gadget is None:
             raise RuntimeError("No appropriate USB HID gadget is available.")
 
         if event.keystate == KeyEvent.key_down:
             logger.debug("Pressing %s (0x%02X) via %s", key_name, key_id, output_gadget)
-            output_gadget.press(key_id)
+            await output_gadget.press(key_id)
         elif event.keystate == KeyEvent.key_up:
             logger.debug("Releasing %s (0x%02X) via %s", key_name, key_id, output_gadget)
             if is_consumer_key(event):
-                output_gadget.release()
+                await output_gadget.release()
             else:
-                output_gadget.release(key_id)
-
-    def _select_gadget(
-        self, event: KeyEvent
-    ) -> ExtendedConsumerControl | ExtendedKeyboard | ExtendedMouse | None:
-        if is_consumer_key(event):
-            return self._hid_gadgets.consumer
-        if is_mouse_button(event):
-            return self._hid_gadgets.mouse
-        return self._hid_gadgets.keyboard
+                await output_gadget.release(key_id)
 
     def _handle_broken_pipe(self) -> None:
         self._hid_write_failures += 1
         logger.warning(
             "BrokenPipeError: USB cable likely disconnected or power-only. "
-            + "Pausing relay.\nSee: "
+            + "Pausing relay until the host reports a fresh configured USB state.\nSee: "
             + "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
         )
         self._relay_gate.suspend_writes()
