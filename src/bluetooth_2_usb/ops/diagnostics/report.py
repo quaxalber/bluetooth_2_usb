@@ -125,8 +125,7 @@ def debug_report(duration: int | None) -> int:
     else:
         text_block("CLI runtime", f"missing virtualenv at {PATHS.venv_python}")
 
-    generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    header = f"# bluetooth_2_usb debug report\n\n_Generated: {generated_at}_\n\n"
+    header = f"# bluetooth_2_usb debug report\n\n_Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}_\n\n"
     report_file.write_text(header + "\n".join(body), encoding="utf-8")
     ok(f"Wrote: {report_file}")
     return 0
