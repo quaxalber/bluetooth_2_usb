@@ -17,8 +17,4 @@ class ProbeResult:
     detail: str = ""
 
     def to_dict(self) -> dict[str, str]:
-        return {
-            "status": self.status.value,
-            "message": self.message,
-            "detail": self.detail,
-        }
+        return {"status": self.status.value, "message": self.message, "detail": self.detail}

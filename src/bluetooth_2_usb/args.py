@@ -149,11 +149,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Output format for --list_devices and --validate-env. Default: text",
         )
         self.add_argument(
-            "--help",
-            "-h",
-            action="help",
-            default=argparse.SUPPRESS,
-            help="Show this help message and exit.",
+            "--help", "-h", action="help", default=argparse.SUPPRESS, help="Show this help message and exit."
         )
 
 

@@ -119,7 +119,7 @@ Please keep code and docs aligned with the supported deployment model:
 ### Python
 
 - Python 3.11+
-- format Python with Black at the repository line length (`100`)
+- format Python with Black at the repository line length (`120`)
 - lint with Ruff
 - avoid magic trailing commas whose only purpose is to force Black to keep a
   call, literal, or assertion split across multiple lines; keep syntactic

@@ -51,16 +51,12 @@ class RollbackStack:
 
 
 def install_service_unit(repo_root: Path) -> None:
-    shutil.copy2(
-        repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit
-    )
+    shutil.copy2(repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit)
     (Path("/etc/systemd/system") / PATHS.service_unit).chmod(0o644)
 
 
 def activate_service_unit() -> None:
-    was_active = (
-        run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
-    )
+    was_active = run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     run(["systemctl", "enable", PATHS.service_unit])
     run(["systemctl", "restart" if was_active else "start", PATHS.service_unit])
 
@@ -132,9 +128,7 @@ def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
 
 def service_installed() -> bool | None:
     completed = run(
-        ["systemctl", "list-unit-files", "--type=service", "--no-legend", "--no-pager"],
-        check=False,
-        capture=True,
+        ["systemctl", "list-unit-files", "--type=service", "--no-legend", "--no-pager"], check=False, capture=True
     )
     if completed.returncode != 0:
         warn(
@@ -142,11 +136,7 @@ def service_installed() -> bool | None:
             + f"cannot determine state of {PATHS.service_unit}"
         )
         return None
-    return any(
-        line.split(None, 1)[0] == PATHS.service_unit
-        for line in completed.stdout.splitlines()
-        if line.split()
-    )
+    return any(line.split(None, 1)[0] == PATHS.service_unit for line in completed.stdout.splitlines() if line.split())
 
 
 def install(repo_root: Path) -> None:
@@ -187,15 +177,12 @@ def install(repo_root: Path) -> None:
     ok("Boot configuration updated")
 
     rollback = RollbackStack()
-    was_active = (
-        run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
-    )
+    was_active = run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     if was_active:
         info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
         run(["systemctl", "stop", PATHS.service_unit])
         rollback.push(
-            f"restore {PATHS.service_unit}",
-            lambda: run(["systemctl", "start", PATHS.service_unit], check=False),
+            f"restore {PATHS.service_unit}", lambda: run(["systemctl", "start", PATHS.service_unit], check=False)
         )
     try:
         info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
@@ -230,10 +217,7 @@ def install(repo_root: Path) -> None:
     info("Next steps")
     info("1. Reboot the Pi so the updated boot configuration takes effect.")
     info("2. After reboot, run: sudo bluetooth_2_usb smoketest")
-    info(
-        "3. For persistent read-only operation, run: "
-        "sudo bluetooth_2_usb readonly setup --device /dev/YOUR-PARTITION"
-    )
+    info("3. For persistent read-only operation, run: sudo bluetooth_2_usb readonly setup --device /dev/YOUR-PARTITION")
     info("   Then run: sudo bluetooth_2_usb readonly enable")
 
 
@@ -276,10 +260,7 @@ def uninstall() -> None:
 
     if manage_b2u_service:
         run(["systemctl", "stop", PATHS.service_unit])
-        if (
-            run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode
-            == 0
-        ):
+        if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
             run(["systemctl", "kill", "--kill-who=all", PATHS.service_unit])
         run(["systemctl", "disable", PATHS.service_unit])
         run(["systemctl", "reset-failed", PATHS.service_unit], check=False)
@@ -295,54 +276,33 @@ def uninstall() -> None:
     run(["systemctl", "daemon-reload"])
     run(["systemctl", "disable", "--now", "var-lib-bluetooth.mount"], check=False)
 
-    bluetooth_was_active = (
-        run(["systemctl", "is-active", "--quiet", "bluetooth.service"], check=False).returncode == 0
-    )
+    bluetooth_was_active = run(["systemctl", "is-active", "--quiet", "bluetooth.service"], check=False).returncode == 0
     try:
         if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
             run(["systemctl", "stop", "bluetooth.service"])
-            if (
-                run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode
-                == 0
-            ):
+            if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
                 run(["umount", "/var/lib/bluetooth"])
         if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
             unit = output(["systemd-escape", "--path", "--suffix=mount", config.persist_mount])
             run(["systemctl", "disable", "--now", unit], check=False)
-            if (
-                run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode
-                == 0
-            ):
+            if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
                 run(["umount", config.persist_mount])
     finally:
         if bluetooth_was_active:
             run(["systemctl", "start", "bluetooth.service"], check=False)
     remove_owned_gadgets()
     run(["systemctl", "daemon-reload"])
-    _assert_absent(
-        Path("/etc/systemd/system") / PATHS.service_unit,
-        "Service unit file still exists after uninstall",
-    )
+    _assert_absent(Path("/etc/systemd/system") / PATHS.service_unit, "Service unit file still exists after uninstall")
     _assert_absent(PATHS.env_file, "Runtime settings file still exists after uninstall")
     _assert_absent(PATHS.readonly_env_file, "Read-only config file still exists after uninstall")
-    _assert_absent(
-        Path("/usr/local/bin/bluetooth_2_usb"),
-        "bluetooth_2_usb CLI link still exists after uninstall",
-    )
+    _assert_absent(Path("/usr/local/bin/bluetooth_2_usb"), "bluetooth_2_usb CLI link still exists after uninstall")
     _assert_absent(
         Path("/usr/local/bin/bluetooth_2_usb.loopback"),
         "bluetooth_2_usb.loopback stale CLI link still exists after uninstall",
     )
-    _assert_absent(
-        PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall"
-    )
-    _assert_absent(
-        PATHS.bluetooth_service_dropin, "bluetooth.service drop-in still exists after uninstall"
-    )
-    if (
-        run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode
-        == 0
-    ):
+    _assert_absent(PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall")
+    _assert_absent(PATHS.bluetooth_service_dropin, "bluetooth.service drop-in still exists after uninstall")
+    if run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode == 0:
         fail(f"{PATHS.service_unit} is still enabled after uninstall")
     ok("Uninstall complete")
     info(f"The checkout at {PATHS.install_dir} was left in place.")

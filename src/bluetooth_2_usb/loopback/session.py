@@ -33,11 +33,7 @@ class LoopbackInterrupted(KeyboardInterrupt):
             except ValueError:
                 signal_name = None
         self.signal_name = signal_name
-        message = (
-            f"Loopback interrupted by {signal_name}"
-            if signal_name is not None
-            else "Loopback interrupted"
-        )
+        message = f"Loopback interrupted by {signal_name}" if signal_name is not None else "Loopback interrupted"
         super().__init__(message)
 
 
@@ -71,13 +67,10 @@ def loopback_session(command: str, scenario: str):
             _lock_loopback_file(lock_handle)
         except OSError as exc:
             raise LoopbackBusyError(
-                "Another Bluetooth-2-USB loopback session is already running "
-                f"(lock: {LOOPBACK_LOCK_PATH})"
+                "Another Bluetooth-2-USB loopback session is already running " f"(lock: {LOOPBACK_LOCK_PATH})"
             ) from exc
 
-        metadata = json.dumps(
-            {"pid": os.getpid(), "command": command, "scenario": scenario}, sort_keys=True
-        )
+        metadata = json.dumps({"pid": os.getpid(), "command": command, "scenario": scenario}, sort_keys=True)
         lock_handle.seek(0)
         lock_handle.truncate()
         lock_handle.write(metadata)
@@ -93,9 +86,7 @@ def loopback_session(command: str, scenario: str):
             )
             if sig is not None
         ]
-        previous_handlers = {
-            handled_signal: signal.getsignal(handled_signal) for handled_signal in handled_signals
-        }
+        previous_handlers = {handled_signal: signal.getsignal(handled_signal) for handled_signal in handled_signals}
 
         def _raise_interrupted(received_signal: int, _frame) -> None:
             raise LoopbackInterrupted(received_signal)

@@ -36,9 +36,7 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
             continue
         match = re.fullmatch(r'([A-Za-z_][A-Za-z0-9_]*)="([^"]*)"', line)
         if match is None:
-            fail(
-                f"Refusing to load invalid read-only config line from {path}:{line_number}: {line}"
-            )
+            fail(f"Refusing to load invalid read-only config line from {path}:{line_number}: {line}")
         key, value = match.groups()
         if key not in allowed:
             fail(f"Refusing to load unexpected key from {path}: {key}")
@@ -48,9 +46,7 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         values.get("B2U_PERSIST_MOUNT", str(PATHS.persist_mount)), "B2U_PERSIST_MOUNT", path
     )
     persist_bluetooth_dir = _required_absolute_path(
-        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.persist_bluetooth_dir)),
-        "B2U_PERSIST_BLUETOOTH_DIR",
-        path,
+        values.get("B2U_PERSIST_BLUETOOTH_DIR", str(PATHS.persist_bluetooth_dir)), "B2U_PERSIST_BLUETOOTH_DIR", path
     )
 
     return ReadonlyConfig(

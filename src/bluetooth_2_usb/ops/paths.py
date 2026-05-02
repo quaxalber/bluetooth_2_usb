@@ -21,9 +21,7 @@ class ManagedPaths:
     def __post_init__(self) -> None:
         object.__setattr__(self, "persist_bluetooth_dir", self.persist_mount / "bluetooth")
         object.__setattr__(
-            self,
-            "bluetooth_service_dropin",
-            self.bluetooth_service_dropin_dir / "bluetooth_2_usb_persist.conf",
+            self, "bluetooth_service_dropin", self.bluetooth_service_dropin_dir / "bluetooth_2_usb_persist.conf"
         )
 
     @property

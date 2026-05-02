@@ -22,10 +22,7 @@ class HidDispatcher:
     """
 
     def __init__(
-        self,
-        hid_gadgets: HidGadgets,
-        relay_gate: RelayGate,
-        shortcut_toggler: ShortcutToggler | None = None,
+        self, hid_gadgets: HidGadgets, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
     ) -> None:
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
@@ -52,10 +49,7 @@ class HidDispatcher:
             self._mouse_delta.add_event(event)
             return
 
-        if (
-            getattr(event, "type", None) == ecodes.EV_SYN
-            and getattr(event, "code", None) == ecodes.SYN_REPORT
-        ):
+        if getattr(event, "type", None) == ecodes.EV_SYN and getattr(event, "code", None) == ecodes.SYN_REPORT:
             await self.flush()
             return
 
@@ -90,11 +84,7 @@ class HidDispatcher:
         await self._write_hid_report(self._dispatch_key_event, "Key event", event, event)
 
     async def _write_hid_report(
-        self,
-        operation: Callable[..., Awaitable[None]],
-        description: str,
-        context: object,
-        *args: object,
+        self, operation: Callable[..., Awaitable[None]], description: str, context: object, *args: object
     ) -> None:
         try:
             await operation(*args)

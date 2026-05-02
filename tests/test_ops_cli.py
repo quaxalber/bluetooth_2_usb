@@ -25,10 +25,7 @@ class OpsCliTest(unittest.TestCase):
         with patch("bluetooth_2_usb.ops.cli.ensure_root"):
             with patch("bluetooth_2_usb.ops.cli.prepare_log"):
                 with patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup:
-                    self.assertEqual(
-                        cli.main(["readonly", "setup", "--device", "/dev/sda1"]),
-                        0,
-                    )
+                    self.assertEqual(cli.main(["readonly", "setup", "--device", "/dev/sda1"]), 0)
                 with patch("bluetooth_2_usb.ops.cli.print_readonly_status") as status:
                     self.assertEqual(cli.main(["readonly", "status"]), 0)
                 with patch("bluetooth_2_usb.ops.cli.enable_readonly") as enable:

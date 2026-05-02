@@ -31,12 +31,7 @@ from bluetooth_2_usb.loopback.capture_windows import (
     RI_MOUSE_LEFT_BUTTON_UP,
     RI_MOUSE_WHEEL,
 )
-from bluetooth_2_usb.loopback.constants import (
-    EXIT_ACCESS,
-    EXIT_INTERRUPTED,
-    EXIT_PREREQUISITE,
-    EXIT_USAGE,
-)
+from bluetooth_2_usb.loopback.constants import EXIT_ACCESS, EXIT_INTERRUPTED, EXIT_PREREQUISITE, EXIT_USAGE
 from bluetooth_2_usb.loopback.inject import (
     DEFAULT_SERVICE_SETTLE_SEC,
     SERVICE_SETTLE_ENV,
@@ -76,10 +71,7 @@ def _mouse_report_count(steps: tuple[ExpectedEvent, ...]) -> int:
     return total
 
 
-SIMPLE_KEYBOARD_STEPS = (
-    ExpectedEvent(EV_KEY, KEY_K, 1),
-    ExpectedEvent(EV_KEY, KEY_K, 0),
-)
+SIMPLE_KEYBOARD_STEPS = (ExpectedEvent(EV_KEY, KEY_K, 1), ExpectedEvent(EV_KEY, KEY_K, 0))
 
 SMALL_MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, 1),
@@ -177,10 +169,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         with self.assertRaises(ValueError) as error:
             get_scenario("nope")
 
-        self.assertEqual(
-            str(error.exception),
-            f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}",
-        )
+        self.assertEqual(str(error.exception), f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}")
 
     def test_removed_scenario_names_are_not_supported(self) -> None:
         removed_names = ("mouse" + "_fast", "mouse_buttons" + "_intrusive", "text" + "_burst")
@@ -219,16 +208,11 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         self.assertEqual(candidates.keyboard_nodes, ())
         self.assertEqual(candidates.mouse_nodes, ())
-        self.assertEqual(
-            [info.node for info in candidates.consumer_nodes], ["consumer-a", "consumer-b"]
-        )
+        self.assertEqual([info.node for info in candidates.consumer_nodes], ["consumer-a", "consumer-b"])
 
     def test_discovery_rejects_multiple_distinct_keyboard_nodes(self) -> None:
         hid_module = _FakeHidModule(
-            [
-                _hid_entry("kbd-a", usage_page=0x01, usage=0x06),
-                _hid_entry("kbd-b", usage_page=0x01, usage=0x06),
-            ]
+            [_hid_entry("kbd-a", usage_page=0x01, usage=0x06), _hid_entry("kbd-b", usage_page=0x01, usage=0x06)]
         )
 
         with self.assertRaisesRegex(Exception, "Multiple keyboard HID devices"):
@@ -244,10 +228,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         )
 
         nodes = discover_gadget_nodes(
-            keyboard_node="kbd-a",
-            mouse_node="mouse-a",
-            consumer_node="consumer-a",
-            hid_module=hid_module,
+            keyboard_node="kbd-a", mouse_node="mouse-a", consumer_node="consumer-a", hid_module=hid_module
         )
 
         self.assertEqual(nodes.keyboard_node, "kbd-a")
@@ -390,10 +371,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_eight_byte_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (
-            bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]),
-            bytes([0x00] * 8),
-        )
+        reports = (bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]), bytes([0x00] * 8))
         for report in reports:
             matcher.handle(report)
 
@@ -402,10 +380,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_report_id_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (
-            bytes([0x01, 0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]),
-            bytes([0x01] + [0x00] * 8),
-        )
+        reports = (bytes([0x01, 0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]), bytes([0x01] + [0x00] * 8))
         for report in reports:
             matcher.handle(report)
 
@@ -414,12 +389,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_ignores_single_zero_reports_between_steps(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (
-            bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]),
-            bytes([0x00]),
-            bytes([0x00] * 8),
-            bytes([0x00]),
-        )
+        reports = (bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]), bytes([0x00]), bytes([0x00] * 8), bytes([0x00]))
         for report in reports:
             matcher.handle(report)
 
@@ -457,9 +427,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
 class MouseSequenceMatcherTest(unittest.TestCase):
     @staticmethod
-    def _extended_mouse_report(
-        buttons: int = 0, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0
-    ) -> bytes:
+    def _extended_mouse_report(buttons: int = 0, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> bytes:
         return bytes(
             [
                 buttons,
@@ -530,9 +498,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], MOUSE_BUTTON_STEPS[:2])
 
-        with self.assertRaisesRegex(
-            CaptureMismatchError, "Mouse button report arrived before movement"
-        ):
+        with self.assertRaisesRegex(CaptureMismatchError, "Mouse button report arrived before movement"):
             matcher.handle(self._extended_mouse_report(buttons=0x08, x=1))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
@@ -565,9 +531,7 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_chunked_fast_motion(self) -> None:
         matcher = MouseSequenceMatcher.create(MOUSE_REL_STEPS, ())
 
-        reports = [
-            report for step in MOUSE_REL_STEPS for report in self._reports_for_rel_step(step)
-        ]
+        reports = [report for step in MOUSE_REL_STEPS for report in self._reports_for_rel_step(step)]
         self.assertGreaterEqual(len(reports), 80)
         for report in reports:
             matcher.handle(report)
@@ -705,21 +669,15 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertFalse(
             capture_windows._device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                (
-                    r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",
-                ),
+                (r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",),
             )
         )
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
-            capture_windows._keyboard_event_to_report(0x7C, is_key_up=False),
-            bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]),
+            capture_windows._keyboard_event_to_report(0x7C, is_key_up=False), bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0])
         )
-        self.assertEqual(
-            capture_windows._keyboard_event_to_report(0x7C, is_key_up=True),
-            bytes([0x00] * 8),
-        )
+        self.assertEqual(capture_windows._keyboard_event_to_report(0x7C, is_key_up=True), bytes([0x00] * 8))
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
         self.assertIsNone(capture_windows._keyboard_event_to_report(0x41, is_key_up=False))
@@ -730,8 +688,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse),
-            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00])]
         )
 
     def test_mouse_event_to_reports_clamps_xy_to_descriptor_bounds(self) -> None:
@@ -740,8 +697,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -40000
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse),
-            [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00])]
         )
 
     def test_mouse_event_to_reports_builds_horizontal_pan_reports(self) -> None:
@@ -749,8 +705,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse),
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])]
         )
 
     def test_mouse_event_to_reports_tracks_button_state(self) -> None:
@@ -772,8 +727,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         left_button_up = RAWMOUSE()
         left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(left_button_up),
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(left_button_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
         )
 
     def test_mouse_event_to_reports_tracks_windows_extra_button_state(self) -> None:
@@ -781,29 +735,25 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         button_4_down = RAWMOUSE()
         button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_4_down),
-            [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(button_4_down), [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
         )
 
         button_5_down = RAWMOUSE()
         button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_5_down),
-            [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(button_5_down), [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
         )
 
         button_4_up = RAWMOUSE()
         button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_4_up),
-            [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(button_4_up), [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
         )
 
         button_5_up = RAWMOUSE()
         button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_5_up),
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
+            capture_windows._mouse_event_to_reports(button_5_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
         )
 
     def test_mouse_event_to_reports_keeps_wheel_and_motion_reports(self) -> None:
@@ -813,8 +763,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse),
-            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00])],
+            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00])]
         )
 
     def test_mouse_event_to_reports_keeps_pan_and_motion_reports(self) -> None:
@@ -824,8 +773,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse),
-            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF])],
+            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF])]
         )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
@@ -846,9 +794,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(skipped, ("BTN_FORWARD", "BTN_BACK", "BTN_TASK"))
         self.assertEqual(len(steps), 10)
-        self.assertTrue(
-            all(step.code in capture_windows.WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES for step in steps)
-        )
+        self.assertTrue(all(step.code in capture_windows.WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES for step in steps))
 
     def test_windows_backend_imports_with_missing_non_windows_handle_aliases(self) -> None:
         if sys.platform == "win32":
@@ -913,10 +859,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
         with patch("pathlib.Path.exists", return_value=True):
             with patch("bluetooth_2_usb.loopback.inject._wait_for_service_settle"):
-                with patch(
-                    "bluetooth_2_usb.loopback.inject.UInput",
-                    side_effect=[keyboard, OSError("mouse failed")],
-                ):
+                with patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, OSError("mouse failed")]):
                     result = run_inject("combo")
 
         self.assertFalse(result.success)
@@ -950,11 +893,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
     def test_inject_cli_passes_none_for_scenario_default_event_gap(self) -> None:
         stdout = io.StringIO()
-        result = SimpleNamespace(
-            exit_code=0,
-            to_dict=lambda: {},
-            to_text=lambda: "ok",
-        )
+        result = SimpleNamespace(exit_code=0, to_dict=lambda: {}, to_text=lambda: "ok")
 
         with patch("bluetooth_2_usb.loopback.inject.run_inject", return_value=result) as run:
             with redirect_stdout(stdout):
@@ -988,11 +927,7 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(json.loads(stdout.getvalue())["details"]["keyboard_steps_seen"], 6)
 
     def test_capture_cli_uses_scenario_default_timeout(self) -> None:
-        result = SimpleNamespace(
-            exit_code=0,
-            to_dict=lambda: {},
-            to_text=lambda: "ok",
-        )
+        result = SimpleNamespace(exit_code=0, to_dict=lambda: {}, to_text=lambda: "ok")
 
         with patch("bluetooth_2_usb.loopback.capture.run_capture", return_value=result) as run:
             exit_code = run_loopback(["capture", "--scenario", "keyboard"])
@@ -1002,30 +937,14 @@ class LoopbackInjectTest(unittest.TestCase):
 
     def test_capture_uses_scenario_default_timeout(self) -> None:
         hid_module = _FakeHidModule(
-            [
-                _hid_entry(
-                    "kbd0",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
-                    interface_number=0,
-                    usage_page=0x01,
-                    usage=0x06,
-                )
-            ]
+            [_hid_entry("kbd0", vendor_id=0x1D6B, product_id=0x0104, interface_number=0, usage_page=0x01, usage=0x06)]
         )
         result = LoopbackResult(
-            command="capture",
-            scenario="keyboard",
-            success=True,
-            exit_code=0,
-            message="ok",
-            details={},
+            command="capture", scenario="keyboard", success=True, exit_code=0, message="ok", details={}
         )
 
         with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
-            with patch(
-                "bluetooth_2_usb.loopback.capture._capture_once", return_value=result
-            ) as run:
+            with patch("bluetooth_2_usb.loopback.capture._capture_once", return_value=result) as run:
                 capture_result = run_capture("keyboard")
 
         self.assertIs(capture_result, result)
@@ -1045,9 +964,7 @@ class LoopbackInjectTest(unittest.TestCase):
     def test_reports_busy_lock_cleanly(self) -> None:
         stdout = io.StringIO()
 
-        with patch(
-            "bluetooth_2_usb.loopback.cli.loopback_session", side_effect=LoopbackBusyError("busy")
-        ):
+        with patch("bluetooth_2_usb.loopback.cli.loopback_session", side_effect=LoopbackBusyError("busy")):
             with redirect_stdout(stdout):
                 exit_code = run_loopback(["capture"])
 
@@ -1073,20 +990,10 @@ class LoopbackInjectTest(unittest.TestCase):
             hid_module=_FakeHidModule(
                 [
                     _hid_entry(
-                        "kbd0",
-                        vendor_id=0x1D6B,
-                        product_id=0x0104,
-                        interface_number=0,
-                        usage_page=0x01,
-                        usage=0x06,
+                        "kbd0", vendor_id=0x1D6B, product_id=0x0104, interface_number=0, usage_page=0x01, usage=0x06
                     ),
                     _hid_entry(
-                        "mouse0",
-                        vendor_id=0x1D6B,
-                        product_id=0x0104,
-                        interface_number=1,
-                        usage_page=0x01,
-                        usage=0x02,
+                        "mouse0", vendor_id=0x1D6B, product_id=0x0104, interface_number=1, usage_page=0x01, usage=0x02
                     ),
                     _hid_entry(
                         "consumer0",
@@ -1106,12 +1013,7 @@ class LoopbackInjectTest(unittest.TestCase):
                 return_value=_FakeHidModule(
                     [
                         _hid_entry(
-                            "kbd0",
-                            vendor_id=0x1D6B,
-                            product_id=0x0104,
-                            interface_number=0,
-                            usage_page=0x01,
-                            usage=0x06,
+                            "kbd0", vendor_id=0x1D6B, product_id=0x0104, interface_number=0, usage_page=0x01, usage=0x06
                         ),
                         _hid_entry(
                             "mouse0",
@@ -1152,12 +1054,7 @@ class LoopbackInjectTest(unittest.TestCase):
         consumer_hid = _FakeHidModule(
             [
                 _hid_entry(
-                    "consumer0",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
-                    interface_number=2,
-                    usage_page=0x0C,
-                    usage=0x01,
+                    "consumer0", vendor_id=0x1D6B, product_id=0x0104, interface_number=2, usage_page=0x0C, usage=0x01
                 )
             ]
         )
