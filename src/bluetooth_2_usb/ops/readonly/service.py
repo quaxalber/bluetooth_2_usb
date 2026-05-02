@@ -8,7 +8,7 @@ def _systemctl_active(unit: str) -> bool:
     return run(["systemctl", "is-active", "--quiet", unit], check=False).returncode == 0
 
 
-def _stop_b2u_if_installed(context: str) -> bool:
+def stop_b2u_if_installed(context: str) -> bool:
     from ..deployment import service_installed
 
     state = service_installed()
@@ -20,7 +20,7 @@ def _stop_b2u_if_installed(context: str) -> bool:
     return bool(was_active)
 
 
-def _restart_b2u_if_installed(was_active: bool, context: str) -> None:
+def restart_b2u_if_installed(was_active: bool, context: str) -> None:
     from ..deployment import service_installed
 
     state = service_installed()

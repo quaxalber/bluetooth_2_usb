@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .config import ReadonlyConfig, load_readonly_config, write_readonly_config
-from .service import _restart_b2u_if_installed, _stop_b2u_if_installed, _systemctl_active
+from .service import restart_b2u_if_installed, stop_b2u_if_installed
 from .status import (
     READONLY_PACKAGES,
     bluetooth_state_persistent,
@@ -31,9 +31,8 @@ from .workflows import disable_readonly, enable_readonly, setup_persistent_bluet
 __all__ = [
     "READONLY_PACKAGES",
     "ReadonlyConfig",
-    "_restart_b2u_if_installed",
-    "_stop_b2u_if_installed",
-    "_systemctl_active",
+    "restart_b2u_if_installed",
+    "stop_b2u_if_installed",
     "bluetooth_state_persistent",
     "disable_readonly",
     "enable_readonly",

@@ -19,7 +19,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
     def test_smoketest_records_structured_probe_results(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=False)
 
-        smoke._bool(True, "ok probe", "failed probe")
+        smoke.record_bool(True, "ok probe", "failed probe")
         smoke.soft_warn("warning probe")
         smoke.warn_fail("failed probe", "failure detail")
 
@@ -113,7 +113,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 for method in (
                     "_path_exists",
                     "_command_ok",
-                    "_bool",
+                    "record_bool",
                     "_check_overlay_runtime",
                     "_check_initramfs",
                     "_check_readonly",

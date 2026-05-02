@@ -25,7 +25,7 @@ class _SignalHandlers:
     loop_handled_signals: tuple[int, ...]
 
 
-def _handled_shutdown_signals() -> tuple[signal.Signals, ...]:
+def handled_shutdown_signals() -> tuple[signal.Signals, ...]:
     signals = [signal.SIGINT, signal.SIGTERM]
     for optional_name in ("SIGHUP", "SIGQUIT"):
         optional_signal = getattr(signal, optional_name, None)
@@ -151,7 +151,7 @@ class Runtime:
             del frame
             _enqueue_shutdown(signal.Signals(sig).name)
 
-        for handled_signal in _handled_shutdown_signals():
+        for handled_signal in handled_shutdown_signals():
             sig_name = signal.Signals(handled_signal).name
             previous_handlers[handled_signal] = signal.getsignal(handled_signal)
             add_signal_handler = getattr(active_loop, "add_signal_handler", None)

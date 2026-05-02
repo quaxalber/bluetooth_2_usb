@@ -36,11 +36,21 @@ class HidGadgets:
         self._gadgets = {"keyboard": None, "mouse": None, "consumer": None}
         self._enabled = False
 
-    def _requested_devices(self):
+    def requested_devices(self):
+        """
+        Return the HID devices declared by the default gadget layout.
+
+        :return: A list of configured HID layout device declarations.
+        """
         return list(build_default_layout().devices)
 
-    def _declared_hidg_paths(self) -> tuple[Path, ...]:
-        return tuple(Path(f"/dev/hidg{device.function_index}") for device in self._requested_devices())
+    def declared_hidg_paths(self) -> tuple[Path, ...]:
+        """
+        Return the /dev/hidg paths expected from the default gadget layout.
+
+        :return: Paths derived from the declared HID function indexes.
+        """
+        return tuple(Path(f"/dev/hidg{device.function_index}") for device in self.requested_devices())
 
     def _hidg_path(self, device) -> Path | None:
         if getattr(device, "path", None):
@@ -53,10 +63,17 @@ class HidGadgets:
     def _hidg_paths(self, devices) -> tuple[Path, ...]:
         return tuple(path for device in devices if (path := self._hidg_path(device)) is not None)
 
-    def _prune_stale_hidg_nodes(
+    def prune_stale_hidg_nodes(
         self, paths: tuple[Path, ...] | None = None, *, remove_character_devices: bool = False
     ) -> None:
-        for path in self._declared_hidg_paths() if paths is None else paths:
+        """
+        Remove stale HID gadget device nodes before rebuilding the gadget.
+
+        :param paths: Optional paths to prune. Defaults to the layout-declared /dev/hidg paths.
+        :param remove_character_devices: Whether character device nodes should also be removed.
+        :return: None.
+        """
+        for path in self.declared_hidg_paths() if paths is None else paths:
             try:
                 mode = path.stat().st_mode
             except FileNotFoundError:
@@ -69,7 +86,13 @@ class HidGadgets:
             except FileNotFoundError:
                 continue
 
-    def _collect_invalid_hidg_nodes(self, devices) -> list[str]:
+    def collect_invalid_hidg_nodes(self, devices) -> list[str]:
+        """
+        Inspect enabled HID device nodes and describe nodes that are not writable character devices.
+
+        :param devices: Enabled usb_hid devices returned by gadget rebuild.
+        :return: Human-readable descriptions of unhealthy device nodes.
+        """
         invalid_paths: list[str] = []
         for device in devices:
             path = self._hidg_path(device)
@@ -94,15 +117,24 @@ class HidGadgets:
             os.close(fd)
         return invalid_paths
 
-    async def _validate_hidg_nodes(
+    async def validate_hidg_nodes(
         self, devices, timeout_sec: float | None = None, poll_interval_sec: float | None = None
     ) -> None:
+        """
+        Wait until all enabled HID device nodes are present and writable.
+
+        :param devices: Enabled usb_hid devices returned by gadget rebuild.
+        :param timeout_sec: Maximum time to wait, or None for the default timeout.
+        :param poll_interval_sec: Delay between health checks, or None for the default interval.
+        :return: None.
+        :raises RuntimeError: If any HID device node remains unhealthy when the timeout expires.
+        """
         timeout_sec = self.HIDG_NODE_READY_TIMEOUT_SEC if timeout_sec is None else timeout_sec
         poll_interval_sec = self.HIDG_NODE_POLL_INTERVAL_SEC if poll_interval_sec is None else poll_interval_sec
         deadline = asyncio.get_running_loop().time() + max(timeout_sec, 0.0)
 
         while True:
-            invalid_paths = self._collect_invalid_hidg_nodes(devices)
+            invalid_paths = self.collect_invalid_hidg_nodes(devices)
             if not invalid_paths:
                 return
             if asyncio.get_running_loop().time() >= deadline:
@@ -115,15 +147,15 @@ class HidGadgets:
         to the new Keyboard, Mouse, and ConsumerControl gadgets.
         """
         self._clear_gadget_state()
-        self._prune_stale_hidg_nodes()
+        self.prune_stale_hidg_nodes()
         enabled_devices = list(rebuild_gadget(build_default_layout()))
         try:
-            await self._validate_hidg_nodes(enabled_devices)
+            await self.validate_hidg_nodes(enabled_devices)
         except RuntimeError:
             logger.warning("Retrying HID gadget initialization after stale node validation failure")
-            self._prune_stale_hidg_nodes(self._hidg_paths(enabled_devices), remove_character_devices=True)
+            self.prune_stale_hidg_nodes(self._hidg_paths(enabled_devices), remove_character_devices=True)
             enabled_devices = list(rebuild_gadget(build_default_layout()))
-            await self._validate_hidg_nodes(enabled_devices)
+            await self.validate_hidg_nodes(enabled_devices)
 
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
@@ -167,7 +199,8 @@ class HidGadgets:
         Best-effort release of any pressed/active state on all HID gadgets.
 
         Shared gadget state is owned by HidGadgets rather than individual
-        device relays, so global shutdown can clear host-visible state once.
+        device relays, so host disconnect and shutdown can clear host-visible
+        state explicitly.
         """
         seen: set[int] = set()
         for name, gadget in self._gadgets.items():

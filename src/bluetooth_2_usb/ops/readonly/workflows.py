@@ -16,7 +16,7 @@ from ..boot_config import (
 )
 from ..commands import fail, info, ok, output, require_commands, run, warn
 from .config import ReadonlyConfig, load_readonly_config, write_readonly_config
-from .service import _restart_b2u_if_installed, _stop_b2u_if_installed, _systemctl_active
+from .service import _systemctl_active, restart_b2u_if_installed, stop_b2u_if_installed
 from .status import (
     bluetooth_state_persistent,
     machine_id_valid,
@@ -66,7 +66,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
     )
 
     bluetooth_was_active = _systemctl_active("bluetooth.service")
-    b2u_was_active = _stop_b2u_if_installed("before migrating Bluetooth state")
+    b2u_was_active = stop_b2u_if_installed("before migrating Bluetooth state")
     try:
         run(["systemctl", "stop", "bluetooth.service"])
         run(["systemctl", "daemon-reload"])
@@ -93,7 +93,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
             run(["systemctl", "start", "bluetooth.service"], check=False)
         elif not bluetooth_was_active and _systemctl_active("bluetooth.service"):
             run(["systemctl", "stop", "bluetooth.service"], check=False)
-        _restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
+        restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
     ok(f"Persistent Bluetooth state is active at {persist_bluetooth_dir}")
 
 

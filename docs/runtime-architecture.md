@@ -26,15 +26,16 @@ Runtime events are plain value objects from `runtime.events`:
 - `ShutdownRequested`
 
 This keeps service control in the event loop. Signal handlers, UDC polling,
-udev hotplug, relay start, relay cancellation, and gadget release all converge
-through the same queue instead of calling across thread or callback boundaries.
+udev hotplug, relay start, relay cancellation, and host-disconnect gadget
+release all converge through the same queue instead of calling across thread or
+callback boundaries.
 
 ## Shutdown
 
 Shutdown is requested by enqueueing `ShutdownRequested`. The supervisor stops
 scheduling new work, cancels active relay tasks, marks the host side inactive in
-`RelayGate`, and releases all HID gadget state once. The runtime also stops the
-event source and applies a bounded graceful shutdown timeout so systemd stop
+`RelayGate`, and clears host-visible HID gadget state. The runtime also stops
+the event source and applies a bounded graceful shutdown timeout so systemd stop
 handling remains predictable.
 
 ## Cable State
@@ -42,8 +43,9 @@ handling remains predictable.
 `UdcStateChanged(UdcState.CONFIGURED)` marks the host side configured. Any other
 UDC state marks the host side inactive and releases current HID gadget state.
 User pause state is independent, so reconnecting the USB cable does not undo a
-manual pause. A HID `BrokenPipeError` suspends writes until a fresh
-`UdcStateChanged(UdcState.CONFIGURED)` transition arrives.
+manual pause. User pause and write suspension stop relaying without globally
+releasing HID gadget state. A HID `BrokenPipeError` suspends writes until a
+fresh `UdcStateChanged(UdcState.CONFIGURED)` transition arrives.
 
 ## Hotplug
 

@@ -11,13 +11,13 @@ from bluetooth_2_usb.ops.commands import OpsError
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import (
     ReadonlyConfig,
-    _restart_b2u_if_installed,
-    _stop_b2u_if_installed,
     bluetooth_state_persistent,
     enable_readonly,
     load_readonly_config,
     overlay_status,
     print_readonly_status,
+    restart_b2u_if_installed,
+    stop_b2u_if_installed,
     write_bluetooth_bind_mount_unit,
     write_readonly_config,
 )
@@ -234,8 +234,8 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.ops.deployment.service_installed", return_value=True):
             with patch(f"{READONLY_SERVICE}.run", side_effect=fake_run):
-                was_active = _stop_b2u_if_installed("during test")
-                _restart_b2u_if_installed(was_active, "during test")
+                was_active = stop_b2u_if_installed("during test")
+                restart_b2u_if_installed(was_active, "during test")
 
         self.assertFalse(was_active)
         self.assertNotIn(["systemctl", "stop", "bluetooth_2_usb.service"], calls)

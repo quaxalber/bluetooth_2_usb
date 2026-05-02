@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
-from unittest.mock import Mock, call, patch
+from unittest.mock import call, patch
 
 from bluetooth_2_usb.ops.commands import OpsError
-from bluetooth_2_usb.ops.deployment import RollbackStack, install, install_cli_links, rebuild_venv_atomically, uninstall
+from bluetooth_2_usb.ops.deployment import install, install_cli_links, rebuild_venv_atomically, uninstall
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
@@ -19,26 +19,6 @@ class OpsDeploymentTest(unittest.TestCase):
         self.assertEqual(paths.persist_bluetooth_dir, Path("/tmp/persist/bluetooth"))
         self.assertEqual(paths.bluetooth_service_dropin, Path("/tmp/dropins/bluetooth_2_usb_persist.conf"))
 
-    def test_rollback_stack_runs_callbacks_in_reverse_order(self) -> None:
-        calls = []
-        rollback = RollbackStack()
-
-        rollback.push("first", lambda: calls.append("first"))
-        rollback.push("second", lambda: calls.append("second"))
-        rollback.rollback()
-
-        self.assertEqual(calls, ["second", "first"])
-
-    def test_rollback_stack_commit_discards_callbacks(self) -> None:
-        callback = Mock()
-        rollback = RollbackStack()
-
-        rollback.push("unused", callback)
-        rollback.commit()
-        rollback.rollback()
-
-        callback.assert_not_called()
-
     def test_install_cli_links_exposes_main_command(self) -> None:
         with patch("pathlib.Path.mkdir"):
             with patch("pathlib.Path.unlink") as unlink:
@@ -49,7 +29,7 @@ class OpsDeploymentTest(unittest.TestCase):
         self.assertEqual(linked_commands, ["bluetooth_2_usb"])
         self.assertEqual(unlink.call_args_list, [call(missing_ok=True), call(missing_ok=True)])
 
-    def test_rebuild_venv_can_keep_previous_environment_for_install_rollback(self) -> None:
+    def test_rebuild_venv_removes_previous_environment_after_success(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             venv = root / "venv"
@@ -62,14 +42,36 @@ class OpsDeploymentTest(unittest.TestCase):
 
             with patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv):
                 with patch("bluetooth_2_usb.ops.deployment.run"):
-                    previous = rebuild_venv_atomically(venv, root, keep_previous=True)
+                    rebuild_venv_atomically(venv, root)
 
-            self.assertIsNotNone(previous)
-            previous_path = previous or Path()
             self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "new")
-            self.assertEqual((previous_path / "marker").read_text(encoding="utf-8"), "previous")
+            self.assertFalse(any(root.glob("venv.old.*")))
 
-    def test_install_restores_active_service_when_rebuild_fails(self) -> None:
+    def test_rebuild_venv_restores_previous_environment_when_activation_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            venv = root / "venv"
+            (venv / "bin").mkdir(parents=True)
+            (venv / "marker").write_text("previous", encoding="utf-8")
+
+            def fake_recreate_venv(staging: Path) -> None:
+                (staging / "bin").mkdir(parents=True)
+                (staging / "marker").write_text("new", encoding="utf-8")
+
+            def fail_repair(_venv: Path, _staging: Path) -> None:
+                raise RuntimeError("activation failed")
+
+            with patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv):
+                with patch("bluetooth_2_usb.ops.deployment.repair_venv_shebangs", side_effect=fail_repair):
+                    with patch("bluetooth_2_usb.ops.deployment.run"):
+                        with self.assertRaisesRegex(RuntimeError, "activation failed"):
+                            rebuild_venv_atomically(venv, root)
+
+            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "previous")
+            self.assertFalse(any(root.glob("venv.new")))
+            self.assertFalse(any(root.glob("venv.old.*")))
+
+    def test_install_stops_active_service_before_rebuild_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / ".git").mkdir()
@@ -109,7 +111,7 @@ class OpsDeploymentTest(unittest.TestCase):
                     install(root)
 
         self.assertIn(["systemctl", "stop", paths.service_unit], commands)
-        self.assertIn(["systemctl", "start", paths.service_unit], commands)
+        self.assertNotIn(["systemctl", "start", paths.service_unit], commands)
 
     def test_install_canonicalizes_managed_env_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

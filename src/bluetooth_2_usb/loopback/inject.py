@@ -81,7 +81,7 @@ def _consumer_capabilities() -> dict[int, list[int]]:
     return {ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN]}
 
 
-def _configured_service_settle_sec() -> float:
+def configured_service_settle_sec() -> float:
     raw = os.environ.get(SERVICE_SETTLE_ENV, str(DEFAULT_SERVICE_SETTLE_SEC))
     try:
         settle = float(raw)
@@ -92,7 +92,7 @@ def _configured_service_settle_sec() -> float:
     return settle
 
 
-def _wait_for_service_settle(settle_seconds: float) -> None:
+def wait_for_service_settle(settle_seconds: float) -> None:
     if settle_seconds == 0 or not math.isfinite(settle_seconds):
         return
     try:
@@ -182,7 +182,7 @@ def run_inject(
             details={},
         )
 
-    _wait_for_service_settle(_configured_service_settle_sec())
+    wait_for_service_settle(configured_service_settle_sec())
 
     keyboard = None
     mouse = None

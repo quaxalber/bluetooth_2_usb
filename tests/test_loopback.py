@@ -35,9 +35,9 @@ from bluetooth_2_usb.loopback.constants import EXIT_ACCESS, EXIT_INTERRUPTED, EX
 from bluetooth_2_usb.loopback.inject import (
     DEFAULT_SERVICE_SETTLE_SEC,
     SERVICE_SETTLE_ENV,
-    _configured_service_settle_sec,
-    _wait_for_service_settle,
+    configured_service_settle_sec,
     run_inject,
+    wait_for_service_settle,
 )
 from bluetooth_2_usb.loopback.result import LoopbackResult
 from bluetooth_2_usb.loopback.scenarios import (
@@ -621,12 +621,9 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
-    def setUp(self) -> None:
-        capture_windows._reset_mouse_button_state()
-
     def test_extract_device_identities_collapses_windows_hid_paths(self) -> None:
         self.assertEqual(
-            capture_windows._extract_device_identities(
+            capture_windows.extract_device_identities(
                 (
                     r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{GUID}",
                     r"\\?\hid#vid_1d6b&pid_0104&mi_00#9&314c2078&0&0000#{guid}",
@@ -637,7 +634,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_matches_candidate_on_same_hid_instance_identity(self) -> None:
         self.assertTrue(
-            capture_windows._device_matches_candidate(
+            capture_windows.device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
             )
@@ -645,13 +642,13 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_stable_device_identity_ignores_guid_and_suffix_differences(self) -> None:
         self.assertEqual(
-            capture_windows._stable_device_identity(
+            capture_windows.stable_device_identity(
                 r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}\KBD"
             ),
             r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
         )
         self.assertEqual(
-            capture_windows._stable_device_identity(
+            capture_windows.stable_device_identity(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{884b96c3-56ef-11d1-bc8c-00a0c91405dd}"
             ),
             r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
@@ -659,7 +656,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_matches_candidate_on_shared_hid_instance_identity(self) -> None:
         self.assertTrue(
-            capture_windows._device_matches_candidate(
+            capture_windows.device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",),
             )
@@ -667,7 +664,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_device_does_not_match_different_hid_instance_identity(self) -> None:
         self.assertFalse(
-            capture_windows._device_matches_candidate(
+            capture_windows.device_matches_candidate(
                 r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
                 (r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",),
             )
@@ -675,105 +672,94 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
-            capture_windows._keyboard_event_to_report(0x7C, is_key_up=False), bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0])
+            capture_windows.keyboard_event_to_report(0x7C, is_key_up=False), bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0])
         )
-        self.assertEqual(capture_windows._keyboard_event_to_report(0x7C, is_key_up=True), bytes([0x00] * 8))
+        self.assertEqual(capture_windows.keyboard_event_to_report(0x7C, is_key_up=True), bytes([0x00] * 8))
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
-        self.assertIsNone(capture_windows._keyboard_event_to_report(0x41, is_key_up=False))
+        self.assertIsNone(capture_windows.keyboard_event_to_report(0x41, is_key_up=False))
 
-    def test_mouse_event_to_reports_builds_16_bit_xy_reports(self) -> None:
+    def test_raw_input_mouse_report_builder_builds_16_bit_xy_reports(self) -> None:
         raw_mouse = RAWMOUSE()
         raw_mouse.lLastX = 300
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00])]
+            capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
+            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00])],
         )
 
-    def test_mouse_event_to_reports_clamps_xy_to_descriptor_bounds(self) -> None:
+    def test_raw_input_mouse_report_builder_clamps_xy_to_descriptor_bounds(self) -> None:
         raw_mouse = RAWMOUSE()
         raw_mouse.lLastX = 40000
         raw_mouse.lLastY = -40000
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00])]
+            capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
+            [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00])],
         )
 
-    def test_mouse_event_to_reports_builds_horizontal_pan_reports(self) -> None:
+    def test_raw_input_mouse_report_builder_builds_horizontal_pan_reports(self) -> None:
         raw_mouse = RAWMOUSE()
         raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])]
+            capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
+            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
         )
 
-    def test_mouse_event_to_reports_tracks_button_state(self) -> None:
-        capture_windows._reset_mouse_button_state()
+    def test_raw_input_mouse_report_builder_tracks_button_state(self) -> None:
+        builder = capture_windows.RawInputMouseReportBuilder()
         left_button_down = RAWMOUSE()
         left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(left_button_down),
-            [bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
-        )
+        self.assertEqual(builder.reports_for(left_button_down), [bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
         move_while_pressed = RAWMOUSE()
         move_while_pressed.lLastX = 1
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(move_while_pressed),
-            [bytes([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])],
-        )
+        self.assertEqual(builder.reports_for(move_while_pressed), [bytes([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
         left_button_up = RAWMOUSE()
         left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(left_button_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
-        )
+        self.assertEqual(builder.reports_for(left_button_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
-    def test_mouse_event_to_reports_tracks_windows_extra_button_state(self) -> None:
-        capture_windows._reset_mouse_button_state()
+    def test_raw_input_mouse_report_builder_tracks_windows_extra_button_state(self) -> None:
+        builder = capture_windows.RawInputMouseReportBuilder()
         button_4_down = RAWMOUSE()
         button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_4_down), [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
-        )
+        self.assertEqual(builder.reports_for(button_4_down), [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
         button_5_down = RAWMOUSE()
         button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_5_down), [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
-        )
+        self.assertEqual(builder.reports_for(button_5_down), [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
         button_4_up = RAWMOUSE()
         button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_4_up), [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
-        )
+        self.assertEqual(builder.reports_for(button_4_up), [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
         button_5_up = RAWMOUSE()
         button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
-        self.assertEqual(
-            capture_windows._mouse_event_to_reports(button_5_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])]
-        )
+        self.assertEqual(builder.reports_for(button_5_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
 
-    def test_mouse_event_to_reports_keeps_wheel_and_motion_reports(self) -> None:
+    def test_raw_input_mouse_report_builder_keeps_wheel_and_motion_reports(self) -> None:
         raw_mouse = RAWMOUSE()
         raw_mouse.ulButtons = RI_MOUSE_WHEEL | (0x0001 << 16)
         raw_mouse.lLastX = 300
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00])]
+            capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
+            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00])],
         )
 
-    def test_mouse_event_to_reports_keeps_pan_and_motion_reports(self) -> None:
+    def test_raw_input_mouse_report_builder_keeps_pan_and_motion_reports(self) -> None:
         raw_mouse = RAWMOUSE()
         raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
         raw_mouse.lLastX = 300
         raw_mouse.lLastY = -300
 
         self.assertEqual(
-            capture_windows._mouse_event_to_reports(raw_mouse), [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF])]
+            capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
+            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF])],
         )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
@@ -790,7 +776,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             )
 
     def test_windows_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
-        steps, skipped = capture_windows._windows_mouse_button_expectations(SCENARIOS["mouse"])
+        steps, skipped = capture_windows.windows_mouse_button_expectations(SCENARIOS["mouse"])
 
         self.assertEqual(skipped, ("BTN_FORWARD", "BTN_BACK", "BTN_TASK"))
         self.assertEqual(len(steps), 10)
@@ -828,23 +814,23 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 class LoopbackInjectTest(unittest.TestCase):
     def test_configured_service_settle_accepts_zero_override(self) -> None:
         with patch.dict("os.environ", {SERVICE_SETTLE_ENV: "0"}):
-            self.assertEqual(_configured_service_settle_sec(), 0)
+            self.assertEqual(configured_service_settle_sec(), 0)
 
     def test_configured_service_settle_defaults_for_invalid_values(self) -> None:
         for value in ("not-a-number", "-1", "inf", "nan"):
             with self.subTest(value=value):
                 with patch.dict("os.environ", {SERVICE_SETTLE_ENV: value}):
-                    self.assertEqual(_configured_service_settle_sec(), DEFAULT_SERVICE_SETTLE_SEC)
+                    self.assertEqual(configured_service_settle_sec(), DEFAULT_SERVICE_SETTLE_SEC)
 
     def test_wait_for_service_settle_skips_systemctl_when_disabled(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.subprocess.run") as run:
-            _wait_for_service_settle(0)
+            wait_for_service_settle(0)
 
         run.assert_not_called()
 
     def test_wait_for_service_settle_ignores_missing_systemctl(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.subprocess.run", side_effect=OSError):
-            _wait_for_service_settle(1)
+            wait_for_service_settle(1)
 
     def test_run_inject_rejects_negative_timing_before_sleeping(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.time.sleep") as sleep:
@@ -858,7 +844,7 @@ class LoopbackInjectTest(unittest.TestCase):
         keyboard = Mock()
 
         with patch("pathlib.Path.exists", return_value=True):
-            with patch("bluetooth_2_usb.loopback.inject._wait_for_service_settle"):
+            with patch("bluetooth_2_usb.loopback.inject.wait_for_service_settle"):
                 with patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, OSError("mouse failed")]):
                     result = run_inject("combo")
 
@@ -871,7 +857,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
         with (
             patch("pathlib.Path.exists", return_value=True),
-            patch("bluetooth_2_usb.loopback.inject._wait_for_service_settle"),
+            patch("bluetooth_2_usb.loopback.inject.wait_for_service_settle"),
             patch("bluetooth_2_usb.loopback.inject.UInput", return_value=keyboard),
             patch("bluetooth_2_usb.loopback.inject.time.sleep"),
         ):

@@ -56,7 +56,7 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         )
         source = self._build_source(queue, monitor=monitor)
 
-        source._drain_udev_events()
+        source.drain_udev_events()
 
         self.assertEqual(await queue.get(), DeviceAdded("/dev/input/event7"))
         self.assertEqual(await queue.get(), DeviceRemoved("/dev/input/event7"))
@@ -77,11 +77,10 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
             udc_path.write_text("configured\n", encoding="utf-8")
             self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("configured"))
 
-            source.stop()
-            await asyncio.wait_for(task, timeout=1)
+        source.stop()
+        await asyncio.wait_for(task, timeout=1)
 
         self.assertTrue(monitor.started)
-        self.assertIsNone(source._loop)
         monitor.close()
 
     async def test_runtime_event_source_normalizes_udc_state_text(self) -> None:
@@ -117,8 +116,19 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
     async def test_udc_read_error_preserves_last_state(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
-        source = self._build_source(queue, monitor=monitor, udc_path=Path("/missing/state"))
-        source._last_state = UdcState.CONFIGURED
+        with tempfile.TemporaryDirectory() as tmpdir:
+            udc_path = Path(tmpdir) / "state"
+            udc_path.write_text("configured\n", encoding="utf-8")
+            source = self._build_source(queue, monitor=monitor, udc_path=udc_path)
 
-        self.assertIs(source._read_udc_state(), UdcState.CONFIGURED)
+            task = asyncio.create_task(source.run())
+            self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged(UdcState.CONFIGURED))
+
+            udc_path.unlink()
+            await asyncio.sleep(0.03)
+
+            source.stop()
+            await asyncio.wait_for(task, timeout=1)
+
+        self.assertTrue(queue.empty())
         monitor.close()

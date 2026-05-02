@@ -58,7 +58,7 @@ class SmokeTest:
             Path("/sys/kernel/config/usb_gadget"), "configfs gadget path is present", "configfs gadget path is missing"
         )
         udc_list = " ".join(path.name for path in Path("/sys/class/udc").glob("*"))
-        self._bool(bool(udc_list), f"UDC is present ({udc_list})", "No UDC detected")
+        self.record_bool(bool(udc_list), f"UDC is present ({udc_list})", "No UDC detected")
         self._command_ok(
             ["systemctl", "is-enabled", PATHS.service_unit],
             f"{PATHS.service_unit} is enabled",
@@ -73,7 +73,7 @@ class SmokeTest:
         self._path_exists(PATHS.venv_python, "Virtualenv interpreter is present", "Virtualenv interpreter is missing")
         if venv_present:
             validate_log = self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"])
-            self._bool(
+            self.record_bool(
                 validate_log[0] == 0,
                 "CLI environment validation passed",
                 "CLI environment validation failed",
@@ -82,7 +82,7 @@ class SmokeTest:
             service_settings_log = self._capture(
                 [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"]
             )
-            self._bool(
+            self.record_bool(
                 service_settings_log[0] == 0,
                 "Runtime settings are valid",
                 "Runtime settings validation failed",
@@ -98,14 +98,14 @@ class SmokeTest:
             "bluetooth.service is not active",
         )
         bt_show = self._capture(["bluetoothctl", "show"])
-        self._bool(
+        self.record_bool(
             bt_show[0] == 0 and bluetooth_controller_powered_from_text(bt_show[1]),
             "Bluetooth controller is powered",
             "bluetoothctl show failed or controller is not powered",
             bt_show[1],
         )
         btmgmt = self._capture(["btmgmt", "info"])
-        self._bool(btmgmt[0] == 0, "btmgmt info succeeded", "btmgmt info failed", btmgmt[1])
+        self.record_bool(btmgmt[0] == 0, "btmgmt info succeeded", "btmgmt info failed", btmgmt[1])
         entries = bluetooth_rfkill_entries()
         if entries:
             if bluetooth_rfkill_blocked():
@@ -297,7 +297,7 @@ class SmokeTest:
         return count
 
     def _path_exists(self, path: Path, success: str, failure: str) -> None:
-        self._bool(path.exists(), success, failure)
+        self.record_bool(path.exists(), success, failure)
 
     def _command_ok(self, command: list[str], success: str, failure: str) -> None:
         try:
@@ -305,9 +305,9 @@ class SmokeTest:
         except (FileNotFoundError, OpsError) as exc:
             self.warn_fail(failure, str(exc))
             return
-        self._bool(completed.returncode == 0, success, failure)
+        self.record_bool(completed.returncode == 0, success, failure)
 
-    def _bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
+    def record_bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
         if condition:
             self.pass_probe(success)
         else:

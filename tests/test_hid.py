@@ -9,7 +9,6 @@ from bluetooth_2_usb.hid.descriptors import MOUSE_IN_REPORT_LENGTH
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.hid.keyboard import ExtendedKeyboard
 from bluetooth_2_usb.hid.mouse import ExtendedMouse
-from bluetooth_2_usb.hid.mouse_delta import MouseDelta
 from bluetooth_2_usb.relay.gate import RelayGate
 
 
@@ -419,7 +418,9 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
-        await dispatcher._dispatch_key_event(SimpleNamespace(scancode=ecodes.KEY_VOLUMEUP, keystate=0))
+        with patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event):
+            with patch("bluetooth_2_usb.hid.dispatch.KeyEvent", _TestKeyEvent):
+                await dispatcher.dispatch(_TestKeyEvent(ecodes.KEY_VOLUMEUP, _TestKeyEvent.key_up))
 
         self.assertEqual(hid_gadgets.consumer.release_calls, 1)
         self.assertEqual(hid_gadgets.mouse.releases, [])
@@ -451,7 +452,13 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets.mouse.move = Mock(side_effect=BlockingIOError())
         dispatcher = HidDispatcher(hid_gadgets, gate)
 
-        await dispatcher._process_mouse_delta(MouseDelta(40000, -40000, 200, -200))
+        with patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event):
+            with patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent):
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 40000))
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -40000))
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_WHEEL, 200))
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_HWHEEL, -200))
+                await dispatcher.flush()
 
         hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
         self.assertEqual(dispatcher.write_failures, 1)

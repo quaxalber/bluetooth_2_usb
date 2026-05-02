@@ -93,8 +93,6 @@ RAW_MOUSE_BUTTON_BITS = (
 )
 WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES = {BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, BTN_SIDE, BTN_EXTRA}
 
-_mouse_button_state = 0
-
 
 class RAWINPUTDEVICE(ctypes.Structure):
     _fields_ = [
@@ -416,12 +414,12 @@ class _RawInputDebug:
         }
 
 
-def _extract_device_identities(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
+def extract_device_identities(nodes: tuple[str | None, ...]) -> tuple[str, ...]:
     identities: list[str] = []
     for node in nodes:
         if not node:
             continue
-        identity = _stable_device_identity(node)
+        identity = stable_device_identity(node)
         if identity not in identities:
             identities.append(identity)
     return tuple(identities)
@@ -431,7 +429,7 @@ def _normalize_device_name(name: str) -> str:
     return name.lower().replace("#", "\\")
 
 
-def _stable_device_identity(name: str) -> str:
+def stable_device_identity(name: str) -> str:
     normalized = _normalize_device_name(name)
     if normalized.startswith("\\\\?\\"):
         normalized = normalized[4:]
@@ -441,13 +439,13 @@ def _stable_device_identity(name: str) -> str:
     return normalized
 
 
-def _device_matches_candidate(device_name: str, candidate_identities: tuple[str, ...]) -> bool:
+def device_matches_candidate(device_name: str, candidate_identities: tuple[str, ...]) -> bool:
     if not candidate_identities:
         return False
-    return _stable_device_identity(device_name) in candidate_identities
+    return stable_device_identity(device_name) in candidate_identities
 
 
-def _keyboard_event_to_report(vkey: int, is_key_up: bool) -> bytes | None:
+def keyboard_event_to_report(vkey: int, *, is_key_up: bool) -> bytes | None:
     hid_code = VK_TO_HID.get(vkey)
     if hid_code is None:
         return None
@@ -461,24 +459,35 @@ def _mouse_i16_bytes(value: int) -> bytes:
     return clamped.to_bytes(2, "little", signed=True)
 
 
-def _apply_mouse_button_flags(button_flags: int) -> bool:
-    global _mouse_button_state
+class RawInputMouseReportBuilder:
+    def __init__(self) -> None:
+        self._button_state = 0
 
-    changed = False
-    for down_flag, up_flag, button_bit in RAW_MOUSE_BUTTON_BITS:
-        if button_flags & down_flag:
-            _mouse_button_state |= button_bit
-            changed = True
-        if button_flags & up_flag:
-            _mouse_button_state &= ~button_bit
-            changed = True
-    return changed
+    def reports_for(self, raw_mouse: RAWMOUSE) -> list[bytes]:
+        reports: list[bytes] = []
+        button_flags = raw_mouse.ulButtons & 0xFFFF
+        button_changed = self._apply_button_flags(button_flags)
+        wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
+        wheel = wheel_value if button_flags & RI_MOUSE_WHEEL else 0
+        pan = wheel_value if button_flags & RI_MOUSE_HORIZONTAL_WHEEL else 0
+        if raw_mouse.lLastX or raw_mouse.lLastY or wheel or pan:
+            x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
+            y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
+            reports.append(bytes([self._button_state, *x_bytes, *y_bytes, wheel & 0xFF, pan & 0xFF]))
+        if button_changed and not reports:
+            reports.append(bytes([self._button_state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        return reports
 
-
-def _reset_mouse_button_state() -> None:
-    global _mouse_button_state
-
-    _mouse_button_state = 0
+    def _apply_button_flags(self, button_flags: int) -> bool:
+        changed = False
+        for down_flag, up_flag, button_bit in RAW_MOUSE_BUTTON_BITS:
+            if button_flags & down_flag:
+                self._button_state |= button_bit
+                changed = True
+            if button_flags & up_flag:
+                self._button_state &= ~button_bit
+                changed = True
+        return changed
 
 
 def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
@@ -489,29 +498,13 @@ def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
     )
 
 
-def _windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
+def windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
     skipped_codes = _unsupported_windows_mouse_button_codes(scenario)
     skipped_names = tuple(EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in skipped_codes)
     supported_steps = tuple(
         step for step in scenario.mouse_button_steps if step.code in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
     )
     return supported_steps, skipped_names
-
-
-def _mouse_event_to_reports(raw_mouse: RAWMOUSE) -> list[bytes]:
-    reports: list[bytes] = []
-    button_flags = raw_mouse.ulButtons & 0xFFFF
-    button_changed = _apply_mouse_button_flags(button_flags)
-    wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
-    wheel = wheel_value if button_flags & RI_MOUSE_WHEEL else 0
-    pan = wheel_value if button_flags & RI_MOUSE_HORIZONTAL_WHEEL else 0
-    if raw_mouse.lLastX or raw_mouse.lLastY or wheel or pan:
-        x_bytes = _mouse_i16_bytes(raw_mouse.lLastX)
-        y_bytes = _mouse_i16_bytes(raw_mouse.lLastY)
-        reports.append(bytes([_mouse_button_state, *x_bytes, *y_bytes, wheel & 0xFF, pan & 0xFF]))
-    if button_changed and not reports:
-        reports.append(bytes([_mouse_button_state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-    return reports
 
 
 def _get_raw_input_device_name(hdevice: int) -> str:
@@ -677,7 +670,7 @@ def _pump_raw_input(
 ) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     expected_mouse_button_steps = scenario.mouse_button_steps if mouse_button_steps is None else mouse_button_steps
-    _reset_mouse_button_state()
+    mouse_report_builder = RawInputMouseReportBuilder()
     keyboard_candidate = (
         _RawInputCandidate("keyboard", keyboard_candidate_identities, KeyboardSequenceMatcher(scenario.keyboard_steps))
         if scenario.keyboard_enabled
@@ -720,11 +713,13 @@ def _pump_raw_input(
                         device_name = _get_raw_input_device_name(raw.header.hDevice)
                     except OSError:
                         device_name = "<unavailable>"
-                    device_identity = _stable_device_identity(device_name)
+                    device_identity = stable_device_identity(device_name)
 
                     if raw.header.dwType == RIM_TYPEKEYBOARD and keyboard_candidate:
-                        matched = _device_matches_candidate(device_name, keyboard_candidate.candidate_identities)
-                        report = _keyboard_event_to_report(raw.keyboard.VKey, bool(raw.keyboard.Flags & RI_KEY_BREAK))
+                        matched = device_matches_candidate(device_name, keyboard_candidate.candidate_identities)
+                        report = keyboard_event_to_report(
+                            raw.keyboard.VKey, is_key_up=bool(raw.keyboard.Flags & RI_KEY_BREAK)
+                        )
                         debug.note_event(
                             role="keyboard",
                             device_name=device_name,
@@ -744,7 +739,7 @@ def _pump_raw_input(
                         keyboard_candidate.matcher.handle(report)
 
                     elif raw.header.dwType == RIM_TYPEMOUSE and mouse_candidate:
-                        matched = _device_matches_candidate(device_name, mouse_candidate.candidate_identities)
+                        matched = device_matches_candidate(device_name, mouse_candidate.candidate_identities)
                         debug.note_event(
                             role="mouse",
                             device_name=device_name,
@@ -757,11 +752,11 @@ def _pump_raw_input(
                         if not matched:
                             continue
                         mouse_candidate.matched_name = device_name
-                        for report in _mouse_event_to_reports(raw.mouse):
+                        for report in mouse_report_builder.reports_for(raw.mouse):
                             mouse_candidate.note_report(report)
                             mouse_candidate.matcher.handle(report)
                     elif raw.header.dwType == RIM_TYPEHID and consumer_candidate:
-                        matched = _device_matches_candidate(device_name, consumer_candidate.candidate_identities)
+                        matched = device_matches_candidate(device_name, consumer_candidate.candidate_identities)
                         for report in _extract_raw_hid_reports(raw_bytes):
                             debug.note_event(
                                 role="consumer",
@@ -878,7 +873,7 @@ def run_windows_raw_input_capture(
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
-    mouse_button_steps, windows_skipped_mouse_buttons = _windows_mouse_button_expectations(scenario)
+    mouse_button_steps, windows_skipped_mouse_buttons = windows_mouse_button_expectations(scenario)
 
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
@@ -886,21 +881,19 @@ def run_windows_raw_input_capture(
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
             return _missing_raw_input_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
-        keyboard_candidate_identities = _extract_device_identities(
+        keyboard_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.keyboard_nodes)
         )
     if scenario.mouse_enabled:
         if not candidate_nodes.mouse_nodes:
             return _missing_raw_input_node_result(scenario.name, "Mouse HID device was not found", candidate_nodes)
-        mouse_candidate_identities = _extract_device_identities(
-            tuple(info.node for info in candidate_nodes.mouse_nodes)
-        )
+        mouse_candidate_identities = extract_device_identities(tuple(info.node for info in candidate_nodes.mouse_nodes))
     if scenario.consumer_enabled:
         if not candidate_nodes.consumer_nodes:
             return _missing_raw_input_node_result(
                 scenario.name, "Consumer-control HID device was not found", candidate_nodes
             )
-        consumer_candidate_identities = _extract_device_identities(
+        consumer_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )
 

@@ -86,15 +86,12 @@ class RelaySupervisor:
         self._grab_devices = grab_devices
 
         self._state = _SupervisorState.NEW
-        self._shutdown_event = asyncio.Event()
-        self._gadgets_released = False
-        self._gadget_release_task: asyncio.Task[None] | None = None
 
         self._active_relays: dict[str, _ActiveRelay] = {}
         self._hotplug_probe_tasks: dict[str, asyncio.Task[None]] = {}
 
     def _shutdown_requested(self) -> bool:
-        return self._shutdown_event.is_set()
+        return self._state in (_SupervisorState.STOPPING, _SupervisorState.STOPPED)
 
     async def run(self, events: asyncio.Queue[RuntimeEvent]) -> None:
         """
@@ -108,7 +105,7 @@ class RelaySupervisor:
             raise RuntimeError("RelaySupervisor cannot be restarted")
         if self._state is _SupervisorState.RUNNING:
             raise RuntimeError("RelaySupervisor is already running")
-        if self._shutdown_requested() or self._state is _SupervisorState.STOPPING:
+        if self._shutdown_requested():
             self._state = _SupervisorState.STOPPED
             return
 
@@ -119,7 +116,6 @@ class RelaySupervisor:
                 logger.exception("Failed enumerating input devices: %s", exc)
                 raise
 
-            self._relay_gate.add_listener(self._relay_gate_changed)
             await self._run(events, initial_devices)
         except Exception:
             logger.exception("Relay supervisor failed.")
@@ -129,9 +125,9 @@ class RelaySupervisor:
                 self._cancel_all_pending_hotplug_probes()
                 for device_path, active_relay in list(self._active_relays.items()):
                     self._relay_task_done(device_path, active_relay.task)
-                self._relay_gate.remove_listener(self._relay_gate_changed)
                 self._relay_gate.set_host_configured(False)
-                await self._release_all_once()
+                if self._state is not _SupervisorState.STOPPING:
+                    await self._hid_gadgets.release_all()
             finally:
                 self._state = _SupervisorState.STOPPED
                 logger.debug("Task group exited.")
@@ -153,26 +149,9 @@ class RelaySupervisor:
         await self._consume_events(events)
 
     async def _consume_events(self, events: asyncio.Queue[RuntimeEvent]) -> None:
-        while not self._shutdown_requested():
-            event_task = self._task_group.create_task(events.get(), name="runtime event queue wait")
-            shutdown_task = self._task_group.create_task(self._shutdown_event.wait(), name="runtime shutdown wait")
-            try:
-                done, pending = await asyncio.wait({event_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED)
-                for task in pending:
-                    task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-
-                if shutdown_task in done:
-                    return
-
-                event = event_task.result()
-                await self._handle_runtime_event(event)
-            finally:
-                tasks = [task for task in (event_task, shutdown_task) if not task.done()]
-                for task in tasks:
-                    task.cancel()
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
+        while self._state is _SupervisorState.RUNNING:
+            event = await events.get()
+            await self._handle_runtime_event(event)
 
     async def _handle_runtime_event(self, event: RuntimeEvent) -> None:
         if isinstance(event, DeviceAdded):
@@ -180,16 +159,13 @@ class RelaySupervisor:
         elif isinstance(event, DeviceRemoved):
             self._device_removed(event.path)
         elif isinstance(event, UdcStateChanged):
+            was_configured = self._relay_gate.state.host_configured
             self._relay_gate.set_host_configured(event.state is UdcState.CONFIGURED)
+            if was_configured and event.state is not UdcState.CONFIGURED:
+                await self._hid_gadgets.release_all()
         elif isinstance(event, ShutdownRequested):
             logger.debug("Runtime shutdown requested: %s", event.reason)
             await self._begin_shutdown()
-
-    def _relay_gate_changed(self, active: bool) -> None:
-        if active:
-            self._gadgets_released = False
-            return
-        self._schedule_release_all_once()
 
     async def _begin_shutdown(self) -> None:
         """
@@ -202,16 +178,15 @@ class RelaySupervisor:
             return
 
         self._state = _SupervisorState.STOPPING
-        self._shutdown_event.set()
         self._cancel_all_pending_hotplug_probes()
 
+        was_configured = self._relay_gate.state.host_configured
         self._relay_gate.set_host_configured(False)
-        await self._release_all_once()
+        if was_configured:
+            await self._hid_gadgets.release_all()
 
-        tasks = [active_relay.task for active_relay in self._active_relays.values()]
         for device_path in list(self._active_relays):
             self._cancel_active_relay(device_path)
-        self._release_gadgets_after_relay_tasks_stop(tasks)
 
     def _device_added(self, device_path: str) -> None:
         if self._state is not _SupervisorState.RUNNING:
@@ -223,9 +198,6 @@ class RelaySupervisor:
     def _device_removed(self, device_path: str) -> None:
         if self._state in (_SupervisorState.NEW, _SupervisorState.STOPPING, _SupervisorState.STOPPED):
             logger.debug("Ignoring remove for %s; supervisor is shutting down.", device_path)
-            return
-        if self._shutdown_requested():
-            logger.debug("Ignoring remove for %s; event loop is unavailable.", device_path)
             return
         self._cancel_pending_hotplug_probe(device_path)
         self._cancel_active_relay(device_path)
@@ -333,48 +305,6 @@ class RelaySupervisor:
         else:
             active_relay.task.cancel()
             logger.debug("Cancelled relay for %s.", device_path)
-
-    def _release_gadgets_after_relay_tasks_stop(self, tasks: list[asyncio.Task[None]]) -> None:
-        pending_tasks = {task for task in tasks if not task.done()}
-        if not pending_tasks:
-            self._schedule_release_all_once()
-            return
-
-        def _release_when_last_task_stops(done_task: asyncio.Task[None]) -> None:
-            pending_tasks.discard(done_task)
-            if not pending_tasks:
-                self._schedule_release_all_once()
-
-        for task in pending_tasks:
-            task.add_done_callback(_release_when_last_task_stops)
-
-    def _schedule_release_all_once(self) -> None:
-        if self._gadgets_released or (self._gadget_release_task is not None and not self._gadget_release_task.done()):
-            return
-
-        async def _release() -> None:
-            try:
-                await self._hid_gadgets.release_all()
-                self._gadgets_released = True
-            finally:
-                self._gadget_release_task = None
-
-        release = _release()
-        try:
-            self._gadget_release_task = self._task_group.create_task(release, name="hid gadget release")
-        except RuntimeError:
-            release.close()
-            logger.debug("Ignoring HID gadget release scheduling during TaskGroup shutdown.")
-
-    async def _release_all_once(self) -> None:
-        if self._gadgets_released:
-            return
-        if self._gadget_release_task is not None:
-            await self._gadget_release_task
-            if self._gadgets_released:
-                return
-        await self._hid_gadgets.release_all()
-        self._gadgets_released = True
 
     def _relay_task_done(self, device_path: str, task: asyncio.Task[None]) -> None:
         active_relay = self._active_relays.get(device_path)

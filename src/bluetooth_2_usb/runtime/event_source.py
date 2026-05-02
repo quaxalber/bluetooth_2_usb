@@ -3,29 +3,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pyudev
+
 from ..logging import get_logger
 from .events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcState, UdcStateChanged
 
 logger = get_logger(__name__)
-
-try:
-    import pyudev
-except ModuleNotFoundError:
-
-    class _MissingPyudevModule:
-        class Device:
-            device_node = None
-
-        class Context:
-            def __init__(self, *_args, **_kwargs) -> None:
-                raise ModuleNotFoundError("pyudev is required for runtime monitoring on this platform.")
-
-        class Monitor:
-            @staticmethod
-            def from_netlink(*_args, **_kwargs):
-                raise ModuleNotFoundError("pyudev is required for runtime monitoring on this platform.")
-
-    pyudev = _MissingPyudevModule()
 
 
 class RuntimeEventSource:
@@ -66,7 +49,7 @@ class RuntimeEventSource:
         self._loop = asyncio.get_running_loop()
         self._last_state = None
         self._monitor.start()
-        self._loop.add_reader(self._monitor.fileno(), self._drain_udev_events)
+        self._loop.add_reader(self._monitor.fileno(), self.drain_udev_events)
         logger.debug("RuntimeEventSource started.")
 
     def _stop_monitoring(self) -> None:
@@ -78,7 +61,7 @@ class RuntimeEventSource:
 
     async def _poll_udc_state(self) -> None:
         while not self._stop_event.is_set():
-            new_state = self._read_udc_state()
+            new_state = self.read_udc_state()
             if new_state != self._last_state:
                 await self._events.put(UdcStateChanged(new_state))
                 self._last_state = new_state
@@ -87,7 +70,12 @@ class RuntimeEventSource:
             except TimeoutError:
                 pass
 
-    def _read_udc_state(self) -> UdcState:
+    def read_udc_state(self) -> UdcState:
+        """
+        Read and normalize the current USB device controller state.
+
+        :return: The normalized UDC state, or the previous state when the state file cannot be read.
+        """
         if self._udc_path is None:
             return UdcState.NOT_ATTACHED
 
@@ -98,7 +86,12 @@ class RuntimeEventSource:
             logger.debug("Unable to read UDC state from %s", self._udc_path)
             return self._last_state or UdcState.NOT_ATTACHED
 
-    def _drain_udev_events(self) -> None:
+    def drain_udev_events(self) -> None:
+        """
+        Drain all currently queued udev monitor events into the runtime event queue.
+
+        :return: None.
+        """
         while True:
             try:
                 device = self._monitor.poll(timeout=0)
