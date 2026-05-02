@@ -110,11 +110,21 @@ def debug_report(duration: int | None) -> int:
             [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"],
             8,
         )
-        debug_command = run(
-            [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--print-shell-command", "--append-debug"],
-            check=False,
-            capture=True,
-        ).stdout.strip()
+        try:
+            debug_command = run(
+                [
+                    PATHS.venv_python,
+                    "-m",
+                    "bluetooth_2_usb.service_settings",
+                    "--print-shell-command",
+                    "--append-debug",
+                ],
+                check=False,
+                capture=True,
+                timeout=5,
+            ).stdout.strip()
+        except (FileNotFoundError, OpsError, subprocess.TimeoutExpired):
+            debug_command = ""
         text_block(
             "Live debug setup",
             f"live_debug_duration={duration if duration else 'until interrupted'}\n"
@@ -135,8 +145,16 @@ def debug_report(duration: int | None) -> int:
 def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
     stopped_service = False
     if run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0:
-        run(["systemctl", "stop", PATHS.service_unit], check=False)
+        stop = run(["systemctl", "stop", PATHS.service_unit], check=False, capture=True)
+        if stop.returncode != 0:
+            output_text = stop.stdout + stop.stderr
+            return redact(
+                "Failed to stop bluetooth_2_usb.service; live debug was not started.\n"
+                + (output_text or "<no output>"),
+                hostname,
+            )
         stopped_service = True
+    debug_output = ""
     try:
         timeout = duration
         with tempfile.TemporaryFile("w+t", encoding="utf-8") as output_file:
@@ -156,7 +174,14 @@ def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
             output_file.seek(0)
-            return redact(output_file.read(), hostname) or "<no output>"
+            debug_output = output_file.read()
     finally:
         if stopped_service:
-            run(["systemctl", "start", PATHS.service_unit], check=False)
+            start = run(["systemctl", "start", PATHS.service_unit], check=False, capture=True)
+            if start.returncode != 0:
+                debug_output += (
+                    "\n[failed to restart bluetooth_2_usb.service: "
+                    + ((start.stdout + start.stderr).strip() or "<no output>")
+                    + "]"
+                )
+    return redact(debug_output, hostname) or "<no output>"

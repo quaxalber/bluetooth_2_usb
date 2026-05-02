@@ -23,6 +23,8 @@ if ($env:HOST_CAPTURE_PYTHON -and (Test-PythonHasHid $env:HOST_CAPTURE_PYTHON)) 
   $PythonBin = $env:HOST_CAPTURE_PYTHON
 } elseif ((Test-Path $VenvPython) -and (Test-PythonHasHid $VenvPython)) {
   $PythonBin = $VenvPython
+} elseif (Test-Path $VenvPython) {
+  Write-Error "Repository venv exists at '$VenvPython' but cannot import hid. Install requirements-host-capture.txt into that venv."
 } elseif (Test-PythonHasHid "python") {
   $PythonBin = "python"
 } else {

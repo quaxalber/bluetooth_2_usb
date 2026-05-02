@@ -132,9 +132,15 @@ def _root_filesystem_type() -> str:
 
 
 def _findmnt_value(target: str | Path, field: str) -> str:
-    completed = run(["findmnt", "-n", "-o", field, "--target", target], check=False, capture=True)
+    try:
+        completed = run(["findmnt", "-n", "-o", field, "--target", target], check=False, capture=True)
+    except (FileNotFoundError, OpsError, OSError):
+        return ""
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 
 def _mountpoint(path: Path) -> bool:
-    return run(["mountpoint", "-q", path], check=False).returncode == 0
+    try:
+        return run(["mountpoint", "-q", path], check=False).returncode == 0
+    except (FileNotFoundError, OpsError, OSError):
+        return False

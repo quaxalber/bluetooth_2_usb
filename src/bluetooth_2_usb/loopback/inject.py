@@ -4,6 +4,7 @@ import math
 import os
 import subprocess
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from evdev import UInput, ecodes
@@ -50,7 +51,8 @@ def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
 def _close_devices(*devices) -> None:
     for device in devices:
         if device is not None:
-            device.close()
+            with suppress(Exception):
+                device.close()
 
 
 def _keyboard_capabilities() -> dict[int, list[int]]:

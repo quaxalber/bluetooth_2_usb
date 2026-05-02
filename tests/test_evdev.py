@@ -2,20 +2,20 @@ import unittest
 from types import SimpleNamespace
 
 from bluetooth_2_usb.evdev import ecodes, evdev_to_usb_hid
-from bluetooth_2_usb.hid.mouse import ExtendedMouse
+from bluetooth_2_usb.hid.buttons import MouseButtons
 
 
 class ExtendedMouseButtonMappingTest(unittest.TestCase):
     def test_evdev_uses_extended_mouse_button_bits(self) -> None:
         expected_buttons = {
-            ecodes.BTN_LEFT: ExtendedMouse.LEFT,
-            ecodes.BTN_RIGHT: ExtendedMouse.RIGHT,
-            ecodes.BTN_MIDDLE: ExtendedMouse.MIDDLE,
-            ecodes.BTN_SIDE: ExtendedMouse.SIDE,
-            ecodes.BTN_EXTRA: ExtendedMouse.EXTRA,
-            ecodes.BTN_FORWARD: ExtendedMouse.FORWARD,
-            ecodes.BTN_BACK: ExtendedMouse.BACK,
-            ecodes.BTN_TASK: ExtendedMouse.TASK,
+            ecodes.BTN_LEFT: MouseButtons.LEFT,
+            ecodes.BTN_RIGHT: MouseButtons.RIGHT,
+            ecodes.BTN_MIDDLE: MouseButtons.MIDDLE,
+            ecodes.BTN_SIDE: MouseButtons.SIDE,
+            ecodes.BTN_EXTRA: MouseButtons.EXTRA,
+            ecodes.BTN_FORWARD: MouseButtons.FORWARD,
+            ecodes.BTN_BACK: MouseButtons.BACK,
+            ecodes.BTN_TASK: MouseButtons.TASK,
         }
 
         for scancode, button in expected_buttons.items():

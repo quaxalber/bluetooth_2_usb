@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 from bluetooth_2_usb.evdev import ecodes
+from bluetooth_2_usb.hid.buttons import MouseButtons
 from bluetooth_2_usb.hid.consumer import ExtendedConsumerControl
 from bluetooth_2_usb.hid.descriptors import MOUSE_IN_REPORT_LENGTH
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
@@ -213,13 +214,13 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             patch("bluetooth_2_usb.hid.mouse.asyncio.sleep") as sleep,
         ):
             mouse = ExtendedMouse(devices=[])
-            await mouse.press(mouse.LEFT_BUTTON)
-            await mouse.release(mouse.LEFT_BUTTON)
+            await mouse.press(MouseButtons.LEFT)
+            await mouse.release(MouseButtons.LEFT)
             await mouse.release_all()
 
         self.assertEqual(
             device.sent,
-            [bytes([mouse.LEFT_BUTTON, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0])],
+            [bytes([MouseButtons.LEFT, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0])],
         )
         sleep.assert_not_called()
 
@@ -404,8 +405,8 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         with patch("adafruit_hid.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
-            await mouse.press(ExtendedMouse.TASK_BUTTON)
-            await mouse.release(ExtendedMouse.TASK_BUTTON)
+            await mouse.press(MouseButtons.TASK)
+            await mouse.release(MouseButtons.TASK)
 
         self.assertEqual(
             device.sent,

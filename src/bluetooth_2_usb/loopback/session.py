@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import stat
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -56,9 +57,31 @@ def _unlock_loopback_file(lock_handle) -> None:
     fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
+def _open_loopback_lock_file():
+    if os.name == "nt":
+        return LOOPBACK_LOCK_PATH.open("a+", encoding="utf-8")
+
+    flags = os.O_RDWR | os.O_CREAT
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(LOOPBACK_LOCK_PATH, flags, 0o600)
+    except OSError as exc:
+        raise LoopbackBusyError(f"Unable to open loopback lock safely: {LOOPBACK_LOCK_PATH}: {exc}") from exc
+
+    try:
+        file_stat = os.fstat(fd)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise LoopbackBusyError(f"Loopback lock path is not a regular file: {LOOPBACK_LOCK_PATH}")
+        return os.fdopen(fd, "a+", encoding="utf-8")
+    except (OSError, LoopbackBusyError):
+        os.close(fd)
+        raise
+
+
 @contextmanager
 def loopback_session(command: str, scenario: str):
-    lock_handle = LOOPBACK_LOCK_PATH.open("a+", encoding="utf-8")
+    lock_handle = _open_loopback_lock_file()
     try:
         if lock_handle.tell() == 0:
             lock_handle.write("\n")

@@ -374,7 +374,7 @@ def normalize_modules_load(cmdline_file: Path, modules: str) -> None:
     for token in tokens:
         if token.startswith("modules-load="):
             existing.extend(value for value in token.split("=", 1)[1].split(",") if value)
-    existing = [value for value in existing if value not in {"dwc2", "libcomposite"}]
+    existing = [value for value in existing if value not in {"dwc2", "dwc_otg", "libcomposite"}]
     merged: list[str] = []
     for value in [*existing, *modules.split(",")]:
         if value and value not in merged:

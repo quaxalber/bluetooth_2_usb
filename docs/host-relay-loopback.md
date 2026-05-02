@@ -61,13 +61,13 @@ sudo bluetooth_2_usb debug --duration 10
 On Linux:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
 ```
 
 Experimental: macOS
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --timeout-sec 1 --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
 ```
 
 > [!NOTE]
@@ -78,7 +78,7 @@ venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --timeout-sec 1 --
 On Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --timeout-sec 1 --output json
+powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,

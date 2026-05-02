@@ -15,7 +15,9 @@ def redact(text: str, hostname: str) -> str:
     ]
     redacted = text
     if hostname:
-        redacted = re.sub(rf"\b{re.escape(hostname)}\b", "<<REDACTED_HOSTNAME>>", redacted)
+        redacted = re.sub(
+            rf"\b{re.escape(hostname)}\b", "<<REDACTED_HOSTNAME>>", redacted, flags=re.IGNORECASE | re.MULTILINE
+        )
     for pattern, replacement in patterns:
         redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE | re.MULTILINE)
     return redacted

@@ -86,7 +86,7 @@ class BootConfigOpsTest(unittest.TestCase):
     def test_normalize_modules_load_replaces_stale_otg_tokens(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cmdline = Path(tmpdir) / "cmdline.txt"
-            cmdline.write_text("root=/dev/mmcblk0p2 modules-load=dwc2,libcomposite,foo quiet\n")
+            cmdline.write_text("root=/dev/mmcblk0p2 modules-load=dwc_otg,dwc2,libcomposite,foo quiet\n")
 
             boot_config.normalize_modules_load(cmdline, "libcomposite")
 

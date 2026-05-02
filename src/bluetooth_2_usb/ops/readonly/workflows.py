@@ -36,7 +36,9 @@ from .units import (
 
 
 def setup_persistent_bluetooth_state(device: str) -> None:
-    require_commands(["blkid", "cp", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape"])
+    require_commands(
+        ["blkid", "cp", "findmnt", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape", "umount"]
+    )
     if not machine_id_valid():
         fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
     detected_type = run(["blkid", "-s", "TYPE", "-o", "value", device], check=False, capture=True).stdout.strip()
@@ -82,12 +84,15 @@ def setup_persistent_bluetooth_state(device: str) -> None:
                 run(["umount", "/var/lib/bluetooth"])
         Path("/var/lib/bluetooth").mkdir(parents=True, exist_ok=True)
         run(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"])
-        run(["systemctl", "start", "bluetooth.service"])
-        if not _systemctl_active("bluetooth.service"):
+        if bluetooth_was_active:
+            run(["systemctl", "start", "bluetooth.service"])
+        if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
             fail("bluetooth.service did not come back up after enabling the persistent bind mount")
     finally:
         if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
             run(["systemctl", "start", "bluetooth.service"], check=False)
+        elif not bluetooth_was_active and _systemctl_active("bluetooth.service"):
+            run(["systemctl", "stop", "bluetooth.service"], check=False)
         _restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
     ok(f"Persistent Bluetooth state is active at {persist_bluetooth_dir}")
 

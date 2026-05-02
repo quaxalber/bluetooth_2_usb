@@ -468,6 +468,16 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
                     await relay.async_relay_events_loop()
 
+    async def test_dispatch_enodev_is_not_treated_as_input_device_removal(self) -> None:
+        gate = _active_gate()
+        input_device = _TestInputDevice([_TestKeyEvent(183, _TestKeyEvent.key_down)])
+        relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
+
+        with patch.object(relay._dispatcher, "_dispatch_key_event", side_effect=OSError(errno.ENODEV, "No device")):
+            async with relay:
+                with self.assertRaises(OSError):
+                    await relay.async_relay_events_loop()
+
         self.assertTrue(gate.active)
         self.assertEqual(relay._dispatcher.write_failures, 1)
 

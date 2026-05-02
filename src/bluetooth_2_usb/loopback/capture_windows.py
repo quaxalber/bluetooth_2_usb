@@ -698,15 +698,18 @@ def _pump_raw_input(
         else None
     )
 
-    # Keep the ctypes callback alive for the lifetime of the message window.
-    hwnd, wndproc = _create_message_window()
-    _register_raw_input(hwnd)
-    deadline = time.monotonic() + timeout_sec
-    msg = MSG()
     debug = _RawInputDebug()
-    debug.raw_device_list = _list_raw_input_devices()
+    hwnd = None
+    # Keep the ctypes callback alive for the lifetime of the message window.
+    wndproc = None
 
     try:
+        hwnd, wndproc = _create_message_window()
+        _register_raw_input(hwnd)
+        deadline = time.monotonic() + timeout_sec
+        msg = MSG()
+        debug.raw_device_list = _list_raw_input_devices()
+
         while time.monotonic() < deadline:
             while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
                 if msg.message == WM_QUIT:
@@ -831,7 +834,9 @@ def _pump_raw_input(
             },
         )
     finally:
-        user32.DestroyWindow(hwnd)
+        if hwnd is not None:
+            user32.DestroyWindow(hwnd)
+        _ = wndproc
 
     return LoopbackResult(
         command="capture",
@@ -845,6 +850,23 @@ def _pump_raw_input(
             "nodes": GadgetNodes(None, None, None).to_dict(),
             "raw_input_debug": debug.to_dict(),
             "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
+        },
+    )
+
+
+def _missing_raw_input_node_result(
+    scenario_name: str, message: str, candidate_nodes: GadgetNodeCandidates
+) -> LoopbackResult:
+    return LoopbackResult(
+        command="capture",
+        scenario=scenario_name,
+        success=False,
+        exit_code=MissingNodeError.exit_code,
+        message=message,
+        details={
+            "capture_backend": "raw_input",
+            "nodes": GadgetNodes(None, None, None).to_dict(),
+            "candidates": candidate_nodes.to_dict(),
         },
     )
 
@@ -863,19 +885,21 @@ def run_windows_raw_input_capture(
     consumer_candidate_identities: tuple[str, ...] = ()
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
-            raise MissingNodeError("Keyboard HID device was not found")
+            return _missing_raw_input_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
         keyboard_candidate_identities = _extract_device_identities(
             tuple(info.node for info in candidate_nodes.keyboard_nodes)
         )
     if scenario.mouse_enabled:
         if not candidate_nodes.mouse_nodes:
-            raise MissingNodeError("Mouse HID device was not found")
+            return _missing_raw_input_node_result(scenario.name, "Mouse HID device was not found", candidate_nodes)
         mouse_candidate_identities = _extract_device_identities(
             tuple(info.node for info in candidate_nodes.mouse_nodes)
         )
     if scenario.consumer_enabled:
         if not candidate_nodes.consumer_nodes:
-            raise MissingNodeError("Consumer-control HID device was not found")
+            return _missing_raw_input_node_result(
+                scenario.name, "Consumer-control HID device was not found", candidate_nodes
+            )
         consumer_candidate_identities = _extract_device_identities(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )

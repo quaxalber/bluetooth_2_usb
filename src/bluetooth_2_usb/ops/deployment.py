@@ -97,11 +97,13 @@ def repair_venv_shebangs(venv_dir: Path, staging_dir: Path) -> None:
         file.write_text("".join(lines), encoding="utf-8")
 
 
-def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
+def rebuild_venv_atomically(venv_dir: Path, package_dir: Path, *, keep_previous: bool = False) -> Path | None:
     staging_dir = venv_dir.with_name(f"{venv_dir.name}.new")
     previous_dir = venv_dir.with_name(f"{venv_dir.name}.old.{os.getpid()}")
     shutil.rmtree(staging_dir, ignore_errors=True)
     shutil.rmtree(previous_dir, ignore_errors=True)
+    previous_to_restore = None
+    cleanup_previous = False
     try:
         recreate_venv(staging_dir)
         run([staging_dir / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
@@ -113,6 +115,9 @@ def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
         try:
             staging_dir.rename(venv_dir)
             repair_venv_shebangs(venv_dir, staging_dir)
+            if moved_previous:
+                previous_to_restore = previous_dir
+                cleanup_previous = not keep_previous
         except Exception:
             warn("Failed to activate the new virtual environment.")
             shutil.rmtree(venv_dir, ignore_errors=True)
@@ -123,7 +128,37 @@ def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
         shutil.rmtree(staging_dir, ignore_errors=True)
         raise
     finally:
-        shutil.rmtree(previous_dir, ignore_errors=True)
+        if cleanup_previous:
+            shutil.rmtree(previous_dir, ignore_errors=True)
+    return previous_to_restore
+
+
+def _remove_path(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink(missing_ok=True)
+
+
+def _restore_directory_backup(current: Path, backup: Path) -> None:
+    if current.exists():
+        shutil.rmtree(current)
+    backup.rename(current)
+
+
+def _backup_file_for_rollback(path: Path, cleanup_paths: list[Path], rollback: RollbackStack) -> None:
+    backup = path.with_name(f"{path.name}.backup.{os.getpid()}")
+    if path.exists():
+        shutil.copy2(path, backup, follow_symlinks=False)
+        cleanup_paths.append(backup)
+
+        def restore_file() -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, path, follow_symlinks=False)
+
+        rollback.push(f"restore {path}", restore_file)
+    else:
+        rollback.push(f"remove created {path}", lambda: _remove_path(path))
 
 
 def service_installed() -> bool | None:
@@ -177,6 +212,7 @@ def install(repo_root: Path) -> None:
     ok("Boot configuration updated")
 
     rollback = RollbackStack()
+    cleanup_paths: list[Path] = []
     was_active = run(["systemctl", "is-active", "--quiet", PATHS.service_unit], check=False).returncode == 0
     if was_active:
         info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
@@ -186,10 +222,18 @@ def install(repo_root: Path) -> None:
         )
     try:
         info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
-        rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir)
+        previous_venv = rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir, keep_previous=True)
+        if previous_venv is not None:
+            cleanup_paths.append(previous_venv)
+            rollback.push(
+                f"restore {PATHS.install_dir / 'venv'}",
+                lambda: _restore_directory_backup(PATHS.install_dir / "venv", previous_venv),
+            )
         ok(f"Virtual environment updated at {PATHS.install_dir / 'venv'}")
 
+        _backup_file_for_rollback(Path("/etc/systemd/system") / PATHS.service_unit, cleanup_paths, rollback)
         install_service_unit(repo_root)
+        _backup_file_for_rollback(PATHS.env_file, cleanup_paths, rollback)
         write_default_env_file()
         canonicalize_service_settings_bools(PATHS.env_file)
         run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
@@ -214,6 +258,8 @@ def install(repo_root: Path) -> None:
         raise
     else:
         rollback.commit()
+        for cleanup_path in cleanup_paths:
+            _remove_path(cleanup_path)
     info("Next steps")
     info("1. Reboot the Pi so the updated boot configuration takes effect.")
     info("2. After reboot, run: sudo bluetooth_2_usb smoketest")

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock, call, patch
 
 from bluetooth_2_usb.ops.commands import OpsError
-from bluetooth_2_usb.ops.deployment import RollbackStack, install, install_cli_links, uninstall
+from bluetooth_2_usb.ops.deployment import RollbackStack, install, install_cli_links, rebuild_venv_atomically, uninstall
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
@@ -48,6 +48,26 @@ class OpsDeploymentTest(unittest.TestCase):
         linked_commands = [call.args[0].name for call in symlink_to.call_args_list]
         self.assertEqual(linked_commands, ["bluetooth_2_usb"])
         self.assertEqual(unlink.call_args_list, [call(missing_ok=True), call(missing_ok=True)])
+
+    def test_rebuild_venv_can_keep_previous_environment_for_install_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            venv = root / "venv"
+            (venv / "bin").mkdir(parents=True)
+            (venv / "marker").write_text("previous", encoding="utf-8")
+
+            def fake_recreate_venv(staging: Path) -> None:
+                (staging / "bin").mkdir(parents=True)
+                (staging / "marker").write_text("new", encoding="utf-8")
+
+            with patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv):
+                with patch("bluetooth_2_usb.ops.deployment.run"):
+                    previous = rebuild_venv_atomically(venv, root, keep_previous=True)
+
+            self.assertIsNotNone(previous)
+            previous_path = previous or Path()
+            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "new")
+            self.assertEqual((previous_path / "marker").read_text(encoding="utf-8"), "previous")
 
     def test_install_restores_active_service_when_rebuild_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -120,7 +140,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_dwc2_overlay"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_modules_load"))
-                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.rebuild_venv_atomically"))
+                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.rebuild_venv_atomically", return_value=None))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_service_unit"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_cli_links"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.activate_service_unit"))

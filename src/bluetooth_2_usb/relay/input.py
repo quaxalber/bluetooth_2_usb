@@ -124,15 +124,23 @@ class InputRelay:
         :return: None
         """
         input_disappeared = False
-        try:
-            async for input_event in self._input_device.async_read_loop():
+        reader = self._input_device.async_read_loop().__aiter__()
+        while True:
+            try:
+                input_event = await reader.__anext__()
+            except StopAsyncIteration:
+                break
+            except OSError as ex:
+                if ex.errno != errno.ENODEV:
+                    raise
+                input_disappeared = True
+                logger.debug(
+                    "Stopping relay loop for %s because the input device disappeared.", self._input_device.path
+                )
+                self._dispatcher.discard_pending()
+                break
+            else:
                 await self._dispatcher.dispatch(input_event)
-        except OSError as ex:
-            if ex.errno != errno.ENODEV:
-                raise
-            input_disappeared = True
-            logger.debug("Stopping relay loop for %s because the input device disappeared.", self._input_device.path)
-            self._dispatcher.discard_pending()
         try:
             await self._dispatcher.flush()
         except OSError as ex:

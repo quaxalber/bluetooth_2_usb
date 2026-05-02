@@ -16,6 +16,7 @@ def install_hid_udev_rule(repo_root: Path) -> None:
         fail(f"Rule source not found: {rule_src}")
     if run(["getent", "group", "input"], check=False, capture=True).returncode != 0:
         fail("The 'input' group does not exist on this host.")
+    RULE_DST.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(rule_src, RULE_DST)
     RULE_DST.chmod(0o644)
     run(["udevadm", "control", "--reload-rules"])

@@ -153,6 +153,7 @@ class Runtime:
 
         for handled_signal in _handled_shutdown_signals():
             sig_name = signal.Signals(handled_signal).name
+            previous_handlers[handled_signal] = signal.getsignal(handled_signal)
             add_signal_handler = getattr(active_loop, "add_signal_handler", None)
             if add_signal_handler is not None:
                 try:
@@ -161,7 +162,6 @@ class Runtime:
                     continue
                 except (NotImplementedError, RuntimeError, ValueError):
                     pass
-            previous_handlers[handled_signal] = signal.getsignal(handled_signal)
             signal.signal(handled_signal, _fallback_signal_handler)
 
         return _SignalHandlers(previous_handlers, tuple(loop_handled_signals))

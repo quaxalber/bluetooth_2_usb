@@ -1,7 +1,7 @@
 from functools import lru_cache
 from importlib import import_module
 
-from ..hid import buttons as MouseButtons
+from ..hid.buttons import MouseButtons
 from ..logging import get_logger
 from .ecodes import ecodes
 from .types import InputEvent, KeyEvent, RelEvent
@@ -200,6 +200,8 @@ def find_key_name(event: KeyEvent) -> str | None:
 
 
 def find_usage_name(event: KeyEvent, hid_usage_id: int | None) -> str | None:
+    if is_mouse_button(event):
+        return _mouse_button_usage_names().get(hid_usage_id)
     code_type = _get_hid_code_type(event)
     for attribute in _cached_dir(code_type):
         if _cached_getattr(code_type, attribute) == hid_usage_id:
@@ -220,8 +222,6 @@ def _cached_dir(class_type: type) -> list[str]:
 def _get_hid_code_type(event: KeyEvent) -> type:
     if is_consumer_key(event):
         return _consumer_control_code_type()
-    if is_mouse_button(event):
-        return MouseButtons
     return _keycode_type()
 
 
@@ -259,6 +259,20 @@ def _consumer_control_code_type():
 @lru_cache(maxsize=1)
 def _keycode_type():
     return import_module("adafruit_hid.keycode").Keycode
+
+
+@lru_cache(maxsize=1)
+def _mouse_button_usage_names() -> dict[int, str]:
+    return {
+        MouseButtons.LEFT: "LEFT",
+        MouseButtons.RIGHT: "RIGHT",
+        MouseButtons.MIDDLE: "MIDDLE",
+        MouseButtons.SIDE: "SIDE",
+        MouseButtons.EXTRA: "EXTRA",
+        MouseButtons.FORWARD: "FORWARD",
+        MouseButtons.BACK: "BACK",
+        MouseButtons.TASK: "TASK",
+    }
 
 
 @lru_cache(maxsize=1)

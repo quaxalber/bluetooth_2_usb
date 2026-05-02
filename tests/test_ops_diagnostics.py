@@ -59,6 +59,11 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertIn("/dev/disk/by-partuuid/<<REDACTED_PARTUUID>>", redacted)
         self.assertIn("/dev/disk/by-uuid/<<REDACTED_UUID>>", redacted)
 
+    def test_redaction_hides_hostname_case_insensitively(self) -> None:
+        redacted = redact("Test-Host test-host TEST-HOST", hostname="test-host")
+
+        self.assertEqual(redacted, "<<REDACTED_HOSTNAME>> <<REDACTED_HOSTNAME>> <<REDACTED_HOSTNAME>>")
+
     def test_smoketest_downgrades_unknown_dwc2_mode_to_heuristic_warning(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
         checked_modules = []
