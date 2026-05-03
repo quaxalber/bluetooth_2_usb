@@ -10,6 +10,7 @@ from adafruit_hid.keycode import Keycode
 
 from ..evdev import KeyEvent, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from ..gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX
+from ..gadgets.layout import HID_FUNC_INDEX_CONSUMER, HID_FUNC_INDEX_KEYBOARD, HID_FUNC_INDEX_MOUSE
 from ..hid.constants import (
     HID_PAGE_CONSUMER,
     HID_PAGE_GENERIC_DESKTOP,
@@ -543,11 +544,11 @@ def _role_for_device(info: HidDeviceInfo) -> str | None:
     if info.usage_page == HID_PAGE_CONSUMER and info.usage == HID_USAGE_CONSUMER_CONTROL:
         return "consumer"
     if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
-        if info.interface_number == 0:
+        if info.interface_number == HID_FUNC_INDEX_KEYBOARD:
             return "keyboard"
-        if info.interface_number == 1:
+        if info.interface_number == HID_FUNC_INDEX_MOUSE:
             return "mouse"
-        if info.interface_number == 2:
+        if info.interface_number == HID_FUNC_INDEX_CONSUMER:
             return "consumer"
     return None
 
