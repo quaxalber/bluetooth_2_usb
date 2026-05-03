@@ -5,7 +5,11 @@ import sys
 import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
+from adafruit_hid.keycode import Keycode
+
+from ..evdev import KeyEvent, ecodes, evdev_to_usb_hid
 from ..hid.constants import (
     HID_PAGE_CONSUMER,
     HID_PAGE_GENERIC_DESKTOP,
@@ -102,26 +106,104 @@ VK_DOWN = 0x28
 VK_LEFT = 0x25
 VK_RIGHT = 0x27
 VK_APPS = 0x5D
+VK_SHIFT = 0x10
+VK_CONTROL = 0x11
+VK_MENU = 0x12
+VK_BACK = 0x08
+VK_TAB = 0x09
+VK_RETURN = 0x0D
+VK_ESCAPE = 0x1B
+VK_SPACE = 0x20
+VK_NUMLOCK = 0x90
+VK_LWIN = 0x5B
+VK_RWIN = 0x5C
+VK_LSHIFT = 0xA0
+VK_RSHIFT = 0xA1
+VK_LCONTROL = 0xA2
+VK_RCONTROL = 0xA3
+VK_LMENU = 0xA4
+VK_RMENU = 0xA5
+VK_OEM_1 = 0xBA
+VK_OEM_PLUS = 0xBB
+VK_OEM_COMMA = 0xBC
+VK_OEM_MINUS = 0xBD
+VK_OEM_PERIOD = 0xBE
+VK_OEM_2 = 0xBF
+VK_OEM_3 = 0xC0
+VK_OEM_4 = 0xDB
+VK_OEM_5 = 0xDC
+VK_OEM_6 = 0xDD
+VK_OEM_7 = 0xDE
+VK_OEM_102 = 0xE2
+VK_NUMPAD0 = 0x60
+VK_MULTIPLY = 0x6A
+VK_ADD = 0x6B
+VK_SUBTRACT = 0x6D
+VK_DECIMAL = 0x6E
+VK_DIVIDE = 0x6F
+VK_F1 = 0x70
 
-VK_TO_HID = {
-    VK_F13: 104,
-    VK_F14: 105,
-    VK_F15: 106,
-    VK_F24: 115,
-    VK_SNAPSHOT: 70,
-    VK_SCROLL: 71,
-    VK_INSERT: 73,
-    VK_DELETE: 76,
-    VK_HOME: 74,
-    VK_END: 77,
-    VK_PRIOR: 75,
-    VK_NEXT: 78,
-    VK_UP: 82,
-    VK_DOWN: 81,
-    VK_LEFT: 80,
-    VK_RIGHT: 79,
-    VK_APPS: 101,
+VK_TO_EVDEV = {
+    **{ord(letter): getattr(ecodes, f"KEY_{letter}") for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"},
+    **{ord(str(number)): getattr(ecodes, f"KEY_{number}") for number in range(10)},
+    **{VK_NUMPAD0 + number: getattr(ecodes, f"KEY_KP{number}") for number in range(10)},
+    **{VK_F1 + index: getattr(ecodes, f"KEY_F{index + 1}") for index in range(24)},
+    VK_SHIFT: ecodes.KEY_LEFTSHIFT,
+    VK_CONTROL: ecodes.KEY_LEFTCTRL,
+    VK_MENU: ecodes.KEY_LEFTALT,
+    VK_BACK: ecodes.KEY_BACKSPACE,
+    VK_TAB: ecodes.KEY_TAB,
+    VK_RETURN: ecodes.KEY_ENTER,
+    VK_ESCAPE: ecodes.KEY_ESC,
+    VK_SPACE: ecodes.KEY_SPACE,
+    VK_SNAPSHOT: ecodes.KEY_SYSRQ,
+    VK_SCROLL: ecodes.KEY_SCROLLLOCK,
+    VK_INSERT: ecodes.KEY_INSERT,
+    VK_DELETE: ecodes.KEY_DELETE,
+    VK_HOME: ecodes.KEY_HOME,
+    VK_END: ecodes.KEY_END,
+    VK_PRIOR: ecodes.KEY_PAGEUP,
+    VK_NEXT: ecodes.KEY_PAGEDOWN,
+    VK_UP: ecodes.KEY_UP,
+    VK_DOWN: ecodes.KEY_DOWN,
+    VK_LEFT: ecodes.KEY_LEFT,
+    VK_RIGHT: ecodes.KEY_RIGHT,
+    VK_NUMLOCK: ecodes.KEY_NUMLOCK,
+    VK_LWIN: ecodes.KEY_LEFTMETA,
+    VK_RWIN: ecodes.KEY_RIGHTMETA,
+    VK_APPS: ecodes.KEY_COMPOSE,
+    VK_LSHIFT: ecodes.KEY_LEFTSHIFT,
+    VK_RSHIFT: ecodes.KEY_RIGHTSHIFT,
+    VK_LCONTROL: ecodes.KEY_LEFTCTRL,
+    VK_RCONTROL: ecodes.KEY_RIGHTCTRL,
+    VK_LMENU: ecodes.KEY_LEFTALT,
+    VK_RMENU: ecodes.KEY_RIGHTALT,
+    VK_MULTIPLY: ecodes.KEY_KPASTERISK,
+    VK_ADD: ecodes.KEY_KPPLUS,
+    VK_SUBTRACT: ecodes.KEY_KPMINUS,
+    VK_DECIMAL: ecodes.KEY_KPDOT,
+    VK_DIVIDE: ecodes.KEY_KPSLASH,
+    VK_OEM_1: ecodes.KEY_SEMICOLON,
+    VK_OEM_PLUS: ecodes.KEY_EQUAL,
+    VK_OEM_COMMA: ecodes.KEY_COMMA,
+    VK_OEM_MINUS: ecodes.KEY_MINUS,
+    VK_OEM_PERIOD: ecodes.KEY_DOT,
+    VK_OEM_2: ecodes.KEY_SLASH,
+    VK_OEM_3: ecodes.KEY_GRAVE,
+    VK_OEM_4: ecodes.KEY_LEFTBRACE,
+    VK_OEM_5: ecodes.KEY_BACKSLASH,
+    VK_OEM_6: ecodes.KEY_RIGHTBRACE,
+    VK_OEM_7: ecodes.KEY_APOSTROPHE,
+    VK_OEM_102: ecodes.KEY_102ND,
 }
+
+
+def _mapped_hid_usage(evdev_code: int) -> int | None:
+    usage, _name = evdev_to_usb_hid(SimpleNamespace(scancode=evdev_code, keystate=KeyEvent.key_down))
+    return usage
+
+
+VK_TO_HID = {vkey: usage for vkey, evdev_code in VK_TO_EVDEV.items() if (usage := _mapped_hid_usage(evdev_code))}
 
 RAW_MOUSE_BUTTON_BITS = (
     (RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, 0x01),
@@ -484,13 +566,35 @@ def device_matches_candidate(device_name: str, candidate_identities: tuple[str, 
     return stable_device_identity(device_name) in candidate_identities
 
 
+class RawInputKeyboardReportBuilder:
+    def __init__(self) -> None:
+        self._modifier_state = 0
+        self._pressed_keys: tuple[int, ...] = ()
+
+    def report_for(self, vkey: int, *, is_key_up: bool) -> bytes | None:
+        hid_code = VK_TO_HID.get(vkey)
+        if hid_code is None:
+            return None
+        modifier = Keycode.modifier_bit(hid_code)
+        if is_key_up:
+            if modifier:
+                self._modifier_state &= ~modifier
+            else:
+                self._pressed_keys = tuple(key for key in self._pressed_keys if key != hid_code)
+        elif modifier:
+            self._modifier_state |= modifier
+        elif hid_code not in self._pressed_keys:
+            self._pressed_keys = (*self._pressed_keys, hid_code)
+        return self._current_report()
+
+    def _current_report(self) -> bytes:
+        keys = list(self._pressed_keys[:6])
+        keys.extend([0] * (6 - len(keys)))
+        return bytes([self._modifier_state, 0, *keys])
+
+
 def keyboard_event_to_report(vkey: int, *, is_key_up: bool) -> bytes | None:
-    hid_code = VK_TO_HID.get(vkey)
-    if hid_code is None:
-        return None
-    if is_key_up:
-        return bytes([0x00] * 8)
-    return bytes([0x00, 0x00, hid_code, 0, 0, 0, 0, 0])
+    return RawInputKeyboardReportBuilder().report_for(vkey, is_key_up=is_key_up)
 
 
 def _mouse_i16_bytes(value: int) -> bytes:
@@ -811,6 +915,7 @@ def _pump_raw_input(
 ) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     expected_mouse_button_steps = scenario.mouse_button_steps if mouse_button_steps is None else mouse_button_steps
+    keyboard_report_builder = RawInputKeyboardReportBuilder()
     mouse_report_builder = RawInputMouseReportBuilder()
     keyboard_candidate = (
         _RawInputCandidate("keyboard", keyboard_candidate_identities, KeyboardSequenceMatcher(scenario.keyboard_steps))
@@ -858,7 +963,7 @@ def _pump_raw_input(
 
                     if raw.header.dwType == RIM_TYPEKEYBOARD and keyboard_candidate:
                         matched = device_matches_candidate(device_name, keyboard_candidate.candidate_identities)
-                        report = keyboard_event_to_report(
+                        report = keyboard_report_builder.report_for(
                             raw.keyboard.VKey, is_key_up=bool(raw.keyboard.Flags & RI_KEY_BREAK)
                         )
                         debug.note_event(

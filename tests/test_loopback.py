@@ -694,6 +694,24 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
         self.assertTrue(matcher.complete)
 
+    def test_mouse_button_mapping_uses_report_bits(self) -> None:
+        matcher = MouseSequenceMatcher.create(
+            (),
+            (
+                ExpectedEvent(EV_KEY, ecodes.BTN_MIDDLE, KeyEvent.key_down),
+                ExpectedEvent(EV_KEY, ecodes.BTN_MIDDLE, KeyEvent.key_up),
+                ExpectedEvent(EV_KEY, ecodes.BTN_SIDE, KeyEvent.key_down),
+                ExpectedEvent(EV_KEY, ecodes.BTN_SIDE, KeyEvent.key_up),
+            ),
+        )
+
+        matcher.handle(bytes([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+
+        self.assertTrue(matcher.complete)
+
 
 class ConsumerSequenceMatcherTest(unittest.TestCase):
     def test_consumer_matcher_accepts_expanded_consumer_sequence(self) -> None:
@@ -814,8 +832,33 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                     bytes([0x00, 0x00, capture_windows.VK_TO_HID[vkey], 0, 0, 0, 0, 0]),
                 )
 
+    def test_keyboard_event_to_report_covers_standard_keys_and_modifiers(self) -> None:
+        k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
+
+        self.assertEqual(
+            capture_windows.keyboard_event_to_report(ord("K"), is_key_up=False),
+            bytes([0x00, 0x00, k_usage, 0, 0, 0, 0, 0]),
+        )
+        self.assertEqual(
+            capture_windows.keyboard_event_to_report(capture_windows.VK_LSHIFT, is_key_up=False),
+            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
+        )
+
+    def test_raw_input_keyboard_report_builder_preserves_modifier_state(self) -> None:
+        builder = capture_windows.RawInputKeyboardReportBuilder()
+        k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
+
+        self.assertEqual(
+            builder.report_for(capture_windows.VK_LSHIFT, is_key_up=False), bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0])
+        )
+        self.assertEqual(builder.report_for(ord("K"), is_key_up=False), bytes([0x02, 0x00, k_usage, 0, 0, 0, 0, 0]))
+        self.assertEqual(builder.report_for(ord("K"), is_key_up=True), bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]))
+        self.assertEqual(
+            builder.report_for(capture_windows.VK_LSHIFT, is_key_up=True), bytes([0x00, 0x00, 0, 0, 0, 0, 0, 0])
+        )
+
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
-        self.assertIsNone(capture_windows.keyboard_event_to_report(0x41, is_key_up=False))
+        self.assertIsNone(capture_windows.keyboard_event_to_report(0x00, is_key_up=False))
 
     def test_raw_input_mouse_report_builder_builds_16_bit_xy_reports(self) -> None:
         raw_mouse = RAWMOUSE()
