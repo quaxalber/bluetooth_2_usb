@@ -17,8 +17,8 @@ This validates the path:
 For regular validation, run `combo`. It exercises the keyboard, mouse, and
 consumer-control paths in one pass. Use `keyboard`, `mouse`, or `consumer` only
 when you need to isolate a specific domain. Use `node-discovery` when you only
-need to identify the active mouse HID node with minimal host-side pointer
-movement.
+need to identify the active keyboard, mouse, and consumer HID nodes with a
+minimal host-side signal.
 
 The `mouse` and `combo` scenarios include fast relative movement, vertical and
 horizontal scrolling, and all configured mouse button bits. Host capture can
@@ -26,10 +26,11 @@ reduce normal desktop handling while it owns the gadget interfaces, but it is
 not a hard isolation boundary. Run these scenarios only in a test session where
 unexpected mouse-button effects are acceptable.
 
-The `node-discovery` scenario is intentionally tiny: it emits only two mouse
-relative events, `REL_X=1` and `REL_X=-1`. It is useful when duplicate gadget
-instances are visible and you need to find which mouse node is live before
-running `combo`.
+The `node-discovery` scenario is intentionally tiny: it emits one F13
+press/release pair, two mouse relative events (`REL_X=1`, `REL_X=-1`), and the
+consumer volume up/down press/release pair. It is useful when duplicate gadget
+instances are visible and you need to find which keyboard, mouse, and consumer
+nodes are live before running `combo`.
 
 ## Preconditions
 
@@ -132,13 +133,15 @@ venv/bin/bluetooth_2_usb loopback capture \
 
 Keep this command running while you trigger the Pi-side injection.
 
-When duplicate gadget instances are visible, first identify the active mouse
-node with the minimal discovery scenario:
+When duplicate gadget instances are visible, first identify the active nodes
+with the minimal discovery scenario:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario node-discovery \
-  --mouse-node '<candidate mouse path>'
+  --keyboard-node '<candidate keyboard path>' \
+  --mouse-node '<candidate mouse path>' \
+  --consumer-node '<candidate consumer path>'
 ```
 
 Then, on the Pi:
@@ -147,7 +150,7 @@ Then, on the Pi:
 sudo bluetooth_2_usb loopback inject --scenario node-discovery
 ```
 
-Use the mouse node that succeeds here when pinning the full `combo` capture.
+Use the node set that succeeds here when pinning the full `combo` capture.
 
 Before each fresh Windows validation run after changing the gadget descriptor
 layout or USB identity:
@@ -182,7 +185,8 @@ and emits this deterministic sequence:
 - keyboard: an alternating-case burst with modifier transitions
 - mouse: large relative X/Y movement, vertical wheel deltas, horizontal pan
   deltas, then all configured mouse button bits press/release
-- node-discovery: one `REL_X=1` event followed by one `REL_X=-1` event
+- node-discovery: F13 press/release, `REL_X=1`, `REL_X=-1`, and consumer
+  volume up/down press/release
 - consumer: volume up/down press/release
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
@@ -228,7 +232,7 @@ venv/bin/bluetooth_2_usb loopback capture --scenario consumer
 sudo bluetooth_2_usb loopback inject --scenario consumer
 ```
 
-Mouse-node discovery only:
+Minimal node discovery:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery

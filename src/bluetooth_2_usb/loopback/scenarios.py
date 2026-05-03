@@ -125,6 +125,7 @@ MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_HWHEEL, -2400),
 )
 
+NODE_DISCOVERY_KEYBOARD_STEPS = (ExpectedEvent(EV_KEY, KEY_F13, 1), ExpectedEvent(EV_KEY, KEY_F13, 0))
 NODE_DISCOVERY_REL_STEPS = (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1))
 
 MOUSE_BUTTON_STEPS = (
@@ -223,10 +224,10 @@ SCENARIOS = {
     ),
     "node-discovery": ScenarioDefinition(
         name="node-discovery",
-        keyboard_steps=(),
+        keyboard_steps=NODE_DISCOVERY_KEYBOARD_STEPS,
         mouse_rel_steps=NODE_DISCOVERY_REL_STEPS,
         mouse_button_steps=(),
-        consumer_steps=(),
+        consumer_steps=CONSUMER_STEPS,
         default_event_gap_ms=20,
         default_post_delay_ms=250,
         default_capture_timeout_sec=5.0,

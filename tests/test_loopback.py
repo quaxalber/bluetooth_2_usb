@@ -48,6 +48,7 @@ from bluetooth_2_usb.loopback.scenarios import (
     KEY_LEFTSHIFT,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
+    NODE_DISCOVERY_KEYBOARD_STEPS,
     NODE_DISCOVERY_REL_STEPS,
     REL_HWHEEL,
     REL_WHEEL,
@@ -151,15 +152,15 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.default_capture_timeout_sec, 10.0)
         self.assertGreaterEqual(_mouse_report_count(scenario.mouse_rel_steps), 80)
 
-    def test_node_discovery_scenario_contains_only_tiny_x_motion(self) -> None:
+    def test_node_discovery_scenario_contains_minimal_all_role_sequence(self) -> None:
         scenario = SCENARIOS["node-discovery"]
 
-        self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertEqual(scenario.required_nodes, ("keyboard", "mouse", "consumer"))
+        self.assertEqual(scenario.keyboard_steps, NODE_DISCOVERY_KEYBOARD_STEPS)
         self.assertEqual(scenario.mouse_rel_steps, (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1)))
         self.assertEqual(scenario.mouse_rel_steps, NODE_DISCOVERY_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, ())
-        self.assertEqual(scenario.keyboard_steps, ())
-        self.assertEqual(scenario.consumer_steps, ())
+        self.assertEqual(scenario.consumer_steps, CONSUMER_STEPS)
         self.assertEqual(scenario.default_capture_timeout_sec, 5.0)
 
     def test_consumer_scenario_contains_volume_sequence(self) -> None:
