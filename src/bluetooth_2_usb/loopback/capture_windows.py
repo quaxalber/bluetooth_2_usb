@@ -6,12 +6,14 @@ import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
 
+from ..hid.constants import (
+    HID_PAGE_CONSUMER,
+    HID_PAGE_GENERIC_DESKTOP,
+    HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_KEYBOARD,
+    HID_USAGE_MOUSE,
+)
 from .capture import (
-    CONSUMER_USAGE,
-    CONSUMER_USAGE_PAGE,
-    GENERIC_DESKTOP_USAGE_PAGE,
-    KEYBOARD_USAGE,
-    MOUSE_USAGE,
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
@@ -624,13 +626,13 @@ def _list_raw_input_devices() -> list[dict[str, object]]:
 def _register_raw_input(hwnd: int) -> None:
     devices = (RAWINPUTDEVICE * 3)(
         RAWINPUTDEVICE(
-            usUsagePage=GENERIC_DESKTOP_USAGE_PAGE, usUsage=KEYBOARD_USAGE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+            usUsagePage=HID_PAGE_GENERIC_DESKTOP, usUsage=HID_USAGE_KEYBOARD, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
         RAWINPUTDEVICE(
-            usUsagePage=GENERIC_DESKTOP_USAGE_PAGE, usUsage=MOUSE_USAGE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+            usUsagePage=HID_PAGE_GENERIC_DESKTOP, usUsage=HID_USAGE_MOUSE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
         RAWINPUTDEVICE(
-            usUsagePage=CONSUMER_USAGE_PAGE, usUsage=CONSUMER_USAGE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+            usUsagePage=HID_PAGE_CONSUMER, usUsage=HID_USAGE_CONSUMER_CONTROL, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
     )
     if not user32.RegisterRawInputDevices(devices, len(devices), ctypes.sizeof(RAWINPUTDEVICE)):

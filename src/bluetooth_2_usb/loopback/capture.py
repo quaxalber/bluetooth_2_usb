@@ -9,6 +9,7 @@ from typing import Any
 from adafruit_hid.keycode import Keycode
 
 from ..evdev import KeyEvent, evdev_to_usb_hid, is_consumer_key, is_mouse_button
+from ..gadgets.identity import USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE, USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
 from ..hid.constants import (
     HID_PAGE_CONSUMER,
     HID_PAGE_GENERIC_DESKTOP,
@@ -34,19 +35,12 @@ from .scenarios import (
     get_scenario,
 )
 
-REPORT_READ_SIZE = 64
-POLL_INTERVAL_SEC = 0.01
-GENERIC_DESKTOP_USAGE_PAGE = HID_PAGE_GENERIC_DESKTOP
-KEYBOARD_USAGE = HID_USAGE_KEYBOARD
-MOUSE_USAGE = HID_USAGE_MOUSE
-CONSUMER_USAGE_PAGE = HID_PAGE_CONSUMER
-CONSUMER_USAGE = HID_USAGE_CONSUMER_CONTROL
-GADGET_VENDOR_ID = 0x1D6B
-GADGET_PRODUCT_ID = 0x0104
+HIDAPI_REPORT_READ_SIZE = 64
+HIDAPI_POLL_INTERVAL_SEC = 0.01
 
-REL_NAMES = {REL_X: "REL_X", REL_Y: "REL_Y", REL_HWHEEL: "REL_HWHEEL", REL_WHEEL: "REL_WHEEL"}
+EVDEV_REL_NAMES = {REL_X: "REL_X", REL_Y: "REL_Y", REL_HWHEEL: "REL_HWHEEL", REL_WHEEL: "REL_WHEEL"}
 
-MOUSE_BUTTON_BITS = {
+HID_MOUSE_BUTTON_BITS = {
     BTN_LEFT: 0x01,
     BTN_RIGHT: 0x02,
     BTN_MIDDLE: 0x04,
@@ -229,7 +223,7 @@ class MouseSequenceMatcher:
         self.button_index += 1
 
     def _apply_button_step(self, expected) -> int:
-        button_bit = MOUSE_BUTTON_BITS.get(expected.code)
+        button_bit = HID_MOUSE_BUTTON_BITS.get(expected.code)
         if button_bit is None:
             raise CaptureMismatchError(f"Expected mouse button step {expected.describe()} is not mappable to HID")
         if expected.value == KeyEvent.key_down:
@@ -247,24 +241,26 @@ class MouseSequenceMatcher:
         pending_index = self._find_pending_rel_index(code, report_codes)
         if pending_index is None:
             expected = self._pending_rel_remaining[0] if self._pending_rel_remaining else None
-            expected_label = f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}" if expected else ""
+            expected_label = (
+                f"; expected {EVDEV_REL_NAMES.get(expected[0], expected[0])}={expected[1]}" if expected else ""
+            )
             raise CaptureMismatchError(
-                "Unexpected mouse relative event " f"{REL_NAMES.get(code, code)}={value}{expected_label}"
+                "Unexpected mouse relative event " f"{EVDEV_REL_NAMES.get(code, code)}={value}{expected_label}"
             )
 
         remaining = self._pending_rel_remaining[pending_index][1]
         if not _same_direction(remaining, value):
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}; expected "
-                f"{REL_NAMES.get(code, code)}={remaining}"
+                f"{EVDEV_REL_NAMES.get(code, code)}={value}; expected "
+                f"{EVDEV_REL_NAMES.get(code, code)}={remaining}"
             )
 
         if abs(value) > abs(remaining):
             raise CaptureMismatchError(
                 "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}; exceeds pending "
-                f"{REL_NAMES.get(code, code)}={remaining}"
+                f"{EVDEV_REL_NAMES.get(code, code)}={value}; exceeds pending "
+                f"{EVDEV_REL_NAMES.get(code, code)}={remaining}"
             )
 
         remaining -= value
@@ -300,7 +296,7 @@ class MouseSequenceMatcher:
         }
         if self._pending_rel_remaining:
             code, remaining = self._pending_rel_remaining[0]
-            details["next_expected_rel"] = f"{REL_NAMES.get(code, code)}={remaining}"
+            details["next_expected_rel"] = f"{EVDEV_REL_NAMES.get(code, code)}={remaining}"
         elif self.button_index < len(self.expected_button_steps):
             details["next_expected_button"] = self.expected_button_steps[self.button_index].describe()
         return details
@@ -569,13 +565,16 @@ def _render_hidapi_path(path_value: bytes | str) -> str:
 
 
 def _role_for_device(info: HidDeviceInfo) -> str | None:
-    if info.usage_page == GENERIC_DESKTOP_USAGE_PAGE and info.usage == KEYBOARD_USAGE:
+    if info.usage_page == HID_PAGE_GENERIC_DESKTOP and info.usage == HID_USAGE_KEYBOARD:
         return "keyboard"
-    if info.usage_page == GENERIC_DESKTOP_USAGE_PAGE and info.usage == MOUSE_USAGE:
+    if info.usage_page == HID_PAGE_GENERIC_DESKTOP and info.usage == HID_USAGE_MOUSE:
         return "mouse"
-    if info.usage_page == CONSUMER_USAGE_PAGE and info.usage == CONSUMER_USAGE:
+    if info.usage_page == HID_PAGE_CONSUMER and info.usage == HID_USAGE_CONSUMER_CONTROL:
         return "consumer"
-    if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
+    if (
+        info.vendor_id == USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
+        and info.product_id == USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE
+    ):
         if info.interface_number == 0:
             return "keyboard"
         if info.interface_number == 1:
@@ -641,7 +640,8 @@ def discover_gadget_node_candidates(
         if role is None:
             continue
         if not _matches_device_substring(info.name, device_substring) and not (
-            info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID
+            info.vendor_id == USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
+            and info.product_id == USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE
         ):
             continue
         if role == "keyboard":
@@ -710,7 +710,10 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         device.set_nonblocking(True)
         return device
     except OSError as exc:
-        if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
+        if (
+            info.vendor_id == USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
+            and info.product_id == USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE
+        ):
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
                 + "On Linux, from the repository root run `sudo ./venv/bin/bluetooth_2_usb "
@@ -807,7 +810,7 @@ def _capture_once(
                 if candidate.failed or candidate.complete:
                     continue
                 try:
-                    report_values = candidate.device.read(REPORT_READ_SIZE)
+                    report_values = candidate.device.read(HIDAPI_REPORT_READ_SIZE)
                 except OSError as exc:
                     raise CaptureError(f"Failed reading HID reports from {candidate.node}: {exc}") from exc
                 except Exception as exc:
@@ -824,7 +827,7 @@ def _capture_once(
                     candidate.failed_message = f"{candidate.node}: {exc}"
 
             if not progress:
-                time.sleep(POLL_INTERVAL_SEC)
+                time.sleep(HIDAPI_POLL_INTERVAL_SEC)
 
     except CaptureError as exc:
         return LoopbackResult(
