@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from bluetooth_2_usb.evdev import ecodes
+from bluetooth_2_usb.evdev import KeyEvent, ecodes
 from bluetooth_2_usb.hid.buttons import MouseButtons
 from bluetooth_2_usb.hid.consumer import ExtendedConsumerControl
 from bluetooth_2_usb.hid.descriptors import MOUSE_IN_REPORT_LENGTH
@@ -81,9 +81,9 @@ def _active_gate() -> RelayGate:
 
 
 class _TestKeyEvent:
-    key_down = 1
+    key_down = KeyEvent.key_down
     key_hold = 2
-    key_up = 0
+    key_up = KeyEvent.key_up
 
     def __init__(self, scancode: int, keystate: int) -> None:
         self.scancode = scancode
@@ -92,13 +92,13 @@ class _TestKeyEvent:
 
 class _TestRelEvent:
     def __init__(self, code: int, value: int) -> None:
-        self.event = SimpleNamespace(type=2, code=code, value=value)
+        self.event = SimpleNamespace(type=ecodes.EV_REL, code=code, value=value)
 
 
 class _TestSynEvent:
-    type = 0
-    code = 0
-    value = 0
+    type = ecodes.EV_SYN
+    code = ecodes.SYN_REPORT
+    value = ecodes.SYN_REPORT
 
 
 class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):

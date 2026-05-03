@@ -10,8 +10,13 @@ from unittest.mock import Mock, patch
 
 import usb_hid
 
-from bluetooth_2_usb.gadgets.config import rebuild_gadget, remove_owned_gadgets
-from bluetooth_2_usb.gadgets.layout import GadgetHidDevice, build_default_layout
+from bluetooth_2_usb.gadgets.config import CONFIG_NAME, LANGUAGE_ID, rebuild_gadget, remove_owned_gadgets
+from bluetooth_2_usb.gadgets.layout import (
+    COMBO_BM_ATTRIBUTES,
+    DEFAULT_BCD_DEVICE,
+    GadgetHidDevice,
+    build_default_layout,
+)
 from bluetooth_2_usb.gadgets.manager import HidGadgets
 from bluetooth_2_usb.hid.descriptors import (
     DEFAULT_KEYBOARD_DESCRIPTOR,
@@ -183,11 +188,11 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
         self.assertEqual(layout.devices[1].configfs_report_length, 8)
         self.assertEqual(bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor))
-        self.assertEqual(layout.bcd_device, "0x0205")
+        self.assertEqual(layout.bcd_device, DEFAULT_BCD_DEVICE)
         self.assertEqual(layout.product_name, "USB Combo Device")
         self.assertEqual(layout.serial_number, "213374badcafe")
         self.assertEqual(layout.max_power, 100)
-        self.assertEqual(layout.bm_attributes, 0xA0)
+        self.assertEqual(layout.bm_attributes, COMBO_BM_ATTRIBUTES)
         self.assertEqual(layout.max_speed, "high-speed")
         self.assertTrue(layout.devices[0].wakeup_on_write)
         self.assertFalse(layout.devices[1].wakeup_on_write)
@@ -274,16 +279,25 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
                         rebuild_gadget(layout)
 
             self.assertEqual(
-                (gadget_root / "strings/0x409/product").read_text(encoding="utf-8").strip(), "USB Combo Device"
+                (gadget_root / "strings" / LANGUAGE_ID / "product").read_text(encoding="utf-8").strip(),
+                "USB Combo Device",
             )
             self.assertEqual(
-                (gadget_root / "strings/0x409/serialnumber").read_text(encoding="utf-8").strip(), "213374badcafe"
+                (gadget_root / "strings" / LANGUAGE_ID / "serialnumber").read_text(encoding="utf-8").strip(),
+                "213374badcafe",
             )
-            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), "0x0205")
-            self.assertEqual((gadget_root / "configs/c.1/MaxPower").read_text(encoding="utf-8").strip(), "100")
-            self.assertEqual((gadget_root / "configs/c.1/bmAttributes").read_text(encoding="utf-8").strip(), "0xa0")
+            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), DEFAULT_BCD_DEVICE)
             self.assertEqual(
-                (gadget_root / "configs/c.1/strings/0x409/configuration").read_text(encoding="utf-8").strip(),
+                (gadget_root / "configs" / CONFIG_NAME / "MaxPower").read_text(encoding="utf-8").strip(), "100"
+            )
+            self.assertEqual(
+                (gadget_root / "configs" / CONFIG_NAME / "bmAttributes").read_text(encoding="utf-8").strip(),
+                hex(COMBO_BM_ATTRIBUTES),
+            )
+            self.assertEqual(
+                (gadget_root / "configs" / CONFIG_NAME / "strings" / LANGUAGE_ID / "configuration")
+                .read_text(encoding="utf-8")
+                .strip(),
                 "Config 1: HID relay",
             )
             self.assertEqual((gadget_root / "max_speed").read_text(encoding="utf-8").strip(), "high-speed")

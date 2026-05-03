@@ -7,6 +7,11 @@ from ctypes import wintypes
 from dataclasses import dataclass, field
 
 from .capture import (
+    CONSUMER_USAGE,
+    CONSUMER_USAGE_PAGE,
+    GENERIC_DESKTOP_USAGE_PAGE,
+    KEYBOARD_USAGE,
+    MOUSE_USAGE,
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
@@ -71,18 +76,48 @@ RI_MOUSE_BUTTON_5_UP = 0x0200
 RI_MOUSE_WHEEL = 0x0400
 RI_MOUSE_HORIZONTAL_WHEEL = 0x0800
 CW_USEDEFAULT = -2147483648
-GENERIC_DESKTOP_USAGE_PAGE = 0x01
-KEYBOARD_USAGE = 0x06
-MOUSE_USAGE = 0x02
-CONSUMER_USAGE_PAGE = 0x0C
-CONSUMER_USAGE = 0x01
 HID_MOUSE_I16_MIN = -32767
 HID_MOUSE_I16_MAX = 32767
+UINT32_ERROR = 0xFFFFFFFF
+RAW_INPUT_BUTTON_FLAGS_MASK = 0xFFFF
+RAW_INPUT_WHEEL_VALUE_SHIFT = 16
 VK_F13 = 0x7C
 VK_F14 = 0x7D
 VK_F15 = 0x7E
+VK_F24 = 0x87
+VK_SNAPSHOT = 0x2C
+VK_SCROLL = 0x91
+VK_INSERT = 0x2D
+VK_DELETE = 0x2E
+VK_HOME = 0x24
+VK_END = 0x23
+VK_PRIOR = 0x21
+VK_NEXT = 0x22
+VK_UP = 0x26
+VK_DOWN = 0x28
+VK_LEFT = 0x25
+VK_RIGHT = 0x27
+VK_APPS = 0x5D
 
-VK_TO_HID = {VK_F13: 104, VK_F14: 105, VK_F15: 106}
+VK_TO_HID = {
+    VK_F13: 104,
+    VK_F14: 105,
+    VK_F15: 106,
+    VK_F24: 115,
+    VK_SNAPSHOT: 70,
+    VK_SCROLL: 71,
+    VK_INSERT: 73,
+    VK_DELETE: 76,
+    VK_HOME: 74,
+    VK_END: 77,
+    VK_PRIOR: 75,
+    VK_NEXT: 78,
+    VK_UP: 82,
+    VK_DOWN: 81,
+    VK_LEFT: 80,
+    VK_RIGHT: 79,
+    VK_APPS: 101,
+}
 
 RAW_MOUSE_BUTTON_BITS = (
     (RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, 0x01),
@@ -465,9 +500,11 @@ class RawInputMouseReportBuilder:
 
     def reports_for(self, raw_mouse: RAWMOUSE) -> list[bytes]:
         reports: list[bytes] = []
-        button_flags = raw_mouse.ulButtons & 0xFFFF
+        button_flags = raw_mouse.ulButtons & RAW_INPUT_BUTTON_FLAGS_MASK
         button_changed = self._apply_button_flags(button_flags)
-        wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
+        wheel_value = ctypes.c_short(
+            (raw_mouse.ulButtons >> RAW_INPUT_WHEEL_VALUE_SHIFT) & RAW_INPUT_BUTTON_FLAGS_MASK
+        ).value
         wheel = wheel_value if button_flags & RI_MOUSE_WHEEL else 0
         pan = wheel_value if button_flags & RI_MOUSE_HORIZONTAL_WHEEL else 0
         if raw_mouse.lLastX or raw_mouse.lLastY or wheel or pan:
@@ -509,12 +546,15 @@ def windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]
 
 def _get_raw_input_device_name(hdevice: int) -> str:
     size = wintypes.UINT(0)
-    if user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICENAME, None, ctypes.byref(size)) == 0xFFFFFFFF:
+    if (
+        user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICENAME, None, ctypes.byref(size))
+        == UINT32_ERROR
+    ):
         raise OSError("GetRawInputDeviceInfoW failed while sizing device name")
     buffer = ctypes.create_unicode_buffer(size.value)
     if (
         user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICENAME, buffer, ctypes.byref(size))
-        == 0xFFFFFFFF
+        == UINT32_ERROR
     ):
         raise OSError("GetRawInputDeviceInfoW failed while reading device name")
     return _normalize_device_name(buffer.value)
@@ -526,7 +566,7 @@ def _get_raw_input_device_info(hdevice: int) -> dict[str, object]:
     size = wintypes.UINT(ctypes.sizeof(RID_DEVICE_INFO))
     if (
         user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICEINFO, ctypes.byref(info), ctypes.byref(size))
-        == 0xFFFFFFFF
+        == UINT32_ERROR
     ):
         raise OSError("GetRawInputDeviceInfoW failed while reading device info")
 
@@ -555,14 +595,14 @@ def _get_raw_input_device_info(hdevice: int) -> dict[str, object]:
 def _list_raw_input_devices() -> list[dict[str, object]]:
     count = wintypes.UINT(0)
     entry_size = ctypes.sizeof(RAWINPUTDEVICELIST)
-    if user32.GetRawInputDeviceList(None, ctypes.byref(count), entry_size) == 0xFFFFFFFF:
+    if user32.GetRawInputDeviceList(None, ctypes.byref(count), entry_size) == UINT32_ERROR:
         raise OSError("GetRawInputDeviceList failed while sizing device list")
     if count.value == 0:
         return []
 
     raw_list = (RAWINPUTDEVICELIST * count.value)()
     result = user32.GetRawInputDeviceList(raw_list, ctypes.byref(count), entry_size)
-    if result == 0xFFFFFFFF:
+    if result == UINT32_ERROR:
         raise OSError("GetRawInputDeviceList failed while reading device list")
 
     devices: list[dict[str, object]] = []
@@ -627,10 +667,10 @@ def _create_message_window() -> tuple[int, WNDPROC]:
 def _read_raw_input(lparam: int) -> tuple[RAWINPUT, bytes]:
     size = wintypes.UINT(0)
     header_size = ctypes.sizeof(RAWINPUTHEADER)
-    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, None, ctypes.byref(size), header_size) == 0xFFFFFFFF:
+    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, None, ctypes.byref(size), header_size) == UINT32_ERROR:
         raise OSError("GetRawInputData sizing failed")
     buffer = ctypes.create_string_buffer(size.value)
-    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, buffer, ctypes.byref(size), header_size) == 0xFFFFFFFF:
+    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, buffer, ctypes.byref(size), header_size) == UINT32_ERROR:
         raise OSError("GetRawInputData read failed")
     raw_bytes = buffer.raw[: size.value]
     if len(raw_bytes) < ctypes.sizeof(RAWINPUT):

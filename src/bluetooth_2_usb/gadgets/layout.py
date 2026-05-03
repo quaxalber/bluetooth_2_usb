@@ -13,6 +13,12 @@ from ..hid.descriptors import (
     MOUSE_IN_REPORT_LENGTH,
 )
 
+USB_CONFIG_BUS_POWERED = 0x80
+USB_CONFIG_REMOTE_WAKEUP = 0x20
+DEFAULT_BM_ATTRIBUTES = USB_CONFIG_BUS_POWERED
+COMBO_BM_ATTRIBUTES = USB_CONFIG_BUS_POWERED | USB_CONFIG_REMOTE_WAKEUP
+DEFAULT_BCD_DEVICE = "0x0205"
+
 
 class GadgetHidDevice(usb_hid.Device):
     def __init__(
@@ -106,7 +112,7 @@ class GadgetLayout:
     product_name: str
     serial_number: str
     max_power: int = 250
-    bm_attributes: int = 0x80
+    bm_attributes: int = DEFAULT_BM_ATTRIBUTES
     configuration_name: str = "Config 1: HID relay"
     max_speed: str | None = None
 
@@ -136,10 +142,10 @@ def build_default_layout() -> GadgetLayout:
             ),
             GadgetHidDevice.from_existing(usb_hid.Device.CONSUMER_CONTROL, function_index=2, protocol=0, subclass=0),
         ),
-        bcd_device="0x0205",
+        bcd_device=DEFAULT_BCD_DEVICE,
         product_name="USB Combo Device",
         serial_number="213374badcafe",
         max_power=100,
-        bm_attributes=0xA0,
+        bm_attributes=COMBO_BM_ATTRIBUTES,
         max_speed="high-speed",
     )

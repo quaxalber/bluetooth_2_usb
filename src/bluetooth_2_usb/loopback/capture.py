@@ -8,7 +8,7 @@ from typing import Any
 
 from adafruit_hid.keycode import Keycode
 
-from ..evdev import evdev_to_usb_hid
+from ..evdev import KeyEvent, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from .constants import DEFAULT_DEVICE_SUBSTRING, EXIT_ACCESS, EXIT_MISMATCH, EXIT_OK, EXIT_PREREQUISITE, EXIT_TIMEOUT
 from .result import GadgetNodes, LoopbackResult
 from .scenarios import (
@@ -20,8 +20,6 @@ from .scenarios import (
     BTN_RIGHT,
     BTN_SIDE,
     BTN_TASK,
-    KEY_VOLUMEDOWN,
-    KEY_VOLUMEUP,
     REL_HWHEEL,
     REL_WHEEL,
     REL_X,
@@ -38,8 +36,6 @@ CONSUMER_USAGE_PAGE = 0x0C
 CONSUMER_USAGE = 0x01
 GADGET_VENDOR_ID = 0x1D6B
 GADGET_PRODUCT_ID = 0x0104
-
-CONSUMER_USAGES = {KEY_VOLUMEUP: 0x00E9, KEY_VOLUMEDOWN: 0x00EA}
 
 REL_NAMES = {REL_X: "REL_X", REL_Y: "REL_Y", REL_HWHEEL: "REL_HWHEEL", REL_WHEEL: "REL_WHEEL"}
 
@@ -135,16 +131,14 @@ class KeyboardSequenceMatcher:
         self.index += 1
 
     def _apply_expected_step(self, expected) -> bytes:
-        hid_code, _ = evdev_to_usb_hid(SimpleNamespace(scancode=expected.code, keystate=expected.value))
-        if hid_code is None:
-            raise CaptureMismatchError(f"Expected keyboard step {expected.describe()} is not mappable to HID")
+        hid_code = _expected_keyboard_usage(expected)
         modifier = Keycode.modifier_bit(hid_code)
-        if expected.value == 1:
+        if expected.value == KeyEvent.key_down:
             if modifier:
                 self._modifier_state |= modifier
             elif hid_code not in self._pressed_keys:
                 self._pressed_keys = (*self._pressed_keys, hid_code)
-        elif expected.value == 0:
+        elif expected.value == KeyEvent.key_up:
             if modifier:
                 self._modifier_state &= ~modifier
             else:
@@ -221,9 +215,9 @@ class MouseSequenceMatcher:
         button_bit = MOUSE_BUTTON_BITS.get(expected.code)
         if button_bit is None:
             raise CaptureMismatchError(f"Expected mouse button step {expected.describe()} is not mappable to HID")
-        if expected.value == 1:
+        if expected.value == KeyEvent.key_down:
             self._button_state |= button_bit
-        elif expected.value == 0:
+        elif expected.value == KeyEvent.key_up:
             self._button_state &= ~button_bit
         return self._button_state
 
@@ -301,7 +295,7 @@ class ConsumerSequenceMatcher:
             return
 
         expected = self.expected_steps[self.index]
-        expected_usage = CONSUMER_USAGES[expected.code] if expected.value == 1 else 0
+        expected_usage = _expected_consumer_usage(expected)
         if usage != expected_usage:
             raise CaptureMismatchError(f"Unexpected consumer usage 0x{usage:04x}; expected 0x{expected_usage:04x}")
         self.index += 1
@@ -309,6 +303,28 @@ class ConsumerSequenceMatcher:
     @property
     def complete(self) -> bool:
         return self.index >= len(self.expected_steps)
+
+
+def _mapped_hid_usage(expected) -> int:
+    usage, _name = evdev_to_usb_hid(SimpleNamespace(scancode=expected.code, keystate=expected.value))
+    if usage is None:
+        raise CaptureMismatchError(f"Expected step {expected.describe()} is not mappable to HID")
+    return usage
+
+
+def _expected_keyboard_usage(expected) -> int:
+    event = SimpleNamespace(scancode=expected.code, keystate=expected.value)
+    if is_consumer_key(event) or is_mouse_button(event):
+        raise CaptureMismatchError(f"Expected keyboard step {expected.describe()} is not a keyboard key")
+    return _mapped_hid_usage(expected)
+
+
+def _expected_consumer_usage(expected) -> int:
+    event = SimpleNamespace(scancode=expected.code, keystate=expected.value)
+    if not is_consumer_key(event):
+        raise CaptureMismatchError(f"Expected consumer step {expected.describe()} is not a consumer key")
+    usage = _mapped_hid_usage(expected)
+    return usage if expected.value == KeyEvent.key_down else 0
 
 
 @dataclass(slots=True)

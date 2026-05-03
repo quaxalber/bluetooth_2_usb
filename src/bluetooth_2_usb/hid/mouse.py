@@ -5,6 +5,7 @@ import asyncio
 from ..logging import get_logger
 from . import timing
 from .bounds import clamp_hid_i8, clamp_hid_i16
+from .constants import HID_PAGE_GENERIC_DESKTOP, HID_USAGE_MOUSE
 from .descriptors import MOUSE_IN_REPORT_LENGTH
 
 logger = get_logger(__name__)
@@ -19,7 +20,7 @@ class ExtendedMouse:
     def __init__(self, devices) -> None:
         from adafruit_hid import find_device
 
-        self._mouse_device = find_device(devices, usage_page=0x1, usage=0x02)
+        self._mouse_device = find_device(devices, usage_page=HID_PAGE_GENERIC_DESKTOP, usage=HID_USAGE_MOUSE)
         if not self._mouse_device:
             raise ValueError("Could not find matching mouse HID device.")
         self.report = bytearray(MOUSE_IN_REPORT_LENGTH)

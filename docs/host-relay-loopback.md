@@ -16,15 +16,22 @@ This validates the path:
 
 For regular validation, run `combo`. It exercises the keyboard, mouse, and
 consumer-control paths in one pass. Use `keyboard`, `mouse`, or `consumer` only
-when you need to isolate a specific domain. Use `node-discovery` when you only
-need to identify the active keyboard, mouse, and consumer HID nodes with a
-minimal host-side signal.
+when you need to isolate a specific domain. The keyboard scenario includes the
+text burst plus extended function, navigation, system, and application keys. The
+consumer scenario includes volume, media transport, menu/application, and
+browser/navigation controls. Use `node-discovery` when you only need to identify
+the active keyboard, mouse, and consumer HID nodes with a minimal host-side
+signal.
 
 The `mouse` and `combo` scenarios include fast relative movement, vertical and
 horizontal scrolling, and all configured mouse button bits. Host capture can
 reduce normal desktop handling while it owns the gadget interfaces, but it is
 not a hard isolation boundary. Run these scenarios only in a test session where
 unexpected mouse-button effects are acceptable.
+
+Consumer controls can also be visible to the host desktop, especially media,
+navigation, and application-launch keys. Run `consumer` and `combo` in a test
+session where those effects are acceptable.
 
 The `node-discovery` scenario is intentionally tiny: it emits one F13
 press/release pair, two mouse relative events (`REL_X=1`, `REL_X=-1`), and the
@@ -187,7 +194,8 @@ and emits this deterministic sequence:
   deltas, then all configured mouse button bits press/release
 - node-discovery: F13 press/release, `REL_X=1`, `REL_X=-1`, and consumer
   volume up/down press/release
-- consumer: volume up/down press/release
+- consumer: volume, media transport, menu/application, and browser/navigation
+  controls
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
 and high-res evdev events in the same `SYN_REPORT` frame. The host capture

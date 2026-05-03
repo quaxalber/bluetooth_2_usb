@@ -15,6 +15,9 @@ DEFAULT_PRODUCT_ID = "0x0104"
 DEFAULT_BCD_USB = "0x0200"
 DEFAULT_BMAX_PACKET_SIZE0 = "0x40"
 DEFAULT_MANUFACTURER = "quaxalber"
+USB_DEVICE_CLASS_PER_INTERFACE = "0x00"
+USB_DEVICE_PROTOCOL_NONE = "0x00"
+USB_DEVICE_SUBCLASS_NONE = "0x00"
 
 
 def _safe_unlink(path: Path) -> None:
@@ -118,9 +121,9 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
 
     _write_text(GADGET_ROOT / "bcdDevice", layout.bcd_device)
     _write_text(GADGET_ROOT / "bcdUSB", DEFAULT_BCD_USB)
-    _write_text(GADGET_ROOT / "bDeviceClass", "0x00")
-    _write_text(GADGET_ROOT / "bDeviceProtocol", "0x00")
-    _write_text(GADGET_ROOT / "bDeviceSubClass", "0x00")
+    _write_text(GADGET_ROOT / "bDeviceClass", USB_DEVICE_CLASS_PER_INTERFACE)
+    _write_text(GADGET_ROOT / "bDeviceProtocol", USB_DEVICE_PROTOCOL_NONE)
+    _write_text(GADGET_ROOT / "bDeviceSubClass", USB_DEVICE_SUBCLASS_NONE)
     _write_text(GADGET_ROOT / "bMaxPacketSize0", DEFAULT_BMAX_PACKET_SIZE0)
     _write_text(GADGET_ROOT / "idProduct", DEFAULT_PRODUCT_ID)
     _write_text(GADGET_ROOT / "idVendor", DEFAULT_VENDOR_ID)

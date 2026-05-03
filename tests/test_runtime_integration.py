@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.evdev import ecodes
+from bluetooth_2_usb.evdev import KeyEvent, ecodes
 from bluetooth_2_usb.relay.gate import RelayGate
 from bluetooth_2_usb.relay.supervisor import RelaySupervisor
 from bluetooth_2_usb.runtime.events import ShutdownRequested, UdcState, UdcStateChanged
@@ -65,9 +65,9 @@ class _FakeHidGadgets:
 
 
 class _FakeKeyEvent:
-    key_down = 1
+    key_down = KeyEvent.key_down
     key_hold = 2
-    key_up = 0
+    key_up = KeyEvent.key_up
 
     def __init__(self, scancode: int, keystate: int) -> None:
         self.scancode = scancode

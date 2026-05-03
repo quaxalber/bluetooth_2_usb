@@ -8,9 +8,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from bluetooth_2_usb.evdev import KeyEvent, ecodes, evdev_to_usb_hid, is_consumer_key
 from bluetooth_2_usb.loopback import capture_windows
 from bluetooth_2_usb.loopback import run as run_loopback
 from bluetooth_2_usb.loopback.capture import (
+    CONSUMER_USAGE,
+    CONSUMER_USAGE_PAGE,
+    GADGET_PRODUCT_ID,
+    GADGET_VENDOR_ID,
+    GENERIC_DESKTOP_USAGE_PAGE,
+    KEYBOARD_USAGE,
+    MOUSE_USAGE,
     CaptureMismatchError,
     ConsumerSequenceMatcher,
     KeyboardSequenceMatcher,
@@ -35,19 +43,24 @@ from bluetooth_2_usb.loopback.constants import EXIT_ACCESS, EXIT_INTERRUPTED, EX
 from bluetooth_2_usb.loopback.inject import (
     DEFAULT_SERVICE_SETTLE_SEC,
     SERVICE_SETTLE_ENV,
+    _consumer_capabilities,
     configured_service_settle_sec,
     run_inject,
     wait_for_service_settle,
 )
 from bluetooth_2_usb.loopback.result import LoopbackResult
 from bluetooth_2_usb.loopback.scenarios import (
+    CONSUMER_CODES,
     CONSUMER_STEPS,
     EV_KEY,
     EV_REL,
+    EXOTIC_KEYBOARD_CODES,
+    EXOTIC_KEYBOARD_STEPS,
     KEY_K,
     KEY_LEFTSHIFT,
     MOUSE_BUTTON_STEPS,
     MOUSE_REL_STEPS,
+    NODE_DISCOVERY_CONSUMER_STEPS,
     NODE_DISCOVERY_KEYBOARD_STEPS,
     NODE_DISCOVERY_REL_STEPS,
     REL_HWHEEL,
@@ -73,7 +86,25 @@ def _mouse_report_count(steps: tuple[ExpectedEvent, ...]) -> int:
     return total
 
 
-SIMPLE_KEYBOARD_STEPS = (ExpectedEvent(EV_KEY, KEY_K, 1), ExpectedEvent(EV_KEY, KEY_K, 0))
+def _mapped_hid_usage(step: ExpectedEvent) -> int:
+    usage, _name = evdev_to_usb_hid(SimpleNamespace(scancode=step.code, keystate=step.value))
+    assert usage is not None
+    return usage
+
+
+def _keyboard_report_for_code(code: int, *, key_state: int = KeyEvent.key_down) -> bytes:
+    usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, code, key_state))
+    return bytes([0x00, 0x00, usage, 0, 0, 0, 0, 0])
+
+
+def _consumer_report_for_step(step: ExpectedEvent, *, report_id: int = 0x03, width: int = 3) -> bytes:
+    usage = _mapped_hid_usage(step) if step.value == KeyEvent.key_down else 0
+    if width == 2:
+        return bytes([report_id, usage & 0xFF])
+    return bytes([report_id, usage & 0xFF, usage >> 8])
+
+
+SIMPLE_KEYBOARD_STEPS = (ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down), ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_up))
 
 SMALL_MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, 1),
@@ -133,11 +164,18 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.required_nodes, ("keyboard",))
         self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
         self.assertIn(KEY_K, [step.code for step in scenario.keyboard_steps])
-        self.assertTrue(any(step.value == 1 for step in scenario.keyboard_steps))
-        self.assertTrue(any(step.value == 0 for step in scenario.keyboard_steps))
+        self.assertTrue(any(step.value == KeyEvent.key_down for step in scenario.keyboard_steps))
+        self.assertTrue(any(step.value == KeyEvent.key_up for step in scenario.keyboard_steps))
+        self.assertTrue(all(step in scenario.keyboard_steps for step in EXOTIC_KEYBOARD_STEPS))
         self.assertEqual(scenario.default_event_gap_ms, 10)
         self.assertEqual(scenario.default_post_delay_ms, 6000)
         self.assertEqual(scenario.default_capture_timeout_sec, 15.0)
+
+    def test_loopback_keyboard_candidates_are_production_mapped(self) -> None:
+        for code in EXOTIC_KEYBOARD_CODES:
+            with self.subTest(code=code):
+                usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, code, KeyEvent.key_down))
+                self.assertIsInstance(usage, int)
 
     def test_mouse_scenario_contains_fast_motion_and_all_button_bits(self) -> None:
         scenario = SCENARIOS["mouse"]
@@ -160,15 +198,25 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.mouse_rel_steps, (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1)))
         self.assertEqual(scenario.mouse_rel_steps, NODE_DISCOVERY_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, ())
-        self.assertEqual(scenario.consumer_steps, CONSUMER_STEPS)
+        self.assertEqual(scenario.consumer_steps, NODE_DISCOVERY_CONSUMER_STEPS)
+        self.assertNotEqual(scenario.consumer_steps, CONSUMER_STEPS)
         self.assertEqual(scenario.default_capture_timeout_sec, 5.0)
 
-    def test_consumer_scenario_contains_volume_sequence(self) -> None:
+    def test_consumer_scenario_contains_representative_consumer_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
 
         self.assertEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
         self.assertEqual(consumer.default_capture_timeout_sec, 10.0)
+
+    def test_loopback_consumer_candidates_are_production_mapped(self) -> None:
+        usages = []
+        for code in CONSUMER_CODES:
+            with self.subTest(code=code):
+                event = SimpleNamespace(scancode=code, keystate=KeyEvent.key_down)
+                self.assertTrue(is_consumer_key(event))
+                usages.append(_mapped_hid_usage(ExpectedEvent(EV_KEY, code, KeyEvent.key_down)))
+        self.assertTrue(any(usage > 0xFF for usage in usages))
 
     def test_combo_scenario_contains_keyboard_mouse_and_consumer_sequences(self) -> None:
         combo = SCENARIOS["combo"]
@@ -191,10 +239,12 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
     def test_discovery_groups_hid_devices_by_input_role(self) -> None:
         hid_module = _FakeHidModule(
             [
-                _hid_entry("kbd0", usage_page=0x01, usage=0x06),
-                _hid_entry("mouse0", usage_page=0x01, usage=0x02),
-                _hid_entry("consumer0", usage_page=0x0C, usage=0x01),
-                _hid_entry("other0", device_name="some other device", usage_page=0x0C, usage=0x01),
+                _hid_entry("kbd0", usage_page=GENERIC_DESKTOP_USAGE_PAGE, usage=KEYBOARD_USAGE),
+                _hid_entry("mouse0", usage_page=GENERIC_DESKTOP_USAGE_PAGE, usage=MOUSE_USAGE),
+                _hid_entry("consumer0", usage_page=CONSUMER_USAGE_PAGE, usage=CONSUMER_USAGE),
+                _hid_entry(
+                    "other0", device_name="some other device", usage_page=CONSUMER_USAGE_PAGE, usage=CONSUMER_USAGE
+                ),
             ]
         )
 
@@ -207,8 +257,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
     def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(self) -> None:
         hid_module = _FakeHidModule(
             [
-                _hid_entry("consumer-b", usage_page=0x0C, usage=0x01),
-                _hid_entry("consumer-a", usage_page=0x0C, usage=0x01),
+                _hid_entry("consumer-b", usage_page=CONSUMER_USAGE_PAGE, usage=CONSUMER_USAGE),
+                _hid_entry("consumer-a", usage_page=CONSUMER_USAGE_PAGE, usage=CONSUMER_USAGE),
             ]
         )
 
@@ -220,7 +270,10 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
     def test_discovery_rejects_multiple_distinct_keyboard_nodes(self) -> None:
         hid_module = _FakeHidModule(
-            [_hid_entry("kbd-a", usage_page=0x01, usage=0x06), _hid_entry("kbd-b", usage_page=0x01, usage=0x06)]
+            [
+                _hid_entry("kbd-a", usage_page=GENERIC_DESKTOP_USAGE_PAGE, usage=KEYBOARD_USAGE),
+                _hid_entry("kbd-b", usage_page=GENERIC_DESKTOP_USAGE_PAGE, usage=KEYBOARD_USAGE),
+            ]
         )
 
         with self.assertRaisesRegex(MissingNodeError, "Multiple keyboard HID devices"):
@@ -229,9 +282,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
     def test_explicit_override_bypasses_auto_detection(self) -> None:
         hid_module = _FakeHidModule(
             [
-                _hid_entry("kbd-a", usage_page=0x01, usage=0x06),
-                _hid_entry("mouse-a", usage_page=0x01, usage=0x02),
-                _hid_entry("consumer-a", usage_page=0x0C, usage=0x01),
+                _hid_entry("kbd-a", usage_page=GENERIC_DESKTOP_USAGE_PAGE, usage=KEYBOARD_USAGE),
+                _hid_entry("mouse-a", usage_page=GENERIC_DESKTOP_USAGE_PAGE, usage=MOUSE_USAGE),
+                _hid_entry("consumer-a", usage_page=CONSUMER_USAGE_PAGE, usage=CONSUMER_USAGE),
             ]
         )
 
@@ -251,8 +304,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     device_name="",
                     manufacturer="",
                     serial="",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=0,
                     usage_page=0,
                     usage=0,
@@ -262,8 +315,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     device_name="",
                     manufacturer="",
                     serial="",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=1,
                     usage_page=0,
                     usage=0,
@@ -273,8 +326,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     device_name="",
                     manufacturer="",
                     serial="",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=2,
                     usage_page=0,
                     usage=0,
@@ -295,8 +348,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.0",
                     device_name="USB Combo Device",
                     serial="213374badcafe",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=0,
                     usage_page=0,
                     usage=0,
@@ -305,8 +358,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.1",
                     device_name="USB Combo Device",
                     serial="213374badcafe",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=1,
                     usage_page=0,
                     usage=0,
@@ -315,8 +368,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.2",
                     device_name="USB Combo Device",
                     serial="213374badcafe",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=2,
                     usage_page=0,
                     usage=0,
@@ -337,8 +390,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.0",
                     device_name="USB Combo Device",
                     serial="213374badcafe",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=0,
                     usage_page=0,
                     usage=0,
@@ -347,8 +400,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.1",
                     device_name="USB Combo Device",
                     serial="213374badcafe",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=1,
                     usage_page=0,
                     usage=0,
@@ -357,8 +410,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.2",
                     device_name="USB Combo Device",
                     serial="213374badcafe",
-                    vendor_id=0x1D6B,
-                    product_id=0x0104,
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
                     interface_number=2,
                     usage_page=0,
                     usage=0,
@@ -379,7 +432,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_eight_byte_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]), bytes([0x00] * 8))
+        reports = (_keyboard_report_for_code(KEY_K), bytes([0x00] * 8))
         for report in reports:
             matcher.handle(report)
 
@@ -388,7 +441,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_report_id_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (bytes([0x01, 0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]), bytes([0x01] + [0x00] * 8))
+        reports = (bytes([0x01]) + _keyboard_report_for_code(KEY_K), bytes([0x01] + [0x00] * 8))
         for report in reports:
             matcher.handle(report)
 
@@ -397,7 +450,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_ignores_single_zero_reports_between_steps(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (bytes([0x00, 0x00, 0x0E, 0, 0, 0, 0, 0]), bytes([0x00]), bytes([0x00] * 8), bytes([0x00]))
+        reports = (_keyboard_report_for_code(KEY_K), bytes([0x00]), bytes([0x00] * 8), bytes([0x00]))
         for report in reports:
             matcher.handle(report)
 
@@ -405,18 +458,19 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
 
     def test_keyboard_matcher_ignores_duplicate_current_state_reports(self) -> None:
         shifted_key_steps = (
-            ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 1),
-            ExpectedEvent(EV_KEY, KEY_K, 1),
-            ExpectedEvent(EV_KEY, KEY_K, 0),
-            ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 0),
+            ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, KeyEvent.key_down),
+            ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down),
+            ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_up),
+            ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, KeyEvent.key_up),
         )
         matcher = KeyboardSequenceMatcher(shifted_key_steps)
+        k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
 
         reports = (
             bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
             bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, 0x0E, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, 0x0E, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, k_usage, 0, 0, 0, 0, 0]),
+            bytes([0x02, 0x00, k_usage, 0, 0, 0, 0, 0]),
             bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
             bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
             bytes([0x00] * 8),
@@ -579,45 +633,40 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
 
 class ConsumerSequenceMatcherTest(unittest.TestCase):
-    def test_consumer_matcher_accepts_volume_sequence(self) -> None:
+    def test_consumer_matcher_accepts_expanded_consumer_sequence(self) -> None:
         matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
 
-        for report in (
-            bytes([0x03, 0xE9, 0x00]),
-            bytes([0x03, 0x00, 0x00]),
-            bytes([0x03, 0xEA, 0x00]),
-            bytes([0x03, 0x00, 0x00]),
-        ):
-            matcher.handle(report)
+        for step in SCENARIOS["consumer"].consumer_steps:
+            matcher.handle(_consumer_report_for_step(step))
 
         self.assertTrue(matcher.complete)
 
     def test_consumer_matcher_accepts_zero_prefixed_raw_input_reports(self) -> None:
         matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
 
-        for report in (
-            bytes([0x00, 0xE9, 0x00]),
-            bytes([0x00, 0x00, 0x00]),
-            bytes([0x00, 0xEA, 0x00]),
-            bytes([0x00, 0x00, 0x00]),
-        ):
-            matcher.handle(report)
+        for step in SCENARIOS["consumer"].consumer_steps:
+            matcher.handle(_consumer_report_for_step(step, report_id=0x00))
 
         self.assertTrue(matcher.complete)
 
     def test_consumer_matcher_accepts_compact_report_id_format(self) -> None:
-        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+        matcher = ConsumerSequenceMatcher(NODE_DISCOVERY_CONSUMER_STEPS)
 
-        for report in (
-            bytes([0x03, 0xE9]),
-            bytes([0x00]),
-            bytes([0x03, 0x00]),
-            bytes([0x00]),
-            bytes([0x03, 0xEA]),
-            bytes([0x00]),
-            bytes([0x03, 0x00]),
-        ):
-            matcher.handle(report)
+        for step in NODE_DISCOVERY_CONSUMER_STEPS:
+            matcher.handle(_consumer_report_for_step(step, width=2))
+
+        self.assertTrue(matcher.complete)
+
+    def test_consumer_matcher_accepts_usage_above_one_byte(self) -> None:
+        high_usage_step = next(
+            step for step in CONSUMER_STEPS if step.value == KeyEvent.key_down and _mapped_hid_usage(step) > 0xFF
+        )
+        matcher = ConsumerSequenceMatcher(
+            (high_usage_step, ExpectedEvent(EV_KEY, high_usage_step.code, KeyEvent.key_up))
+        )
+
+        matcher.handle(_consumer_report_for_step(high_usage_step))
+        matcher.handle(_consumer_report_for_step(ExpectedEvent(EV_KEY, high_usage_step.code, KeyEvent.key_up)))
 
         self.assertTrue(matcher.complete)
 
@@ -680,9 +729,27 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
-            capture_windows.keyboard_event_to_report(0x7C, is_key_up=False), bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0])
+            capture_windows.keyboard_event_to_report(capture_windows.VK_F13, is_key_up=False),
+            bytes([0x00, 0x00, capture_windows.VK_TO_HID[capture_windows.VK_F13], 0, 0, 0, 0, 0]),
         )
-        self.assertEqual(capture_windows.keyboard_event_to_report(0x7C, is_key_up=True), bytes([0x00] * 8))
+        self.assertEqual(
+            capture_windows.keyboard_event_to_report(capture_windows.VK_F13, is_key_up=True), bytes([0x00] * 8)
+        )
+
+    def test_keyboard_event_to_report_covers_extended_scenario_keys(self) -> None:
+        for vkey in (
+            capture_windows.VK_F24,
+            capture_windows.VK_SNAPSHOT,
+            capture_windows.VK_INSERT,
+            capture_windows.VK_DELETE,
+            capture_windows.VK_UP,
+            capture_windows.VK_APPS,
+        ):
+            with self.subTest(vkey=vkey):
+                self.assertEqual(
+                    capture_windows.keyboard_event_to_report(vkey, is_key_up=False),
+                    bytes([0x00, 0x00, capture_windows.VK_TO_HID[vkey], 0, 0, 0, 0, 0]),
+                )
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
         self.assertIsNone(capture_windows.keyboard_event_to_report(0x41, is_key_up=False))
@@ -798,7 +865,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             matcher=SimpleNamespace(complete=True, index=2),
             matched_name=r"\\?\hid\vid_1d6b&pid_0104&mi_00\instance\{guid}",
         )
-        candidate.note_report(bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]))
+        candidate.note_report(_keyboard_report_for_code(ecodes.KEY_F13))
 
         result = capture_windows._raw_input_success_result(
             SCENARIOS["keyboard"], 15.0, debug, candidate, None, None, ()
@@ -839,6 +906,11 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
 
 class LoopbackInjectTest(unittest.TestCase):
+    def test_consumer_capabilities_are_derived_from_scenarios(self) -> None:
+        capabilities = _consumer_capabilities()
+
+        self.assertEqual(capabilities[ecodes.EV_KEY], sorted({step.code for step in CONSUMER_STEPS}))
+
     def test_configured_service_settle_accepts_zero_override(self) -> None:
         with patch.dict("os.environ", {SERVICE_SETTLE_ENV: "0"}):
             self.assertEqual(configured_service_settle_sec(), 0)
@@ -950,7 +1022,16 @@ class LoopbackInjectTest(unittest.TestCase):
 
     def test_capture_uses_scenario_default_timeout(self) -> None:
         hid_module = _FakeHidModule(
-            [_hid_entry("kbd0", vendor_id=0x1D6B, product_id=0x0104, interface_number=0, usage_page=0x01, usage=0x06)]
+            [
+                _hid_entry(
+                    "kbd0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=0,
+                    usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                    usage=KEYBOARD_USAGE,
+                )
+            ]
         )
         result = LoopbackResult(
             command="capture", scenario="keyboard", success=True, exit_code=0, message="ok", details={}
@@ -1003,18 +1084,28 @@ class LoopbackInjectTest(unittest.TestCase):
             hid_module=_FakeHidModule(
                 [
                     _hid_entry(
-                        "kbd0", vendor_id=0x1D6B, product_id=0x0104, interface_number=0, usage_page=0x01, usage=0x06
+                        "kbd0",
+                        vendor_id=GADGET_VENDOR_ID,
+                        product_id=GADGET_PRODUCT_ID,
+                        interface_number=0,
+                        usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                        usage=KEYBOARD_USAGE,
                     ),
                     _hid_entry(
-                        "mouse0", vendor_id=0x1D6B, product_id=0x0104, interface_number=1, usage_page=0x01, usage=0x02
+                        "mouse0",
+                        vendor_id=GADGET_VENDOR_ID,
+                        product_id=GADGET_PRODUCT_ID,
+                        interface_number=1,
+                        usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                        usage=MOUSE_USAGE,
                     ),
                     _hid_entry(
                         "consumer0",
-                        vendor_id=0x1D6B,
-                        product_id=0x0104,
+                        vendor_id=GADGET_VENDOR_ID,
+                        product_id=GADGET_PRODUCT_ID,
                         interface_number=2,
-                        usage_page=0x0C,
-                        usage=0x01,
+                        usage_page=CONSUMER_USAGE_PAGE,
+                        usage=CONSUMER_USAGE,
                     ),
                 ]
             ),
@@ -1026,23 +1117,28 @@ class LoopbackInjectTest(unittest.TestCase):
                 return_value=_FakeHidModule(
                     [
                         _hid_entry(
-                            "kbd0", vendor_id=0x1D6B, product_id=0x0104, interface_number=0, usage_page=0x01, usage=0x06
+                            "kbd0",
+                            vendor_id=GADGET_VENDOR_ID,
+                            product_id=GADGET_PRODUCT_ID,
+                            interface_number=0,
+                            usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                            usage=KEYBOARD_USAGE,
                         ),
                         _hid_entry(
                             "mouse0",
-                            vendor_id=0x1D6B,
-                            product_id=0x0104,
+                            vendor_id=GADGET_VENDOR_ID,
+                            product_id=GADGET_PRODUCT_ID,
                             interface_number=1,
-                            usage_page=0x01,
-                            usage=0x02,
+                            usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                            usage=MOUSE_USAGE,
                         ),
                         _hid_entry(
                             "consumer0",
-                            vendor_id=0x1D6B,
-                            product_id=0x0104,
+                            vendor_id=GADGET_VENDOR_ID,
+                            product_id=GADGET_PRODUCT_ID,
                             interface_number=2,
-                            usage_page=0x0C,
-                            usage=0x01,
+                            usage_page=CONSUMER_USAGE_PAGE,
+                            usage=CONSUMER_USAGE,
                         ),
                     ]
                 ),
@@ -1067,7 +1163,12 @@ class LoopbackInjectTest(unittest.TestCase):
         consumer_hid = _FakeHidModule(
             [
                 _hid_entry(
-                    "consumer0", vendor_id=0x1D6B, product_id=0x0104, interface_number=2, usage_page=0x0C, usage=0x01
+                    "consumer0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=2,
+                    usage_page=CONSUMER_USAGE_PAGE,
+                    usage=CONSUMER_USAGE,
                 )
             ]
         )

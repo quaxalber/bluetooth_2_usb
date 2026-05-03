@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..evdev import ecodes
+from ..evdev.types import KeyEvent
 
 EV_KEY = ecodes.EV_KEY
 EV_REL = ecodes.EV_REL
+KEY_DOWN = KeyEvent.key_down
+KEY_UP = KeyEvent.key_up
 
 KEY_F13 = ecodes.KEY_F13
 KEY_F14 = ecodes.KEY_F14
@@ -125,34 +128,66 @@ MOUSE_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_HWHEEL, -2400),
 )
 
-NODE_DISCOVERY_KEYBOARD_STEPS = (ExpectedEvent(EV_KEY, KEY_F13, 1), ExpectedEvent(EV_KEY, KEY_F13, 0))
+EXOTIC_KEYBOARD_CODES = (
+    ecodes.KEY_F13,
+    ecodes.KEY_F14,
+    ecodes.KEY_F15,
+    ecodes.KEY_F24,
+    ecodes.KEY_SYSRQ,
+    ecodes.KEY_SCROLLLOCK,
+    ecodes.KEY_INSERT,
+    ecodes.KEY_DELETE,
+    ecodes.KEY_HOME,
+    ecodes.KEY_END,
+    ecodes.KEY_PAGEUP,
+    ecodes.KEY_PAGEDOWN,
+    ecodes.KEY_UP,
+    ecodes.KEY_DOWN,
+    ecodes.KEY_LEFT,
+    ecodes.KEY_RIGHT,
+    ecodes.KEY_COMPOSE,
+)
+
+CONSUMER_CODES = (
+    ecodes.KEY_VOLUMEUP,
+    ecodes.KEY_VOLUMEDOWN,
+    ecodes.KEY_PLAYPAUSE,
+    ecodes.KEY_NEXTSONG,
+    ecodes.KEY_PREVIOUSSONG,
+    ecodes.KEY_STOPCD,
+    ecodes.KEY_MENU,
+    ecodes.KEY_CALC,
+    ecodes.KEY_HOMEPAGE,
+    ecodes.KEY_SEARCH,
+    ecodes.KEY_BACK,
+    ecodes.KEY_FORWARD,
+    ecodes.KEY_REFRESH,
+)
+
+
+def _press_release_steps(*codes: int) -> tuple[ExpectedEvent, ...]:
+    return tuple(
+        step for code in codes for step in (ExpectedEvent(EV_KEY, code, KEY_DOWN), ExpectedEvent(EV_KEY, code, KEY_UP))
+    )
+
+
+NODE_DISCOVERY_KEYBOARD_STEPS = _press_release_steps(KEY_F13)
 NODE_DISCOVERY_REL_STEPS = (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1))
+NODE_DISCOVERY_CONSUMER_STEPS = _press_release_steps(KEY_VOLUMEUP, KEY_VOLUMEDOWN)
 
 MOUSE_BUTTON_STEPS = (
-    ExpectedEvent(EV_KEY, BTN_LEFT, 1),
-    ExpectedEvent(EV_KEY, BTN_LEFT, 0),
-    ExpectedEvent(EV_KEY, BTN_RIGHT, 1),
-    ExpectedEvent(EV_KEY, BTN_RIGHT, 0),
-    ExpectedEvent(EV_KEY, BTN_MIDDLE, 1),
-    ExpectedEvent(EV_KEY, BTN_MIDDLE, 0),
-    ExpectedEvent(EV_KEY, BTN_SIDE, 1),
-    ExpectedEvent(EV_KEY, BTN_SIDE, 0),
-    ExpectedEvent(EV_KEY, BTN_EXTRA, 1),
-    ExpectedEvent(EV_KEY, BTN_EXTRA, 0),
-    ExpectedEvent(EV_KEY, BTN_FORWARD, 1),
-    ExpectedEvent(EV_KEY, BTN_FORWARD, 0),
-    ExpectedEvent(EV_KEY, BTN_BACK, 1),
-    ExpectedEvent(EV_KEY, BTN_BACK, 0),
-    ExpectedEvent(EV_KEY, BTN_TASK, 1),
-    ExpectedEvent(EV_KEY, BTN_TASK, 0),
+    *_press_release_steps(BTN_LEFT),
+    *_press_release_steps(BTN_RIGHT),
+    *_press_release_steps(BTN_MIDDLE),
+    *_press_release_steps(BTN_SIDE),
+    *_press_release_steps(BTN_EXTRA),
+    *_press_release_steps(BTN_FORWARD),
+    *_press_release_steps(BTN_BACK),
+    *_press_release_steps(BTN_TASK),
 )
 
-CONSUMER_STEPS = (
-    ExpectedEvent(EV_KEY, KEY_VOLUMEUP, 1),
-    ExpectedEvent(EV_KEY, KEY_VOLUMEUP, 0),
-    ExpectedEvent(EV_KEY, KEY_VOLUMEDOWN, 1),
-    ExpectedEvent(EV_KEY, KEY_VOLUMEDOWN, 0),
-)
+EXOTIC_KEYBOARD_STEPS = _press_release_steps(*EXOTIC_KEYBOARD_CODES)
+CONSUMER_STEPS = _press_release_steps(*CONSUMER_CODES)
 
 
 def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
@@ -169,15 +204,15 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
     }
     for char in text:
         if char == " ":
-            steps.extend((ExpectedEvent(EV_KEY, KEY_SPACE, 1), ExpectedEvent(EV_KEY, KEY_SPACE, 0)))
+            steps.extend((ExpectedEvent(EV_KEY, KEY_SPACE, KEY_DOWN), ExpectedEvent(EV_KEY, KEY_SPACE, KEY_UP)))
             continue
         if char == "_":
             steps.extend(
                 (
-                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 1),
-                    ExpectedEvent(EV_KEY, KEY_MINUS, 1),
-                    ExpectedEvent(EV_KEY, KEY_MINUS, 0),
-                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 0),
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, KEY_DOWN),
+                    ExpectedEvent(EV_KEY, KEY_MINUS, KEY_DOWN),
+                    ExpectedEvent(EV_KEY, KEY_MINUS, KEY_UP),
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, KEY_UP),
                 )
             )
             continue
@@ -186,21 +221,22 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
         if char.isupper():
             steps.extend(
                 (
-                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 1),
-                    ExpectedEvent(EV_KEY, key_code, 1),
-                    ExpectedEvent(EV_KEY, key_code, 0),
-                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, 0),
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, KEY_DOWN),
+                    ExpectedEvent(EV_KEY, key_code, KEY_DOWN),
+                    ExpectedEvent(EV_KEY, key_code, KEY_UP),
+                    ExpectedEvent(EV_KEY, KEY_LEFTSHIFT, KEY_UP),
                 )
             )
             continue
 
-        steps.extend((ExpectedEvent(EV_KEY, key_code, 1), ExpectedEvent(EV_KEY, key_code, 0)))
+        steps.extend((ExpectedEvent(EV_KEY, key_code, KEY_DOWN), ExpectedEvent(EV_KEY, key_code, KEY_UP)))
 
 
 _KEYBOARD_STEPS: list[ExpectedEvent] = []
 for _ in range(9):
     _append_text_steps(_KEYBOARD_STEPS, "kEyBoArD")
-KEYBOARD_STEPS = tuple(_KEYBOARD_STEPS)
+TEXT_KEYBOARD_STEPS = tuple(_KEYBOARD_STEPS)
+KEYBOARD_STEPS = TEXT_KEYBOARD_STEPS + EXOTIC_KEYBOARD_STEPS
 
 SCENARIOS = {
     "keyboard": ScenarioDefinition(
@@ -227,7 +263,7 @@ SCENARIOS = {
         keyboard_steps=NODE_DISCOVERY_KEYBOARD_STEPS,
         mouse_rel_steps=NODE_DISCOVERY_REL_STEPS,
         mouse_button_steps=(),
-        consumer_steps=CONSUMER_STEPS,
+        consumer_steps=NODE_DISCOVERY_CONSUMER_STEPS,
         default_event_gap_ms=20,
         default_post_delay_ms=250,
         default_capture_timeout_sec=5.0,

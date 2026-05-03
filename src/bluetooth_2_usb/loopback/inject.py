@@ -24,6 +24,7 @@ from .scenarios import SCENARIOS, get_scenario, scenario_to_dict
 UINPUT_PATH = Path("/dev/uinput")
 SERVICE_SETTLE_ENV = "B2U_LOOPBACK_SERVICE_SETTLE_SEC"
 DEFAULT_SERVICE_SETTLE_SEC = 10.0
+HI_RES_WHEEL_UNITS_PER_DETENT = 120
 
 
 def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:
@@ -39,7 +40,7 @@ def _write_mouse_rel_step(device: UInput, step_event) -> None:
     device.write(step_event.event_type, step_event.code, step_event.value)
     hi_res_code = _HI_RES_REL_CODES.get(step_event.code)
     if step_event.event_type == ecodes.EV_REL and hi_res_code is not None:
-        device.write(step_event.event_type, hi_res_code, step_event.value * 120)
+        device.write(step_event.event_type, hi_res_code, step_event.value * HI_RES_WHEEL_UNITS_PER_DETENT)
 
 
 def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
@@ -78,7 +79,8 @@ def _mouse_capabilities() -> dict[int, list[int]]:
 
 
 def _consumer_capabilities() -> dict[int, list[int]]:
-    return {ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN]}
+    consumer_codes = sorted({step.code for scenario in SCENARIOS.values() for step in scenario.consumer_steps})
+    return {ecodes.EV_KEY: consumer_codes}
 
 
 def configured_service_settle_sec() -> float:

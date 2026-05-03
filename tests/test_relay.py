@@ -4,13 +4,15 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
-from bluetooth_2_usb.evdev import ecodes
+from bluetooth_2_usb.evdev import KeyEvent, ecodes
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.relay.gate import RelayGate, RelayInactiveReason
 from bluetooth_2_usb.relay.input import InputRelay
 from bluetooth_2_usb.relay.shortcut import ShortcutToggler
 from bluetooth_2_usb.relay.supervisor import RelaySupervisor
 from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, ShutdownRequested, UdcState, UdcStateChanged
+
+UNKNOWN_KEY_CODE = 88
 
 
 class _FakeKeyboard:
@@ -185,9 +187,9 @@ class _FakeGrabInputDevice:
 
 
 class _TestKeyEvent:
-    key_down = 1
+    key_down = KeyEvent.key_down
     key_hold = 2
-    key_up = 0
+    key_up = KeyEvent.key_up
 
     def __init__(self, scancode: int, keystate: int) -> None:
         self.scancode = scancode
@@ -196,13 +198,13 @@ class _TestKeyEvent:
 
 class _TestRelEvent:
     def __init__(self, code: int, value: int) -> None:
-        self.event = SimpleNamespace(type=2, code=code, value=value)
+        self.event = SimpleNamespace(type=ecodes.EV_REL, code=code, value=value)
 
 
 class _TestSynEvent:
-    type = 0
-    code = 0
-    value = 0
+    type = ecodes.EV_SYN
+    code = ecodes.SYN_REPORT
+    value = ecodes.SYN_REPORT
 
 
 class _TestInputDevice:
@@ -400,7 +402,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         toggler = ShortcutToggler(shortcut_keys={"KEY_F12"}, relay_gate=gate)
         input_device = _FakeGrabInputDevice(
-            [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(88, _TestKeyEvent.key_down), _TestSynEvent()]
+            [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down), _TestSynEvent()]
         )
         relay = InputRelay(input_device, hid_gadgets, grab_device=True, relay_gate=gate, shortcut_toggler=toggler)
 
@@ -418,7 +420,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         toggler = ShortcutToggler(shortcut_keys={"KEY_F12"}, relay_gate=gate)
         dispatcher = HidDispatcher(_FakeHidGadgets(), gate, toggler)
 
-        await dispatcher.dispatch(_TestKeyEvent(88, _TestKeyEvent.key_down))
+        await dispatcher.dispatch(_TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down))
 
         self.assertTrue(gate.active)
 
