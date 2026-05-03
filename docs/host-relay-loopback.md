@@ -103,6 +103,12 @@ strict capture of the actual relay sequence uses Raw Input; `hidapi` remains a
 discovery step, not the primary event backend. Use a Python environment where
 `python -c "import hid"` succeeds.
 
+Loopback JSON is intentionally summarized. Normal injector output reports the
+scenario name, timing, device names, and expected event counts instead of the
+full event sequence. Capture timeouts report the candidates, any nodes that
+completed before the timeout, per-role progress counters, and the next expected
+event. They do not dump the full remaining sequence.
+
 With the repository virtual environment on Windows:
 
 ```powershell
@@ -216,6 +222,52 @@ reports on the host gadget HID device.
 
 The Pi-side injector exits `0` and reports that it injected the expected test
 sequence through `/dev/uinput`.
+
+Injector JSON includes a compact expectation summary:
+
+```json
+{
+  "expected": {
+    "name": "combo",
+    "keyboard_steps": 250,
+    "mouse_rel_steps": 8,
+    "mouse_button_steps": 16,
+    "consumer_steps": 26,
+    "total_steps": 300
+  }
+}
+```
+
+Timeout JSON focuses on the useful debugging state:
+
+```json
+{
+  "message": "Timed out waiting for combo reports after 30.0s",
+  "details": {
+    "summary": {
+      "keyboard": "250/250 complete",
+      "mouse": "2/8 rel, 0/16 buttons",
+      "consumer": "0/26"
+    },
+    "progress": {
+      "mouse": [
+        {
+          "node": "/dev/hidraw3",
+          "rel_steps_seen": 2,
+          "rel_steps_expected": 8,
+          "button_steps_seen": 0,
+          "button_steps_expected": 16,
+          "next_expected_rel": "REL_X=-210000"
+        }
+      ]
+    }
+  }
+}
+```
+
+Windows Raw Input capture also includes aggregate message counts and a small
+sample of observed events for device-matching issues; it intentionally avoids a
+complete Raw Input event stream.
 
 ## 5. Useful variants
 

@@ -19,6 +19,8 @@ from .capture import (
     KeyboardSequenceMatcher,
     MissingNodeError,
     MouseSequenceMatcher,
+    candidate_progress_details,
+    progress_summary_details,
 )
 from .constants import EXIT_OK
 from .result import GadgetNodes, LoopbackResult
@@ -723,16 +725,39 @@ def _raw_input_nodes(
     )
 
 
+def _raw_input_progress(
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+) -> dict[str, list[dict[str, object]]]:
+    progress: dict[str, list[dict[str, object]]] = {}
+    for candidate in (keyboard_candidate, mouse_candidate, consumer_candidate):
+        if candidate is None:
+            continue
+        progress.setdefault(candidate.role, []).append(
+            candidate_progress_details(node=candidate.matched_name, matcher=candidate.matcher)
+        )
+    return progress
+
+
 def _raw_input_failure_details(
-    timeout_sec: float, debug: _RawInputDebug, windows_skipped_mouse_buttons: tuple[str, ...]
+    timeout_sec: float,
+    debug: _RawInputDebug,
+    windows_skipped_mouse_buttons: tuple[str, ...],
+    keyboard_candidate: _RawInputCandidate | None = None,
+    mouse_candidate: _RawInputCandidate | None = None,
+    consumer_candidate: _RawInputCandidate | None = None,
 ) -> dict[str, object]:
-    return {
+    progress = _raw_input_progress(keyboard_candidate, mouse_candidate, consumer_candidate)
+    details: dict[str, object] = {
         "capture_backend": "raw_input",
         "timeout_sec": timeout_sec,
-        "nodes": GadgetNodes(None, None, None).to_dict(),
+        "nodes": _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate).to_dict(),
         "raw_input_debug": debug.to_dict(),
         "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
     }
+    details.update(progress_summary_details(progress))
+    return details
 
 
 def _raw_input_success_result(
@@ -908,7 +933,14 @@ def _pump_raw_input(
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
-            details=_raw_input_failure_details(timeout_sec, debug, windows_skipped_mouse_buttons),
+            details=_raw_input_failure_details(
+                timeout_sec,
+                debug,
+                windows_skipped_mouse_buttons,
+                keyboard_candidate,
+                mouse_candidate,
+                consumer_candidate,
+            ),
         )
     finally:
         if hwnd is not None:
@@ -921,7 +953,9 @@ def _pump_raw_input(
         success=False,
         exit_code=CaptureTimeoutError.exit_code,
         message=f"Timed out waiting for {scenario.name} events after {timeout_sec}s",
-        details=_raw_input_failure_details(timeout_sec, debug, windows_skipped_mouse_buttons),
+        details=_raw_input_failure_details(
+            timeout_sec, debug, windows_skipped_mouse_buttons, keyboard_candidate, mouse_candidate, consumer_candidate
+        ),
     )
 
 

@@ -19,7 +19,7 @@ from .constants import (
     EXIT_PREREQUISITE,
 )
 from .result import LoopbackResult
-from .scenarios import SCENARIOS, get_scenario, scenario_to_dict
+from .scenarios import SCENARIOS, get_scenario, scenario_summary
 
 UINPUT_PATH = Path("/dev/uinput")
 SERVICE_SETTLE_ENV = "B2U_LOOPBACK_SERVICE_SETTLE_SEC"
@@ -285,7 +285,7 @@ def run_inject(
             "pre_delay_ms": pre_delay_ms,
             "event_gap_ms": resolved_event_gap_ms,
             "post_delay_ms": resolved_post_delay_ms,
-            "expected": scenario_to_dict(scenario),
+            "expected": scenario_summary(scenario),
             "injected_event_count": injected_events,
         },
     )

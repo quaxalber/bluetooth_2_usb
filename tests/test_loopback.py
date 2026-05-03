@@ -39,7 +39,13 @@ from bluetooth_2_usb.loopback.capture_windows import (
     RI_MOUSE_LEFT_BUTTON_UP,
     RI_MOUSE_WHEEL,
 )
-from bluetooth_2_usb.loopback.constants import EXIT_ACCESS, EXIT_INTERRUPTED, EXIT_PREREQUISITE, EXIT_USAGE
+from bluetooth_2_usb.loopback.constants import (
+    EXIT_ACCESS,
+    EXIT_INTERRUPTED,
+    EXIT_PREREQUISITE,
+    EXIT_TIMEOUT,
+    EXIT_USAGE,
+)
 from bluetooth_2_usb.loopback.inject import (
     DEFAULT_SERVICE_SETTLE_SEC,
     SERVICE_SETTLE_ENV,
@@ -70,6 +76,7 @@ from bluetooth_2_usb.loopback.scenarios import (
     SCENARIOS,
     ExpectedEvent,
     get_scenario,
+    scenario_summary,
 )
 from bluetooth_2_usb.loopback.session import LoopbackBusyError
 
@@ -154,6 +161,38 @@ class _FakeHidModule:
         return list(self._entries)
 
 
+class _FakeReadableHidDevice:
+    def __init__(self, reports_by_path):
+        self._reports_by_path = reports_by_path
+        self._path = None
+
+    def open_path(self, path):
+        self._path = path
+
+    def set_nonblocking(self, enabled):
+        del enabled
+
+    def read(self, size):
+        del size
+        assert self._path is not None
+        reports = self._reports_by_path.get(self._path, [])
+        if not reports:
+            return []
+        return reports.pop(0)
+
+    def close(self):
+        pass
+
+
+class _FakeReadableHidModule(_FakeHidModule):
+    def __init__(self, entries, reports_by_path):
+        super().__init__(entries)
+        self._reports_by_path = {path: list(reports) for path, reports in reports_by_path.items()}
+
+    def device(self):
+        return _FakeReadableHidDevice(self._reports_by_path)
+
+
 class ScenarioDefinitionTest(unittest.TestCase):
     def test_public_scenarios_are_small_and_intentional(self) -> None:
         self.assertEqual(tuple(SCENARIOS), ("keyboard", "mouse", "node-discovery", "consumer", "combo"))
@@ -233,6 +272,22 @@ class ScenarioDefinitionTest(unittest.TestCase):
             get_scenario("nope")
 
         self.assertEqual(str(error.exception), f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}")
+
+    def test_scenario_summary_reports_counts_without_full_sequences(self) -> None:
+        summary = scenario_summary(SCENARIOS["combo"])
+
+        self.assertEqual(summary["name"], "combo")
+        self.assertEqual(summary["keyboard_steps"], len(SCENARIOS["combo"].keyboard_steps))
+        self.assertEqual(summary["mouse_rel_steps"], len(SCENARIOS["combo"].mouse_rel_steps))
+        self.assertEqual(summary["mouse_button_steps"], len(SCENARIOS["combo"].mouse_button_steps))
+        self.assertEqual(summary["consumer_steps"], len(SCENARIOS["combo"].consumer_steps))
+        self.assertEqual(
+            summary["total_steps"],
+            len(SCENARIOS["combo"].keyboard_steps)
+            + len(SCENARIOS["combo"].mouse_rel_steps)
+            + len(SCENARIOS["combo"].mouse_button_steps)
+            + len(SCENARIOS["combo"].consumer_steps),
+        )
 
 
 class GadgetNodeDiscoveryTest(unittest.TestCase):
@@ -876,6 +931,34 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(result.details["keyboard_steps_seen"], 2)
         self.assertEqual(result.details["nodes"]["keyboard_node"], candidate.matched_name)
 
+    def test_windows_raw_input_failure_details_include_compact_progress(self) -> None:
+        debug = capture_windows._RawInputDebug()
+        candidate = capture_windows._RawInputCandidate(
+            role="keyboard",
+            candidate_identities=("hid\\vid_1d6b&pid_0104&mi_00\\instance",),
+            matcher=KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps),
+            matched_name=r"\\?\hid\vid_1d6b&pid_0104&mi_00\instance\{guid}",
+        )
+        candidate.matcher.handle(_keyboard_report_for_code(KEY_K))
+        for index in range(20):
+            debug.note_event(
+                role="keyboard",
+                device_name=f"device-{index}",
+                device_identity=f"identity-{index}",
+                candidate_identities=candidate.candidate_identities,
+                matched=True,
+                report=_keyboard_report_for_code(KEY_K),
+            )
+
+        details = capture_windows._raw_input_failure_details(15.0, debug, (), candidate, None, None)
+
+        self.assertEqual(details["capture_backend"], "raw_input")
+        self.assertEqual(details["keyboard_steps_seen"], 1)
+        self.assertEqual(details["keyboard_steps_expected"], len(SCENARIOS["keyboard"].keyboard_steps))
+        self.assertEqual(details["nodes"]["keyboard_node"], candidate.matched_name)
+        self.assertIn("next_expected", details["progress"]["keyboard"][0])
+        self.assertEqual(len(details["raw_input_debug"]["sample_events"]), 12)
+
     def test_windows_backend_imports_with_missing_non_windows_handle_aliases(self) -> None:
         if sys.platform == "win32":
             self.skipTest("Non-Windows import fallback is not exercised on Windows")
@@ -967,6 +1050,27 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(result.details["post_delay_ms"], 6000)
         self.assertGreaterEqual(keyboard.write.call_count, 200)
 
+    def test_run_inject_uses_compact_expected_summary(self) -> None:
+        keyboard = Mock()
+        mouse = Mock()
+        consumer = Mock()
+
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("bluetooth_2_usb.loopback.inject.wait_for_service_settle"),
+            patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, mouse, consumer]),
+            patch("bluetooth_2_usb.loopback.inject.time.sleep"),
+        ):
+            result = run_inject("combo", pre_delay_ms=0)
+
+        self.assertTrue(result.success)
+        expected = result.details["expected"]
+        self.assertEqual(expected["name"], "combo")
+        self.assertEqual(expected["keyboard_steps"], len(SCENARIOS["combo"].keyboard_steps))
+        self.assertEqual(expected["total_steps"], result.details["injected_event_count"])
+        self.assertNotIsInstance(expected["keyboard_steps"], list)
+        self.assertNotIn("consumer_steps", [key for key, value in expected.items() if isinstance(value, list)])
+
     def test_inject_usage_error_returns_exit_usage(self) -> None:
         stdout = io.StringIO()
 
@@ -1043,6 +1147,102 @@ class LoopbackInjectTest(unittest.TestCase):
 
         self.assertIs(capture_result, result)
         self.assertEqual(run.call_args.kwargs["timeout_sec"], 15.0)
+
+    def test_capture_timeout_reports_zero_progress(self) -> None:
+        hid_module = _FakeReadableHidModule(
+            [
+                _hid_entry(
+                    "kbd0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=0,
+                    usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                    usage=KEYBOARD_USAGE,
+                )
+            ],
+            {"kbd0": []},
+        )
+
+        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
+            with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
+                result = run_capture("keyboard", timeout_sec=0.001)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_TIMEOUT)
+        self.assertEqual(result.details["keyboard_steps_seen"], 0)
+        self.assertEqual(result.details["keyboard_steps_expected"], len(SCENARIOS["keyboard"].keyboard_steps))
+        self.assertEqual(result.details["summary"]["keyboard"], f"0/{len(SCENARIOS['keyboard'].keyboard_steps)}")
+        self.assertEqual(result.details["progress"]["keyboard"][0]["node"], "kbd0")
+        self.assertIn("next_expected", result.details["progress"]["keyboard"][0])
+
+    def test_capture_timeout_reports_partial_keyboard_progress(self) -> None:
+        hid_module = _FakeReadableHidModule(
+            [
+                _hid_entry(
+                    "kbd0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=0,
+                    usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                    usage=KEYBOARD_USAGE,
+                )
+            ],
+            {"kbd0": [_keyboard_report_for_code(KEY_K)]},
+        )
+
+        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
+            with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
+                result = run_capture("keyboard", timeout_sec=0.001)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_TIMEOUT)
+        self.assertEqual(result.details["keyboard_steps_seen"], 1)
+        self.assertIn("next_expected", result.details["progress"]["keyboard"][0])
+        self.assertIn("KEY_K", result.details["progress"]["keyboard"][0]["next_expected"])
+
+    def test_combo_timeout_reports_completed_and_incomplete_roles(self) -> None:
+        hid_module = _FakeReadableHidModule(
+            [
+                _hid_entry(
+                    "kbd0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=0,
+                    usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                    usage=KEYBOARD_USAGE,
+                ),
+                _hid_entry(
+                    "mouse0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=1,
+                    usage_page=GENERIC_DESKTOP_USAGE_PAGE,
+                    usage=MOUSE_USAGE,
+                ),
+                _hid_entry(
+                    "consumer0",
+                    vendor_id=GADGET_VENDOR_ID,
+                    product_id=GADGET_PRODUCT_ID,
+                    interface_number=2,
+                    usage_page=CONSUMER_USAGE_PAGE,
+                    usage=CONSUMER_USAGE,
+                ),
+            ],
+            {"kbd0": [_keyboard_report_for_code(ecodes.KEY_F13), bytes([0x00] * 8)], "mouse0": [], "consumer0": []},
+        )
+
+        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
+            with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
+                result = run_capture("node-discovery", timeout_sec=0.001)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_TIMEOUT)
+        self.assertEqual(result.details["nodes"]["keyboard_node"], "kbd0")
+        self.assertEqual(result.details["keyboard_steps_seen"], 2)
+        self.assertEqual(result.details["mouse_rel_steps_seen"], 0)
+        self.assertEqual(result.details["consumer_steps_seen"], 0)
+        self.assertIn("complete", result.details["summary"]["keyboard"])
+        self.assertIn("REL_X=1", result.details["progress"]["mouse"][0]["next_expected_rel"])
 
     def test_capture_missing_nodes_returns_prerequisite_exit(self) -> None:
         stdout = io.StringIO()

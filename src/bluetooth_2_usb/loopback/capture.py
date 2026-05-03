@@ -157,6 +157,16 @@ class KeyboardSequenceMatcher:
     def complete(self) -> bool:
         return self.index >= len(self.expected_steps)
 
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "steps_seen": self.index,
+            "steps_expected": len(self.expected_steps),
+        }
+        if not self.complete:
+            details["next_expected"] = self.expected_steps[self.index].describe()
+        return details
+
 
 @dataclass(slots=True)
 class MouseSequenceMatcher:
@@ -273,6 +283,21 @@ class MouseSequenceMatcher:
     def complete(self) -> bool:
         return self.rel_complete and self.button_index >= len(self.expected_button_steps)
 
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "rel_steps_seen": self.rel_index,
+            "rel_steps_expected": len(self.expected_rel_steps),
+            "button_steps_seen": self.button_index,
+            "button_steps_expected": len(self.expected_button_steps),
+        }
+        if self._pending_rel_remaining:
+            code, remaining = self._pending_rel_remaining[0]
+            details["next_expected_rel"] = f"{REL_NAMES.get(code, code)}={remaining}"
+        elif self.button_index < len(self.expected_button_steps):
+            details["next_expected_button"] = self.expected_button_steps[self.button_index].describe()
+        return details
+
 
 def _same_direction(expected: int, observed: int) -> bool:
     if expected == 0:
@@ -303,6 +328,16 @@ class ConsumerSequenceMatcher:
     @property
     def complete(self) -> bool:
         return self.index >= len(self.expected_steps)
+
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "steps_seen": self.index,
+            "steps_expected": len(self.expected_steps),
+        }
+        if not self.complete:
+            details["next_expected"] = self.expected_steps[self.index].describe()
+        return details
 
 
 def _mapped_hid_usage(expected) -> int:
@@ -346,6 +381,123 @@ class _CandidateMatcher:
     @property
     def failed(self) -> bool:
         return self.failed_message is not None
+
+
+def matcher_progress_details(
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+) -> dict[str, object]:
+    return matcher.progress_details()
+
+
+def candidate_progress_details(
+    *,
+    node: str | None,
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+    failed_message: str | None = None,
+) -> dict[str, object]:
+    details: dict[str, object] = {"node": node}
+    details.update(matcher_progress_details(matcher))
+    if failed_message is not None:
+        details["failed_message"] = failed_message
+    return details
+
+
+def _candidate_progress(candidate: _CandidateMatcher) -> dict[str, object]:
+    return candidate_progress_details(
+        node=candidate.node, matcher=candidate.matcher, failed_message=candidate.failed_message
+    )
+
+
+def _candidate_progress_score(progress: dict[str, object]) -> int:
+    if "steps_seen" in progress:
+        return int(progress["steps_seen"])
+    return int(progress.get("rel_steps_seen", 0)) + int(progress.get("button_steps_seen", 0))
+
+
+def _progress_by_role(candidates: list[_CandidateMatcher]) -> dict[str, list[dict[str, object]]]:
+    progress: dict[str, list[dict[str, object]]] = {}
+    for candidate in candidates:
+        progress.setdefault(candidate.role, []).append(_candidate_progress(candidate))
+    return progress
+
+
+def _role_summary(role: str, progress_items: list[dict[str, object]]) -> str:
+    if not progress_items:
+        return "0 candidates"
+    progress = max(progress_items, key=_candidate_progress_score)
+    if role == "mouse":
+        rel_seen = progress["rel_steps_seen"]
+        rel_expected = progress["rel_steps_expected"]
+        button_seen = progress["button_steps_seen"]
+        button_expected = progress["button_steps_expected"]
+        suffix = " complete" if progress["complete"] else ""
+        return f"{rel_seen}/{rel_expected} rel, {button_seen}/{button_expected} buttons{suffix}"
+    suffix = " complete" if progress["complete"] else ""
+    return f"{progress['steps_seen']}/{progress['steps_expected']}{suffix}"
+
+
+def _add_best_progress_counts(details: dict[str, object], role: str, progress_items: list[dict[str, object]]) -> None:
+    if not progress_items:
+        return
+    progress = max(progress_items, key=_candidate_progress_score)
+    if role == "keyboard":
+        details["keyboard_steps_seen"] = progress["steps_seen"]
+        details["keyboard_steps_expected"] = progress["steps_expected"]
+    elif role == "mouse":
+        details["mouse_rel_steps_seen"] = progress["rel_steps_seen"]
+        details["mouse_rel_steps_expected"] = progress["rel_steps_expected"]
+        details["mouse_button_steps_seen"] = progress["button_steps_seen"]
+        details["mouse_button_steps_expected"] = progress["button_steps_expected"]
+    elif role == "consumer":
+        details["consumer_steps_seen"] = progress["steps_seen"]
+        details["consumer_steps_expected"] = progress["steps_expected"]
+
+
+def _matched_nodes_from_progress(progress: dict[str, list[dict[str, object]]]) -> GadgetNodes:
+    def _completed_node(role: str) -> str | None:
+        for candidate in progress.get(role, []):
+            if candidate.get("complete"):
+                node = candidate.get("node")
+                return str(node) if node is not None else None
+        return None
+
+    return GadgetNodes(
+        keyboard_node=_completed_node("keyboard"),
+        mouse_node=_completed_node("mouse"),
+        consumer_node=_completed_node("consumer"),
+    )
+
+
+def progress_summary_details(progress: dict[str, list[dict[str, object]]]) -> dict[str, object]:
+    details: dict[str, object] = {}
+    summary: dict[str, str] = {}
+    for role in ("keyboard", "mouse", "consumer"):
+        progress_items = progress.get(role, [])
+        if not progress_items:
+            continue
+        summary[role] = _role_summary(role, progress_items)
+        _add_best_progress_counts(details, role, progress_items)
+    if summary:
+        details["summary"] = summary
+        details["progress"] = progress
+    return details
+
+
+def _capture_failure_details(
+    timeout_sec: float, candidate_nodes: GadgetNodeCandidates, candidates: list[_CandidateMatcher]
+) -> dict[str, object]:
+    progress = _progress_by_role(candidates)
+    details: dict[str, object] = {
+        "capture_backend": "hidapi",
+        "candidates": candidate_nodes.to_dict(),
+        "nodes": _matched_nodes_from_progress(progress).to_dict(),
+        "timeout_sec": timeout_sec,
+    }
+    details.update(progress_summary_details(progress))
+    failed_candidates = [candidate.failed_message for candidate in candidates if candidate.failed_message is not None]
+    if failed_candidates:
+        details["failed_candidates"] = failed_candidates
+    return details
 
 
 def _normalize_keyboard_report(report: bytes) -> bytes | None:
@@ -674,12 +826,7 @@ def _capture_once(
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
-            details={
-                "capture_backend": "hidapi",
-                "candidates": candidate_nodes.to_dict(),
-                "nodes": GadgetNodes(None, None, None).to_dict(),
-                "timeout_sec": timeout_sec,
-            },
+            details=_capture_failure_details(timeout_sec, candidate_nodes, candidates),
         )
     finally:
         for candidate in candidates:

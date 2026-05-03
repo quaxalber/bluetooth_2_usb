@@ -315,3 +315,22 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
         "default_post_delay_ms": scenario.default_post_delay_ms,
         "default_capture_timeout_sec": scenario.default_capture_timeout_sec,
     }
+
+
+def scenario_summary(scenario: ScenarioDefinition) -> dict[str, object]:
+    keyboard_steps = len(scenario.keyboard_steps)
+    mouse_rel_steps = len(scenario.mouse_rel_steps)
+    mouse_button_steps = len(scenario.mouse_button_steps)
+    consumer_steps = len(scenario.consumer_steps)
+    return {
+        "name": scenario.name,
+        "keyboard_steps": keyboard_steps,
+        "mouse_rel_steps": mouse_rel_steps,
+        "mouse_button_steps": mouse_button_steps,
+        "consumer_steps": consumer_steps,
+        "total_steps": keyboard_steps + mouse_rel_steps + mouse_button_steps + consumer_steps,
+        "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
+        "default_event_gap_ms": scenario.default_event_gap_ms,
+        "default_post_delay_ms": scenario.default_post_delay_ms,
+        "default_capture_timeout_sec": scenario.default_capture_timeout_sec,
+    }
