@@ -70,12 +70,6 @@ for command in inject capture; do
   ./venv/bin/bluetooth_2_usb loopback "$command" --help
   echo
 done
-
-if [[ -f scripts/loopback-capture.ps1 ]] && command -v powershell >/dev/null 2>&1; then
-  echo "==== scripts/loopback-capture.ps1"
-  powershell -ExecutionPolicy Bypass -File ./scripts/loopback-capture.ps1 --help
-  echo
-fi
 ```
 
 ### 3. Runtime CLI interface

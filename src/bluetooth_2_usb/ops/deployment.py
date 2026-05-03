@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
@@ -61,53 +60,12 @@ def recreate_venv(venv_dir: Path) -> None:
     run(["python3", "-m", "venv", venv_dir])
 
 
-def repair_venv_shebangs(venv_dir: Path, staging_dir: Path) -> None:
-    for file in (venv_dir / "bin").iterdir():
-        if not file.is_file():
-            continue
-        try:
-            text = file.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        lines = text.splitlines(keepends=True)
-        if not lines or not lines[0].startswith(f"#!{staging_dir}"):
-            continue
-        lines[0] = f"#!{venv_dir}{lines[0][len(f'#!{staging_dir}'):]}"
-        file.write_text("".join(lines), encoding="utf-8")
-
-
-def rebuild_venv_atomically(venv_dir: Path, package_dir: Path) -> None:
-    staging_dir = venv_dir.with_name(f"{venv_dir.name}.new")
-    previous_dir = venv_dir.with_name(f"{venv_dir.name}.old.{os.getpid()}")
-    moved_previous = False
-    swap_succeeded = False
-    restore_succeeded = False
-    shutil.rmtree(staging_dir, ignore_errors=True)
-    shutil.rmtree(previous_dir, ignore_errors=True)
-    try:
-        recreate_venv(staging_dir)
-        run([staging_dir / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
-        run([staging_dir / "bin/pip", "install", "--upgrade", package_dir])
-        if venv_dir.exists():
-            venv_dir.rename(previous_dir)
-            moved_previous = True
-        try:
-            staging_dir.rename(venv_dir)
-            repair_venv_shebangs(venv_dir, staging_dir)
-            swap_succeeded = True
-        except Exception:
-            warn("Failed to activate the new virtual environment.")
-            shutil.rmtree(venv_dir, ignore_errors=True)
-            if moved_previous and previous_dir.exists():
-                previous_dir.rename(venv_dir)
-                restore_succeeded = True
-            raise
-    except Exception:
-        shutil.rmtree(staging_dir, ignore_errors=True)
-        raise
-    finally:
-        if not moved_previous or swap_succeeded or restore_succeeded:
-            shutil.rmtree(previous_dir, ignore_errors=True)
+def rebuild_venv(venv_dir: Path, package_dir: Path) -> None:
+    shutil.rmtree(venv_dir, ignore_errors=True)
+    recreate_venv(venv_dir)
+    run([venv_dir / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
+    run([venv_dir / "bin/pip", "install", "--upgrade", package_dir])
+    run([venv_dir / "bin/python", "-m", "bluetooth_2_usb", "--version"], capture=True)
 
 
 def service_installed() -> bool | None:
@@ -166,7 +124,7 @@ def install(repo_root: Path) -> None:
         run(["systemctl", "stop", PATHS.service_unit])
 
     info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
-    rebuild_venv_atomically(PATHS.install_dir / "venv", PATHS.install_dir)
+    rebuild_venv(PATHS.install_dir / "venv", PATHS.install_dir)
     ok(f"Virtual environment updated at {PATHS.install_dir / 'venv'}")
 
     install_service_unit(repo_root)

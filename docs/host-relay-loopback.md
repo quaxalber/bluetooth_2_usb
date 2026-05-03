@@ -78,13 +78,21 @@ venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
 On Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\loopback-capture.ps1 --scenario keyboard --output json
+$env:PYTHONPATH = "$PWD\src"
+python -m bluetooth_2_usb loopback capture --scenario keyboard --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
 or consumer HID device paths even if the short timeout expires. On Windows,
 strict capture of the actual relay sequence uses Raw Input; `hidapi` remains a
-discovery step, not the primary event backend.
+discovery step, not the primary event backend. Use a Python environment where
+`python -c "import hid"` succeeds.
+
+With the repository virtual environment on Windows:
+
+```powershell
+.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --scenario keyboard --output json
+```
 
 ## 2. Start the host capture
 

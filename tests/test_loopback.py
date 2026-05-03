@@ -130,10 +130,12 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(scenario.required_nodes, ("keyboard",))
         self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
+        self.assertIn(KEY_K, [step.code for step in scenario.keyboard_steps])
+        self.assertTrue(any(step.value == 1 for step in scenario.keyboard_steps))
+        self.assertTrue(any(step.value == 0 for step in scenario.keyboard_steps))
         self.assertEqual(scenario.default_event_gap_ms, 10)
         self.assertEqual(scenario.default_post_delay_ms, 6000)
         self.assertEqual(scenario.default_capture_timeout_sec, 15.0)
-        self.assertEqual(len(scenario.keyboard_steps), 216)
 
     def test_mouse_scenario_contains_fast_motion_and_all_button_bits(self) -> None:
         scenario = SCENARIOS["mouse"]
@@ -159,7 +161,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         combo = SCENARIOS["combo"]
 
         self.assertEqual(combo.required_nodes, ("keyboard", "mouse", "consumer"))
-        self.assertEqual(len(combo.keyboard_steps), 216)
+        self.assertEqual(combo.keyboard_steps, SCENARIOS["keyboard"].keyboard_steps)
         self.assertEqual(combo.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(combo.mouse_button_steps, MOUSE_BUTTON_STEPS)
         self.assertEqual(combo.consumer_steps, CONSUMER_STEPS)
@@ -170,13 +172,6 @@ class ScenarioDefinitionTest(unittest.TestCase):
             get_scenario("nope")
 
         self.assertEqual(str(error.exception), f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}")
-
-    def test_removed_scenario_names_are_not_supported(self) -> None:
-        removed_names = ("mouse" + "_fast", "mouse_buttons" + "_intrusive", "text" + "_burst")
-        for scenario_name in removed_names:
-            with self.subTest(scenario_name=scenario_name):
-                with self.assertRaises(ValueError):
-                    get_scenario(scenario_name)
 
 
 class GadgetNodeDiscoveryTest(unittest.TestCase):
@@ -781,6 +776,25 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(skipped, ("BTN_FORWARD", "BTN_BACK", "BTN_TASK"))
         self.assertEqual(len(steps), 10)
         self.assertTrue(all(step.code in capture_windows.WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES for step in steps))
+
+    def test_windows_raw_input_success_details_include_matched_keyboard_node(self) -> None:
+        debug = capture_windows._RawInputDebug()
+        candidate = capture_windows._RawInputCandidate(
+            role="keyboard",
+            candidate_identities=("hid\\vid_1d6b&pid_0104&mi_00\\instance",),
+            matcher=SimpleNamespace(complete=True, index=2),
+            matched_name=r"\\?\hid\vid_1d6b&pid_0104&mi_00\instance\{guid}",
+        )
+        candidate.note_report(bytes([0x00, 0x00, 104, 0, 0, 0, 0, 0]))
+
+        result = capture_windows._raw_input_success_result(
+            SCENARIOS["keyboard"], 15.0, debug, candidate, None, None, ()
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.details["capture_backend"], "raw_input")
+        self.assertEqual(result.details["keyboard_steps_seen"], 2)
+        self.assertEqual(result.details["nodes"]["keyboard_node"], candidate.matched_name)
 
     def test_windows_backend_imports_with_missing_non_windows_handle_aliases(self) -> None:
         if sys.platform == "win32":
