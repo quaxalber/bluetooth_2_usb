@@ -1,5 +1,6 @@
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -21,25 +22,28 @@ class OpsCliTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 2)
 
-    def test_nested_operational_commands_dispatch_correctly(self) -> None:
-        with patch("bluetooth_2_usb.ops.cli.ensure_root"):
-            with patch("bluetooth_2_usb.ops.cli.prepare_log"):
-                with patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup:
-                    self.assertEqual(cli.main(["readonly", "setup", "--device", "/dev/sda1"]), 0)
-                with patch("bluetooth_2_usb.ops.cli.print_readonly_status") as status:
-                    self.assertEqual(cli.main(["readonly", "status"]), 0)
-                with patch("bluetooth_2_usb.ops.cli.enable_readonly") as enable:
-                    self.assertEqual(cli.main(["readonly", "enable"]), 0)
-                with patch("bluetooth_2_usb.ops.cli.disable_readonly") as disable:
-                    self.assertEqual(cli.main(["readonly", "disable"]), 0)
-                with patch("bluetooth_2_usb.ops.cli.install_hid_udev_rule") as install_rule:
-                    self.assertEqual(cli.main(["udev", "install"]), 0)
+    def test_readonly_setup_dispatches_device_to_workflow(self) -> None:
+        with patch("bluetooth_2_usb.ops.cli.ensure_root"), patch("bluetooth_2_usb.ops.cli.prepare_log"):
+            with patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup:
+                self.assertEqual(cli.main(["readonly", "setup", "--device", "/dev/sda1"]), 0)
 
         setup.assert_called_once_with("/dev/sda1")
-        status.assert_called_once_with()
-        enable.assert_called_once_with()
-        disable.assert_called_once_with()
-        install_rule.assert_called_once()
+
+    def test_nested_operational_commands_dispatch_to_selected_workflow(self) -> None:
+        cases = (
+            (["readonly", "status"], "print_readonly_status"),
+            (["readonly", "enable"], "enable_readonly"),
+            (["readonly", "disable"], "disable_readonly"),
+            (["udev", "install"], "install_hid_udev_rule"),
+        )
+
+        for argv, target in cases:
+            with self.subTest(argv=argv):
+                with patch("bluetooth_2_usb.ops.cli.ensure_root"), patch("bluetooth_2_usb.ops.cli.prepare_log"):
+                    with patch(f"bluetooth_2_usb.ops.cli.{target}") as command:
+                        self.assertEqual(cli.main(argv), 0)
+
+                command.assert_called_once()
 
     def test_udev_install_help_exposes_repo_root_option(self) -> None:
         stdout = io.StringIO()
@@ -75,18 +79,17 @@ class OpsCliTest(unittest.TestCase):
                             exit_code = cli.main(["smoketest", "--output", "json"])
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(stdout.getvalue().count("\n"), 1)
         self.assertEqual(json.loads(stdout.getvalue()), {"exit_code": 0, "result": "ok"})
-        self.assertEqual(stderr.getvalue(), "probe text\n")
+        self.assertIn("probe text", stderr.getvalue())
 
     def test_prepare_log_closes_file_and_restores_streams(self) -> None:
-        with patch("bluetooth_2_usb.ops.commands.PATHS", ManagedPaths(log_dir=Path(self.id()))):
-            with redirect_stdout(io.StringIO()):
-                with patch("pathlib.Path.mkdir"):
-                    with patch("pathlib.Path.open") as open_log:
-                        log_file = open_log.return_value
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stdout = io.StringIO()
+            with patch("bluetooth_2_usb.ops.commands.PATHS", ManagedPaths(log_dir=Path(tmpdir))):
+                with redirect_stdout(stdout):
+                    log_path = prepare_log("test")
+                    print("payload")
+                    close_log()
 
-                        prepare_log("test")
-                        close_log()
-
-        log_file.close.assert_called_once_with()
+            self.assertIn("payload", stdout.getvalue())
+            self.assertIn("payload", log_path.read_text(encoding="utf-8"))

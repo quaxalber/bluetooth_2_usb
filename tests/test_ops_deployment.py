@@ -24,14 +24,19 @@ class OpsDeploymentTest(unittest.TestCase):
         self.assertEqual(paths.bluetooth_service_dropin, Path("/tmp/dropins/bluetooth_2_usb_persist.conf"))
 
     def test_install_cli_links_exposes_main_command(self) -> None:
-        with patch("pathlib.Path.mkdir"):
-            with patch("pathlib.Path.unlink") as unlink:
-                with patch("pathlib.Path.symlink_to") as symlink_to:
+        with patch("pathlib.Path.mkdir", autospec=True):
+            with patch("pathlib.Path.unlink", autospec=True) as unlink:
+                with patch("pathlib.Path.symlink_to", autospec=True) as symlink_to:
                     install_cli_links()
 
-        linked_commands = [call.args[0].name for call in symlink_to.call_args_list]
-        self.assertEqual(linked_commands, ["bluetooth_2_usb"])
-        self.assertEqual(unlink.call_args_list, [call(missing_ok=True), call(missing_ok=True)])
+        symlink_to.assert_called_once_with(
+            Path("/usr/local/bin/bluetooth_2_usb"), Path("/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb")
+        )
+        unlinked_paths = {call_args.args[0] for call_args in unlink.call_args_list}
+        self.assertEqual(
+            unlinked_paths, {Path("/usr/local/bin/bluetooth_2_usb"), Path("/usr/local/bin/bluetooth_2_usb.loopback")}
+        )
+        self.assertTrue(all(call_args.kwargs == {"missing_ok": True} for call_args in unlink.call_args_list))
 
     def test_rebuild_venv_recreates_existing_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

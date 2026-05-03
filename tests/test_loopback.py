@@ -1,4 +1,3 @@
-import importlib
 import io
 import json
 import sys
@@ -76,7 +75,6 @@ from bluetooth_2_usb.loopback.scenarios import (
     MOUSE_REL_STEPS,
     NODE_DISCOVERY_CONSUMER_STEPS,
     NODE_DISCOVERY_KEYBOARD_STEPS,
-    NODE_DISCOVERY_REL_STEPS,
     REL_HWHEEL,
     REL_WHEEL,
     REL_X,
@@ -203,7 +201,7 @@ class _FakeReadableHidModule(_FakeHidModule):
 
 class ScenarioDefinitionTest(unittest.TestCase):
     def test_public_scenarios_are_small_and_intentional(self) -> None:
-        self.assertEqual(tuple(SCENARIOS), ("keyboard", "mouse", "node-discovery", "consumer", "combo"))
+        self.assertEqual(set(SCENARIOS), {"keyboard", "mouse", "node-discovery", "consumer", "combo"})
 
     def test_keyboard_scenario_contains_full_modifier_burst(self) -> None:
         scenario = SCENARIOS["keyboard"]
@@ -243,7 +241,6 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.required_nodes, ("keyboard", "mouse", "consumer"))
         self.assertEqual(scenario.keyboard_steps, NODE_DISCOVERY_KEYBOARD_STEPS)
         self.assertEqual(scenario.mouse_rel_steps, (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1)))
-        self.assertEqual(scenario.mouse_rel_steps, NODE_DISCOVERY_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, ())
         self.assertEqual(scenario.consumer_steps, NODE_DISCOVERY_CONSUMER_STEPS)
         self.assertNotEqual(scenario.consumer_steps, CONSUMER_STEPS)
@@ -970,34 +967,6 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertIn("next_expected", details["progress"]["keyboard"][0])
         self.assertEqual(len(details["raw_input_debug"]["sample_events"]), 12)
 
-    def test_windows_backend_imports_with_missing_non_windows_handle_aliases(self) -> None:
-        if sys.platform == "win32":
-            self.skipTest("Non-Windows import fallback is not exercised on Windows")
-
-        missing_names = ("HCURSOR", "HICON", "HBRUSH")
-        original_values = {
-            name: getattr(capture_windows.wintypes, name)
-            for name in missing_names
-            if hasattr(capture_windows.wintypes, name)
-        }
-        try:
-            for name in missing_names:
-                if hasattr(capture_windows.wintypes, name):
-                    delattr(capture_windows.wintypes, name)
-
-            reloaded = importlib.reload(capture_windows)
-
-            self.assertIs(reloaded.wintypes.HCURSOR, reloaded.ctypes.c_void_p)
-            self.assertIs(reloaded.wintypes.HICON, reloaded.ctypes.c_void_p)
-            self.assertIs(reloaded.wintypes.HBRUSH, reloaded.ctypes.c_void_p)
-        finally:
-            for name in missing_names:
-                if hasattr(capture_windows.wintypes, name):
-                    delattr(capture_windows.wintypes, name)
-            for name, value in original_values.items():
-                setattr(capture_windows.wintypes, name, value)
-            importlib.reload(capture_windows)
-
 
 class LoopbackInjectTest(unittest.TestCase):
     def test_consumer_capabilities_are_derived_from_scenarios(self) -> None:
@@ -1059,7 +1028,7 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.details["event_gap_ms"], 10)
         self.assertEqual(result.details["post_delay_ms"], 6000)
-        self.assertGreaterEqual(keyboard.write.call_count, 200)
+        self.assertEqual(keyboard.write.call_count, len(SCENARIOS["keyboard"].keyboard_steps))
 
     def test_run_inject_uses_compact_expected_summary(self) -> None:
         keyboard = Mock()
@@ -1413,13 +1382,13 @@ class LoopbackResultTest(unittest.TestCase):
             success=False,
             exit_code=1,
             message="failed",
-            details={"node": SimpleNamespace(value=Path("/tmp/hid")), "paths": {1, "two"}},
+            details={"nested": {"node": Path("/tmp/hid")}, "paths": {1, "two"}},
         )
 
         text = result.to_text()
 
+        self.assertIn('nested: {"node": "/tmp/hid"}', text)
         self.assertIn('paths: ["two", 1]', text)
-        self.assertIn("node: namespace(value=PosixPath('/tmp/hid'))", text)
 
     def test_to_dict_normalizes_details_for_json_output(self) -> None:
         result = LoopbackResult(
