@@ -659,6 +659,80 @@ def _extract_raw_hid_reports(raw_bytes: bytes) -> list[bytes]:
     return reports
 
 
+def _raw_input_complete(
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+) -> bool:
+    return (
+        (keyboard_candidate is None or keyboard_candidate.complete)
+        and (mouse_candidate is None or mouse_candidate.complete)
+        and (consumer_candidate is None or consumer_candidate.complete)
+    )
+
+
+def _raw_input_nodes(
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+) -> GadgetNodes:
+    return GadgetNodes(
+        keyboard_node=(keyboard_candidate.matched_name if keyboard_candidate else None),
+        mouse_node=(mouse_candidate.matched_name if mouse_candidate else None),
+        consumer_node=(consumer_candidate.matched_name if consumer_candidate else None),
+    )
+
+
+def _raw_input_failure_details(
+    timeout_sec: float, debug: _RawInputDebug, windows_skipped_mouse_buttons: tuple[str, ...]
+) -> dict[str, object]:
+    return {
+        "capture_backend": "raw_input",
+        "timeout_sec": timeout_sec,
+        "nodes": GadgetNodes(None, None, None).to_dict(),
+        "raw_input_debug": debug.to_dict(),
+        "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
+    }
+
+
+def _raw_input_success_result(
+    scenario,
+    timeout_sec: float,
+    debug: _RawInputDebug,
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+    windows_skipped_mouse_buttons: tuple[str, ...],
+) -> LoopbackResult:
+    nodes = _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate)
+    details: dict[str, object] = {
+        "capture_backend": "raw_input",
+        "timeout_sec": timeout_sec,
+        "nodes": nodes.to_dict(),
+        "raw_input_debug": debug.to_dict(),
+    }
+    if keyboard_candidate is not None:
+        details["keyboard_steps_seen"] = keyboard_candidate.matcher.index
+        details["keyboard_reports_seen"] = list(keyboard_candidate.matched_reports)
+    if mouse_candidate is not None:
+        details["mouse_rel_steps_seen"] = mouse_candidate.matcher.rel_index
+        details["mouse_button_steps_seen"] = mouse_candidate.matcher.button_index
+        details["mouse_reports_seen"] = list(mouse_candidate.matched_reports)
+        if windows_skipped_mouse_buttons:
+            details["windows_skipped_mouse_buttons"] = list(windows_skipped_mouse_buttons)
+    if consumer_candidate is not None:
+        details["consumer_steps_seen"] = consumer_candidate.matcher.index
+        details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
+    return LoopbackResult(
+        command="capture",
+        scenario=scenario.name,
+        success=True,
+        exit_code=EXIT_OK,
+        message="Observed expected relay events through Windows Raw Input",
+        details=details,
+    )
+
+
 def _pump_raw_input(
     timeout_sec: float,
     keyboard_candidate_identities: tuple[str, ...],
@@ -775,41 +849,15 @@ def _pump_raw_input(
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
 
-            if (
-                (keyboard_candidate is None or keyboard_candidate.complete)
-                and (mouse_candidate is None or mouse_candidate.complete)
-                and (consumer_candidate is None or consumer_candidate.complete)
-            ):
-                nodes = GadgetNodes(
-                    keyboard_node=(keyboard_candidate.matched_name if keyboard_candidate else None),
-                    mouse_node=(mouse_candidate.matched_name if mouse_candidate else None),
-                    consumer_node=(consumer_candidate.matched_name if consumer_candidate else None),
-                )
-                details: dict[str, object] = {
-                    "capture_backend": "raw_input",
-                    "timeout_sec": timeout_sec,
-                    "nodes": nodes.to_dict(),
-                    "raw_input_debug": debug.to_dict(),
-                }
-                if keyboard_candidate is not None:
-                    details["keyboard_steps_seen"] = keyboard_candidate.matcher.index
-                    details["keyboard_reports_seen"] = list(keyboard_candidate.matched_reports)
-                if mouse_candidate is not None:
-                    details["mouse_rel_steps_seen"] = mouse_candidate.matcher.rel_index
-                    details["mouse_button_steps_seen"] = mouse_candidate.matcher.button_index
-                    details["mouse_reports_seen"] = list(mouse_candidate.matched_reports)
-                    if windows_skipped_mouse_buttons:
-                        details["windows_skipped_mouse_buttons"] = list(windows_skipped_mouse_buttons)
-                if consumer_candidate is not None:
-                    details["consumer_steps_seen"] = consumer_candidate.matcher.index
-                    details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
-                return LoopbackResult(
-                    command="capture",
-                    scenario=scenario.name,
-                    success=True,
-                    exit_code=EXIT_OK,
-                    message="Observed expected relay events through Windows Raw Input",
-                    details=details,
+            if _raw_input_complete(keyboard_candidate, mouse_candidate, consumer_candidate):
+                return _raw_input_success_result(
+                    scenario,
+                    timeout_sec,
+                    debug,
+                    keyboard_candidate,
+                    mouse_candidate,
+                    consumer_candidate,
+                    windows_skipped_mouse_buttons,
                 )
 
             time.sleep(0.01)
@@ -820,13 +868,7 @@ def _pump_raw_input(
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
-            details={
-                "capture_backend": "raw_input",
-                "timeout_sec": timeout_sec,
-                "nodes": GadgetNodes(None, None, None).to_dict(),
-                "raw_input_debug": debug.to_dict(),
-                "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
-            },
+            details=_raw_input_failure_details(timeout_sec, debug, windows_skipped_mouse_buttons),
         )
     finally:
         if hwnd is not None:
@@ -839,13 +881,7 @@ def _pump_raw_input(
         success=False,
         exit_code=CaptureTimeoutError.exit_code,
         message=f"Timed out waiting for {scenario.name} events after {timeout_sec}s",
-        details={
-            "capture_backend": "raw_input",
-            "timeout_sec": timeout_sec,
-            "nodes": GadgetNodes(None, None, None).to_dict(),
-            "raw_input_debug": debug.to_dict(),
-            "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
-        },
+        details=_raw_input_failure_details(timeout_sec, debug, windows_skipped_mouse_buttons),
     )
 
 

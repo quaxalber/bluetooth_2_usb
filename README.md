@@ -253,8 +253,8 @@ loopback inject/capture validation.
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
-validation. On Windows, use `scripts/loopback-capture.ps1` as the launcher for
-the same host-capture flow.
+validation. On Windows, use the same Python CLI from an environment that can
+import `hid`; strict Windows event capture uses the Python Raw Input backend.
 
 ### `udev install`
 

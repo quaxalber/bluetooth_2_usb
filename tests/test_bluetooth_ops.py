@@ -86,6 +86,52 @@ class BootConfigOpsTest(unittest.TestCase):
         with self.assertRaises(OpsError):
             boot_config.required_boot_modules_csv("unknown")
 
+    def test_boot_config_assignment_uses_matching_model_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "config.txt"
+            config.write_text(
+                "\n".join(["arm_64bit=0", "[pi4]", "arm_64bit=1", "[pi5]", "arm_64bit=0"]) + "\n", encoding="utf-8"
+            )
+
+            value = boot_config.boot_config_assignment_value("arm_64bit", config_file=config, model_filters=["pi4"])
+
+        self.assertEqual(value, "1")
+
+    def test_configured_initramfs_uses_matching_model_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "config.txt"
+            config.write_text(
+                "\n".join(
+                    [
+                        "initramfs initramfs-default followkernel",
+                        "[cm4]",
+                        "initramfs initramfs-cm4 followkernel",
+                        "[pi5]",
+                        "initramfs initramfs-pi5 followkernel",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("bluetooth_2_usb.ops.boot_config.boot_config_model_filters", return_value=["cm4"]):
+                self.assertEqual(boot_config.configured_initramfs_file(config), "initramfs-cm4")
+
+    def test_normalize_dwc2_overlay_replaces_stale_lines_under_all_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "config.txt"
+            config.write_text(
+                "dtoverlay=dwc2\n" "dtoverlay=vc4-kms-v3d\n" "[all]\n" "dtoverlay=dwc2,dr_mode=host\n" "arm_64bit=1\n",
+                encoding="utf-8",
+            )
+
+            boot_config.normalize_dwc2_overlay(config, "dtoverlay=dwc2,dr_mode=peripheral")
+
+            self.assertEqual(
+                config.read_text(encoding="utf-8"),
+                "dtoverlay=vc4-kms-v3d\n[all]\ndtoverlay=dwc2,dr_mode=peripheral\narm_64bit=1\n",
+            )
+
     def test_normalize_modules_load_replaces_stale_otg_tokens(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cmdline = Path(tmpdir) / "cmdline.txt"
@@ -96,6 +142,24 @@ class BootConfigOpsTest(unittest.TestCase):
             self.assertEqual(
                 cmdline.read_text(encoding="utf-8"), "root=/dev/mmcblk0p2 quiet modules-load=foo,libcomposite\n"
             )
+
+    def test_normalize_modules_load_adds_missing_token_and_preserves_unrelated_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdline = Path(tmpdir) / "cmdline.txt"
+            cmdline.write_text("root=/dev/mmcblk0p2 modules-load=i2c-dev quiet\n")
+
+            boot_config.normalize_modules_load(cmdline, "dwc2,libcomposite")
+
+            self.assertEqual(
+                cmdline.read_text(encoding="utf-8"),
+                "root=/dev/mmcblk0p2 quiet modules-load=i2c-dev,dwc2,libcomposite\n",
+            )
+
+    def test_boot_initramfs_target_rejects_unsafe_paths(self) -> None:
+        for target in ("/boot/initramfs8", "../initramfs8", "nested/initramfs8"):
+            with self.subTest(target=target):
+                with self.assertRaises(OpsError):
+                    boot_config.boot_initramfs_target_path(target)
 
 
 class ReadonlyConfigTest(unittest.TestCase):
@@ -304,7 +368,7 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertIn("Requires=mnt-persist.mount\n", content)
         self.assertIn("What=/mnt/persist/custom/bluetooth\n", content)
 
-    def test_enable_readonly_rolls_back_overlayfs_when_validation_fails(self) -> None:
+    def test_enable_readonly_does_not_rollback_overlayfs_when_validation_fails(self) -> None:
         config = ReadonlyConfig(
             mode="disabled",
             persist_mount=Path("/mnt/persist"),
@@ -350,9 +414,11 @@ class ReadonlyConfigTest(unittest.TestCase):
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
 
             with self.assertRaises(OpsError):
-                enable_readonly()
+                with redirect_stdout(StringIO()) as stdout:
+                    enable_readonly()
 
         self.assertIn(["raspi-config", "nonint", "enable_overlayfs"], commands)
-        self.assertIn(["raspi-config", "nonint", "disable_overlayfs"], commands)
+        self.assertNotIn(["raspi-config", "nonint", "disable_overlayfs"], commands)
         self.assertEqual(config.mode, "disabled")
-        self.assertEqual(written, [config])
+        self.assertEqual(written, [])
+        self.assertIn("readonly status", stdout.getvalue())
