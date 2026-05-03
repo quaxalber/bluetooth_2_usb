@@ -16,13 +16,20 @@ This validates the path:
 
 For regular validation, run `combo`. It exercises the keyboard, mouse, and
 consumer-control paths in one pass. Use `keyboard`, `mouse`, or `consumer` only
-when you need to isolate a specific domain.
+when you need to isolate a specific domain. Use `node-discovery` when you only
+need to identify the active mouse HID node with minimal host-side pointer
+movement.
 
 The `mouse` and `combo` scenarios include fast relative movement, vertical and
 horizontal scrolling, and all configured mouse button bits. Host capture can
 reduce normal desktop handling while it owns the gadget interfaces, but it is
 not a hard isolation boundary. Run these scenarios only in a test session where
 unexpected mouse-button effects are acceptable.
+
+The `node-discovery` scenario is intentionally tiny: it emits only two mouse
+relative events, `REL_X=1` and `REL_X=-1`. It is useful when duplicate gadget
+instances are visible and you need to find which mouse node is live before
+running `combo`.
 
 ## Preconditions
 
@@ -125,6 +132,23 @@ venv/bin/bluetooth_2_usb loopback capture \
 
 Keep this command running while you trigger the Pi-side injection.
 
+When duplicate gadget instances are visible, first identify the active mouse
+node with the minimal discovery scenario:
+
+```bash
+venv/bin/bluetooth_2_usb loopback capture \
+  --scenario node-discovery \
+  --mouse-node '<candidate mouse path>'
+```
+
+Then, on the Pi:
+
+```bash
+sudo bluetooth_2_usb loopback inject --scenario node-discovery
+```
+
+Use the mouse node that succeeds here when pinning the full `combo` capture.
+
 Before each fresh Windows validation run after changing the gadget descriptor
 layout or USB identity:
 
@@ -158,6 +182,7 @@ and emits this deterministic sequence:
 - keyboard: an alternating-case burst with modifier transitions
 - mouse: large relative X/Y movement, vertical wheel deltas, horizontal pan
   deltas, then all configured mouse button bits press/release
+- node-discovery: one `REL_X=1` event followed by one `REL_X=-1` event
 - consumer: volume up/down press/release
 
 For mouse wheel and horizontal wheel steps, the injector emits paired low-res
@@ -168,7 +193,7 @@ The mouse gadget report uses one button byte, signed 16-bit relative X/Y, and
 signed 8-bit vertical wheel and horizontal pan.
 
 On Windows, the current Raw Input capture backend only maps mouse button bits
-through `BTN_EXTRA`. Windows can still run all four public scenarios, but mouse
+through `BTN_EXTRA`. Windows can still run every public scenario, but mouse
 button validation is partial for `mouse` and `combo`; skipped buttons are
 reported as `windows_skipped_mouse_buttons`.
 
@@ -201,6 +226,13 @@ Consumer-control only:
 ```bash
 venv/bin/bluetooth_2_usb loopback capture --scenario consumer
 sudo bluetooth_2_usb loopback inject --scenario consumer
+```
+
+Mouse-node discovery only:
+
+```bash
+venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery
+sudo bluetooth_2_usb loopback inject --scenario node-discovery
 ```
 
 ## 6. Failure interpretation
