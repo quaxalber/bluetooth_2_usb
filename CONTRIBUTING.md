@@ -46,6 +46,9 @@ Branch and commit naming:
   `test/`, `chore/`
 - use matching conventional commit prefixes such as `feat:`, `fix:`, `docs:`,
   `refactor:`, `test:`, `chore:`
+- do not use agent- or tool-branded names such as `codex/...` branch prefixes
+  or `[codex] ...` PR titles; prefer the change type and intent, for example
+  `refactor/simplify-v3-cleanup` and `refactor: simplify v3 cleanup paths`
 - do not push directly to `main`
 
 Merge policy:
