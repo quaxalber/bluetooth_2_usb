@@ -9,7 +9,7 @@ from typing import Any
 from adafruit_hid.keycode import Keycode
 
 from ..evdev import KeyEvent, evdev_to_usb_hid, is_consumer_key, is_mouse_button
-from ..gadgets.identity import USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE, USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
+from ..gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX
 from ..hid.constants import (
     HID_PAGE_CONSUMER,
     HID_PAGE_GENERIC_DESKTOP,
@@ -19,37 +19,10 @@ from ..hid.constants import (
 )
 from .constants import DEFAULT_DEVICE_SUBSTRING, EXIT_ACCESS, EXIT_MISMATCH, EXIT_OK, EXIT_PREREQUISITE, EXIT_TIMEOUT
 from .result import GadgetNodes, LoopbackResult
-from .scenarios import (
-    BTN_BACK,
-    BTN_EXTRA,
-    BTN_FORWARD,
-    BTN_LEFT,
-    BTN_MIDDLE,
-    BTN_RIGHT,
-    BTN_SIDE,
-    BTN_TASK,
-    REL_HWHEEL,
-    REL_WHEEL,
-    REL_X,
-    REL_Y,
-    get_scenario,
-)
+from .scenarios import EV_REL, EVENT_CODE_NAMES, REL_HWHEEL, REL_WHEEL, REL_X, REL_Y, get_scenario
 
 HIDAPI_REPORT_READ_SIZE = 64
 HIDAPI_POLL_INTERVAL_SEC = 0.01
-
-EVDEV_REL_NAMES = {REL_X: "REL_X", REL_Y: "REL_Y", REL_HWHEEL: "REL_HWHEEL", REL_WHEEL: "REL_WHEEL"}
-
-HID_MOUSE_BUTTON_BITS = {
-    BTN_LEFT: 0x01,
-    BTN_RIGHT: 0x02,
-    BTN_MIDDLE: 0x04,
-    BTN_SIDE: 0x08,
-    BTN_EXTRA: 0x10,
-    BTN_FORWARD: 0x20,
-    BTN_BACK: 0x40,
-    BTN_TASK: 0x80,
-}
 
 
 class CaptureError(RuntimeError):
@@ -80,6 +53,10 @@ class HidDeviceInfo:
     interface_number: int
     usage_page: int
     usage: int
+
+
+def _rel_name(code: int) -> str:
+    return EVENT_CODE_NAMES.get(EV_REL, {}).get(code, str(code))
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,9 +200,10 @@ class MouseSequenceMatcher:
         self.button_index += 1
 
     def _apply_button_step(self, expected) -> int:
-        button_bit = HID_MOUSE_BUTTON_BITS.get(expected.code)
-        if button_bit is None:
+        event = SimpleNamespace(scancode=expected.code, keystate=expected.value)
+        if not is_mouse_button(event):
             raise CaptureMismatchError(f"Expected mouse button step {expected.describe()} is not mappable to HID")
+        button_bit = _mapped_hid_usage(expected)
         if expected.value == KeyEvent.key_down:
             self._button_state |= button_bit
         elif expected.value == KeyEvent.key_up:
@@ -241,26 +219,19 @@ class MouseSequenceMatcher:
         pending_index = self._find_pending_rel_index(code, report_codes)
         if pending_index is None:
             expected = self._pending_rel_remaining[0] if self._pending_rel_remaining else None
-            expected_label = (
-                f"; expected {EVDEV_REL_NAMES.get(expected[0], expected[0])}={expected[1]}" if expected else ""
-            )
-            raise CaptureMismatchError(
-                "Unexpected mouse relative event " f"{EVDEV_REL_NAMES.get(code, code)}={value}{expected_label}"
-            )
+            expected_label = f"; expected {_rel_name(expected[0])}={expected[1]}" if expected else ""
+            raise CaptureMismatchError(f"Unexpected mouse relative event {_rel_name(code)}={value}{expected_label}")
 
         remaining = self._pending_rel_remaining[pending_index][1]
         if not _same_direction(remaining, value):
             raise CaptureMismatchError(
-                "Unexpected mouse relative event "
-                f"{EVDEV_REL_NAMES.get(code, code)}={value}; expected "
-                f"{EVDEV_REL_NAMES.get(code, code)}={remaining}"
+                f"Unexpected mouse relative event {_rel_name(code)}={value}; expected {_rel_name(code)}={remaining}"
             )
 
         if abs(value) > abs(remaining):
             raise CaptureMismatchError(
-                "Unexpected mouse relative event "
-                f"{EVDEV_REL_NAMES.get(code, code)}={value}; exceeds pending "
-                f"{EVDEV_REL_NAMES.get(code, code)}={remaining}"
+                f"Unexpected mouse relative event {_rel_name(code)}={value}; "
+                f"exceeds pending {_rel_name(code)}={remaining}"
             )
 
         remaining -= value
@@ -296,7 +267,7 @@ class MouseSequenceMatcher:
         }
         if self._pending_rel_remaining:
             code, remaining = self._pending_rel_remaining[0]
-            details["next_expected_rel"] = f"{EVDEV_REL_NAMES.get(code, code)}={remaining}"
+            details["next_expected_rel"] = f"{_rel_name(code)}={remaining}"
         elif self.button_index < len(self.expected_button_steps):
             details["next_expected_button"] = self.expected_button_steps[self.button_index].describe()
         return details
@@ -456,7 +427,7 @@ def _add_best_progress_counts(details: dict[str, object], role: str, progress_it
         details["consumer_steps_expected"] = progress["steps_expected"]
 
 
-def _matched_nodes_from_progress(progress: dict[str, list[dict[str, object]]]) -> GadgetNodes:
+def _nodes_from_progress(progress: dict[str, list[dict[str, object]]]) -> GadgetNodes:
     def _completed_node(role: str) -> str | None:
         for candidate in progress.get(role, []):
             if candidate.get("complete"):
@@ -493,7 +464,7 @@ def _capture_failure_details(
     details: dict[str, object] = {
         "capture_backend": "hidapi",
         "candidates": candidate_nodes.to_dict(),
-        "nodes": _matched_nodes_from_progress(progress).to_dict(),
+        "nodes": _nodes_from_progress(progress).to_dict(),
         "timeout_sec": timeout_sec,
     }
     details.update(progress_summary_details(progress))
@@ -571,10 +542,7 @@ def _role_for_device(info: HidDeviceInfo) -> str | None:
         return "mouse"
     if info.usage_page == HID_PAGE_CONSUMER and info.usage == HID_USAGE_CONSUMER_CONTROL:
         return "consumer"
-    if (
-        info.vendor_id == USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
-        and info.product_id == USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE
-    ):
+    if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
         if info.interface_number == 0:
             return "keyboard"
         if info.interface_number == 1:
@@ -640,8 +608,7 @@ def discover_gadget_node_candidates(
         if role is None:
             continue
         if not _matches_device_substring(info.name, device_substring) and not (
-            info.vendor_id == USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
-            and info.product_id == USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE
+            info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO
         ):
             continue
         if role == "keyboard":
@@ -710,10 +677,7 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         device.set_nonblocking(True)
         return device
     except OSError as exc:
-        if (
-            info.vendor_id == USB_GADGET_VENDOR_ID_LINUX_FOUNDATION
-            and info.product_id == USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE
-        ):
+        if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
                 + "On Linux, from the repository root run `sudo ./venv/bin/bluetooth_2_usb "
@@ -912,9 +876,9 @@ def run_capture(
         )
 
     if sys.platform == "win32":
-        from .capture_windows import run_windows_raw_input_capture
+        from .capture_windows import run_raw_input_capture
 
-        result = run_windows_raw_input_capture(
+        result = run_raw_input_capture(
             scenario_name=scenario_name, timeout_sec=resolved_timeout_sec, candidate_nodes=candidate_nodes
         )
         result.details["candidates"] = candidate_nodes.to_dict()

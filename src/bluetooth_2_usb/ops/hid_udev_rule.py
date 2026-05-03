@@ -3,11 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from ..gadgets.identity import (
-    USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
-    USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-    usb_udev_hex_u16,
-)
+from ..gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, usb_udev_hex_u16
 from .commands import fail, info, ok, run
 
 RULE_DST = Path("/etc/udev/rules.d/70-bluetooth_2_usb_hidapi.rules")
@@ -28,8 +24,8 @@ def install_hid_udev_rule(repo_root: Path) -> None:
             "udevadm",
             "trigger",
             "--subsystem-match=usb",
-            f"--attr-match=idVendor={usb_udev_hex_u16(USB_GADGET_VENDOR_ID_LINUX_FOUNDATION)}",
-            f"--attr-match=idProduct={usb_udev_hex_u16(USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE)}",
+            f"--attr-match=idVendor={usb_udev_hex_u16(USB_GADGET_VID_LINUX)}",
+            f"--attr-match=idProduct={usb_udev_hex_u16(USB_GADGET_PID_COMBO)}",
         ]
     )
     ok(f"Installed udev rule: {RULE_DST}")

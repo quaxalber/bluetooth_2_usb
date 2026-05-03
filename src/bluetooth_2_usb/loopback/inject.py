@@ -83,7 +83,7 @@ def _consumer_capabilities() -> dict[int, list[int]]:
     return {ecodes.EV_KEY: consumer_codes}
 
 
-def configured_service_settle_sec() -> float:
+def service_settle_sec() -> float:
     raw = os.environ.get(SERVICE_SETTLE_ENV, str(DEFAULT_SERVICE_SETTLE_SEC))
     try:
         settle = float(raw)
@@ -184,7 +184,7 @@ def run_inject(
             details={},
         )
 
-    wait_for_service_settle(configured_service_settle_sec())
+    wait_for_service_settle(service_settle_sec())
 
     keyboard = None
     mouse = None

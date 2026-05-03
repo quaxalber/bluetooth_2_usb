@@ -10,31 +10,22 @@ from unittest.mock import Mock, patch
 
 import usb_hid
 
-from bluetooth_2_usb.gadgets.config import (
-    USB_CONFIGFS_CONFIG_NAME,
-    USB_STRING_LANGID_EN_US,
-    rebuild_gadget,
-    remove_owned_gadgets,
-)
-from bluetooth_2_usb.gadgets.identity import (
-    USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
-    USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-    usb_configfs_hex_u16,
-)
+from bluetooth_2_usb.gadgets.config import USB_CFG_DIR_NAME, USB_LANGID_EN_US, rebuild_gadget, remove_owned_gadgets
+from bluetooth_2_usb.gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, usb_configfs_hex_u16
 from bluetooth_2_usb.gadgets.layout import (
-    HID_FUNCTION_INDEX_CONSUMER_CONTROL,
-    HID_FUNCTION_INDEX_KEYBOARD,
-    HID_FUNCTION_INDEX_MOUSE,
-    HID_FUNCTION_PROTOCOL_BOOT_KEYBOARD,
-    HID_FUNCTION_PROTOCOL_NONE,
-    HID_FUNCTION_SUBCLASS_BOOT_INTERFACE,
-    HID_FUNCTION_SUBCLASS_NONE,
+    HID_FUNC_INDEX_CONSUMER,
+    HID_FUNC_INDEX_KEYBOARD,
+    HID_FUNC_INDEX_MOUSE,
+    HID_FUNC_PROTOCOL_BOOT_KEYBOARD,
+    HID_FUNC_PROTOCOL_NONE,
+    HID_FUNC_SUBCLASS_BOOT_INTERFACE,
+    HID_FUNC_SUBCLASS_NONE,
     HID_OUT_REPORT_LENGTH_NONE,
     HID_REPORT_ID_NONE,
-    USB_CONFIG_BM_ATTRIBUTES_COMPOSITE_HID,
-    USB_CONFIG_MAX_POWER_MA,
-    USB_CONFIGURATION_NAME,
-    USB_DEVICE_RELEASE_BCD,
+    USB_CFG_BM_ATTR_COMBO,
+    USB_CFG_LABEL,
+    USB_CFG_MAX_POWER_MA,
+    USB_DEV_RELEASE_BCD,
     USB_GADGET_MAX_SPEED,
     USB_PRODUCT_NAME,
     USB_SERIAL_NUMBER,
@@ -217,11 +208,11 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (HID_OUT_REPORT_LENGTH_NONE,))
         self.assertEqual(layout.devices[1].configfs_report_length, MOUSE_CONFIGFS_REPORT_LENGTH)
         self.assertEqual(bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor))
-        self.assertEqual(layout.bcd_device, USB_DEVICE_RELEASE_BCD)
+        self.assertEqual(layout.bcd_device, USB_DEV_RELEASE_BCD)
         self.assertEqual(layout.product_name, USB_PRODUCT_NAME)
         self.assertEqual(layout.serial_number, USB_SERIAL_NUMBER)
-        self.assertEqual(layout.max_power, USB_CONFIG_MAX_POWER_MA)
-        self.assertEqual(layout.bm_attributes, USB_CONFIG_BM_ATTRIBUTES_COMPOSITE_HID)
+        self.assertEqual(layout.max_power, USB_CFG_MAX_POWER_MA)
+        self.assertEqual(layout.bm_attributes, USB_CFG_BM_ATTR_COMBO)
         self.assertEqual(layout.max_speed, USB_GADGET_MAX_SPEED)
         self.assertTrue(layout.devices[0].wakeup_on_write)
         self.assertFalse(layout.devices[1].wakeup_on_write)
@@ -240,14 +231,14 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(usb_hid.Device, "__init__", fake_device_init):
             GadgetHidDevice.from_existing(
                 usb_hid.Device.BOOT_KEYBOARD,
-                function_index=HID_FUNCTION_INDEX_KEYBOARD,
-                protocol=HID_FUNCTION_PROTOCOL_BOOT_KEYBOARD,
-                subclass=HID_FUNCTION_SUBCLASS_BOOT_INTERFACE,
+                function_index=HID_FUNC_INDEX_KEYBOARD,
+                protocol=HID_FUNC_PROTOCOL_BOOT_KEYBOARD,
+                subclass=HID_FUNC_SUBCLASS_BOOT_INTERFACE,
             )
 
         self.assertEqual(len(init_calls), 1)
-        self.assertEqual(init_calls[0]["protocol"], HID_FUNCTION_PROTOCOL_BOOT_KEYBOARD)
-        self.assertEqual(init_calls[0]["subclass"], HID_FUNCTION_SUBCLASS_BOOT_INTERFACE)
+        self.assertEqual(init_calls[0]["protocol"], HID_FUNC_PROTOCOL_BOOT_KEYBOARD)
+        self.assertEqual(init_calls[0]["subclass"], HID_FUNC_SUBCLASS_BOOT_INTERFACE)
 
     async def test_prune_stale_hidg_nodes_removes_regular_files(self) -> None:
         hid_gadgets = HidGadgets()
@@ -307,68 +298,57 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         layout = build_default_layout()
         with tempfile.TemporaryDirectory() as tmpdir:
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
-            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_CONFIGFS_ROOT", gadget_root):
+            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root):
                 with patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"):
                     with patch.object(usb_hid, "gadget_root", str(gadget_root)):
                         rebuild_gadget(layout)
 
             self.assertEqual(
-                (gadget_root / "strings" / USB_STRING_LANGID_EN_US / "product").read_text(encoding="utf-8").strip(),
+                (gadget_root / "strings" / USB_LANGID_EN_US / "product").read_text(encoding="utf-8").strip(),
                 USB_PRODUCT_NAME,
             )
             self.assertEqual(
-                (gadget_root / "strings" / USB_STRING_LANGID_EN_US / "serialnumber")
-                .read_text(encoding="utf-8")
-                .strip(),
+                (gadget_root / "strings" / USB_LANGID_EN_US / "serialnumber").read_text(encoding="utf-8").strip(),
                 USB_SERIAL_NUMBER,
             )
-            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), USB_DEVICE_RELEASE_BCD)
+            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), USB_DEV_RELEASE_BCD)
             self.assertEqual(
                 (gadget_root / "idVendor").read_text(encoding="utf-8").strip(),
-                usb_configfs_hex_u16(USB_GADGET_VENDOR_ID_LINUX_FOUNDATION),
+                usb_configfs_hex_u16(USB_GADGET_VID_LINUX),
             )
             self.assertEqual(
                 (gadget_root / "idProduct").read_text(encoding="utf-8").strip(),
-                usb_configfs_hex_u16(USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE),
+                usb_configfs_hex_u16(USB_GADGET_PID_COMBO),
             )
             self.assertEqual(
-                (gadget_root / "configs" / USB_CONFIGFS_CONFIG_NAME / "MaxPower").read_text(encoding="utf-8").strip(),
-                str(USB_CONFIG_MAX_POWER_MA),
+                (gadget_root / "configs" / USB_CFG_DIR_NAME / "MaxPower").read_text(encoding="utf-8").strip(),
+                str(USB_CFG_MAX_POWER_MA),
             )
             self.assertEqual(
-                (gadget_root / "configs" / USB_CONFIGFS_CONFIG_NAME / "bmAttributes")
+                (gadget_root / "configs" / USB_CFG_DIR_NAME / "bmAttributes").read_text(encoding="utf-8").strip(),
+                hex(USB_CFG_BM_ATTR_COMBO),
+            )
+            self.assertEqual(
+                (gadget_root / "configs" / USB_CFG_DIR_NAME / "strings" / USB_LANGID_EN_US / "configuration")
                 .read_text(encoding="utf-8")
                 .strip(),
-                hex(USB_CONFIG_BM_ATTRIBUTES_COMPOSITE_HID),
-            )
-            self.assertEqual(
-                (
-                    gadget_root
-                    / "configs"
-                    / USB_CONFIGFS_CONFIG_NAME
-                    / "strings"
-                    / USB_STRING_LANGID_EN_US
-                    / "configuration"
-                )
-                .read_text(encoding="utf-8")
-                .strip(),
-                USB_CONFIGURATION_NAME,
+                USB_CFG_LABEL,
             )
             self.assertEqual((gadget_root / "max_speed").read_text(encoding="utf-8").strip(), USB_GADGET_MAX_SPEED)
             self.assertEqual(
-                (gadget_root / _hid_function_path(HID_FUNCTION_INDEX_KEYBOARD) / "report_length")
+                (gadget_root / _hid_function_path(HID_FUNC_INDEX_KEYBOARD) / "report_length")
                 .read_text(encoding="utf-8")
                 .strip(),
                 str(KEYBOARD_IN_REPORT_LENGTH),
             )
             self.assertEqual(
-                (gadget_root / _hid_function_path(HID_FUNCTION_INDEX_MOUSE) / "report_length")
+                (gadget_root / _hid_function_path(HID_FUNC_INDEX_MOUSE) / "report_length")
                 .read_text(encoding="utf-8")
                 .strip(),
                 str(MOUSE_CONFIGFS_REPORT_LENGTH),
             )
             self.assertEqual(
-                (gadget_root / _hid_function_path(HID_FUNCTION_INDEX_CONSUMER_CONTROL) / "report_length")
+                (gadget_root / _hid_function_path(HID_FUNC_INDEX_CONSUMER) / "report_length")
                 .read_text(encoding="utf-8")
                 .strip(),
                 str(CONSUMER_IN_REPORT_LENGTH),
@@ -378,8 +358,8 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         layout = build_default_layout()
         with tempfile.TemporaryDirectory() as tmpdir:
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
-            keyboard_wakeup = gadget_root / _hid_function_path(HID_FUNCTION_INDEX_KEYBOARD) / "wakeup_on_write"
-            mouse_wakeup = gadget_root / _hid_function_path(HID_FUNCTION_INDEX_MOUSE) / "wakeup_on_write"
+            keyboard_wakeup = gadget_root / _hid_function_path(HID_FUNC_INDEX_KEYBOARD) / "wakeup_on_write"
+            mouse_wakeup = gadget_root / _hid_function_path(HID_FUNC_INDEX_MOUSE) / "wakeup_on_write"
 
             def fake_exists(path: Path) -> bool:
                 if path in {keyboard_wakeup, mouse_wakeup}:
@@ -388,7 +368,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
             original_exists = type(keyboard_wakeup).exists
 
-            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_CONFIGFS_ROOT", gadget_root):
+            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root):
                 with patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"):
                     with patch.object(usb_hid, "gadget_root", str(gadget_root)):
                         with patch.object(type(keyboard_wakeup), "exists", fake_exists):
@@ -396,9 +376,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(keyboard_wakeup.read_text(encoding="utf-8").strip(), "1")
             self.assertEqual(mouse_wakeup.read_text(encoding="utf-8").strip(), "0")
-            self.assertFalse(
-                (gadget_root / _hid_function_path(HID_FUNCTION_INDEX_CONSUMER_CONTROL) / "wakeup_on_write").exists()
-            )
+            self.assertFalse((gadget_root / _hid_function_path(HID_FUNC_INDEX_CONSUMER) / "wakeup_on_write").exists())
 
     async def test_remove_owned_gadgets_removes_default_and_project_gadget_trees(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -407,15 +385,15 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             project_root = configfs_root / "bluetooth_2_usb-test"
             for root in (gadget_root, project_root):
                 (root / "configs/c.1").mkdir(parents=True)
-                function_path = _hid_function_path(HID_FUNCTION_INDEX_KEYBOARD)
+                function_path = _hid_function_path(HID_FUNC_INDEX_KEYBOARD)
                 (root / function_path).mkdir(parents=True)
                 (root / "UDC").write_text("dummy.udc\n", encoding="utf-8")
                 (root / function_path / "report_length").write_text(f"{KEYBOARD_IN_REPORT_LENGTH}\n", encoding="utf-8")
-                (root / "configs" / USB_CONFIGFS_CONFIG_NAME / f"hid.usb{HID_FUNCTION_INDEX_KEYBOARD}").symlink_to(
+                (root / "configs" / USB_CFG_DIR_NAME / f"hid.usb{HID_FUNC_INDEX_KEYBOARD}").symlink_to(
                     root / function_path
                 )
 
-            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_CONFIGFS_ROOT", gadget_root):
+            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root):
                 remove_owned_gadgets()
 
             self.assertFalse(gadget_root.exists())
@@ -424,9 +402,9 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
     async def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
         base_device = GadgetHidDevice.from_existing(
             usb_hid.Device.BOOT_KEYBOARD,
-            function_index=HID_FUNCTION_INDEX_KEYBOARD,
-            protocol=HID_FUNCTION_PROTOCOL_BOOT_KEYBOARD,
-            subclass=HID_FUNCTION_SUBCLASS_BOOT_INTERFACE,
+            function_index=HID_FUNC_INDEX_KEYBOARD,
+            protocol=HID_FUNC_PROTOCOL_BOOT_KEYBOARD,
+            subclass=HID_FUNC_SUBCLASS_BOOT_INTERFACE,
             descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
             configfs_report_length=KEYBOARD_IN_REPORT_LENGTH,
             wakeup_on_write=True,
@@ -434,9 +412,9 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
         cloned = GadgetHidDevice.from_existing(
             base_device,
-            function_index=HID_FUNCTION_INDEX_MOUSE,
-            protocol=HID_FUNCTION_PROTOCOL_NONE,
-            subclass=HID_FUNCTION_SUBCLASS_NONE,
+            function_index=HID_FUNC_INDEX_MOUSE,
+            protocol=HID_FUNC_PROTOCOL_NONE,
+            subclass=HID_FUNC_SUBCLASS_NONE,
         )
 
         self.assertTrue(cloned.wakeup_on_write)

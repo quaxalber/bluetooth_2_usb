@@ -531,7 +531,7 @@ class RawInputMouseReportBuilder:
         return changed
 
 
-def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
+def _unsupported_mouse_buttons(scenario) -> tuple[int, ...]:
     return tuple(
         dict.fromkeys(
             step.code for step in scenario.mouse_button_steps if step.code not in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
@@ -539,8 +539,8 @@ def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
     )
 
 
-def windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
-    skipped_codes = _unsupported_windows_mouse_button_codes(scenario)
+def mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
+    skipped_codes = _unsupported_mouse_buttons(scenario)
     skipped_names = tuple(EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in skipped_codes)
     supported_steps = tuple(
         step for step in scenario.mouse_button_steps if step.code in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
@@ -961,9 +961,7 @@ def _pump_raw_input(
     )
 
 
-def _missing_raw_input_node_result(
-    scenario_name: str, message: str, candidate_nodes: GadgetNodeCandidates
-) -> LoopbackResult:
+def _missing_node_result(scenario_name: str, message: str, candidate_nodes: GadgetNodeCandidates) -> LoopbackResult:
     return LoopbackResult(
         command="capture",
         scenario=scenario_name,
@@ -978,33 +976,31 @@ def _missing_raw_input_node_result(
     )
 
 
-def run_windows_raw_input_capture(
+def run_raw_input_capture(
     scenario_name: str, timeout_sec: float, candidate_nodes: GadgetNodeCandidates
 ) -> LoopbackResult:
     if not IS_WINDOWS:
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
-    mouse_button_steps, windows_skipped_mouse_buttons = windows_mouse_button_expectations(scenario)
+    mouse_button_steps, windows_skipped_mouse_buttons = mouse_button_expectations(scenario)
 
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
     consumer_candidate_identities: tuple[str, ...] = ()
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
-            return _missing_raw_input_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
+            return _missing_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
         keyboard_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.keyboard_nodes)
         )
     if scenario.mouse_enabled:
         if not candidate_nodes.mouse_nodes:
-            return _missing_raw_input_node_result(scenario.name, "Mouse HID device was not found", candidate_nodes)
+            return _missing_node_result(scenario.name, "Mouse HID device was not found", candidate_nodes)
         mouse_candidate_identities = extract_device_identities(tuple(info.node for info in candidate_nodes.mouse_nodes))
     if scenario.consumer_enabled:
         if not candidate_nodes.consumer_nodes:
-            return _missing_raw_input_node_result(
-                scenario.name, "Consumer-control HID device was not found", candidate_nodes
-            )
+            return _missing_node_result(scenario.name, "Consumer-control HID device was not found", candidate_nodes)
         consumer_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )

@@ -9,10 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes, evdev_to_usb_hid, is_consumer_key
-from bluetooth_2_usb.gadgets.identity import (
-    USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
-    USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-)
+from bluetooth_2_usb.gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX
 from bluetooth_2_usb.gadgets.layout import USB_PRODUCT_NAME, USB_SERIAL_NUMBER
 from bluetooth_2_usb.hid.constants import (
     HID_PAGE_CONSUMER,
@@ -55,8 +52,8 @@ from bluetooth_2_usb.loopback.inject import (
     DEFAULT_SERVICE_SETTLE_SEC,
     SERVICE_SETTLE_ENV,
     _consumer_capabilities,
-    configured_service_settle_sec,
     run_inject,
+    service_settle_sec,
     wait_for_service_settle,
 )
 from bluetooth_2_usb.loopback.result import LoopbackResult
@@ -367,8 +364,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     device_name="",
                     manufacturer="",
                     serial="",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=0,
                     usage=0,
@@ -378,8 +375,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     device_name="",
                     manufacturer="",
                     serial="",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=1,
                     usage_page=0,
                     usage=0,
@@ -389,8 +386,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     device_name="",
                     manufacturer="",
                     serial="",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=2,
                     usage_page=0,
                     usage=0,
@@ -411,8 +408,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.0",
                     device_name=USB_PRODUCT_NAME,
                     serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=0,
                     usage=0,
@@ -421,8 +418,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.1",
                     device_name=USB_PRODUCT_NAME,
                     serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=1,
                     usage_page=0,
                     usage=0,
@@ -431,8 +428,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.2",
                     device_name=USB_PRODUCT_NAME,
                     serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=2,
                     usage_page=0,
                     usage=0,
@@ -453,8 +450,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.0",
                     device_name=USB_PRODUCT_NAME,
                     serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=0,
                     usage=0,
@@ -463,8 +460,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.1",
                     device_name=USB_PRODUCT_NAME,
                     serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=1,
                     usage_page=0,
                     usage=0,
@@ -473,8 +470,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     "1-2.1.2:1.2",
                     device_name=USB_PRODUCT_NAME,
                     serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=2,
                     usage_page=0,
                     usage=0,
@@ -905,7 +902,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             self.skipTest("Non-Windows runtime guard is not exercised on Windows")
 
         with self.assertRaisesRegex(RuntimeError, "only available on Windows"):
-            capture_windows.run_windows_raw_input_capture(
+            capture_windows.run_raw_input_capture(
                 scenario_name="keyboard",
                 timeout_sec=1.0,
                 candidate_nodes=capture_windows.GadgetNodeCandidates(
@@ -913,8 +910,8 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 ),
             )
 
-    def test_windows_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
-        steps, skipped = capture_windows.windows_mouse_button_expectations(SCENARIOS["mouse"])
+    def test_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
+        steps, skipped = capture_windows.mouse_button_expectations(SCENARIOS["mouse"])
 
         self.assertEqual(skipped, ("BTN_FORWARD", "BTN_BACK", "BTN_TASK"))
         self.assertEqual(len(steps), 10)
@@ -1004,13 +1001,13 @@ class LoopbackInjectTest(unittest.TestCase):
 
     def test_configured_service_settle_accepts_zero_override(self) -> None:
         with patch.dict("os.environ", {SERVICE_SETTLE_ENV: "0"}):
-            self.assertEqual(configured_service_settle_sec(), 0)
+            self.assertEqual(service_settle_sec(), 0)
 
     def test_configured_service_settle_defaults_for_invalid_values(self) -> None:
         for value in ("not-a-number", "-1", "inf", "nan"):
             with self.subTest(value=value):
                 with patch.dict("os.environ", {SERVICE_SETTLE_ENV: value}):
-                    self.assertEqual(configured_service_settle_sec(), DEFAULT_SERVICE_SETTLE_SEC)
+                    self.assertEqual(service_settle_sec(), DEFAULT_SERVICE_SETTLE_SEC)
 
     def test_wait_for_service_settle_skips_systemctl_when_disabled(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.subprocess.run") as run:
@@ -1137,8 +1134,8 @@ class LoopbackInjectTest(unittest.TestCase):
             [
                 _hid_entry(
                     "kbd0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=HID_PAGE_GENERIC_DESKTOP,
                     usage=HID_USAGE_KEYBOARD,
@@ -1161,8 +1158,8 @@ class LoopbackInjectTest(unittest.TestCase):
             [
                 _hid_entry(
                     "kbd0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=HID_PAGE_GENERIC_DESKTOP,
                     usage=HID_USAGE_KEYBOARD,
@@ -1188,8 +1185,8 @@ class LoopbackInjectTest(unittest.TestCase):
             [
                 _hid_entry(
                     "kbd0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=HID_PAGE_GENERIC_DESKTOP,
                     usage=HID_USAGE_KEYBOARD,
@@ -1213,24 +1210,24 @@ class LoopbackInjectTest(unittest.TestCase):
             [
                 _hid_entry(
                     "kbd0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=0,
                     usage_page=HID_PAGE_GENERIC_DESKTOP,
                     usage=HID_USAGE_KEYBOARD,
                 ),
                 _hid_entry(
                     "mouse0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=1,
                     usage_page=HID_PAGE_GENERIC_DESKTOP,
                     usage=HID_USAGE_MOUSE,
                 ),
                 _hid_entry(
                     "consumer0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=2,
                     usage_page=HID_PAGE_CONSUMER,
                     usage=HID_USAGE_CONSUMER_CONTROL,
@@ -1293,24 +1290,24 @@ class LoopbackInjectTest(unittest.TestCase):
                 [
                     _hid_entry(
                         "kbd0",
-                        vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                        product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                        vendor_id=USB_GADGET_VID_LINUX,
+                        product_id=USB_GADGET_PID_COMBO,
                         interface_number=0,
                         usage_page=HID_PAGE_GENERIC_DESKTOP,
                         usage=HID_USAGE_KEYBOARD,
                     ),
                     _hid_entry(
                         "mouse0",
-                        vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                        product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                        vendor_id=USB_GADGET_VID_LINUX,
+                        product_id=USB_GADGET_PID_COMBO,
                         interface_number=1,
                         usage_page=HID_PAGE_GENERIC_DESKTOP,
                         usage=HID_USAGE_MOUSE,
                     ),
                     _hid_entry(
                         "consumer0",
-                        vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                        product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                        vendor_id=USB_GADGET_VID_LINUX,
+                        product_id=USB_GADGET_PID_COMBO,
                         interface_number=2,
                         usage_page=HID_PAGE_CONSUMER,
                         usage=HID_USAGE_CONSUMER_CONTROL,
@@ -1326,24 +1323,24 @@ class LoopbackInjectTest(unittest.TestCase):
                     [
                         _hid_entry(
                             "kbd0",
-                            vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                            product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                            vendor_id=USB_GADGET_VID_LINUX,
+                            product_id=USB_GADGET_PID_COMBO,
                             interface_number=0,
                             usage_page=HID_PAGE_GENERIC_DESKTOP,
                             usage=HID_USAGE_KEYBOARD,
                         ),
                         _hid_entry(
                             "mouse0",
-                            vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                            product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                            vendor_id=USB_GADGET_VID_LINUX,
+                            product_id=USB_GADGET_PID_COMBO,
                             interface_number=1,
                             usage_page=HID_PAGE_GENERIC_DESKTOP,
                             usage=HID_USAGE_MOUSE,
                         ),
                         _hid_entry(
                             "consumer0",
-                            vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                            product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                            vendor_id=USB_GADGET_VID_LINUX,
+                            product_id=USB_GADGET_PID_COMBO,
                             interface_number=2,
                             usage_page=HID_PAGE_CONSUMER,
                             usage=HID_USAGE_CONSUMER_CONTROL,
@@ -1352,7 +1349,7 @@ class LoopbackInjectTest(unittest.TestCase):
                 ),
             ):
                 with patch(
-                    "bluetooth_2_usb.loopback.capture_windows.run_windows_raw_input_capture",
+                    "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
                     return_value=LoopbackResult(
                         command="capture",
                         scenario="combo",
@@ -1372,8 +1369,8 @@ class LoopbackInjectTest(unittest.TestCase):
             [
                 _hid_entry(
                     "consumer0",
-                    vendor_id=USB_GADGET_VENDOR_ID_LINUX_FOUNDATION,
-                    product_id=USB_GADGET_PRODUCT_ID_MULTIFUNCTION_COMPOSITE,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
                     interface_number=2,
                     usage_page=HID_PAGE_CONSUMER,
                     usage=HID_USAGE_CONSUMER_CONTROL,
@@ -1384,7 +1381,7 @@ class LoopbackInjectTest(unittest.TestCase):
         with patch("bluetooth_2_usb.loopback.capture.sys.platform", "win32"):
             with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=consumer_hid):
                 with patch(
-                    "bluetooth_2_usb.loopback.capture_windows.run_windows_raw_input_capture",
+                    "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
                     return_value=LoopbackResult(
                         command="capture",
                         scenario="consumer",

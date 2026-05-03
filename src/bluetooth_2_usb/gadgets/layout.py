@@ -23,22 +23,22 @@ import usb_hid
 from ..hid.constants import MOUSE_CONFIGFS_REPORT_LENGTH, MOUSE_IN_REPORT_LENGTH
 from ..hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
 
-USB_CONFIG_REQUIRED_ATTRIBUTES = 0x80
+USB_CFG_REQUIRED_ATTR = 0x80
 """USB configuration bmAttributes bit 7: required by the USB specification."""
 
-USB_CONFIG_SELF_POWERED = 0x40
+USB_CFG_SELF_POWERED = 0x40
 """USB configuration bmAttributes bit 6: advertise self-powered operation."""
 
-USB_CONFIG_REMOTE_WAKEUP = 0x20
+USB_CFG_REMOTE_WAKEUP = 0x20
 """USB configuration bmAttributes bit 5: advertise remote wakeup support."""
 
-USB_CONFIG_BM_ATTRIBUTES_DEFAULT = USB_CONFIG_REQUIRED_ATTRIBUTES
+USB_CFG_BM_ATTR_DEFAULT = USB_CFG_REQUIRED_ATTR
 """Default bus-powered configuration attributes."""
 
-USB_CONFIG_BM_ATTRIBUTES_COMPOSITE_HID = USB_CONFIG_REQUIRED_ATTRIBUTES | USB_CONFIG_REMOTE_WAKEUP
+USB_CFG_BM_ATTR_COMBO = USB_CFG_REQUIRED_ATTR | USB_CFG_REMOTE_WAKEUP
 """Composite HID configuration attributes: bus-powered with remote wakeup."""
 
-USB_DEVICE_RELEASE_BCD = "0x0205"
+USB_DEV_RELEASE_BCD = "0x0205"
 """USB device descriptor bcdDevice: device release 2.05 as binary-coded decimal."""
 
 USB_PRODUCT_NAME = "USB Combo Device"
@@ -47,34 +47,34 @@ USB_PRODUCT_NAME = "USB Combo Device"
 USB_SERIAL_NUMBER = "213374badcafe"
 """Stable host-visible serial string used for host-side device identity."""
 
-USB_CONFIGURATION_NAME = "Config 1: HID relay"
+USB_CFG_LABEL = "Config 1: HID relay"
 """Configuration string descriptor exposed to the host for this composite layout."""
 
-USB_CONFIG_MAX_POWER_MA = 100
+USB_CFG_MAX_POWER_MA = 100
 """configfs MaxPower value in mA; Linux encodes descriptor power units."""
 
 USB_GADGET_MAX_SPEED = "high-speed"
 """Linux gadget speed policy: cap this gadget at USB 2.0 high speed."""
 
-HID_FUNCTION_PROTOCOL_NONE = 0
+HID_FUNC_PROTOCOL_NONE = 0
 """Linux HID gadget function protocol value for no boot protocol."""
 
-HID_FUNCTION_SUBCLASS_NONE = 0
+HID_FUNC_SUBCLASS_NONE = 0
 """Linux HID gadget function subclass value for no boot subclass."""
 
-HID_FUNCTION_PROTOCOL_BOOT_KEYBOARD = 1
+HID_FUNC_PROTOCOL_BOOT_KEYBOARD = 1
 """Linux HID gadget function protocol value for boot keyboard."""
 
-HID_FUNCTION_SUBCLASS_BOOT_INTERFACE = 1
+HID_FUNC_SUBCLASS_BOOT_INTERFACE = 1
 """Linux HID gadget function subclass value for boot-interface devices."""
 
-HID_FUNCTION_INDEX_KEYBOARD = 0
+HID_FUNC_INDEX_KEYBOARD = 0
 """Configfs HID function index for the keyboard gadget."""
 
-HID_FUNCTION_INDEX_MOUSE = 1
+HID_FUNC_INDEX_MOUSE = 1
 """Configfs HID function index for the mouse gadget."""
 
-HID_FUNCTION_INDEX_CONSUMER_CONTROL = 2
+HID_FUNC_INDEX_CONSUMER = 2
 """Configfs HID function index for the consumer-control gadget."""
 
 HID_REPORT_ID_NONE = 0
@@ -175,9 +175,9 @@ class GadgetLayout:
     bcd_device: str
     product_name: str
     serial_number: str
-    max_power: int = USB_CONFIG_MAX_POWER_MA
-    bm_attributes: int = USB_CONFIG_BM_ATTRIBUTES_DEFAULT
-    configuration_name: str = USB_CONFIGURATION_NAME
+    max_power: int = USB_CFG_MAX_POWER_MA
+    bm_attributes: int = USB_CFG_BM_ATTR_DEFAULT
+    configuration_name: str = USB_CFG_LABEL
     max_speed: str | None = None
 
 
@@ -186,17 +186,17 @@ def build_default_layout() -> GadgetLayout:
         devices=(
             GadgetHidDevice.from_existing(
                 usb_hid.Device.BOOT_KEYBOARD,
-                function_index=HID_FUNCTION_INDEX_KEYBOARD,
-                protocol=HID_FUNCTION_PROTOCOL_BOOT_KEYBOARD,
-                subclass=HID_FUNCTION_SUBCLASS_BOOT_INTERFACE,
+                function_index=HID_FUNC_INDEX_KEYBOARD,
+                protocol=HID_FUNC_PROTOCOL_BOOT_KEYBOARD,
+                subclass=HID_FUNC_SUBCLASS_BOOT_INTERFACE,
                 descriptor=DEFAULT_KEYBOARD_DESCRIPTOR,
                 wakeup_on_write=True,
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.MOUSE,
-                function_index=HID_FUNCTION_INDEX_MOUSE,
-                protocol=HID_FUNCTION_PROTOCOL_NONE,
-                subclass=HID_FUNCTION_SUBCLASS_NONE,
+                function_index=HID_FUNC_INDEX_MOUSE,
+                protocol=HID_FUNC_PROTOCOL_NONE,
+                subclass=HID_FUNC_SUBCLASS_NONE,
                 descriptor=DEFAULT_MOUSE_DESCRIPTOR,
                 name="mouse gadget",
                 report_ids=(HID_REPORT_ID_NONE,),
@@ -206,15 +206,15 @@ def build_default_layout() -> GadgetLayout:
             ),
             GadgetHidDevice.from_existing(
                 usb_hid.Device.CONSUMER_CONTROL,
-                function_index=HID_FUNCTION_INDEX_CONSUMER_CONTROL,
-                protocol=HID_FUNCTION_PROTOCOL_NONE,
-                subclass=HID_FUNCTION_SUBCLASS_NONE,
+                function_index=HID_FUNC_INDEX_CONSUMER,
+                protocol=HID_FUNC_PROTOCOL_NONE,
+                subclass=HID_FUNC_SUBCLASS_NONE,
             ),
         ),
-        bcd_device=USB_DEVICE_RELEASE_BCD,
+        bcd_device=USB_DEV_RELEASE_BCD,
         product_name=USB_PRODUCT_NAME,
         serial_number=USB_SERIAL_NUMBER,
-        max_power=USB_CONFIG_MAX_POWER_MA,
-        bm_attributes=USB_CONFIG_BM_ATTRIBUTES_COMPOSITE_HID,
+        max_power=USB_CFG_MAX_POWER_MA,
+        bm_attributes=USB_CFG_BM_ATTR_COMBO,
         max_speed=USB_GADGET_MAX_SPEED,
     )
