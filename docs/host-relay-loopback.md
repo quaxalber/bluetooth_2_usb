@@ -63,6 +63,12 @@ On Linux, install the udev rule once:
 sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
+For a managed host-side install, use:
+
+```bash
+sudo bluetooth_2_usb udev install
+```
+
 Recommended baseline checks on the Pi:
 
 ```bash
@@ -330,6 +336,9 @@ If needed:
 ```bash
 sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
+
+For a managed host-side install, run `sudo bluetooth_2_usb udev install`
+instead.
 
 ### Host capture times out
 

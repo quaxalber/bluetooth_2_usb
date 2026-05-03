@@ -47,30 +47,25 @@ operational commands:
 
 ```bash
 ./venv/bin/bluetooth_2_usb --help
-while read -r command; do
-  echo "==== $command"
-  ./venv/bin/bluetooth_2_usb $command --help
-  echo
-done <<'EOF'
-install
-update
-uninstall
-smoketest
-debug
-readonly setup
-readonly status
-readonly enable
-readonly disable
-udev install
-EOF
+./venv/bin/bluetooth_2_usb install --help
+./venv/bin/bluetooth_2_usb update --help
+./venv/bin/bluetooth_2_usb uninstall --help
+./venv/bin/bluetooth_2_usb smoketest --help
+./venv/bin/bluetooth_2_usb debug --help
+./venv/bin/bluetooth_2_usb readonly setup --help
+./venv/bin/bluetooth_2_usb readonly status --help
+./venv/bin/bluetooth_2_usb readonly enable --help
+./venv/bin/bluetooth_2_usb readonly disable --help
+./venv/bin/bluetooth_2_usb udev install --help
+./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD" --help
 
 ./venv/bin/bluetooth_2_usb loopback --help
-for command in inject capture; do
-  echo "==== bluetooth_2_usb loopback $command"
-  ./venv/bin/bluetooth_2_usb loopback "$command" --help
-  echo
-done
+./venv/bin/bluetooth_2_usb loopback inject --help
+./venv/bin/bluetooth_2_usb loopback capture --help
 ```
+
+Avoid examples that depend on implicit shell word splitting for nested command
+names such as `readonly setup`; write nested command invocations explicitly.
 
 ### 3. Runtime CLI interface
 

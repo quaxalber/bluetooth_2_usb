@@ -36,8 +36,6 @@ Please:
 - explain what changed and why
 - describe how you tested it
 - update docs when behavior, commands, paths, or defaults change
-- target `staging` for normal work
-- do not target `main` directly for normal project work
 
 Use a normal PR into `staging` for features, fixes, refactors, and other
 non-trivial changes. Small follow-up review fixes may be pushed directly to
@@ -157,9 +155,6 @@ Please keep code and docs aligned with the supported deployment model:
 > Do not keep legacy aliases, shell wrappers, removed config keys, deprecated
 > entrypoints, or compatibility shims.
 
-- keep docs, tests, and code aligned with the current supported product surface
-- do not keep legacy aliases, shell wrappers, removed config keys, deprecated
-  entrypoints, or compatibility shims
 - when an interface changes, update callers and docs to the new interface
   directly instead of preserving old paths
 

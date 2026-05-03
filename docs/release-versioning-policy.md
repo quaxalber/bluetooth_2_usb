@@ -22,8 +22,6 @@ Examples:
 - `v1.1.0`
 - `v2.0.0`
 
-Only tags that match that exact pattern count as release tags for package versioning.
-
 > [!IMPORTANT]
 > Only exact `vMAJOR.MINOR.PATCH` tags count as official release tags.
 

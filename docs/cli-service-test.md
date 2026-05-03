@@ -210,15 +210,9 @@ done
 
 > [!TIP]
 > If the enable step fails with `mkinitramfs: failed to determine device for /`,
-> repair `initramfs-tools` before rebooting and rerun the enable step:
-
-```bash
-ssh <pi-host> '
-  sudo -n sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
-  sudo -n dpkg --configure -a
-  sudo -n bluetooth_2_usb readonly enable
-'
-```
+> follow the repair step in
+> [persistent-readonly.md](persistent-readonly.md#enable-persistent-read-only-mode),
+> then rerun `readonly enable` and resume validation here before rebooting.
 
 After reboot:
 
