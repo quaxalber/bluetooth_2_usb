@@ -1015,6 +1015,7 @@ class LoopbackInjectTest(unittest.TestCase):
         keyboard.close.assert_called_once_with()
 
     def test_run_inject_uses_scenario_default_event_gap(self) -> None:
+        scenario = SCENARIOS["keyboard"]
         keyboard = Mock()
 
         with (
@@ -1026,9 +1027,12 @@ class LoopbackInjectTest(unittest.TestCase):
             result = run_inject("keyboard", pre_delay_ms=0)
 
         self.assertTrue(result.success)
-        self.assertEqual(result.details["event_gap_ms"], 10)
-        self.assertEqual(result.details["post_delay_ms"], 6000)
-        self.assertEqual(keyboard.write.call_count, len(SCENARIOS["keyboard"].keyboard_steps))
+        self.assertEqual(result.details["event_gap_ms"], scenario.default_event_gap_ms)
+        self.assertEqual(result.details["post_delay_ms"], scenario.default_post_delay_ms)
+        self.assertEqual(result.details["injected_event_count"], len(scenario.keyboard_steps))
+        self.assertEqual(keyboard.write.call_count, result.details["injected_event_count"])
+        first_step = scenario.keyboard_steps[0]
+        keyboard.write.assert_any_call(first_step.event_type, first_step.code, first_step.value)
 
     def test_run_inject_uses_compact_expected_summary(self) -> None:
         keyboard = Mock()

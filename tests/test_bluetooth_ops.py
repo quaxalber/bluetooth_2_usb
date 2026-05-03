@@ -385,6 +385,7 @@ class ReadonlyConfigTest(unittest.TestCase):
             )
             commands = []
             written = []
+            var_lib_bluetooth = root / "var/lib/bluetooth"
 
             def fake_run(command, *, check=True, capture=False):
                 commands.append(command)
@@ -398,6 +399,11 @@ class ReadonlyConfigTest(unittest.TestCase):
                 elif command[:2] == ["mountpoint", "-q"]:
                     Completed.returncode = 1
                 return Completed()
+
+            def local_path(value: str) -> Path:
+                if value == "/var/lib/bluetooth":
+                    return var_lib_bluetooth
+                return Path(value)
 
             with ExitStack() as stack:
                 stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
@@ -417,19 +423,21 @@ class ReadonlyConfigTest(unittest.TestCase):
                 restart_b2u = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.restart_b2u_if_installed"))
                 seed_state = stack.enter_context(patch(f"{READONLY_WORKFLOWS}._seed_bluetooth_state"))
                 stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.Path", side_effect=local_path))
 
                 setup_persistent_bluetooth_state("/dev/sda1")
 
-        self.assertEqual(written[0].persist_spec, "/dev/disk/by-uuid/abc")
-        self.assertEqual(written[0].persist_device, "/dev/sda1")
-        write_bind.assert_called_once_with(root / "persist" / "bluetooth", root / "persist")
-        install_dropin.assert_called_once_with()
-        seed_state.assert_called_once_with(root / "persist" / "bluetooth")
-        restart_b2u.assert_called_once_with(False, "after enabling the persistent bind mount")
-        self.assertIn(["systemctl", "stop", "bluetooth.service"], commands)
-        self.assertIn(["systemctl", "enable", "--now", "mnt-persist.mount"], commands)
-        self.assertIn(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"], commands)
-        self.assertIn(["systemctl", "start", "bluetooth.service"], commands)
+            self.assertTrue(var_lib_bluetooth.is_dir())
+            self.assertEqual(written[0].persist_spec, "/dev/disk/by-uuid/abc")
+            self.assertEqual(written[0].persist_device, "/dev/sda1")
+            write_bind.assert_called_once_with(root / "persist" / "bluetooth", root / "persist")
+            install_dropin.assert_called_once_with()
+            seed_state.assert_called_once_with(root / "persist" / "bluetooth")
+            restart_b2u.assert_called_once_with(False, "after enabling the persistent bind mount")
+            self.assertIn(["systemctl", "stop", "bluetooth.service"], commands)
+            self.assertIn(["systemctl", "enable", "--now", "mnt-persist.mount"], commands)
+            self.assertIn(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"], commands)
+            self.assertIn(["systemctl", "start", "bluetooth.service"], commands)
 
     def test_enable_readonly_does_not_rollback_overlayfs_when_validation_fails(self) -> None:
         config = ReadonlyConfig(
