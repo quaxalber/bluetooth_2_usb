@@ -1,3 +1,19 @@
+"""USB gadget configfs writes for the default Bluetooth-2-USB composite device.
+
+USB gadget configfs values are written as text attributes. Linux parses them
+into USB descriptors exposed to the host.
+
+References:
+- Linux USB gadget configfs:
+  https://docs.kernel.org/usb/gadget_configfs.html
+- Linux USB gadget API:
+  https://kernel.org/doc/html/next/driver-api/usb/gadget.html
+- USB device descriptor fields:
+  https://learn.microsoft.com/windows-hardware/drivers/network/device-descriptor
+- USB configuration descriptor fields:
+  https://learn.microsoft.com/windows-hardware/drivers/usbcon/standard-usb-descriptors
+"""
+
 from __future__ import annotations
 
 import os
@@ -8,38 +24,37 @@ import usb_hid
 from .layout import GadgetHidDevice, GadgetLayout
 
 GADGET_ROOT = Path(usb_hid.gadget_root)
-CONFIG_NAME = "c.1"
+"""Configfs root path for the managed Bluetooth-2-USB gadget."""
 
-# USB gadget configfs values are written as text attributes; Linux parses them
-# into USB descriptors exposed to the host.
-#
-# References:
-# - Linux USB gadget configfs:
-#   https://docs.kernel.org/usb/gadget_configfs.html
-# - Linux USB gadget API:
-#   https://kernel.org/doc/html/next/driver-api/usb/gadget.html
-# - USB device descriptor fields:
-#   https://learn.microsoft.com/windows-hardware/drivers/network/device-descriptor
-# - USB configuration descriptor fields:
-#   https://learn.microsoft.com/windows-hardware/drivers/usbcon/standard-usb-descriptors
-# String descriptor language ID: English, United States.
+CONFIG_NAME = "c.1"
+"""Default configfs configuration directory name."""
+
 USB_STRING_LANGID_EN_US = "0x409"
-# Device descriptor idVendor. 0x1d6b is the Linux Foundation VID commonly used
-# by Linux USB gadget examples/defaults.
+"""String descriptor language ID: English, United States."""
+
 USB_VENDOR_ID_LINUX_FOUNDATION = "0x1d6b"
-# Device descriptor idProduct for the Linux Foundation multifunction composite
-# gadget identity used by this project and its host-side discovery/udev rules.
+"""USB device descriptor idVendor: Linux Foundation VID used by gadget examples."""
+
 USB_PRODUCT_ID_MULTIFUNCTION_COMPOSITE = "0x0104"
-# Device descriptor bcdUSB: USB 2.00 encoded as binary-coded decimal.
+"""USB device descriptor idProduct for this multifunction composite gadget."""
+
 USB_SPEC_VERSION_BCD = "0x0200"
-# Device descriptor bMaxPacketSize0: 64-byte endpoint-zero control packets.
+"""USB device descriptor bcdUSB: USB 2.00 encoded as binary-coded decimal."""
+
 USB_EP0_MAX_PACKET_SIZE_BYTES = "0x40"
-# Manufacturer string descriptor exposed to the host.
+"""USB device descriptor bMaxPacketSize0: 64-byte endpoint-zero control packets."""
+
 USB_MANUFACTURER = "quaxalber"
-# Device class 0 means each interface declares its own class/subclass/protocol.
+"""Manufacturer string descriptor exposed to the host."""
+
 USB_DEVICE_CLASS_PER_INTERFACE = "0x00"
+"""USB device class 0: each interface declares its own class/subclass/protocol."""
+
 USB_DEVICE_PROTOCOL_NONE = "0x00"
+"""USB device protocol 0: no device-level protocol."""
+
 USB_DEVICE_SUBCLASS_NONE = "0x00"
+"""USB device subclass 0: no device-level subclass."""
 
 
 def _safe_unlink(path: Path) -> None:

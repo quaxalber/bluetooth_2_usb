@@ -23,12 +23,8 @@ from bluetooth_2_usb.gadgets.layout import (
     build_default_layout,
 )
 from bluetooth_2_usb.gadgets.manager import HidGadgets
-from bluetooth_2_usb.hid.descriptors import (
-    DEFAULT_KEYBOARD_DESCRIPTOR,
-    DEFAULT_MOUSE_DESCRIPTOR,
-    MOUSE_CONFIGFS_REPORT_LENGTH,
-    MOUSE_IN_REPORT_LENGTH,
-)
+from bluetooth_2_usb.hid.constants import MOUSE_CONFIGFS_REPORT_LENGTH, MOUSE_IN_REPORT_LENGTH
+from bluetooth_2_usb.hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
 
 
 class _FakeKeyboard:

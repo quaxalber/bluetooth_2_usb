@@ -4,8 +4,8 @@ from unittest.mock import Mock, call, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes
 from bluetooth_2_usb.hid.buttons import MouseButtons
+from bluetooth_2_usb.hid.constants import MOUSE_IN_REPORT_LENGTH
 from bluetooth_2_usb.hid.consumer import ExtendedConsumerControl
-from bluetooth_2_usb.hid.descriptors import MOUSE_IN_REPORT_LENGTH
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.hid.keyboard import ExtendedKeyboard
 from bluetooth_2_usb.hid.mouse import ExtendedMouse

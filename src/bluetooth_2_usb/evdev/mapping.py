@@ -156,7 +156,7 @@ _CONSUMER_KEYS = set(
         ecodes.KEY_SCALE,
     )
 )
-"""evdev scancodes that are mapped to USB HUT (HID Uage Table) UsageIDs from consumer page (0x0C)"""
+"""evdev scancodes mapped to USB HUT (HID Usage Table) Usage IDs from the consumer page."""
 
 
 _MOUSE_BUTTONS = set(

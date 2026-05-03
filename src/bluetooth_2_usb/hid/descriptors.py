@@ -1,15 +1,5 @@
 from __future__ import annotations
 
-KEYBOARD_IN_REPORT_LENGTH = 8
-KEYBOARD_OUT_REPORT_LENGTH = 1
-MOUSE_IN_REPORT_LENGTH = 7
-# Keep the HID input report at 7 bytes, but make the configfs request size
-# larger so each write is a short packet. On Pi dwc2 this avoids an extra empty
-# interrupt-IN completion after every full-size mouse report.
-MOUSE_CONFIGFS_REPORT_LENGTH = 8
-CONSUMER_IN_REPORT_LENGTH = 2
-CONSUMER_OUT_REPORT_LENGTH = 0
-
 # Keep descriptor bytes in HID item rows to match the Adafruit HID descriptor
 # style and make item boundaries easier to review.
 # fmt: off
