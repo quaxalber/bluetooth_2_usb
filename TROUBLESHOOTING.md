@@ -1,6 +1,7 @@
 # Troubleshooting
 
-Most troubleshooting sessions should start with the two built-in diagnostics:
+> [!TIP]
+> Most troubleshooting sessions should start with the two built-in diagnostics:
 
 ```bash
 sudo bluetooth_2_usb smoketest --verbose
@@ -139,6 +140,7 @@ Interpretation:
   link-local IPv6, DNS, or Wi-Fi power-management policy rather than a product
   bug
 
-Site-specific connectivity recovery and host-policy tuning are intentionally not
-part of the product docs. Resolve the local access issue first, then return to
-the product checks above.
+> [!NOTE]
+> Site-specific connectivity recovery and host-policy tuning are intentionally
+> not part of the product docs. Resolve the local access issue first, then
+> return to the product checks above.

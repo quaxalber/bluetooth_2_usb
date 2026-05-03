@@ -24,6 +24,9 @@ Examples:
 
 Only tags that match that exact pattern count as release tags for package versioning.
 
+> [!IMPORTANT]
+> Only exact `vMAJOR.MINOR.PATCH` tags count as official release tags.
+
 That means helper tags such as:
 
 - `hardening-test-install-2026-04-05`
@@ -111,12 +114,13 @@ git push origin v1.0.0
 
 ## History rewrites and tag ancestry
 
-Bluetooth-2-USB derives development versions from the most recent reachable
-release tag. If `main` history is rewritten, the latest official release tag
-must be re-anchored to the content-equivalent commit on the rewritten history.
-
-Otherwise `setuptools_scm` can fall back to an incorrect base version such as
-`0.0`, and development builds will no longer advance from the real last release.
+> [!WARNING]
+> Bluetooth-2-USB derives development versions from the most recent reachable
+> release tag. If `main` history is rewritten, the latest official release tag
+> must be re-anchored to the content-equivalent commit on the rewritten history.
+> Otherwise `setuptools_scm` can fall back to an incorrect base version such as
+> `0.0`, and development builds will no longer advance from the real last
+> release.
 
 ## Test tags
 
@@ -127,4 +131,6 @@ Good examples:
 - `hardening-test-install-2026-04-05`
 - `pi-validation-2026-04-06`
 
-Do not create throwaway tags that look like official releases unless you actually intend to ship that release.
+> [!IMPORTANT]
+> Do not create throwaway tags that look like official releases unless you
+> actually intend to ship that release.

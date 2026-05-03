@@ -102,11 +102,12 @@ strict capture of the actual relay sequence uses Raw Input; `hidapi` remains a
 discovery step, not the primary event backend. Use a Python environment where
 `python -c "import hid"` succeeds.
 
-Loopback JSON is intentionally summarized. Normal injector output reports the
-scenario name, timing, device names, and expected event counts instead of the
-full event sequence. Capture timeouts report the candidates, any nodes that
-completed before the timeout, per-role progress counters, and the next expected
-event. They do not dump the full remaining sequence.
+> [!NOTE]
+> Loopback JSON is intentionally summarized. Normal injector output reports the
+> scenario name, timing, device names, and expected event counts instead of the
+> full event sequence. Capture timeouts report the candidates, any nodes that
+> completed before the timeout, per-role progress counters, and the next
+> expected event. They do not dump the full remaining sequence.
 
 With the repository virtual environment on Windows:
 
@@ -164,8 +165,9 @@ sudo bluetooth_2_usb loopback inject --scenario node-discovery
 
 Use the node set that succeeds here when pinning the full `combo` capture.
 
-Before each fresh Windows validation run after changing the gadget descriptor
-layout or USB identity:
+> [!IMPORTANT]
+> Before each fresh Windows validation run after changing the gadget descriptor
+> layout or USB identity:
 
 1. set the Pi to the intended software revision
 2. reboot the Pi
@@ -180,11 +182,12 @@ On the Pi:
 sudo bluetooth_2_usb loopback inject --scenario combo
 ```
 
-When `bluetooth_2_usb.service` is active, the injector waits up to the default
-service-settle window before emitting events. This avoids racing a freshly
-re-enumerated USB HID gadget before the host has started draining reports. Set
-`B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that loopback-only wait. Invalid
-values are ignored and the default settle window is used.
+> [!NOTE]
+> When `bluetooth_2_usb.service` is active, the injector waits up to the default
+> service-settle window before emitting events. This avoids racing a freshly
+> re-enumerated USB HID gadget before the host has started draining reports. Set
+> `B2U_LOOPBACK_SERVICE_SETTLE_SEC=0` to disable that loopback-only wait.
+> Invalid values are ignored and the default settle window is used.
 
 The injector creates temporary virtual devices named:
 

@@ -26,6 +26,9 @@ Pi is connected to the target host through the OTG-capable data port.
 
 This repository uses `staging` as its integration branch.
 
+> [!IMPORTANT]
+> Normal project work targets `staging`, not `main`.
+
 Please:
 
 - keep scope focused
@@ -42,13 +45,16 @@ non-trivial changes. Small follow-up review fixes may be pushed directly to
 
 Branch and commit naming:
 
+> [!IMPORTANT]
+> Do not use agent- or tool-branded names such as `codex/...` branch prefixes
+> or `[codex] ...` PR titles. Prefer the change type and intent, for example
+> `refactor/simplify-v3-cleanup` and
+> `refactor: simplify v3 cleanup paths`.
+
 - use descriptive branch prefixes such as `feat/`, `fix/`, `docs/`, `refactor/`,
   `test/`, `chore/`
 - use matching conventional commit prefixes such as `feat:`, `fix:`, `docs:`,
   `refactor:`, `test:`, `chore:`
-- do not use agent- or tool-branded names such as `codex/...` branch prefixes
-  or `[codex] ...` PR titles; prefer the change type and intent, for example
-  `refactor/simplify-v3-cleanup` and `refactor: simplify v3 cleanup paths`
 - do not push directly to `main`
 
 Merge policy:
@@ -86,9 +92,10 @@ CodeRabbit policy:
 
 ## Development Environment
 
-Meaningful runtime validation requires Linux, and changes that affect USB
-gadget behavior should be tested on a real Raspberry Pi with an OTG-capable
-connection to a target host.
+> [!NOTE]
+> Meaningful runtime validation requires Linux, and changes that affect USB
+> gadget behavior should be tested on a real Raspberry Pi with an OTG-capable
+> connection to a target host.
 
 Basic setup:
 
@@ -144,6 +151,11 @@ Please keep code and docs aligned with the supported deployment model:
 - keep CLI behavior and help text stable unless intentionally changed
 
 ### Compatibility Policy
+
+> [!IMPORTANT]
+> Keep docs, tests, and code aligned with the current supported product surface.
+> Do not keep legacy aliases, shell wrappers, removed config keys, deprecated
+> entrypoints, or compatibility shims.
 
 - keep docs, tests, and code aligned with the current supported product surface
 - do not keep legacy aliases, shell wrappers, removed config keys, deprecated

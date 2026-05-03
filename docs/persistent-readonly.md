@@ -49,13 +49,13 @@ sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 > Double-check the target with `lsblk -f` before formatting or enabling
 > persistent Bluetooth state.
 
-In principle you can also take the writable space from the same physical
-device that holds the root filesystem, for example by carving out a separate
-ext4 partition on that SD card or SSD. That avoids extra physical media, but
-it does not reduce SD-card wear the way moving that writable state to a USB
-stick or other separate storage can. It also increases the risk of
-partitioning mistakes and gives you less separation during maintenance or
-recovery.
+> [!WARNING]
+> You can take the writable space from the same physical device that holds the
+> root filesystem, for example by carving out a separate ext4 partition on that
+> SD card or SSD. That avoids extra physical media, but it does not reduce
+> SD-card wear the way moving that writable state to a USB stick or other
+> separate storage can. It also increases the risk of partitioning mistakes and
+> gives you less separation during maintenance or recovery.
 
 ## Enable persistent read-only mode
 
@@ -86,9 +86,10 @@ else:
 PY
 ```
 
-If `readonly enable` fails while `overlayroot` is being installed and the
-log shows `mkinitramfs: failed to determine device for /`, repair the package
-state before rebooting:
+> [!TIP]
+> If `readonly enable` fails while `overlayroot` is being installed and the log
+> shows `mkinitramfs: failed to determine device for /`, repair the package
+> state before rebooting:
 
 ```bash
 sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
@@ -99,6 +100,10 @@ sudo bluetooth_2_usb readonly enable
 That failure mode has been observed on current Raspberry Pi OS releases when
 `initramfs-tools` cannot infer the root device during `overlayroot` setup.
 
+> [!IMPORTANT]
+> Custom kernels must stay fully installed on the Pi before you run
+> `readonly enable`.
+
 When a custom kernel image is selected in `config.txt`, `readonly enable`
 does not just toggle OverlayFS. Before it finalizes read-only mode, it:
 
@@ -106,9 +111,8 @@ does not just toggle OverlayFS. Before it finalizes read-only mode, it:
 - runs `update-initramfs` for the current `uname -r`
 - installs the resulting image at the firmware-visible boot path
 
-That is why custom kernels must stay fully installed on the Pi before you run
-`readonly enable`. In practice this means the running kernel release needs
-its module tree under `/lib/modules/$(uname -r)` and its config available as
+In practice this means the running kernel release needs its module tree under
+`/lib/modules/$(uname -r)` and its config available as
 `/boot/config-$(uname -r)` or `/proc/config.gz`, otherwise the command aborts
 instead of leaving you with a half-configured read-only boot path.
 

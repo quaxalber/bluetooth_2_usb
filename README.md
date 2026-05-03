@@ -127,9 +127,10 @@ For the supported appliance-style read-only workflow, use
 
 ## Host wake from suspend
 
-Wake-from-suspend support requires a patched Raspberry Pi kernel. For the
-validated custom-kernel workflow, use
-[docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
+> [!WARNING]
+> Wake-from-suspend support requires a patched Raspberry Pi kernel. This is not
+> part of the stock install path. For the validated custom-kernel workflow, use
+> [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
 
 ## Configuration
 
