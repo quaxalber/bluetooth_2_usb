@@ -10,10 +10,15 @@ from unittest.mock import Mock, patch
 
 import usb_hid
 
-from bluetooth_2_usb.gadgets.config import CONFIG_NAME, LANGUAGE_ID, rebuild_gadget, remove_owned_gadgets
+from bluetooth_2_usb.gadgets.config import CONFIG_NAME, USB_STRING_LANGID_EN_US, rebuild_gadget, remove_owned_gadgets
 from bluetooth_2_usb.gadgets.layout import (
     COMBO_BM_ATTRIBUTES,
-    DEFAULT_BCD_DEVICE,
+    DEVICE_RELEASE_BCD,
+    USB_CONFIG_MAX_POWER_MA,
+    USB_CONFIGURATION_NAME,
+    USB_GADGET_MAX_SPEED,
+    USB_PRODUCT_NAME,
+    USB_SERIAL_NUMBER,
     GadgetHidDevice,
     build_default_layout,
 )
@@ -188,12 +193,12 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (0,))
         self.assertEqual(layout.devices[1].configfs_report_length, 8)
         self.assertEqual(bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor))
-        self.assertEqual(layout.bcd_device, DEFAULT_BCD_DEVICE)
-        self.assertEqual(layout.product_name, "USB Combo Device")
-        self.assertEqual(layout.serial_number, "213374badcafe")
-        self.assertEqual(layout.max_power, 100)
+        self.assertEqual(layout.bcd_device, DEVICE_RELEASE_BCD)
+        self.assertEqual(layout.product_name, USB_PRODUCT_NAME)
+        self.assertEqual(layout.serial_number, USB_SERIAL_NUMBER)
+        self.assertEqual(layout.max_power, USB_CONFIG_MAX_POWER_MA)
         self.assertEqual(layout.bm_attributes, COMBO_BM_ATTRIBUTES)
-        self.assertEqual(layout.max_speed, "high-speed")
+        self.assertEqual(layout.max_speed, USB_GADGET_MAX_SPEED)
         self.assertTrue(layout.devices[0].wakeup_on_write)
         self.assertFalse(layout.devices[1].wakeup_on_write)
         self.assertFalse(layout.devices[2].wakeup_on_write)
@@ -279,28 +284,31 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
                         rebuild_gadget(layout)
 
             self.assertEqual(
-                (gadget_root / "strings" / LANGUAGE_ID / "product").read_text(encoding="utf-8").strip(),
-                "USB Combo Device",
+                (gadget_root / "strings" / USB_STRING_LANGID_EN_US / "product").read_text(encoding="utf-8").strip(),
+                USB_PRODUCT_NAME,
             )
             self.assertEqual(
-                (gadget_root / "strings" / LANGUAGE_ID / "serialnumber").read_text(encoding="utf-8").strip(),
-                "213374badcafe",
+                (gadget_root / "strings" / USB_STRING_LANGID_EN_US / "serialnumber")
+                .read_text(encoding="utf-8")
+                .strip(),
+                USB_SERIAL_NUMBER,
             )
-            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), DEFAULT_BCD_DEVICE)
+            self.assertEqual((gadget_root / "bcdDevice").read_text(encoding="utf-8").strip(), DEVICE_RELEASE_BCD)
             self.assertEqual(
-                (gadget_root / "configs" / CONFIG_NAME / "MaxPower").read_text(encoding="utf-8").strip(), "100"
+                (gadget_root / "configs" / CONFIG_NAME / "MaxPower").read_text(encoding="utf-8").strip(),
+                str(USB_CONFIG_MAX_POWER_MA),
             )
             self.assertEqual(
                 (gadget_root / "configs" / CONFIG_NAME / "bmAttributes").read_text(encoding="utf-8").strip(),
                 hex(COMBO_BM_ATTRIBUTES),
             )
             self.assertEqual(
-                (gadget_root / "configs" / CONFIG_NAME / "strings" / LANGUAGE_ID / "configuration")
+                (gadget_root / "configs" / CONFIG_NAME / "strings" / USB_STRING_LANGID_EN_US / "configuration")
                 .read_text(encoding="utf-8")
                 .strip(),
-                "Config 1: HID relay",
+                USB_CONFIGURATION_NAME,
             )
-            self.assertEqual((gadget_root / "max_speed").read_text(encoding="utf-8").strip(), "high-speed")
+            self.assertEqual((gadget_root / "max_speed").read_text(encoding="utf-8").strip(), USB_GADGET_MAX_SPEED)
             self.assertEqual(
                 (gadget_root / "functions/hid.usb0/report_length").read_text(encoding="utf-8").strip(), "8"
             )

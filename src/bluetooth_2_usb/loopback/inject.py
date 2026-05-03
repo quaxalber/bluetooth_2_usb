@@ -9,6 +9,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
+from ..hid.constants import HI_RES_WHEEL_UNITS_PER_DETENT
 from .constants import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
@@ -24,7 +25,6 @@ from .scenarios import SCENARIOS, get_scenario, scenario_summary
 UINPUT_PATH = Path("/dev/uinput")
 SERVICE_SETTLE_ENV = "B2U_LOOPBACK_SERVICE_SETTLE_SEC"
 DEFAULT_SERVICE_SETTLE_SEC = 10.0
-HI_RES_WHEEL_UNITS_PER_DETENT = 120
 
 
 def _send_step(device: UInput, step_event, event_gap_ms: int) -> None:

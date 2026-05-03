@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes
+from bluetooth_2_usb.hid.constants import HI_RES_WHEEL_UNITS_PER_DETENT
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.relay.gate import RelayGate, RelayInactiveReason
 from bluetooth_2_usb.relay.input import InputRelay
@@ -188,7 +189,7 @@ class _FakeGrabInputDevice:
 
 class _TestKeyEvent:
     key_down = KeyEvent.key_down
-    key_hold = 2
+    key_hold = KeyEvent.key_hold
     key_up = KeyEvent.key_up
 
     def __init__(self, scancode: int, keystate: int) -> None:
@@ -639,9 +640,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice(
             [
                 _TestRelEvent(ecodes.REL_HWHEEL, 1),
-                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, 120),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, HI_RES_WHEEL_UNITS_PER_DETENT),
                 _TestSynEvent(),
-                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, -120),
+                _TestRelEvent(ecodes.REL_HWHEEL_HI_RES, -HI_RES_WHEEL_UNITS_PER_DETENT),
                 _TestRelEvent(ecodes.REL_HWHEEL, -1),
                 _TestSynEvent(),
             ]
@@ -659,9 +660,9 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _TestInputDevice(
             [
                 _TestRelEvent(ecodes.REL_WHEEL, 1),
-                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, 120),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, HI_RES_WHEEL_UNITS_PER_DETENT),
                 _TestSynEvent(),
-                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, -120),
+                _TestRelEvent(ecodes.REL_WHEEL_HI_RES, -HI_RES_WHEEL_UNITS_PER_DETENT),
                 _TestRelEvent(ecodes.REL_WHEEL, -1),
                 _TestSynEvent(),
             ]

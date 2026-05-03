@@ -13,11 +13,39 @@ from ..hid.descriptors import (
     MOUSE_IN_REPORT_LENGTH,
 )
 
-USB_CONFIG_BUS_POWERED = 0x80
+# Host-visible USB identity/configuration policy for the default composite HID
+# gadget. Changing these values can cause host re-enumeration, new cached device
+# instances, or different power/wakeup behavior.
+#
+# References:
+# - Linux USB gadget configfs:
+#   https://docs.kernel.org/usb/gadget_configfs.html
+# - USB device descriptor fields:
+#   https://learn.microsoft.com/windows-hardware/drivers/network/device-descriptor
+# - USB configuration descriptor fields:
+#   https://learn.microsoft.com/windows-hardware/drivers/usbcon/standard-usb-descriptors
+# Configuration descriptor bmAttributes: bit 7 must be set, bit 6 would
+# advertise self-powered operation, and bit 5 advertises remote wakeup support.
+# Leaving bit 6 clear means the default configuration is bus-powered.
+USB_CONFIG_REQUIRED_ATTRIBUTES = 0x80
+USB_CONFIG_SELF_POWERED = 0x40
 USB_CONFIG_REMOTE_WAKEUP = 0x20
-DEFAULT_BM_ATTRIBUTES = USB_CONFIG_BUS_POWERED
-COMBO_BM_ATTRIBUTES = USB_CONFIG_BUS_POWERED | USB_CONFIG_REMOTE_WAKEUP
-DEFAULT_BCD_DEVICE = "0x0205"
+DEFAULT_BM_ATTRIBUTES = USB_CONFIG_REQUIRED_ATTRIBUTES
+COMBO_BM_ATTRIBUTES = USB_CONFIG_REQUIRED_ATTRIBUTES | USB_CONFIG_REMOTE_WAKEUP
+# Device descriptor bcdDevice: device release 2.05 encoded as binary-coded
+# decimal. Keep stable unless intentionally changing host-visible USB identity.
+DEVICE_RELEASE_BCD = "0x0205"
+# Product string descriptor exposed to the host and used by loopback discovery.
+USB_PRODUCT_NAME = "USB Combo Device"
+# Stable host-visible serial string. Changing it can create a new host-side
+# device instance/cache entry.
+USB_SERIAL_NUMBER = "213374badcafe"
+# Configuration string descriptor exposed to the host for this composite layout.
+USB_CONFIGURATION_NAME = "Config 1: HID relay"
+# configfs MaxPower is written in mA; Linux encodes the descriptor power units.
+USB_CONFIG_MAX_POWER_MA = 100
+# Linux gadget speed policy: cap this gadget at USB 2.0 high speed.
+USB_GADGET_MAX_SPEED = "high-speed"
 
 
 class GadgetHidDevice(usb_hid.Device):
@@ -113,7 +141,7 @@ class GadgetLayout:
     serial_number: str
     max_power: int = 250
     bm_attributes: int = DEFAULT_BM_ATTRIBUTES
-    configuration_name: str = "Config 1: HID relay"
+    configuration_name: str = USB_CONFIGURATION_NAME
     max_speed: str | None = None
 
 
@@ -142,10 +170,10 @@ def build_default_layout() -> GadgetLayout:
             ),
             GadgetHidDevice.from_existing(usb_hid.Device.CONSUMER_CONTROL, function_index=2, protocol=0, subclass=0),
         ),
-        bcd_device=DEFAULT_BCD_DEVICE,
-        product_name="USB Combo Device",
-        serial_number="213374badcafe",
-        max_power=100,
+        bcd_device=DEVICE_RELEASE_BCD,
+        product_name=USB_PRODUCT_NAME,
+        serial_number=USB_SERIAL_NUMBER,
+        max_power=USB_CONFIG_MAX_POWER_MA,
         bm_attributes=COMBO_BM_ATTRIBUTES,
-        max_speed="high-speed",
+        max_speed=USB_GADGET_MAX_SPEED,
     )

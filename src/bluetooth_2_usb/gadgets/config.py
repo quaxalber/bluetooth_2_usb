@@ -9,12 +9,34 @@ from .layout import GadgetHidDevice, GadgetLayout
 
 GADGET_ROOT = Path(usb_hid.gadget_root)
 CONFIG_NAME = "c.1"
-LANGUAGE_ID = "0x409"
-DEFAULT_VENDOR_ID = "0x1d6b"
-DEFAULT_PRODUCT_ID = "0x0104"
-DEFAULT_BCD_USB = "0x0200"
-DEFAULT_BMAX_PACKET_SIZE0 = "0x40"
-DEFAULT_MANUFACTURER = "quaxalber"
+
+# USB gadget configfs values are written as text attributes; Linux parses them
+# into USB descriptors exposed to the host.
+#
+# References:
+# - Linux USB gadget configfs:
+#   https://docs.kernel.org/usb/gadget_configfs.html
+# - Linux USB gadget API:
+#   https://kernel.org/doc/html/next/driver-api/usb/gadget.html
+# - USB device descriptor fields:
+#   https://learn.microsoft.com/windows-hardware/drivers/network/device-descriptor
+# - USB configuration descriptor fields:
+#   https://learn.microsoft.com/windows-hardware/drivers/usbcon/standard-usb-descriptors
+# String descriptor language ID: English, United States.
+USB_STRING_LANGID_EN_US = "0x409"
+# Device descriptor idVendor. 0x1d6b is the Linux Foundation VID commonly used
+# by Linux USB gadget examples/defaults.
+USB_VENDOR_ID_LINUX_FOUNDATION = "0x1d6b"
+# Device descriptor idProduct for the Linux Foundation multifunction composite
+# gadget identity used by this project and its host-side discovery/udev rules.
+USB_PRODUCT_ID_MULTIFUNCTION_COMPOSITE = "0x0104"
+# Device descriptor bcdUSB: USB 2.00 encoded as binary-coded decimal.
+USB_SPEC_VERSION_BCD = "0x0200"
+# Device descriptor bMaxPacketSize0: 64-byte endpoint-zero control packets.
+USB_EP0_MAX_PACKET_SIZE_BYTES = "0x40"
+# Manufacturer string descriptor exposed to the host.
+USB_MANUFACTURER = "quaxalber"
+# Device class 0 means each interface declares its own class/subclass/protocol.
 USB_DEVICE_CLASS_PER_INTERFACE = "0x00"
 USB_DEVICE_PROTOCOL_NONE = "0x00"
 USB_DEVICE_SUBCLASS_NONE = "0x00"
@@ -112,23 +134,23 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
 
     function_root = GADGET_ROOT / "functions"
     config_root = GADGET_ROOT / "configs" / CONFIG_NAME
-    gadget_strings = GADGET_ROOT / "strings" / LANGUAGE_ID
-    config_strings = config_root / "strings" / LANGUAGE_ID
+    gadget_strings = GADGET_ROOT / "strings" / USB_STRING_LANGID_EN_US
+    config_strings = config_root / "strings" / USB_STRING_LANGID_EN_US
 
     function_root.mkdir(parents=True, exist_ok=True)
     config_strings.mkdir(parents=True, exist_ok=True)
     gadget_strings.mkdir(parents=True, exist_ok=True)
 
     _write_text(GADGET_ROOT / "bcdDevice", layout.bcd_device)
-    _write_text(GADGET_ROOT / "bcdUSB", DEFAULT_BCD_USB)
+    _write_text(GADGET_ROOT / "bcdUSB", USB_SPEC_VERSION_BCD)
     _write_text(GADGET_ROOT / "bDeviceClass", USB_DEVICE_CLASS_PER_INTERFACE)
     _write_text(GADGET_ROOT / "bDeviceProtocol", USB_DEVICE_PROTOCOL_NONE)
     _write_text(GADGET_ROOT / "bDeviceSubClass", USB_DEVICE_SUBCLASS_NONE)
-    _write_text(GADGET_ROOT / "bMaxPacketSize0", DEFAULT_BMAX_PACKET_SIZE0)
-    _write_text(GADGET_ROOT / "idProduct", DEFAULT_PRODUCT_ID)
-    _write_text(GADGET_ROOT / "idVendor", DEFAULT_VENDOR_ID)
+    _write_text(GADGET_ROOT / "bMaxPacketSize0", USB_EP0_MAX_PACKET_SIZE_BYTES)
+    _write_text(GADGET_ROOT / "idProduct", USB_PRODUCT_ID_MULTIFUNCTION_COMPOSITE)
+    _write_text(GADGET_ROOT / "idVendor", USB_VENDOR_ID_LINUX_FOUNDATION)
     _write_text(gadget_strings / "serialnumber", layout.serial_number)
-    _write_text(gadget_strings / "manufacturer", DEFAULT_MANUFACTURER)
+    _write_text(gadget_strings / "manufacturer", USB_MANUFACTURER)
     _write_text(gadget_strings / "product", layout.product_name)
 
     _write_text(config_strings / "configuration", layout.configuration_name)

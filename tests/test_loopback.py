@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes, evdev_to_usb_hid, is_consumer_key
+from bluetooth_2_usb.gadgets.layout import USB_PRODUCT_NAME, USB_SERIAL_NUMBER
 from bluetooth_2_usb.loopback import capture_windows
 from bluetooth_2_usb.loopback import run as run_loopback
 from bluetooth_2_usb.loopback.capture import (
@@ -131,9 +132,9 @@ SMALL_MOUSE_REL_STEPS = (
 def _hid_entry(
     path: str,
     *,
-    device_name: str = "quaxalber USB Combo Device",
+    device_name: str = f"quaxalber {USB_PRODUCT_NAME}",
     manufacturer: str = "quaxalber",
-    serial: str = "213374badcafe",
+    serial: str = USB_SERIAL_NUMBER,
     vendor_id: int = 0,
     product_id: int = 0,
     interface_number: int = 0,
@@ -401,8 +402,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [
                 _hid_entry(
                     "1-2.1.2:1.0",
-                    device_name="USB Combo Device",
-                    serial="213374badcafe",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
                     vendor_id=GADGET_VENDOR_ID,
                     product_id=GADGET_PRODUCT_ID,
                     interface_number=0,
@@ -411,8 +412,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.1",
-                    device_name="USB Combo Device",
-                    serial="213374badcafe",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
                     vendor_id=GADGET_VENDOR_ID,
                     product_id=GADGET_PRODUCT_ID,
                     interface_number=1,
@@ -421,8 +422,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.2",
-                    device_name="USB Combo Device",
-                    serial="213374badcafe",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
                     vendor_id=GADGET_VENDOR_ID,
                     product_id=GADGET_PRODUCT_ID,
                     interface_number=2,
@@ -443,8 +444,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             [
                 _hid_entry(
                     "1-2.1.2:1.0",
-                    device_name="USB Combo Device",
-                    serial="213374badcafe",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
                     vendor_id=GADGET_VENDOR_ID,
                     product_id=GADGET_PRODUCT_ID,
                     interface_number=0,
@@ -453,8 +454,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.1",
-                    device_name="USB Combo Device",
-                    serial="213374badcafe",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
                     vendor_id=GADGET_VENDOR_ID,
                     product_id=GADGET_PRODUCT_ID,
                     interface_number=1,
@@ -463,8 +464,8 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 ),
                 _hid_entry(
                     "1-2.1.2:1.2",
-                    device_name="USB Combo Device",
-                    serial="213374badcafe",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
                     vendor_id=GADGET_VENDOR_ID,
                     product_id=GADGET_PRODUCT_ID,
                     interface_number=2,

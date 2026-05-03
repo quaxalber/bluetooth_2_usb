@@ -2,6 +2,7 @@ from functools import lru_cache
 from importlib import import_module
 
 from ..hid.buttons import MouseButtons
+from ..hid.constants import HI_RES_WHEEL_UNITS_PER_DETENT
 from ..logging import get_logger
 from .ecodes import ecodes
 from .types import InputEvent, KeyEvent, RelEvent
@@ -243,11 +244,11 @@ def get_mouse_movement(event: RelEvent) -> tuple[int, int, float, float]:
     elif input_event.code == ecodes.REL_WHEEL:
         mwheel = input_event.value
     elif input_event.code == ecodes.REL_WHEEL_HI_RES:
-        mwheel = input_event.value / 120.0
+        mwheel = input_event.value / HI_RES_WHEEL_UNITS_PER_DETENT
     elif input_event.code == ecodes.REL_HWHEEL:
         pan = input_event.value
     elif input_event.code == ecodes.REL_HWHEEL_HI_RES:
-        pan = input_event.value / 120.0
+        pan = input_event.value / HI_RES_WHEEL_UNITS_PER_DETENT
     return x, y, mwheel, pan
 
 

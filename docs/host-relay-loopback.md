@@ -14,24 +14,23 @@ This validates the path:
 
 `Pi virtual input device -> bluetooth_2_usb relay -> USB HID gadget -> host HID device`
 
-For regular validation, run `combo`. It exercises the keyboard, mouse, and
-consumer-control paths in one pass. Use `keyboard`, `mouse`, or `consumer` only
-when you need to isolate a specific domain. The keyboard scenario includes the
-text burst plus extended function, navigation, system, and application keys. The
-consumer scenario includes volume, media transport, menu/application, and
-browser/navigation controls. Use `node-discovery` when you only need to identify
-the active keyboard, mouse, and consumer HID nodes with a minimal host-side
-signal.
+Start every physical validation session with `node-discovery`. It identifies
+the active keyboard, mouse, and consumer HID nodes with the smallest practical
+host-side signal before running broader scenarios.
 
-The `mouse` and `combo` scenarios include fast relative movement, vertical and
-horizontal scrolling, and all configured mouse button bits. Host capture can
-reduce normal desktop handling while it owns the gadget interfaces, but it is
-not a hard isolation boundary. Run these scenarios only in a test session where
-unexpected mouse-button effects are acceptable.
+For regular full-path validation after node discovery, run `combo`. It
+exercises the keyboard, mouse, and consumer-control paths in one pass. Use
+`keyboard`, `mouse`, or `consumer` only when you need to isolate a specific
+domain. The keyboard scenario includes the text burst plus extended function,
+navigation, system, and application keys. The consumer scenario includes volume,
+media transport, menu/application, and browser/navigation controls.
 
-Consumer controls can also be visible to the host desktop, especially media,
-navigation, and application-launch keys. Run `consumer` and `combo` in a test
-session where those effects are acceptable.
+> [!WARNING]
+> Loopback scenarios inject real host-visible HID reports. Even
+> `node-discovery` can leak keyboard, mouse, or consumer-control input to the
+> host UI. Run these scenarios only in a test session where unexpected key,
+> pointer, scroll, media, navigation, or application-launch effects are
+> acceptable.
 
 The `node-discovery` scenario is intentionally tiny: it emits one F13
 press/release pair, two mouse relative events (`REL_X=1`, `REL_X=-1`), and the

@@ -82,7 +82,7 @@ def _active_gate() -> RelayGate:
 
 class _TestKeyEvent:
     key_down = KeyEvent.key_down
-    key_hold = 2
+    key_hold = KeyEvent.key_hold
     key_up = KeyEvent.key_up
 
     def __init__(self, scancode: int, keystate: int) -> None:
