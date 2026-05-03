@@ -41,6 +41,17 @@ class OpsCliTest(unittest.TestCase):
         disable.assert_called_once_with()
         install_rule.assert_called_once()
 
+    def test_udev_install_help_exposes_repo_root_option(self) -> None:
+        stdout = io.StringIO()
+
+        with redirect_stdout(stdout):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["udev", "install", "--help"], prog="bluetooth_2_usb")
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("--repo-root REPO_ROOT", stdout.getvalue())
+        self.assertIn("udev/70-bluetooth_2_usb_hidapi.rules", stdout.getvalue())
+
     def test_smoketest_json_output_prints_structured_result(self) -> None:
         class FakeSmokeTest:
             def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:

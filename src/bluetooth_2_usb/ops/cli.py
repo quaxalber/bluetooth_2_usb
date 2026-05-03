@@ -54,7 +54,14 @@ def _main(argv: list[str], *, prog: str) -> int:
 
     udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
     udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
-    _command_parser(udev_subparsers, "install", "Install the host-side hidapi udev rule.")
+    _command_parser(
+        udev_subparsers,
+        "install",
+        "Install the host-side hidapi udev rule.",
+        repo_root_help=(
+            f"Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. Default: {PATHS.install_dir}"
+        ),
+    )
 
     namespace, remainder = parser.parse_known_args(argv)
     if remainder:
@@ -121,10 +128,15 @@ def _command_path(namespace: argparse.Namespace) -> tuple[str, ...]:
 
 
 def _command_parser(
-    subparsers: argparse._SubParsersAction, name: str, help_text: str, *, add_help: bool = True
+    subparsers: argparse._SubParsersAction,
+    name: str,
+    help_text: str,
+    *,
+    add_help: bool = True,
+    repo_root_help: str = argparse.SUPPRESS,
 ) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(name, help=help_text, add_help=add_help)
-    parser.add_argument("--repo-root", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--repo-root", default=None, help=repo_root_help)
     return parser
 
 
