@@ -148,40 +148,6 @@ python -m build
 
 Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
 
-For broad Python formatting churn, also scan for accidental adjacent string
-literals:
-
-```bash
-python - <<'PY'
-from pathlib import Path
-import io
-import subprocess
-import tokenize
-
-for raw_path in subprocess.check_output(["git", "ls-files", "*.py"], text=True).splitlines():
-    path = Path(raw_path)
-    if path.parts and path.parts[0] in {"build", "dist", "venv"}:
-        continue
-    text = path.read_text(encoding="utf-8")
-    tokens = [
-        token
-        for token in tokenize.generate_tokens(io.StringIO(text).readline)
-        if token.type
-        not in {
-            tokenize.NL,
-            tokenize.NEWLINE,
-            tokenize.INDENT,
-            tokenize.DEDENT,
-            tokenize.COMMENT,
-            tokenize.ENCODING,
-        }
-    ]
-    for previous, current in zip(tokens, tokens[1:]):
-        if previous.type == tokenize.STRING and current.type == tokenize.STRING:
-            print(f"{path}:{previous.start[0]}-{current.start[0]}")
-PY
-```
-
 ## Hardware Validation
 
 If your change affects runtime behavior, installation, service startup, USB
