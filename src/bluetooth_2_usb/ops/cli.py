@@ -36,7 +36,7 @@ def _main(argv: list[str], *, prog: str) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _command_parser(subparsers, "install", "Apply the managed system install.")
-    _command_parser(subparsers, "update", "Fast-forward and reapply the managed install when changed.")
+    _command_parser(subparsers, "update", "Fast-forward and reapply the managed install.")
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")

@@ -214,8 +214,9 @@ Use this after cloning into the supported install path.
 
 ### `update`
 
-Fast-forward the managed checkout and call `install` only when the checkout
-actually changed. This is the normal update path for an installed system.
+Fast-forward the managed checkout and reapply `install`. This is the normal
+update path for an installed system, and it rebuilds the managed environment
+even when the checkout is already current.
 
 ### `uninstall`
 

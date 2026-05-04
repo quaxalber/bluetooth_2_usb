@@ -130,7 +130,7 @@ ssh <pi-host> 'sudo -n bluetooth_2_usb update'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
-without rebuilding the managed virtual environment or restarting the service.
+after reapplying the managed install and restarting the service.
 
 Reboot and repeat the post-boot smoketest checks if the updated change touched boot
 configuration or other reboot-sensitive behavior.
