@@ -12,6 +12,7 @@ from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import (
     ReadonlyConfig,
     bluetooth_state_persistent,
+    disable_readonly,
     enable_readonly,
     load_readonly_config,
     overlay_configured_status,
@@ -19,6 +20,7 @@ from bluetooth_2_usb.ops.readonly import (
     package_status,
     print_readonly_status,
     restart_b2u_if_installed,
+    setup_persistent_bluetooth_state,
     stop_b2u_if_installed,
     write_bluetooth_bind_mount_unit,
     write_readonly_config,
@@ -86,6 +88,52 @@ class BootConfigOpsTest(unittest.TestCase):
         with self.assertRaises(OpsError):
             boot_config.required_boot_modules_csv("unknown")
 
+    def test_boot_config_assignment_uses_matching_model_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "config.txt"
+            config.write_text(
+                "\n".join(["arm_64bit=0", "[pi4]", "arm_64bit=1", "[pi5]", "arm_64bit=0"]) + "\n", encoding="utf-8"
+            )
+
+            value = boot_config.boot_config_assignment_value("arm_64bit", config_file=config, model_filters=["pi4"])
+
+        self.assertEqual(value, "1")
+
+    def test_configured_initramfs_uses_matching_model_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "config.txt"
+            config.write_text(
+                "\n".join(
+                    [
+                        "initramfs initramfs-default followkernel",
+                        "[cm4]",
+                        "initramfs initramfs-cm4 followkernel",
+                        "[pi5]",
+                        "initramfs initramfs-pi5 followkernel",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("bluetooth_2_usb.ops.boot_config.boot_config_model_filters", return_value=["cm4"]):
+                self.assertEqual(boot_config.configured_initramfs_file(config), "initramfs-cm4")
+
+    def test_normalize_dwc2_overlay_replaces_stale_lines_under_all_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "config.txt"
+            config.write_text(
+                "dtoverlay=dwc2\n" "dtoverlay=vc4-kms-v3d\n" "[all]\n" "dtoverlay=dwc2,dr_mode=host\n" "arm_64bit=1\n",
+                encoding="utf-8",
+            )
+
+            boot_config.normalize_dwc2_overlay(config, "dtoverlay=dwc2,dr_mode=peripheral")
+
+            self.assertEqual(
+                config.read_text(encoding="utf-8"),
+                "dtoverlay=vc4-kms-v3d\n[all]\ndtoverlay=dwc2,dr_mode=peripheral\narm_64bit=1\n",
+            )
+
     def test_normalize_modules_load_replaces_stale_otg_tokens(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cmdline = Path(tmpdir) / "cmdline.txt"
@@ -96,6 +144,24 @@ class BootConfigOpsTest(unittest.TestCase):
             self.assertEqual(
                 cmdline.read_text(encoding="utf-8"), "root=/dev/mmcblk0p2 quiet modules-load=foo,libcomposite\n"
             )
+
+    def test_normalize_modules_load_adds_missing_token_and_preserves_unrelated_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cmdline = Path(tmpdir) / "cmdline.txt"
+            cmdline.write_text("root=/dev/mmcblk0p2 modules-load=i2c-dev quiet\n")
+
+            boot_config.normalize_modules_load(cmdline, "dwc2,libcomposite")
+
+            self.assertEqual(
+                cmdline.read_text(encoding="utf-8"),
+                "root=/dev/mmcblk0p2 quiet modules-load=i2c-dev,dwc2,libcomposite\n",
+            )
+
+    def test_boot_initramfs_target_rejects_unsafe_paths(self) -> None:
+        for target in ("/boot/initramfs8", "../initramfs8", "nested/initramfs8"):
+            with self.subTest(target=target):
+                with self.assertRaises(OpsError):
+                    boot_config.boot_initramfs_target_path(target)
 
 
 class ReadonlyConfigTest(unittest.TestCase):
@@ -228,16 +294,18 @@ class ReadonlyConfigTest(unittest.TestCase):
             return values.get((str(target), field), "")
 
         stdout = StringIO()
-        with patch(f"{READONLY_STATUS}.load_readonly_config", return_value=config):
-            with patch(f"{READONLY_STATUS}.readonly_mode", return_value="persistent"):
-                with patch(f"{READONLY_STATUS}.overlay_status", return_value="enabled"):
-                    with patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"):
-                        with patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"):
-                            with patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=True):
-                                with patch(f"{READONLY_STATUS}._findmnt_value", side_effect=fake_findmnt):
-                                    with patch(f"{READONLY_STATUS}._mountpoint", return_value=True):
-                                        with redirect_stdout(stdout):
-                                            print_readonly_status()
+        with (
+            patch(f"{READONLY_STATUS}.load_readonly_config", return_value=config),
+            patch(f"{READONLY_STATUS}.readonly_mode", return_value="persistent"),
+            patch(f"{READONLY_STATUS}.overlay_status", return_value="enabled"),
+            patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"),
+            patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"),
+            patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=True),
+            patch(f"{READONLY_STATUS}._findmnt_value", side_effect=fake_findmnt),
+            patch(f"{READONLY_STATUS}._mountpoint", return_value=True),
+            redirect_stdout(stdout),
+        ):
+            print_readonly_status()
 
         output = stdout.getvalue()
         self.assertIn("mode: persistent\n", output)
@@ -248,16 +316,18 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_print_readonly_status_uses_safe_defaults_when_config_cannot_load(self) -> None:
         stdout = StringIO()
-        with patch(f"{READONLY_STATUS}.load_readonly_config", side_effect=OpsError("invalid readonly env")):
-            with patch(f"{READONLY_STATUS}.readonly_mode", return_value="disabled"):
-                with patch(f"{READONLY_STATUS}.overlay_status", return_value="unknown"):
-                    with patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="unknown"):
-                        with patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="unknown"):
-                            with patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=False):
-                                with patch(f"{READONLY_STATUS}._findmnt_value", return_value=""):
-                                    with patch(f"{READONLY_STATUS}._mountpoint", return_value=False):
-                                        with redirect_stdout(stdout):
-                                            print_readonly_status()
+        with (
+            patch(f"{READONLY_STATUS}.load_readonly_config", side_effect=OpsError("invalid readonly env")),
+            patch(f"{READONLY_STATUS}.readonly_mode", return_value="disabled"),
+            patch(f"{READONLY_STATUS}.overlay_status", return_value="unknown"),
+            patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="unknown"),
+            patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="unknown"),
+            patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=False),
+            patch(f"{READONLY_STATUS}._findmnt_value", return_value=""),
+            patch(f"{READONLY_STATUS}._mountpoint", return_value=False),
+            redirect_stdout(stdout),
+        ):
+            print_readonly_status()
 
         output = stdout.getvalue()
         self.assertIn("configured_mode: disabled\n", output)
@@ -287,24 +357,95 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_bluetooth_bind_mount_unit_depends_on_persist_mount_unit(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            unit_path = Path(tmpdir) / "var-lib-bluetooth.mount"
+            root = Path(tmpdir)
+            unit_path = root / "var-lib-bluetooth.mount"
             paths = ManagedPaths(bluetooth_bind_mount_unit=unit_path)
 
-            with patch(f"{READONLY_UNITS}.PATHS", paths):
-                with patch("pathlib.Path.mkdir"):
-                    with patch(
-                        f"{READONLY_UNITS}.persist_mount_unit_name", return_value="mnt-persist.mount"
-                    ) as unit_name:
-                        write_bluetooth_bind_mount_unit(Path("/mnt/persist/custom/bluetooth"), Path("/mnt/persist"))
+            def local_path(value: str) -> Path:
+                if value == "/var/lib/bluetooth":
+                    return root / "var/lib/bluetooth"
+                return Path(value)
 
-            unit_name.assert_called_once_with(Path("/mnt/persist"))
+            with (
+                patch(f"{READONLY_UNITS}.PATHS", paths),
+                patch(f"{READONLY_UNITS}.Path", side_effect=local_path),
+                patch(f"{READONLY_UNITS}.output", return_value="mnt-persist.mount"),
+            ):
+                write_bluetooth_bind_mount_unit(Path("/mnt/persist/custom/bluetooth"), Path("/mnt/persist"))
+
             content = unit_path.read_text(encoding="utf-8")
 
         self.assertIn("After=mnt-persist.mount\n", content)
         self.assertIn("Requires=mnt-persist.mount\n", content)
         self.assertIn("What=/mnt/persist/custom/bluetooth\n", content)
 
-    def test_enable_readonly_rolls_back_overlayfs_when_validation_fails(self) -> None:
+    def test_setup_persistent_bluetooth_state_writes_config_and_mounts_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = ReadonlyConfig(
+                mode="disabled",
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=root / "persist" / "bluetooth",
+                persist_spec="",
+                persist_device="",
+            )
+            commands = []
+            written = []
+            var_lib_bluetooth = root / "var/lib/bluetooth"
+
+            def fake_run(command, *, check=True, capture=False):
+                commands.append(command)
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+
+                if command[:4] == ["blkid", "-s", "TYPE", "-o"]:
+                    Completed.stdout = "ext4\n"
+                elif command[:2] == ["mountpoint", "-q"]:
+                    Completed.returncode = 1
+                return Completed()
+
+            def local_path(value: str) -> Path:
+                if value == "/var/lib/bluetooth":
+                    return var_lib_bluetooth
+                return Path(value)
+
+            with ExitStack() as stack:
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.machine_id_valid", return_value=True))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+                stack.enter_context(
+                    patch(f"{READONLY_WORKFLOWS}.persist_spec_from_device", return_value="/dev/disk/by-uuid/abc")
+                )
+                stack.enter_context(
+                    patch(f"{READONLY_WORKFLOWS}.write_persist_mount_unit", return_value="mnt-persist.mount")
+                )
+                write_bind = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_bluetooth_bind_mount_unit"))
+                install_dropin = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.install_bluetooth_persist_dropin"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}._systemctl_active", side_effect=[True, True, True]))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.stop_b2u_if_installed", return_value=False))
+                restart_b2u = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.restart_b2u_if_installed"))
+                seed_state = stack.enter_context(patch(f"{READONLY_WORKFLOWS}._seed_bluetooth_state"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.Path", side_effect=local_path))
+
+                setup_persistent_bluetooth_state("/dev/sda1")
+
+            self.assertTrue(var_lib_bluetooth.is_dir())
+            self.assertEqual(written[0].persist_spec, "/dev/disk/by-uuid/abc")
+            self.assertEqual(written[0].persist_device, "/dev/sda1")
+            write_bind.assert_called_once_with(root / "persist" / "bluetooth", root / "persist")
+            install_dropin.assert_called_once_with()
+            seed_state.assert_called_once_with(root / "persist" / "bluetooth")
+            restart_b2u.assert_called_once_with(False, "after enabling the persistent bind mount")
+            self.assertIn(["systemctl", "stop", "bluetooth.service"], commands)
+            self.assertIn(["systemctl", "enable", "--now", "mnt-persist.mount"], commands)
+            self.assertIn(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"], commands)
+            self.assertIn(["systemctl", "start", "bluetooth.service"], commands)
+
+    def test_enable_readonly_does_not_rollback_overlayfs_when_validation_fails(self) -> None:
         config = ReadonlyConfig(
             mode="disabled",
             persist_mount=Path("/mnt/persist"),
@@ -350,9 +491,89 @@ class ReadonlyConfigTest(unittest.TestCase):
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
 
             with self.assertRaises(OpsError):
-                enable_readonly()
+                with redirect_stdout(StringIO()) as stdout:
+                    enable_readonly()
 
         self.assertIn(["raspi-config", "nonint", "enable_overlayfs"], commands)
-        self.assertIn(["raspi-config", "nonint", "disable_overlayfs"], commands)
+        self.assertNotIn(["raspi-config", "nonint", "disable_overlayfs"], commands)
+        self.assertEqual(config.mode, "disabled")
+        self.assertEqual(written, [])
+        self.assertIn("readonly status", stdout.getvalue())
+        self.assertIn(
+            "https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
+            "#overlayfs-repair-guidance",
+            stdout.getvalue(),
+        )
+
+    def test_enable_readonly_reports_repair_guidance_when_overlayfs_enable_fails(self) -> None:
+        config = ReadonlyConfig(
+            mode="disabled",
+            persist_mount=Path("/mnt/persist"),
+            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
+            persist_spec="/dev/sda1",
+            persist_device="/dev/sda1",
+        )
+
+        with ExitStack() as stack:
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.machine_id_valid", return_value=True))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=True))
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.readonly_stack_packages_bootstrap_safe", return_value=True)
+            )
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.readonly_stack_packages_missing", return_value=False))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.overlay_status", return_value="disabled"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.current_kernel_release", return_value="6.6.1"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.configured_kernel_image", return_value="kernel8.img"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.configured_initramfs_file", return_value=""))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.expected_boot_initramfs_file", return_value="initramfs8"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.versioned_initrd_candidates", return_value=[]))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=OpsError("raspi-config failed")))
+            write_config = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config"))
+
+            with self.assertRaises(OpsError):
+                with redirect_stdout(StringIO()) as stdout:
+                    enable_readonly()
+
+        write_config.assert_not_called()
+        self.assertIn("readonly status", stdout.getvalue())
+        self.assertIn(
+            "https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
+            "#overlayfs-repair-guidance",
+            stdout.getvalue(),
+        )
+        self.assertIn("disable OverlayFS", stdout.getvalue())
+
+    def test_disable_readonly_disables_overlayfs_and_keeps_persistent_mount_config(self) -> None:
+        config = ReadonlyConfig(
+            mode="persistent",
+            persist_mount=Path("/mnt/persist"),
+            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
+            persist_spec="/dev/disk/by-uuid/abc",
+            persist_device="/dev/sda1",
+        )
+        commands = []
+        written = []
+
+        def fake_run(command, *, check=True, capture=False):
+            commands.append(command)
+
+            class Completed:
+                returncode = 0
+                stdout = ""
+
+            return Completed()
+
+        with ExitStack() as stack:
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
+
+            disable_readonly()
+
+        self.assertEqual(commands, [["raspi-config", "nonint", "disable_overlayfs"]])
         self.assertEqual(config.mode, "disabled")
         self.assertEqual(written, [config])
+        self.assertEqual(config.persist_spec, "/dev/disk/by-uuid/abc")

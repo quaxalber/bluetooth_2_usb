@@ -3,8 +3,9 @@
 Use this guide when you need a Raspberry Pi USB HID gadget that can wake a
 sleeping or suspended host by sending keyboard input.
 
-This is an advanced workflow. It relies on a custom Raspberry Pi kernel and is
-not part of the stock Bluetooth-2-USB install path.
+> [!WARNING]
+> This is an advanced workflow. It installs and runs a custom Raspberry Pi
+> kernel and is not part of the stock Bluetooth-2-USB install path.
 
 ## Scope and warnings
 
@@ -37,7 +38,8 @@ The wake path needs both of the following:
 2. a Bluetooth-2-USB runtime that enables `wakeup_on_write=1` for the keyboard
    HID function when that attribute exists
 
-Without the kernel patch, the runtime cannot wake suspended hosts.
+> [!IMPORTANT]
+> Without the kernel patch, the runtime cannot wake suspended hosts.
 
 ## Patch source
 
@@ -166,11 +168,12 @@ Notes for the LLVM fallback:
 
 ## Additional unvalidated targets
 
-These build paths are unvalidated for this project. They are included so you
-can build and deploy the matching custom kernel and let
-`bluetooth_2_usb readonly enable` install the corresponding boot initramfs
-automatically when you later enable persistent read-only mode. Use the target
-matrix above for the expected image and initramfs filenames.
+> [!WARNING]
+> These build paths are unvalidated for this project. They are included so you
+> can build and deploy the matching custom kernel and let
+> `bluetooth_2_usb readonly enable` install the corresponding boot initramfs
+> automatically when you later enable persistent read-only mode. Use the target
+> matrix above for the expected image and initramfs filenames.
 
 ### Raspberry Pi 5
 
@@ -230,11 +233,15 @@ With `auto_initramfs=1`, Raspberry Pi firmware derives the boot initramfs name
 from the kernel image name. Use the matching boot initramfs target from the
 same matrix when checking or troubleshooting boot artifacts.
 
+> [!IMPORTANT]
+> Do not treat `config-<kernelrelease>` or the matching module tree as optional
+> when you plan to enable persistent read-only mode with a custom kernel.
+
 When you later enable persistent read-only mode,
 `bluetooth_2_usb readonly enable` ensures a bootable initramfs exists for the
 running kernel and installs or reuses the matching boot initramfs file
 automatically. That path depends on the running kernel being fully installed on
-the Pi, so do not treat `config-<kernelrelease>` as optional:
+the Pi:
 
 - install `/lib/modules/<kernelrelease>`
 - install `/boot/config-<kernelrelease>` or otherwise keep `/proc/config.gz`
@@ -245,7 +252,8 @@ the Pi, so do not treat `config-<kernelrelease>` as optional:
 If those artifacts are missing, `bluetooth_2_usb readonly enable` aborts
 instead of trying to guess a bootable initramfs layout from documentation alone.
 
-Keep the stock kernel entry available so rollback is trivial.
+> [!IMPORTANT]
+> Keep the stock kernel entry available so rollback is trivial.
 
 ## Verification
 
@@ -291,8 +299,9 @@ Rollback should be simple:
 - restore `config.txt` to the stock kernel entry
 - reboot
 
-If the custom kernel fails to boot cleanly, use console or the boot medium from
-another machine to restore the stock kernel selection.
+> [!WARNING]
+> If the custom kernel fails to boot cleanly, use console or the boot medium
+> from another machine to restore the stock kernel selection.
 
 ## Known limitations
 

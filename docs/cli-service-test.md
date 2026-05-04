@@ -29,6 +29,11 @@ ssh <pi-host> 'sudo -n true'
 
 Replace `<pi-host>` with the real SSH host or alias.
 
+> [!TIP]
+> Take the baseline status snapshot below before mutating the Pi. It gives you
+> the service, overlay, root filesystem, and kernel state to compare against
+> after install, read-only, or reboot-sensitive validation.
+
 ## Prepare the checkout on the Pi
 
 The supported deployment model is a normal Git checkout at
@@ -125,7 +130,7 @@ ssh <pi-host> 'sudo -n bluetooth_2_usb update'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
-without rebuilding the managed virtual environment or restarting the service.
+after reapplying the managed install and restarting the service.
 
 Reboot and repeat the post-boot smoketest checks if the updated change touched boot
 configuration or other reboot-sensitive behavior.
@@ -175,6 +180,10 @@ end-to-end loopback inject/capture validation from
 
 ## Persistent read-only validation
 
+> [!WARNING]
+> This flow uses persistent storage, changes boot/read-only state, and reboots
+> the Pi. Verify `<persist-partition>` with `lsblk -f` before running setup.
+
 Prepare the writable ext4 partition:
 
 Replace `<persist-partition>` with the actual writable ext4 partition after
@@ -199,16 +208,11 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
 done
 ```
 
-If the enable step fails with `mkinitramfs: failed to determine device for /`,
-repair `initramfs-tools` before rebooting and rerun the enable step:
-
-```bash
-ssh <pi-host> '
-  sudo -n sed -i "s/^MODULES=dep$/MODULES=most/" /etc/initramfs-tools/initramfs.conf
-  sudo -n dpkg --configure -a
-  sudo -n bluetooth_2_usb readonly enable
-'
-```
+> [!TIP]
+> If the enable step fails with `mkinitramfs: failed to determine device for /`,
+> follow the repair step in
+> [persistent-readonly.md](persistent-readonly.md#enable-persistent-read-only-mode),
+> then rerun `readonly enable` and resume validation here before rebooting.
 
 After reboot:
 
@@ -269,6 +273,10 @@ Pass criteria:
 
 ## Hard power-loss follow-up
 
+> [!WARNING]
+> This intentionally cuts power. Run it only after read-only mode and
+> persistent Bluetooth storage have already been validated.
+
 Before cutting power:
 
 ```bash
@@ -317,9 +325,10 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
 done
 ```
 
-Only run destructive read-only rollback checks after disabling read-only mode
-and rebooting, once `findmnt -no FSTYPE,SOURCE /` no longer shows `overlay` for
-the live root filesystem.
+> [!WARNING]
+> Only run destructive read-only rollback checks after disabling read-only mode
+> and rebooting, once `findmnt -no FSTYPE,SOURCE /` no longer shows `overlay`
+> for the live root filesystem.
 
 ## Uninstall validation
 
