@@ -143,7 +143,7 @@ bluetooth_2_usb --help
 bluetooth_2_usb --version
 bluetooth_2_usb --validate-env || test $? -eq 3
 yamllint .github/workflows/ci.yml
-python -m build
+python -m build --wheel
 ```
 
 Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
