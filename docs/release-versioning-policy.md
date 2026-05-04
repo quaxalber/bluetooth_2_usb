@@ -68,13 +68,13 @@ This avoids hard-coded version strings in runtime code and keeps these outputs a
 
 - `bluetooth_2_usb --version`
 - package metadata
-- wheels and source distributions
+- wheel artifacts
 - installed service/runtime logs
 
 The managed `/opt/bluetooth_2_usb` clone-based install works with that
 versioning model. The installer rebuilds the venv from the checked-out Git
 tree in `/opt/bluetooth_2_usb`, so an install from the exact tagged commit will
-show that exact release version. A separate tarball install is not required for
+show that exact release version. A separate release artifact install is not required for
 the runtime to report `1.0.0`.
 
 In practice:
@@ -90,7 +90,7 @@ For an official release:
 2. Ensure the branch is clean and tested
 3. Create an annotated SemVer tag
 4. Push the tag
-5. Publish the GitHub release and any attached repository build artifacts
+5. Publish the GitHub release and the wheel artifact
 
 Release notes should describe the current supported product surface only:
 
