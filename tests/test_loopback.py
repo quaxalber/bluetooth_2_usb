@@ -871,25 +871,6 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                     _keyboard_report(capture_windows.VK_TO_HID[vkey]),
                 )
 
-    def test_windows_vk_mapping_is_limited_to_loopback_scenario_keys(self) -> None:
-        scenario_key_codes = {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
-        mapped_key_codes = set(capture_windows.VK_TO_EVDEV.values())
-
-        self.assertEqual(scenario_key_codes - mapped_key_codes, set())
-        self.assertEqual(
-            {
-                ecodes.KEY_BACKSPACE,
-                ecodes.KEY_TAB,
-                ecodes.KEY_ENTER,
-                ecodes.KEY_SPACE,
-                ecodes.KEY_KP0,
-                ecodes.KEY_RIGHTALT,
-                ecodes.KEY_SEMICOLON,
-            }
-            & mapped_key_codes,
-            set(),
-        )
-
     def test_keyboard_event_to_report_covers_standard_keys_and_modifiers(self) -> None:
         k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
 

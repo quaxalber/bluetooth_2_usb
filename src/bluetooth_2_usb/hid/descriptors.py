@@ -58,9 +58,8 @@ DEFAULT_MOUSE_DESCRIPTOR = bytes(
             0x05, 0x01,  # Usage Page (Generic Desktop)
             0x09, 0x30,  # Usage (X)
             0x09, 0x31,  # Usage (Y)
-            0x16, 0x01,  # Logical Minimum (-32767)
-            0x80, 0x26,  # Logical Minimum continuation, Logical Maximum
-            0xFF, 0x7F,  # Logical Maximum continuation (32767)
+            0x16, 0x01, 0x80,  # Logical Minimum (-32767)
+            0x26, 0xFF, 0x7F,  # Logical Maximum (32767)
             0x75, 0x10,  # Report Size (16 bits per X/Y axis)
             0x95, 0x02,  # Report Count (2 axes -> bytes 1..4)
             0x81, 0x06,  # Input (signed relative X/Y movement)

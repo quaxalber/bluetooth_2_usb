@@ -148,8 +148,10 @@ class RuntimeRelayIntegrationTest(unittest.IsolatedAsyncioTestCase):
 
                 runtime_events.put_nowait(UdcStateChanged(UdcState.NOT_ATTACHED))
                 await _wait_until(lambda: hid_gadgets.release_all_calls == 1)
+                baseline_presses = list(hid_gadgets.keyboard.presses)
                 input_events.put_nowait(_FakeKeyEvent(ecodes.KEY_B, _FakeKeyEvent.key_down))
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.01)
+                self.assertEqual(hid_gadgets.keyboard.presses, baseline_presses)
 
                 runtime_events.put_nowait(ShutdownRequested("test"))
                 await asyncio.wait_for(run_task, timeout=1)

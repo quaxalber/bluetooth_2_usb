@@ -499,7 +499,11 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertEqual(config.mode, "disabled")
         self.assertEqual(written, [])
         self.assertIn("readonly status", stdout.getvalue())
-        self.assertIn("docs/persistent-readonly.md#overlayfs-repair-guidance", stdout.getvalue())
+        self.assertIn(
+            "https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
+            "#overlayfs-repair-guidance",
+            stdout.getvalue(),
+        )
 
     def test_enable_readonly_reports_repair_guidance_when_overlayfs_enable_fails(self) -> None:
         config = ReadonlyConfig(
@@ -534,7 +538,11 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         write_config.assert_not_called()
         self.assertIn("readonly status", stdout.getvalue())
-        self.assertIn("docs/persistent-readonly.md#overlayfs-repair-guidance", stdout.getvalue())
+        self.assertIn(
+            "https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
+            "#overlayfs-repair-guidance",
+            stdout.getvalue(),
+        )
         self.assertIn("disable OverlayFS", stdout.getvalue())
 
     def test_disable_readonly_disables_overlayfs_and_keeps_persistent_mount_config(self) -> None:
