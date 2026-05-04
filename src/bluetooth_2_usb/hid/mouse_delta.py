@@ -28,6 +28,7 @@ class MouseDeltaAccumulator:
     def __init__(self) -> None:
         self._x = 0
         self._y = 0
+        self._event_count = 0
         self._wheel_low_res = 0.0
         self._wheel_hi_res = 0.0
         self._wheel_hi_res_seen = False
@@ -37,8 +38,13 @@ class MouseDeltaAccumulator:
         self._pan_hi_res_seen = False
         self._pan_remainder = 0.0
 
+    @property
+    def pending_event_count(self) -> int:
+        return self._event_count
+
     def add_event(self, event: RelEvent) -> None:
         x, y, wheel, pan = get_mouse_movement(event)
+        self._event_count += 1
         logger.debug(
             "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
             event.event.code,
@@ -85,6 +91,7 @@ class MouseDeltaAccumulator:
     def _discard_pending_frame(self) -> None:
         self._x = 0
         self._y = 0
+        self._event_count = 0
         self._wheel_low_res = 0.0
         self._wheel_hi_res = 0.0
         self._wheel_hi_res_seen = False

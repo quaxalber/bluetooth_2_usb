@@ -16,16 +16,18 @@ class OpsCliTest(unittest.TestCase):
         close_log()
 
     def test_non_loopback_command_rejects_unknown_args(self) -> None:
-        with self.assertRaises(SystemExit) as raised:
-            with patch("sys.stderr", new=io.StringIO()):
-                cli.main(["smoketest", "--unknown"], prog="bluetooth_2_usb")
+        with self.assertRaises(SystemExit) as raised, patch("sys.stderr", new=io.StringIO()):
+            cli.main(["smoketest", "--unknown"], prog="bluetooth_2_usb")
 
         self.assertEqual(raised.exception.code, 2)
 
     def test_readonly_setup_dispatches_device_to_workflow(self) -> None:
-        with patch("bluetooth_2_usb.ops.cli.ensure_root"), patch("bluetooth_2_usb.ops.cli.prepare_log"):
-            with patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup:
-                self.assertEqual(cli.main(["readonly", "setup", "--device", "/dev/sda1"]), 0)
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.prepare_log"),
+            patch("bluetooth_2_usb.ops.cli.setup_persistent_bluetooth_state") as setup,
+        ):
+            self.assertEqual(cli.main(["readonly", "setup", "--device", "/dev/sda1"]), 0)
 
         setup.assert_called_once_with("/dev/sda1")
 
@@ -39,9 +41,12 @@ class OpsCliTest(unittest.TestCase):
 
         for argv, target in cases:
             with self.subTest(argv=argv):
-                with patch("bluetooth_2_usb.ops.cli.ensure_root"), patch("bluetooth_2_usb.ops.cli.prepare_log"):
-                    with patch(f"bluetooth_2_usb.ops.cli.{target}") as command:
-                        self.assertEqual(cli.main(argv), 0)
+                with (
+                    patch("bluetooth_2_usb.ops.cli.ensure_root"),
+                    patch("bluetooth_2_usb.ops.cli.prepare_log"),
+                    patch(f"bluetooth_2_usb.ops.cli.{target}") as command,
+                ):
+                    self.assertEqual(cli.main(argv), 0)
 
                 command.assert_called_once()
 
@@ -69,14 +74,16 @@ class OpsCliTest(unittest.TestCase):
             def result_dict(self) -> dict[str, object]:
                 return {"exit_code": 0, "result": "ok"}
 
-        with patch("bluetooth_2_usb.ops.cli.ensure_root"):
-            with patch("bluetooth_2_usb.ops.cli.prepare_log"):
-                with patch("bluetooth_2_usb.ops.cli.SmokeTest", FakeSmokeTest):
-                    stdout = io.StringIO()
-                    stderr = io.StringIO()
-                    with redirect_stdout(stdout):
-                        with patch("sys.stderr", stderr):
-                            exit_code = cli.main(["smoketest", "--output", "json"])
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.prepare_log"),
+            patch("bluetooth_2_usb.ops.cli.SmokeTest", FakeSmokeTest),
+            redirect_stdout(stdout),
+            patch("sys.stderr", stderr),
+        ):
+            exit_code = cli.main(["smoketest", "--output", "json"])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(stdout.getvalue()), {"exit_code": 0, "result": "ok"})

@@ -7,6 +7,9 @@ from unittest.mock import call, patch
 from bluetooth_2_usb.gadgets.identity import (
     USB_GADGET_PID_COMBO,
     USB_GADGET_VID_LINUX,
+    USB_MANUFACTURER,
+    USB_PRODUCT_NAME,
+    USB_SERIAL_NUMBER,
     usb_configfs_hex_u16,
     usb_udev_hex_u16,
 )
@@ -19,6 +22,11 @@ class GadgetIdentityTest(unittest.TestCase):
         self.assertEqual(usb_configfs_hex_u16(USB_GADGET_PID_COMBO), "0x0104")
         self.assertEqual(usb_udev_hex_u16(USB_GADGET_VID_LINUX), "1d6b")
         self.assertEqual(usb_udev_hex_u16(USB_GADGET_PID_COMBO), "0104")
+
+    def test_usb_identity_strings_are_stable_host_visible_values(self) -> None:
+        self.assertEqual(USB_MANUFACTURER, "quaxalber")
+        self.assertEqual(USB_PRODUCT_NAME, "USB Combo Device")
+        self.assertEqual(USB_SERIAL_NUMBER, "213374badcafe")
 
     def test_static_udev_rule_uses_canonical_usb_identity(self) -> None:
         rule_text = (Path(__file__).parents[1] / "udev/70-bluetooth_2_usb_hidapi.rules").read_text(encoding="utf-8")
@@ -33,9 +41,11 @@ class GadgetIdentityTest(unittest.TestCase):
             (repo_root / "udev/70-bluetooth_2_usb_hidapi.rules").write_text("rule\n", encoding="utf-8")
             rule_dst = Path(tmpdir) / "rules.d/70-bluetooth_2_usb_hidapi.rules"
 
-            with patch("bluetooth_2_usb.ops.hid_udev_rule.RULE_DST", rule_dst):
-                with patch("bluetooth_2_usb.ops.hid_udev_rule.run", return_value=SimpleNamespace(returncode=0)) as run:
-                    install_hid_udev_rule(repo_root)
+            with (
+                patch("bluetooth_2_usb.ops.hid_udev_rule.RULE_DST", rule_dst),
+                patch("bluetooth_2_usb.ops.hid_udev_rule.run", return_value=SimpleNamespace(returncode=0)) as run,
+            ):
+                install_hid_udev_rule(repo_root)
 
         self.assertIn(
             call(

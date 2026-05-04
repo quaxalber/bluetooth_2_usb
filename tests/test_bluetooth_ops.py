@@ -494,6 +494,41 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertEqual(written, [])
         self.assertIn("readonly status", stdout.getvalue())
 
+    def test_enable_readonly_reports_repair_guidance_when_overlayfs_enable_fails(self) -> None:
+        config = ReadonlyConfig(
+            mode="disabled",
+            persist_mount=Path("/mnt/persist"),
+            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
+            persist_spec="/dev/sda1",
+            persist_device="/dev/sda1",
+        )
+
+        with ExitStack() as stack:
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.machine_id_valid", return_value=True))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=True))
+            stack.enter_context(
+                patch(f"{READONLY_WORKFLOWS}.readonly_stack_packages_bootstrap_safe", return_value=True)
+            )
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.readonly_stack_packages_missing", return_value=False))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.overlay_status", return_value="disabled"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.current_kernel_release", return_value="6.6.1"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.configured_kernel_image", return_value="kernel8.img"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.configured_initramfs_file", return_value=""))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.expected_boot_initramfs_file", return_value="initramfs8"))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.versioned_initrd_candidates", return_value=[]))
+            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=OpsError("raspi-config failed")))
+            write_config = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config"))
+
+            with self.assertRaises(OpsError):
+                with redirect_stdout(StringIO()) as stdout:
+                    enable_readonly()
+
+        write_config.assert_not_called()
+        self.assertIn("readonly status", stdout.getvalue())
+        self.assertIn("disable OverlayFS", stdout.getvalue())
+
     def test_disable_readonly_disables_overlayfs_and_keeps_persistent_mount_config(self) -> None:
         config = ReadonlyConfig(
             mode="persistent",

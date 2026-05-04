@@ -2,6 +2,16 @@ from __future__ import annotations
 
 # Keep descriptor bytes in HID item rows to match the Adafruit HID descriptor
 # style and make item boundaries easier to review.
+#
+# The keyboard report is the standard 8-byte boot-keyboard input report:
+# 1 modifier bitfield byte, 1 reserved byte, and 6 key-usage slots. Its one-byte
+# output report is the host-to-device LED bitfield for Num/Caps/Scroll Lock.
+#
+# The mouse report intentionally uses one full button bitfield byte followed by
+# signed 16-bit relative X/Y movement and signed 8-bit vertical wheel and
+# horizontal pan fields. The wheel and pan logical collections include
+# resolution-multiplier feature items so hosts can interpret high-resolution
+# scrolling while the input report itself stays compact and stable.
 # fmt: off
 DEFAULT_KEYBOARD_DESCRIPTOR = bytes(
     (

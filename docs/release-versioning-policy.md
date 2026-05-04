@@ -119,6 +119,16 @@ git push origin v1.0.0
 > Otherwise `setuptools_scm` can fall back to an incorrect base version such as
 > `0.0`, and development builds will no longer advance from the real last
 > release.
+>
+> Recovery after a history rewrite:
+>
+> 1. Find the content-equivalent commit for the latest official release tag on
+>    the rewritten `main` history, for example with `git log` or patch-id
+>    comparison.
+> 2. Recreate the annotated release tag at that commit:
+>    `git tag -d <tag>` and `git tag -a <tag> <commit> -m "<release message>"`.
+> 3. Update the remote tag with `git push --force origin <tag>` and update or
+>    replace the GitHub Release entry if one was published.
 
 ## Test tags
 

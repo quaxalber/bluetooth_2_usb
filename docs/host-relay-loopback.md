@@ -81,13 +81,13 @@ sudo bluetooth_2_usb debug --duration 10
 On Linux:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery --output json
 ```
 
 Experimental: macOS
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario keyboard --output json
+venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery --output json
 ```
 
 > [!NOTE]
@@ -99,7 +99,7 @@ On Windows:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\src"
-python -m bluetooth_2_usb loopback capture --scenario keyboard --output json
+python -m bluetooth_2_usb loopback capture --scenario node-discovery --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,

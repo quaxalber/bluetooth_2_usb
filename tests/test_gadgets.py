@@ -11,7 +11,13 @@ from unittest.mock import Mock, patch
 import usb_hid
 
 from bluetooth_2_usb.gadgets.config import USB_CFG_DIR_NAME, USB_LANGID_EN_US, rebuild_gadget, remove_owned_gadgets
-from bluetooth_2_usb.gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, usb_configfs_hex_u16
+from bluetooth_2_usb.gadgets.identity import (
+    USB_GADGET_PID_COMBO,
+    USB_GADGET_VID_LINUX,
+    USB_PRODUCT_NAME,
+    USB_SERIAL_NUMBER,
+    usb_configfs_hex_u16,
+)
 from bluetooth_2_usb.gadgets.layout import (
     HID_FUNC_INDEX_CONSUMER,
     HID_FUNC_INDEX_KEYBOARD,
@@ -27,8 +33,6 @@ from bluetooth_2_usb.gadgets.layout import (
     USB_CFG_MAX_POWER_MA,
     USB_DEV_RELEASE_BCD,
     USB_GADGET_MAX_SPEED,
-    USB_PRODUCT_NAME,
-    USB_SERIAL_NUMBER,
     GadgetHidDevice,
     build_default_layout,
 )
@@ -110,27 +114,29 @@ class _FakeHidGadgets:
 
 class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
     async def _enable_with_fakes(self, hid_gadgets: HidGadgets, keyboard, mouse, consumer) -> None:
-        with patch("bluetooth_2_usb.gadgets.manager.rebuild_gadget", return_value=[]):
-            with patch.object(hid_gadgets, "prune_stale_hidg_nodes"):
-                with patch.object(hid_gadgets, "validate_hidg_nodes"):
-                    with patch("bluetooth_2_usb.gadgets.manager.ExtendedKeyboard", return_value=keyboard):
-                        with patch("bluetooth_2_usb.gadgets.manager.ExtendedMouse", return_value=mouse):
-                            with patch(
-                                "bluetooth_2_usb.gadgets.manager.ExtendedConsumerControl", return_value=consumer
-                            ):
-                                await hid_gadgets.enable()
+        with (
+            patch("bluetooth_2_usb.gadgets.manager.rebuild_gadget", return_value=[]),
+            patch.object(hid_gadgets, "prune_stale_hidg_nodes"),
+            patch.object(hid_gadgets, "validate_hidg_nodes"),
+            patch("bluetooth_2_usb.gadgets.manager.ExtendedKeyboard", return_value=keyboard),
+            patch("bluetooth_2_usb.gadgets.manager.ExtendedMouse", return_value=mouse),
+            patch("bluetooth_2_usb.gadgets.manager.ExtendedConsumerControl", return_value=consumer),
+        ):
+            await hid_gadgets.enable()
 
     async def test_enable_requests_default_layout(self) -> None:
         layout = SimpleNamespace(devices=("keyboard", "mouse", "consumer"))
 
-        with patch("bluetooth_2_usb.gadgets.manager.build_default_layout", return_value=layout):
-            with patch("bluetooth_2_usb.gadgets.manager.rebuild_gadget", return_value=[]) as rebuild:
-                with patch.object(HidGadgets, "prune_stale_hidg_nodes"):
-                    with patch.object(HidGadgets, "validate_hidg_nodes"):
-                        with patch("bluetooth_2_usb.gadgets.manager.ExtendedKeyboard"):
-                            with patch("bluetooth_2_usb.gadgets.manager.ExtendedMouse"):
-                                with patch("bluetooth_2_usb.gadgets.manager.ExtendedConsumerControl"):
-                                    await HidGadgets().enable()
+        with (
+            patch("bluetooth_2_usb.gadgets.manager.build_default_layout", return_value=layout),
+            patch("bluetooth_2_usb.gadgets.manager.rebuild_gadget", return_value=[]) as rebuild,
+            patch.object(HidGadgets, "prune_stale_hidg_nodes"),
+            patch.object(HidGadgets, "validate_hidg_nodes"),
+            patch("bluetooth_2_usb.gadgets.manager.ExtendedKeyboard"),
+            patch("bluetooth_2_usb.gadgets.manager.ExtendedMouse"),
+            patch("bluetooth_2_usb.gadgets.manager.ExtendedConsumerControl"),
+        ):
+            await HidGadgets().enable()
 
         rebuild.assert_called_once_with(layout)
 
@@ -188,10 +194,12 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         device = SimpleNamespace(name="mouse", path="/dev/hidg9", get_device_path=Mock(return_value="/dev/hidg1"))
         stats = SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=0)
 
-        with patch.object(Path, "stat", return_value=stats) as path_stat:
-            with patch("bluetooth_2_usb.gadgets.manager.os.open", return_value=7) as open_path:
-                with patch("bluetooth_2_usb.gadgets.manager.os.close"):
-                    await hid_gadgets.validate_hidg_nodes([device], timeout_sec=0, poll_interval_sec=0)
+        with (
+            patch.object(Path, "stat", return_value=stats) as path_stat,
+            patch("bluetooth_2_usb.gadgets.manager.os.open", return_value=7) as open_path,
+            patch("bluetooth_2_usb.gadgets.manager.os.close"),
+        ):
+            await hid_gadgets.validate_hidg_nodes([device], timeout_sec=0, poll_interval_sec=0)
 
         path_stat.assert_called_once_with()
         open_path.assert_called_once_with(Path("/dev/hidg9"), os.O_WRONLY | os.O_NONBLOCK)
@@ -285,12 +293,12 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         stats = SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=0)
 
         device = SimpleNamespace(name="mouse", path=str(path))
-        with patch.object(Path, "stat", return_value=stats):
-            with patch("bluetooth_2_usb.gadgets.manager.os.O_NONBLOCK", 0, create=True):
-                with patch(
-                    "bluetooth_2_usb.gadgets.manager.os.open", side_effect=OSError(errno.ENODEV, "No such device")
-                ):
-                    invalid_paths = hid_gadgets.collect_invalid_hidg_nodes([device])
+        with (
+            patch.object(Path, "stat", return_value=stats),
+            patch("bluetooth_2_usb.gadgets.manager.os.O_NONBLOCK", 0, create=True),
+            patch("bluetooth_2_usb.gadgets.manager.os.open", side_effect=OSError(errno.ENODEV, "No such device")),
+        ):
+            invalid_paths = hid_gadgets.collect_invalid_hidg_nodes([device])
 
         self.assertEqual(invalid_paths, [f"{path} (No such device)"])
 
@@ -298,10 +306,12 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         layout = build_default_layout()
         with tempfile.TemporaryDirectory() as tmpdir:
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
-            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root):
-                with patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"):
-                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
-                        rebuild_gadget(layout)
+            with (
+                patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root),
+                patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"),
+                patch.object(usb_hid, "gadget_root", str(gadget_root)),
+            ):
+                rebuild_gadget(layout)
 
             self.assertEqual(
                 (gadget_root / "strings" / USB_LANGID_EN_US / "product").read_text(encoding="utf-8").strip(),
@@ -368,11 +378,13 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
             original_exists = type(keyboard_wakeup).exists
 
-            with patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root):
-                with patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"):
-                    with patch.object(usb_hid, "gadget_root", str(gadget_root)):
-                        with patch.object(type(keyboard_wakeup), "exists", fake_exists):
-                            rebuild_gadget(layout)
+            with (
+                patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root),
+                patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"),
+                patch.object(usb_hid, "gadget_root", str(gadget_root)),
+                patch.object(type(keyboard_wakeup), "exists", fake_exists),
+            ):
+                rebuild_gadget(layout)
 
             self.assertEqual(keyboard_wakeup.read_text(encoding="utf-8").strip(), "1")
             self.assertEqual(mouse_wakeup.read_text(encoding="utf-8").strip(), "0")

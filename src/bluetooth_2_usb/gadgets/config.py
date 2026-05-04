@@ -21,7 +21,7 @@ from pathlib import Path
 
 import usb_hid
 
-from .identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, usb_configfs_hex_u16
+from .identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, USB_MANUFACTURER, usb_configfs_hex_u16
 from .layout import GadgetHidDevice, GadgetLayout
 
 USB_GADGET_ROOT = Path(usb_hid.gadget_root)
@@ -38,9 +38,6 @@ USB_SPEC_VERSION_BCD = "0x0200"
 
 USB_EP0_MAX_PACKET_SIZE_BYTES = "0x40"
 """USB device descriptor bMaxPacketSize0: 64-byte endpoint-zero control packets."""
-
-USB_MANUFACTURER = "quaxalber"
-"""Manufacturer string descriptor exposed to the host."""
 
 USB_DEV_CLASS_PER_INTERFACE = "0x00"
 """USB device class 0: each interface declares its own class/subclass/protocol."""

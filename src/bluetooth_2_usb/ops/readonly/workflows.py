@@ -167,11 +167,14 @@ def enable_readonly() -> None:
     )
 
     overlay_before = overlay_status()
-    if overlay_before != "enabled":
-        if readonly_stack_packages_missing():
-            info("OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now.")
-        run(["raspi-config", "nonint", "enable_overlayfs"])
     try:
+        if overlay_before != "enabled":
+            if readonly_stack_packages_missing():
+                info(
+                    "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
+                )
+            run(["raspi-config", "nonint", "enable_overlayfs"])
+
         if not readonly_stack_packages_healthy():
             warn("OverlayFS package state is incomplete:")
             print(readonly_stack_package_report())

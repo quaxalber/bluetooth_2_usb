@@ -22,6 +22,7 @@ import usb_hid
 
 from ..hid.constants import MOUSE_CONFIGFS_REPORT_LENGTH, MOUSE_IN_REPORT_LENGTH
 from ..hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
+from .identity import USB_PRODUCT_NAME, USB_SERIAL_NUMBER
 
 USB_CFG_REQUIRED_ATTR = 0x80
 """USB configuration bmAttributes bit 7: required by the USB specification."""
@@ -40,12 +41,6 @@ USB_CFG_BM_ATTR_COMBO = USB_CFG_REQUIRED_ATTR | USB_CFG_REMOTE_WAKEUP
 
 USB_DEV_RELEASE_BCD = "0x0205"
 """USB device descriptor bcdDevice: device release 2.05 as binary-coded decimal."""
-
-USB_PRODUCT_NAME = "USB Combo Device"
-"""Product string descriptor exposed to the host and used by loopback discovery."""
-
-USB_SERIAL_NUMBER = "213374badcafe"
-"""Stable host-visible serial string used for host-side device identity."""
 
 USB_CFG_LABEL = "Config 1: HID relay"
 """Configuration string descriptor exposed to the host for this composite layout."""

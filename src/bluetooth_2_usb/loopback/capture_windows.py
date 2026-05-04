@@ -28,7 +28,7 @@ from .capture import (
     candidate_progress_details,
     progress_summary_details,
 )
-from .constants import EXIT_OK
+from .constants import EXIT_ACCESS, EXIT_OK
 from .result import GadgetNodes, LoopbackResult
 from .scenarios import BTN_EXTRA, BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, BTN_SIDE, EV_KEY, EVENT_CODE_NAMES, get_scenario
 
@@ -89,34 +89,41 @@ HID_MOUSE_I16_MAX = 32767
 UINT32_ERROR = 0xFFFFFFFF
 RAW_INPUT_BUTTON_FLAGS_MASK = 0xFFFF
 RAW_INPUT_WHEEL_VALUE_SHIFT = 16
+VK_BACK = 0x08
+VK_TAB = 0x09
+VK_RETURN = 0x0D
+VK_SHIFT = 0x10
+VK_CONTROL = 0x11
+VK_MENU = 0x12
+VK_ESCAPE = 0x1B
+VK_SPACE = 0x20
+VK_PRIOR = 0x21
+VK_NEXT = 0x22
+VK_END = 0x23
+VK_HOME = 0x24
+VK_LEFT = 0x25
+VK_UP = 0x26
+VK_RIGHT = 0x27
+VK_DOWN = 0x28
+VK_SNAPSHOT = 0x2C
+VK_INSERT = 0x2D
+VK_DELETE = 0x2E
+VK_LWIN = 0x5B
+VK_RWIN = 0x5C
+VK_APPS = 0x5D
+VK_NUMPAD0 = 0x60
+VK_MULTIPLY = 0x6A
+VK_ADD = 0x6B
+VK_SUBTRACT = 0x6D
+VK_DECIMAL = 0x6E
+VK_DIVIDE = 0x6F
+VK_F1 = 0x70
 VK_F13 = 0x7C
 VK_F14 = 0x7D
 VK_F15 = 0x7E
 VK_F24 = 0x87
-VK_SNAPSHOT = 0x2C
-VK_SCROLL = 0x91
-VK_INSERT = 0x2D
-VK_DELETE = 0x2E
-VK_HOME = 0x24
-VK_END = 0x23
-VK_PRIOR = 0x21
-VK_NEXT = 0x22
-VK_UP = 0x26
-VK_DOWN = 0x28
-VK_LEFT = 0x25
-VK_RIGHT = 0x27
-VK_APPS = 0x5D
-VK_SHIFT = 0x10
-VK_CONTROL = 0x11
-VK_MENU = 0x12
-VK_BACK = 0x08
-VK_TAB = 0x09
-VK_RETURN = 0x0D
-VK_ESCAPE = 0x1B
-VK_SPACE = 0x20
 VK_NUMLOCK = 0x90
-VK_LWIN = 0x5B
-VK_RWIN = 0x5C
+VK_SCROLL = 0x91
 VK_LSHIFT = 0xA0
 VK_RSHIFT = 0xA1
 VK_LCONTROL = 0xA2
@@ -135,54 +142,47 @@ VK_OEM_5 = 0xDC
 VK_OEM_6 = 0xDD
 VK_OEM_7 = 0xDE
 VK_OEM_102 = 0xE2
-VK_NUMPAD0 = 0x60
-VK_MULTIPLY = 0x6A
-VK_ADD = 0x6B
-VK_SUBTRACT = 0x6D
-VK_DECIMAL = 0x6E
-VK_DIVIDE = 0x6F
-VK_F1 = 0x70
 
 VK_TO_EVDEV = {
-    **{ord(letter): getattr(ecodes, f"KEY_{letter}") for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"},
-    **{ord(str(number)): getattr(ecodes, f"KEY_{number}") for number in range(10)},
-    **{VK_NUMPAD0 + number: getattr(ecodes, f"KEY_KP{number}") for number in range(10)},
-    **{VK_F1 + index: getattr(ecodes, f"KEY_F{index + 1}") for index in range(24)},
-    VK_SHIFT: ecodes.KEY_LEFTSHIFT,
-    VK_CONTROL: ecodes.KEY_LEFTCTRL,
-    VK_MENU: ecodes.KEY_LEFTALT,
     VK_BACK: ecodes.KEY_BACKSPACE,
     VK_TAB: ecodes.KEY_TAB,
     VK_RETURN: ecodes.KEY_ENTER,
+    VK_SHIFT: ecodes.KEY_LEFTSHIFT,
+    VK_CONTROL: ecodes.KEY_LEFTCTRL,
+    VK_MENU: ecodes.KEY_LEFTALT,
     VK_ESCAPE: ecodes.KEY_ESC,
     VK_SPACE: ecodes.KEY_SPACE,
-    VK_SNAPSHOT: ecodes.KEY_SYSRQ,
-    VK_SCROLL: ecodes.KEY_SCROLLLOCK,
-    VK_INSERT: ecodes.KEY_INSERT,
-    VK_DELETE: ecodes.KEY_DELETE,
-    VK_HOME: ecodes.KEY_HOME,
-    VK_END: ecodes.KEY_END,
     VK_PRIOR: ecodes.KEY_PAGEUP,
     VK_NEXT: ecodes.KEY_PAGEDOWN,
-    VK_UP: ecodes.KEY_UP,
-    VK_DOWN: ecodes.KEY_DOWN,
+    VK_END: ecodes.KEY_END,
+    VK_HOME: ecodes.KEY_HOME,
     VK_LEFT: ecodes.KEY_LEFT,
+    VK_UP: ecodes.KEY_UP,
     VK_RIGHT: ecodes.KEY_RIGHT,
-    VK_NUMLOCK: ecodes.KEY_NUMLOCK,
+    VK_DOWN: ecodes.KEY_DOWN,
+    VK_SNAPSHOT: ecodes.KEY_SYSRQ,
+    VK_INSERT: ecodes.KEY_INSERT,
+    VK_DELETE: ecodes.KEY_DELETE,
+    **{ord(str(number)): getattr(ecodes, f"KEY_{number}") for number in range(10)},
+    **{ord(letter): getattr(ecodes, f"KEY_{letter}") for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"},
     VK_LWIN: ecodes.KEY_LEFTMETA,
     VK_RWIN: ecodes.KEY_RIGHTMETA,
     VK_APPS: ecodes.KEY_COMPOSE,
+    **{VK_NUMPAD0 + number: getattr(ecodes, f"KEY_KP{number}") for number in range(10)},
+    VK_MULTIPLY: ecodes.KEY_KPASTERISK,
+    VK_ADD: ecodes.KEY_KPPLUS,
+    VK_SUBTRACT: ecodes.KEY_KPMINUS,
+    VK_DECIMAL: ecodes.KEY_KPDOT,
+    VK_DIVIDE: ecodes.KEY_KPSLASH,
+    **{VK_F1 + index: getattr(ecodes, f"KEY_F{index + 1}") for index in range(24)},
+    VK_NUMLOCK: ecodes.KEY_NUMLOCK,
+    VK_SCROLL: ecodes.KEY_SCROLLLOCK,
     VK_LSHIFT: ecodes.KEY_LEFTSHIFT,
     VK_RSHIFT: ecodes.KEY_RIGHTSHIFT,
     VK_LCONTROL: ecodes.KEY_LEFTCTRL,
     VK_RCONTROL: ecodes.KEY_RIGHTCTRL,
     VK_LMENU: ecodes.KEY_LEFTALT,
     VK_RMENU: ecodes.KEY_RIGHTALT,
-    VK_MULTIPLY: ecodes.KEY_KPASTERISK,
-    VK_ADD: ecodes.KEY_KPPLUS,
-    VK_SUBTRACT: ecodes.KEY_KPMINUS,
-    VK_DECIMAL: ecodes.KEY_KPDOT,
-    VK_DIVIDE: ecodes.KEY_KPSLASH,
     VK_OEM_1: ecodes.KEY_SEMICOLON,
     VK_OEM_PLUS: ecodes.KEY_EQUAL,
     VK_OEM_COMMA: ecodes.KEY_COMMA,
@@ -963,9 +963,11 @@ def _pump_raw_input(
 
                     if raw.header.dwType == RIM_TYPEKEYBOARD and keyboard_candidate:
                         matched = device_matches_candidate(device_name, keyboard_candidate.candidate_identities)
-                        report = keyboard_report_builder.report_for(
-                            raw.keyboard.VKey, is_key_up=bool(raw.keyboard.Flags & RI_KEY_BREAK)
-                        )
+                        report = None
+                        if matched:
+                            report = keyboard_report_builder.report_for(
+                                raw.keyboard.VKey, is_key_up=bool(raw.keyboard.Flags & RI_KEY_BREAK)
+                            )
                         debug.note_event(
                             role="keyboard",
                             device_name=device_name,
@@ -1040,6 +1042,22 @@ def _pump_raw_input(
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
+            details=_raw_input_failure_details(
+                timeout_sec,
+                debug,
+                windows_skipped_mouse_buttons,
+                keyboard_candidate,
+                mouse_candidate,
+                consumer_candidate,
+            ),
+        )
+    except OSError as exc:
+        return LoopbackResult(
+            command="capture",
+            scenario=scenario.name,
+            success=False,
+            exit_code=EXIT_ACCESS,
+            message=f"Windows Raw Input capture failed: {exc}",
             details=_raw_input_failure_details(
                 timeout_sec,
                 debug,

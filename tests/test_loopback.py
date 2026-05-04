@@ -8,14 +8,15 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes, evdev_to_usb_hid, is_consumer_key
-from bluetooth_2_usb.gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX
-from bluetooth_2_usb.gadgets.layout import (
-    HID_FUNC_INDEX_CONSUMER,
-    HID_FUNC_INDEX_KEYBOARD,
-    HID_FUNC_INDEX_MOUSE,
+from bluetooth_2_usb.gadgets.identity import (
+    USB_GADGET_PID_COMBO,
+    USB_GADGET_VID_LINUX,
+    USB_MANUFACTURER,
     USB_PRODUCT_NAME,
     USB_SERIAL_NUMBER,
+    usb_udev_hex_u16,
 )
+from bluetooth_2_usb.gadgets.layout import HID_FUNC_INDEX_CONSUMER, HID_FUNC_INDEX_KEYBOARD, HID_FUNC_INDEX_MOUSE
 from bluetooth_2_usb.hid.constants import (
     HID_PAGE_CONSUMER,
     HID_PAGE_GENERIC_DESKTOP,
@@ -86,6 +87,21 @@ from bluetooth_2_usb.loopback.scenarios import (
 )
 from bluetooth_2_usb.loopback.session import LoopbackBusyError
 
+NUL = 0x00
+NO_REPORT_ID = NUL
+KEYBOARD_REPORT_ID = 0x01
+MOUSE_REPORT_ID = 0x02
+CONSUMER_REPORT_ID = 0x03
+LEFT_SHIFT_MODIFIER = 0x02
+NO_BUTTONS = NUL
+NO_USAGE = NUL
+HID_I16_MAX = 32767
+HID_I16_MIN = -32767
+HID_I8_MAX = 127
+HID_I8_MIN = -127
+WINDOWS_USB_ID = f"vid_{usb_udev_hex_u16(USB_GADGET_VID_LINUX)}&pid_{usb_udev_hex_u16(USB_GADGET_PID_COMBO)}"
+WINDOWS_USB_ID_UPPER = WINDOWS_USB_ID.upper()
+
 
 def _chunk_count(value: int, report_limit: int) -> int:
     return (abs(value) + report_limit - 1) // report_limit
@@ -107,11 +123,23 @@ def _mapped_hid_usage(step: ExpectedEvent) -> int:
 
 def _keyboard_report_for_code(code: int, *, key_state: int = KeyEvent.key_down) -> bytes:
     usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, code, key_state))
-    return bytes([0x00, 0x00, usage, 0, 0, 0, 0, 0])
+    return _keyboard_report(usage)
 
 
-def _consumer_report_for_step(step: ExpectedEvent, *, report_id: int = 0x03, width: int = 3) -> bytes:
-    usage = _mapped_hid_usage(step) if step.value == KeyEvent.key_down else 0
+def _keyboard_report(*usages: int, modifier: int = NUL) -> bytes:
+    return bytes([modifier, NUL, *usages[:6], *([NUL] * (6 - len(usages[:6])))])
+
+
+def _empty_keyboard_report() -> bytes:
+    return _keyboard_report()
+
+
+def _report_id_prefixed(report_id: int, report: bytes) -> bytes:
+    return bytes([report_id]) + report
+
+
+def _consumer_report_for_step(step: ExpectedEvent, *, report_id: int = CONSUMER_REPORT_ID, width: int = 3) -> bytes:
+    usage = _mapped_hid_usage(step) if step.value == KeyEvent.key_down else NO_USAGE
     if width == 2:
         return bytes([report_id, usage & 0xFF])
     return bytes([report_id, usage & 0xFF, usage >> 8])
@@ -137,8 +165,8 @@ SMALL_MOUSE_REL_STEPS = (
 def _hid_entry(
     path: str,
     *,
-    device_name: str = f"quaxalber {USB_PRODUCT_NAME}",
-    manufacturer: str = "quaxalber",
+    device_name: str = f"{USB_MANUFACTURER} {USB_PRODUCT_NAME}",
+    manufacturer: str = USB_MANUFACTURER,
     serial: str = USB_SERIAL_NUMBER,
     vendor_id: int = 0,
     product_id: int = 0,
@@ -206,7 +234,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_keyboard_scenario_contains_full_modifier_burst(self) -> None:
         scenario = SCENARIOS["keyboard"]
 
-        self.assertEqual(scenario.required_nodes, ("keyboard",))
+        self.assertCountEqual(scenario.required_nodes, ("keyboard",))
         self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
         self.assertIn(KEY_K, [step.code for step in scenario.keyboard_steps])
         self.assertTrue(any(step.value == KeyEvent.key_down for step in scenario.keyboard_steps))
@@ -225,7 +253,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_mouse_scenario_contains_fast_motion_and_all_button_bits(self) -> None:
         scenario = SCENARIOS["mouse"]
 
-        self.assertEqual(scenario.required_nodes, ("mouse",))
+        self.assertCountEqual(scenario.required_nodes, ("mouse",))
         self.assertEqual(scenario.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, MOUSE_BUTTON_STEPS)
         self.assertEqual(len(scenario.mouse_button_steps), 16)
@@ -238,7 +266,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_node_discovery_scenario_contains_minimal_all_role_sequence(self) -> None:
         scenario = SCENARIOS["node-discovery"]
 
-        self.assertEqual(scenario.required_nodes, ("keyboard", "mouse", "consumer"))
+        self.assertCountEqual(scenario.required_nodes, ("keyboard", "mouse", "consumer"))
         self.assertEqual(scenario.keyboard_steps, NODE_DISCOVERY_KEYBOARD_STEPS)
         self.assertEqual(scenario.mouse_rel_steps, (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1)))
         self.assertEqual(scenario.mouse_button_steps, ())
@@ -249,7 +277,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_consumer_scenario_contains_representative_consumer_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
 
-        self.assertEqual(consumer.required_nodes, ("consumer",))
+        self.assertCountEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
         self.assertEqual(consumer.default_capture_timeout_sec, 10.0)
 
@@ -265,7 +293,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
     def test_combo_scenario_contains_keyboard_mouse_and_consumer_sequences(self) -> None:
         combo = SCENARIOS["combo"]
 
-        self.assertEqual(combo.required_nodes, ("keyboard", "mouse", "consumer"))
+        self.assertCountEqual(combo.required_nodes, ("keyboard", "mouse", "consumer"))
         self.assertEqual(combo.keyboard_steps, SCENARIOS["keyboard"].keyboard_steps)
         self.assertEqual(combo.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(combo.mouse_button_steps, MOUSE_BUTTON_STEPS)
@@ -495,7 +523,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_eight_byte_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (_keyboard_report_for_code(KEY_K), bytes([0x00] * 8))
+        reports = (_keyboard_report_for_code(KEY_K), _empty_keyboard_report())
         for report in reports:
             matcher.handle(report)
 
@@ -504,7 +532,10 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_accepts_report_id_keyboard_reports(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (bytes([0x01]) + _keyboard_report_for_code(KEY_K), bytes([0x01] + [0x00] * 8))
+        reports = (
+            _report_id_prefixed(KEYBOARD_REPORT_ID, _keyboard_report_for_code(KEY_K)),
+            _report_id_prefixed(KEYBOARD_REPORT_ID, _empty_keyboard_report()),
+        )
         for report in reports:
             matcher.handle(report)
 
@@ -513,7 +544,7 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
     def test_keyboard_matcher_ignores_single_zero_reports_between_steps(self) -> None:
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
-        reports = (_keyboard_report_for_code(KEY_K), bytes([0x00]), bytes([0x00] * 8), bytes([0x00]))
+        reports = (_keyboard_report_for_code(KEY_K), bytes([NUL]), _empty_keyboard_report(), bytes([NUL]))
         for report in reports:
             matcher.handle(report)
 
@@ -530,13 +561,13 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
 
         reports = (
-            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, k_usage, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, k_usage, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
-            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
-            bytes([0x00] * 8),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
+            _keyboard_report(k_usage, modifier=LEFT_SHIFT_MODIFIER),
+            _keyboard_report(k_usage, modifier=LEFT_SHIFT_MODIFIER),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
+            _empty_keyboard_report(),
         )
         for report in reports:
             matcher.handle(report)
@@ -547,12 +578,14 @@ class KeyboardSequenceMatcherTest(unittest.TestCase):
         matcher = KeyboardSequenceMatcher(SIMPLE_KEYBOARD_STEPS)
 
         with self.assertRaises(CaptureMismatchError):
-            matcher.handle(bytes([0x00] * 8))
+            matcher.handle(_empty_keyboard_report())
 
 
 class MouseSequenceMatcherTest(unittest.TestCase):
     @staticmethod
-    def _extended_mouse_report(buttons: int = 0, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> bytes:
+    def _extended_mouse_report(
+        buttons: int = NO_BUTTONS, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0
+    ) -> bytes:
         return bytes(
             [
                 buttons,
@@ -596,21 +629,21 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_zero_prefixed_hidapi_report(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:1], ())
 
-        matcher.handle(bytes([0x00]) + self._extended_mouse_report(x=1))
+        matcher.handle(_report_id_prefixed(NO_REPORT_ID, self._extended_mouse_report(x=1)))
 
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_report_id_prefixed_hidapi_report(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:1], ())
 
-        matcher.handle(bytes([0x02]) + self._extended_mouse_report(x=1))
+        matcher.handle(_report_id_prefixed(MOUSE_REPORT_ID, self._extended_mouse_report(x=1)))
 
         self.assertTrue(matcher.complete)
 
     def test_mouse_matcher_accepts_two_byte_prefixed_hidapi_report(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:1], ())
 
-        matcher.handle(bytes([0x00, 0x02]) + self._extended_mouse_report(x=1))
+        matcher.handle(bytes([NUL, MOUSE_REPORT_ID]) + self._extended_mouse_report(x=1))
 
         self.assertTrue(matcher.complete)
 
@@ -618,13 +651,13 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], ())
 
         with self.assertRaisesRegex(CaptureMismatchError, "button bits"):
-            matcher.handle(self._extended_mouse_report(buttons=0x02, x=1))
+            matcher.handle(self._extended_mouse_report(buttons=_mapped_hid_usage(MOUSE_BUTTON_STEPS[2]), x=1))
 
     def test_mouse_matcher_rejects_button_state_on_motion_before_movement_complete(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], MOUSE_BUTTON_STEPS[:2])
 
         with self.assertRaisesRegex(CaptureMismatchError, "Mouse button report arrived before movement"):
-            matcher.handle(self._extended_mouse_report(buttons=0x08, x=1))
+            matcher.handle(self._extended_mouse_report(buttons=_mapped_hid_usage(MOUSE_BUTTON_STEPS[6]), x=1))
 
     def test_mouse_matcher_rejects_unexpected_motion_order(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS[:4], ())
@@ -641,15 +674,15 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_extended_motion_wheel_and_pan(self) -> None:
         matcher = MouseSequenceMatcher.create(SMALL_MOUSE_REL_STEPS, ())
 
-        matcher.handle(bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]))
-        matcher.handle(bytes([0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]))
-        matcher.handle(bytes([0x00, 0x02, 0x00, 0xFD, 0xFF, 0x00, 0x01]))
+        matcher.handle(self._extended_mouse_report(x=1))
+        matcher.handle(self._extended_mouse_report(x=-1))
+        matcher.handle(self._extended_mouse_report(y=1))
+        matcher.handle(self._extended_mouse_report(y=-1))
+        matcher.handle(self._extended_mouse_report(wheel=1))
+        matcher.handle(self._extended_mouse_report(wheel=-1))
+        matcher.handle(self._extended_mouse_report(pan=1))
+        matcher.handle(self._extended_mouse_report(pan=-1))
+        matcher.handle(self._extended_mouse_report(x=2, y=-3, pan=1))
 
         self.assertTrue(matcher.complete)
 
@@ -675,10 +708,10 @@ class MouseSequenceMatcherTest(unittest.TestCase):
         )
 
         for report in (
-            self._extended_mouse_report(x=32767, y=-32767, wheel=127, pan=-127),
+            self._extended_mouse_report(x=HID_I16_MAX, y=HID_I16_MIN, wheel=HID_I8_MAX, pan=HID_I8_MIN),
             self._extended_mouse_report(x=7233, y=-7233, wheel=127, pan=-127),
-            self._extended_mouse_report(wheel=127, pan=-127),
-            self._extended_mouse_report(wheel=127, pan=-127),
+            self._extended_mouse_report(wheel=HID_I8_MAX, pan=HID_I8_MIN),
+            self._extended_mouse_report(wheel=HID_I8_MAX, pan=HID_I8_MIN),
             self._extended_mouse_report(wheel=92, pan=-92),
         ):
             matcher.handle(report)
@@ -688,9 +721,9 @@ class MouseSequenceMatcherTest(unittest.TestCase):
     def test_mouse_matcher_accepts_all_extended_button_bits(self) -> None:
         matcher = MouseSequenceMatcher.create((), MOUSE_BUTTON_STEPS)
 
-        for button in (0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80):
-            matcher.handle(bytes([button, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-            matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        for button in (_mapped_hid_usage(step) for step in MOUSE_BUTTON_STEPS[::2]):
+            matcher.handle(self._extended_mouse_report(buttons=button))
+            matcher.handle(self._extended_mouse_report())
 
         self.assertTrue(matcher.complete)
 
@@ -705,10 +738,10 @@ class MouseSequenceMatcherTest(unittest.TestCase):
             ),
         )
 
-        matcher.handle(bytes([0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-        matcher.handle(bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-        matcher.handle(bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        matcher.handle(self._extended_mouse_report(buttons=_mapped_hid_usage(MOUSE_BUTTON_STEPS[4])))
+        matcher.handle(self._extended_mouse_report())
+        matcher.handle(self._extended_mouse_report(buttons=_mapped_hid_usage(MOUSE_BUTTON_STEPS[6])))
+        matcher.handle(self._extended_mouse_report())
 
         self.assertTrue(matcher.complete)
 
@@ -726,7 +759,7 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
         matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
 
         for step in SCENARIOS["consumer"].consumer_steps:
-            matcher.handle(_consumer_report_for_step(step, report_id=0x00))
+            matcher.handle(_consumer_report_for_step(step, report_id=NO_REPORT_ID))
 
         self.assertTrue(matcher.complete)
 
@@ -755,7 +788,7 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
         matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
 
         with self.assertRaises(CaptureMismatchError):
-            matcher.handle(bytes([0x03, 0x00, 0x00]))
+            matcher.handle(bytes([CONSUMER_REPORT_ID, NUL, NUL]))
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):
@@ -763,47 +796,47 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(
             capture_windows.extract_device_identities(
                 (
-                    r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{GUID}",
-                    r"\\?\hid#vid_1d6b&pid_0104&mi_00#9&314c2078&0&0000#{guid}",
+                    f"\\\\?\\HID#{WINDOWS_USB_ID_UPPER}&MI_00#9&314c2078&0&0000#{{GUID}}",
+                    f"\\\\?\\hid#{WINDOWS_USB_ID}&mi_00#9&314c2078&0&0000#{{guid}}",
                 )
             ),
-            (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
+            (f"hid\\{WINDOWS_USB_ID}&mi_00\\9&314c2078&0&0000",),
         )
 
     def test_device_matches_candidate_on_same_hid_instance_identity(self) -> None:
         self.assertTrue(
             capture_windows.device_matches_candidate(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                (r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",),
+                f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_00\\9&314c2078&0&0000\\{{378de44c-56ef-11d1-bc8c-00a0c91405dd}}",
+                (f"hid\\{WINDOWS_USB_ID}&mi_00\\9&314c2078&0&0000",),
             )
         )
 
     def test_stable_device_identity_ignores_guid_and_suffix_differences(self) -> None:
         self.assertEqual(
             capture_windows.stable_device_identity(
-                r"\\?\HID#VID_1D6B&PID_0104&MI_00#9&314c2078&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}\KBD"
+                f"\\\\?\\HID#{WINDOWS_USB_ID_UPPER}&MI_00#9&314c2078&0&0000#{{A5DCBF10-6530-11D2-901F-00C04FB951ED}}\\KBD"
             ),
-            r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
+            f"hid\\{WINDOWS_USB_ID}&mi_00\\9&314c2078&0&0000",
         )
         self.assertEqual(
             capture_windows.stable_device_identity(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000\{884b96c3-56ef-11d1-bc8c-00a0c91405dd}"
+                f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_00\\9&314c2078&0&0000\\{{884b96c3-56ef-11d1-bc8c-00a0c91405dd}}"
             ),
-            r"hid\vid_1d6b&pid_0104&mi_00\9&314c2078&0&0000",
+            f"hid\\{WINDOWS_USB_ID}&mi_00\\9&314c2078&0&0000",
         )
 
     def test_device_matches_candidate_on_shared_hid_instance_identity(self) -> None:
         self.assertTrue(
             capture_windows.device_matches_candidate(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
-                (r"hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000",),
+                f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_01\\9&2217c3c8&0&0000\\{{378de44c-56ef-11d1-bc8c-00a0c91405dd}}",
+                (f"hid\\{WINDOWS_USB_ID}&mi_01\\9&2217c3c8&0&0000",),
             )
         )
 
     def test_device_does_not_match_different_hid_instance_identity(self) -> None:
         self.assertFalse(
             capture_windows.device_matches_candidate(
-                r"\\?\hid\vid_1d6b&pid_0104&mi_01\9&2217c3c8&0&0000\{378de44c-56ef-11d1-bc8c-00a0c91405dd}",
+                f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_01\\9&2217c3c8&0&0000\\{{378de44c-56ef-11d1-bc8c-00a0c91405dd}}",
                 (r"\\?\HID#VID_16D0&PID_092E&MI_00#8&1020304&0&0000#{A5DCBF10-6530-11D2-901F-00C04FB951ED}",),
             )
         )
@@ -811,10 +844,10 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
         self.assertEqual(
             capture_windows.keyboard_event_to_report(capture_windows.VK_F13, is_key_up=False),
-            bytes([0x00, 0x00, capture_windows.VK_TO_HID[capture_windows.VK_F13], 0, 0, 0, 0, 0]),
+            _keyboard_report(capture_windows.VK_TO_HID[capture_windows.VK_F13]),
         )
         self.assertEqual(
-            capture_windows.keyboard_event_to_report(capture_windows.VK_F13, is_key_up=True), bytes([0x00] * 8)
+            capture_windows.keyboard_event_to_report(capture_windows.VK_F13, is_key_up=True), _empty_keyboard_report()
         )
 
     def test_keyboard_event_to_report_covers_extended_scenario_keys(self) -> None:
@@ -829,19 +862,16 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
             with self.subTest(vkey=vkey):
                 self.assertEqual(
                     capture_windows.keyboard_event_to_report(vkey, is_key_up=False),
-                    bytes([0x00, 0x00, capture_windows.VK_TO_HID[vkey], 0, 0, 0, 0, 0]),
+                    _keyboard_report(capture_windows.VK_TO_HID[vkey]),
                 )
 
     def test_keyboard_event_to_report_covers_standard_keys_and_modifiers(self) -> None:
         k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
 
-        self.assertEqual(
-            capture_windows.keyboard_event_to_report(ord("K"), is_key_up=False),
-            bytes([0x00, 0x00, k_usage, 0, 0, 0, 0, 0]),
-        )
+        self.assertEqual(capture_windows.keyboard_event_to_report(ord("K"), is_key_up=False), _keyboard_report(k_usage))
         self.assertEqual(
             capture_windows.keyboard_event_to_report(capture_windows.VK_LSHIFT, is_key_up=False),
-            bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
         )
 
     def test_raw_input_keyboard_report_builder_preserves_modifier_state(self) -> None:
@@ -849,16 +879,17 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
 
         self.assertEqual(
-            builder.report_for(capture_windows.VK_LSHIFT, is_key_up=False), bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0])
+            builder.report_for(capture_windows.VK_LSHIFT, is_key_up=False),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
         )
-        self.assertEqual(builder.report_for(ord("K"), is_key_up=False), bytes([0x02, 0x00, k_usage, 0, 0, 0, 0, 0]))
-        self.assertEqual(builder.report_for(ord("K"), is_key_up=True), bytes([0x02, 0x00, 0, 0, 0, 0, 0, 0]))
         self.assertEqual(
-            builder.report_for(capture_windows.VK_LSHIFT, is_key_up=True), bytes([0x00, 0x00, 0, 0, 0, 0, 0, 0])
+            builder.report_for(ord("K"), is_key_up=False), _keyboard_report(k_usage, modifier=LEFT_SHIFT_MODIFIER)
         )
+        self.assertEqual(builder.report_for(ord("K"), is_key_up=True), _keyboard_report(modifier=LEFT_SHIFT_MODIFIER))
+        self.assertEqual(builder.report_for(capture_windows.VK_LSHIFT, is_key_up=True), _empty_keyboard_report())
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
-        self.assertIsNone(capture_windows.keyboard_event_to_report(0x00, is_key_up=False))
+        self.assertIsNone(capture_windows.keyboard_event_to_report(NUL, is_key_up=False))
 
     def test_raw_input_mouse_report_builder_builds_16_bit_xy_reports(self) -> None:
         raw_mouse = RAWMOUSE()
@@ -867,7 +898,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
-            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0x00])],
+            [MouseSequenceMatcherTest._extended_mouse_report(x=300, y=-300)],
         )
 
     def test_raw_input_mouse_report_builder_clamps_xy_to_descriptor_bounds(self) -> None:
@@ -877,7 +908,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
-            [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x00, 0x00])],
+            [MouseSequenceMatcherTest._extended_mouse_report(x=HID_I16_MAX, y=HID_I16_MIN)],
         )
 
     def test_raw_input_mouse_report_builder_builds_horizontal_pan_reports(self) -> None:
@@ -886,40 +917,55 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
+            [MouseSequenceMatcherTest._extended_mouse_report(pan=-1)],
         )
 
     def test_raw_input_mouse_report_builder_tracks_button_state(self) -> None:
         builder = capture_windows.RawInputMouseReportBuilder()
         left_button_down = RAWMOUSE()
         left_button_down.ulButtons = RI_MOUSE_LEFT_BUTTON_DOWN
-        self.assertEqual(builder.reports_for(left_button_down), [bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        left_button_bit = _mapped_hid_usage(ExpectedEvent(EV_KEY, ecodes.BTN_LEFT, KeyEvent.key_down))
+        self.assertEqual(
+            builder.reports_for(left_button_down), [MouseSequenceMatcherTest._extended_mouse_report(left_button_bit)]
+        )
 
         move_while_pressed = RAWMOUSE()
         move_while_pressed.lLastX = 1
-        self.assertEqual(builder.reports_for(move_while_pressed), [bytes([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        self.assertEqual(
+            builder.reports_for(move_while_pressed),
+            [MouseSequenceMatcherTest._extended_mouse_report(left_button_bit, x=1)],
+        )
 
         left_button_up = RAWMOUSE()
         left_button_up.ulButtons = RI_MOUSE_LEFT_BUTTON_UP
-        self.assertEqual(builder.reports_for(left_button_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        self.assertEqual(builder.reports_for(left_button_up), [MouseSequenceMatcherTest._extended_mouse_report()])
 
     def test_raw_input_mouse_report_builder_tracks_windows_extra_button_state(self) -> None:
         builder = capture_windows.RawInputMouseReportBuilder()
         button_4_down = RAWMOUSE()
         button_4_down.ulButtons = RI_MOUSE_BUTTON_4_DOWN
-        self.assertEqual(builder.reports_for(button_4_down), [bytes([0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        side_button_bit = _mapped_hid_usage(ExpectedEvent(EV_KEY, ecodes.BTN_SIDE, KeyEvent.key_down))
+        extra_button_bit = _mapped_hid_usage(ExpectedEvent(EV_KEY, ecodes.BTN_EXTRA, KeyEvent.key_down))
+        self.assertEqual(
+            builder.reports_for(button_4_down), [MouseSequenceMatcherTest._extended_mouse_report(side_button_bit)]
+        )
 
         button_5_down = RAWMOUSE()
         button_5_down.ulButtons = RI_MOUSE_BUTTON_5_DOWN
-        self.assertEqual(builder.reports_for(button_5_down), [bytes([0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        self.assertEqual(
+            builder.reports_for(button_5_down),
+            [MouseSequenceMatcherTest._extended_mouse_report(side_button_bit | extra_button_bit)],
+        )
 
         button_4_up = RAWMOUSE()
         button_4_up.ulButtons = RI_MOUSE_BUTTON_4_UP
-        self.assertEqual(builder.reports_for(button_4_up), [bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        self.assertEqual(
+            builder.reports_for(button_4_up), [MouseSequenceMatcherTest._extended_mouse_report(extra_button_bit)]
+        )
 
         button_5_up = RAWMOUSE()
         button_5_up.ulButtons = RI_MOUSE_BUTTON_5_UP
-        self.assertEqual(builder.reports_for(button_5_up), [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])])
+        self.assertEqual(builder.reports_for(button_5_up), [MouseSequenceMatcherTest._extended_mouse_report()])
 
     def test_raw_input_mouse_report_builder_keeps_wheel_and_motion_reports(self) -> None:
         raw_mouse = RAWMOUSE()
@@ -929,7 +975,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
-            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0x00])],
+            [MouseSequenceMatcherTest._extended_mouse_report(x=300, y=-300, wheel=1)],
         )
 
     def test_raw_input_mouse_report_builder_keeps_pan_and_motion_reports(self) -> None:
@@ -940,7 +986,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(
             capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
-            [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x00, 0xFF])],
+            [MouseSequenceMatcherTest._extended_mouse_report(x=300, y=-300, pan=-1)],
         )
 
     def test_windows_backend_refuses_non_windows_runtime(self) -> None:
@@ -956,6 +1002,21 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 ),
             )
 
+    def test_raw_input_pump_reports_win32_api_errors_as_capture_failures(self) -> None:
+        with patch("bluetooth_2_usb.loopback.capture_windows._create_message_window", side_effect=OSError("boom")):
+            result = capture_windows._pump_raw_input(
+                timeout_sec=1.0,
+                keyboard_candidate_identities=(),
+                mouse_candidate_identities=(),
+                consumer_candidate_identities=(),
+                scenario_name="keyboard",
+            )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, EXIT_ACCESS)
+        self.assertIn("Windows Raw Input capture failed: boom", result.message)
+        self.assertEqual(result.details["capture_backend"], "raw_input")
+
     def test_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
         steps, skipped = capture_windows.mouse_button_expectations(SCENARIOS["mouse"])
 
@@ -967,9 +1028,9 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         debug = capture_windows._RawInputDebug()
         candidate = capture_windows._RawInputCandidate(
             role="keyboard",
-            candidate_identities=("hid\\vid_1d6b&pid_0104&mi_00\\instance",),
+            candidate_identities=(f"hid\\{WINDOWS_USB_ID}&mi_00\\instance",),
             matcher=SimpleNamespace(complete=True, index=2),
-            matched_name=r"\\?\hid\vid_1d6b&pid_0104&mi_00\instance\{guid}",
+            matched_name=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_00\\instance\\{{guid}}",
         )
         candidate.note_report(_keyboard_report_for_code(ecodes.KEY_F13))
 
@@ -986,9 +1047,9 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         debug = capture_windows._RawInputDebug()
         candidate = capture_windows._RawInputCandidate(
             role="keyboard",
-            candidate_identities=("hid\\vid_1d6b&pid_0104&mi_00\\instance",),
+            candidate_identities=(f"hid\\{WINDOWS_USB_ID}&mi_00\\instance",),
             matcher=KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps),
-            matched_name=r"\\?\hid\vid_1d6b&pid_0104&mi_00\instance\{guid}",
+            matched_name=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_00\\instance\\{{guid}}",
         )
         candidate.matcher.handle(_keyboard_report_for_code(KEY_K))
         for index in range(20):
@@ -1048,10 +1109,12 @@ class LoopbackInjectTest(unittest.TestCase):
     def test_run_inject_closes_created_devices_when_setup_fails(self) -> None:
         keyboard = Mock()
 
-        with patch("pathlib.Path.exists", return_value=True):
-            with patch("bluetooth_2_usb.loopback.inject.wait_for_service_settle"):
-                with patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, OSError("mouse failed")]):
-                    result = run_inject("combo")
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("bluetooth_2_usb.loopback.inject.wait_for_service_settle"),
+            patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, OSError("mouse failed")]),
+        ):
+            result = run_inject("combo")
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_ACCESS)
@@ -1168,9 +1231,11 @@ class LoopbackInjectTest(unittest.TestCase):
             command="capture", scenario="keyboard", success=True, exit_code=0, message="ok", details={}
         )
 
-        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
-            with patch("bluetooth_2_usb.loopback.capture._capture_once", return_value=result) as run:
-                capture_result = run_capture("keyboard")
+        with (
+            patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
+            patch("bluetooth_2_usb.loopback.capture._capture_once", return_value=result) as run,
+        ):
+            capture_result = run_capture("keyboard")
 
         self.assertIs(capture_result, result)
         self.assertEqual(run.call_args.kwargs["timeout_sec"], 15.0)
@@ -1190,9 +1255,11 @@ class LoopbackInjectTest(unittest.TestCase):
             {"kbd0": []},
         )
 
-        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
-            with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
-                result = run_capture("keyboard", timeout_sec=0.001)
+        with (
+            patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
+            patch("bluetooth_2_usb.loopback.capture.time.sleep"),
+        ):
+            result = run_capture("keyboard", timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1217,9 +1284,11 @@ class LoopbackInjectTest(unittest.TestCase):
             {"kbd0": [_keyboard_report_for_code(KEY_K)]},
         )
 
-        with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
-            with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
-                result = run_capture("keyboard", timeout_sec=0.001)
+        with (
+            patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
+            patch("bluetooth_2_usb.loopback.capture.time.sleep"),
+        ):
+            result = run_capture("keyboard", timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1255,7 +1324,11 @@ class LoopbackInjectTest(unittest.TestCase):
                     usage=HID_USAGE_CONSUMER_CONTROL,
                 ),
             ],
-            {"kbd0": [_keyboard_report_for_code(ecodes.KEY_F13), bytes([0x00] * 8)], "mouse0": [], "consumer0": []},
+            {
+                "kbd0": [_keyboard_report_for_code(ecodes.KEY_F13), _empty_keyboard_report()],
+                "mouse0": [],
+                "consumer0": [],
+            },
         )
 
         with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
@@ -1338,8 +1411,9 @@ class LoopbackInjectTest(unittest.TestCase):
             ),
         )
 
-        with patch("bluetooth_2_usb.loopback.capture.sys.platform", "win32"):
-            with patch(
+        with (
+            patch("bluetooth_2_usb.loopback.capture.sys.platform", "win32"),
+            patch(
                 "bluetooth_2_usb.loopback.capture._load_hidapi",
                 return_value=_FakeHidModule(
                     [
@@ -1369,19 +1443,20 @@ class LoopbackInjectTest(unittest.TestCase):
                         ),
                     ]
                 ),
-            ):
-                with patch(
-                    "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
-                    return_value=LoopbackResult(
-                        command="capture",
-                        scenario="combo",
-                        success=True,
-                        exit_code=0,
-                        message="ok",
-                        details={"nodes": candidate_nodes.matched_nodes().to_dict()},
-                    ),
-                ) as run_backend:
-                    exit_code = run_loopback(["capture", "--scenario", "combo"])
+            ),
+            patch(
+                "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
+                return_value=LoopbackResult(
+                    command="capture",
+                    scenario="combo",
+                    success=True,
+                    exit_code=0,
+                    message="ok",
+                    details={"nodes": candidate_nodes.matched_nodes().to_dict()},
+                ),
+            ) as run_backend,
+        ):
+            exit_code = run_loopback(["capture", "--scenario", "combo"])
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
@@ -1400,21 +1475,23 @@ class LoopbackInjectTest(unittest.TestCase):
             ]
         )
 
-        with patch("bluetooth_2_usb.loopback.capture.sys.platform", "win32"):
-            with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=consumer_hid):
-                with patch(
-                    "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
-                    return_value=LoopbackResult(
-                        command="capture",
-                        scenario="consumer",
-                        success=True,
-                        exit_code=0,
-                        message="ok",
-                        details={"capture_backend": "raw_input"},
-                    ),
-                ) as run_backend:
-                    with patch("bluetooth_2_usb.loopback.capture._capture_once") as capture_once:
-                        exit_code = run_loopback(["capture", "--scenario", "consumer"])
+        with (
+            patch("bluetooth_2_usb.loopback.capture.sys.platform", "win32"),
+            patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=consumer_hid),
+            patch(
+                "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
+                return_value=LoopbackResult(
+                    command="capture",
+                    scenario="consumer",
+                    success=True,
+                    exit_code=0,
+                    message="ok",
+                    details={"capture_backend": "raw_input"},
+                ),
+            ) as run_backend,
+            patch("bluetooth_2_usb.loopback.capture._capture_once") as capture_once,
+        ):
+            exit_code = run_loopback(["capture", "--scenario", "consumer"])
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
