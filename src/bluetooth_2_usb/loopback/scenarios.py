@@ -91,7 +91,7 @@ class ScenarioDefinition:
     mouse_coalesced_tail_count: int = 0
     default_event_gap_ms: int = 40
     default_post_delay_ms: int = 250
-    default_capture_timeout_sec: float = 10.0
+    default_capture_timeout_sec: float = 20.0
 
     @property
     def keyboard_enabled(self) -> bool:
@@ -247,7 +247,6 @@ SCENARIOS = {
         consumer_steps=(),
         default_event_gap_ms=10,
         default_post_delay_ms=6000,
-        default_capture_timeout_sec=15.0,
     ),
     "mouse": ScenarioDefinition(
         name="mouse",
@@ -266,7 +265,7 @@ SCENARIOS = {
         consumer_steps=NODE_DISCOVERY_CONSUMER_STEPS,
         default_event_gap_ms=20,
         default_post_delay_ms=250,
-        default_capture_timeout_sec=5.0,
+        default_capture_timeout_sec=10.0,
     ),
     "consumer": ScenarioDefinition(
         name="consumer", keyboard_steps=(), mouse_rel_steps=(), mouse_button_steps=(), consumer_steps=CONSUMER_STEPS
@@ -279,7 +278,7 @@ SCENARIOS = {
         consumer_steps=CONSUMER_STEPS,
         default_event_gap_ms=10,
         default_post_delay_ms=6000,
-        default_capture_timeout_sec=30.0,
+        default_capture_timeout_sec=60.0,
     ),
 }
 

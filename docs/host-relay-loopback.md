@@ -132,8 +132,8 @@ venv/bin/bluetooth_2_usb loopback capture --scenario combo
 Default behavior:
 
 - detects the gadget HID device by product name and HID usage
-- waits up to the scenario-specific timeout for the complete sequence (`10`
-  seconds by default; `keyboard` uses `15` seconds and `combo` uses `30`
+- waits up to the scenario-specific timeout for the complete sequence (`20`
+  seconds by default; `node-discovery` uses `10` seconds and `combo` uses `60`
   seconds)
 - may temporarily claim the gadget HID interfaces while the capture runs, so do
   not assume the local desktop will process the same inputs during that window

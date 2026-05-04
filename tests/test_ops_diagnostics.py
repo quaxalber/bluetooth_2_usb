@@ -32,6 +32,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
         modules_load: str = "",
         rfkill_entries: list[_RfkillEntry] | None = None,
         rfkill_blocked: bool = False,
+        udc_states: dict[str, str] | None = None,
     ) -> list[str]:
         checked_modules: list[str] = []
 
@@ -71,6 +72,9 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
             )
             stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}._udc_states", return_value=udc_states or {"dummy.udc": "configured"})
+            )
             stack.enter_context(
                 patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=rfkill_entries or [])
             )
@@ -159,6 +163,18 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
         self.assertEqual(checked_modules, ["libcomposite"])
         self.assertEqual(smoke.soft_warnings, 1)
+
+    def test_smoketest_warns_when_udc_is_not_configured(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_smoketest_harness(
+                smoke, root=Path(tmpdir), modules_load="modules-load=dwc2", udc_states={"dummy.udc": "not attached"}
+            )
+
+        warnings = [result for result in smoke.results if result.status is ProbeStatus.WARN]
+        self.assertTrue(any("UDC is not configured" in result.message for result in warnings))
+        self.assertEqual(smoke.summary["UDC state"], "dummy.udc=not attached")
 
     def test_smoketest_records_healthy_rfkill_probe(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)

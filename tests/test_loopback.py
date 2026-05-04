@@ -247,7 +247,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertTrue(all(step in scenario.keyboard_steps for step in EXOTIC_KEYBOARD_STEPS))
         self.assertEqual(scenario.default_event_gap_ms, 10)
         self.assertEqual(scenario.default_post_delay_ms, 6000)
-        self.assertEqual(scenario.default_capture_timeout_sec, 15.0)
+        self.assertEqual(scenario.default_capture_timeout_sec, 20.0)
 
     def test_loopback_keyboard_candidates_are_production_mapped(self) -> None:
         for code in EXOTIC_KEYBOARD_CODES:
@@ -265,7 +265,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
         self.assertEqual(scenario.default_event_gap_ms, 0)
         self.assertEqual(scenario.default_post_delay_ms, 1000)
-        self.assertEqual(scenario.default_capture_timeout_sec, 10.0)
+        self.assertEqual(scenario.default_capture_timeout_sec, 20.0)
         self.assertGreaterEqual(_mouse_report_count(scenario.mouse_rel_steps), 80)
 
     def test_node_discovery_scenario_contains_minimal_all_role_sequence(self) -> None:
@@ -277,14 +277,14 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(scenario.mouse_button_steps, ())
         self.assertEqual(scenario.consumer_steps, NODE_DISCOVERY_CONSUMER_STEPS)
         self.assertNotEqual(scenario.consumer_steps, CONSUMER_STEPS)
-        self.assertEqual(scenario.default_capture_timeout_sec, 5.0)
+        self.assertEqual(scenario.default_capture_timeout_sec, 10.0)
 
     def test_consumer_scenario_contains_representative_consumer_sequence(self) -> None:
         consumer = SCENARIOS["consumer"]
 
         self.assertCountEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
-        self.assertEqual(consumer.default_capture_timeout_sec, 10.0)
+        self.assertEqual(consumer.default_capture_timeout_sec, 20.0)
 
     def test_loopback_consumer_candidates_are_production_mapped(self) -> None:
         usages = []
@@ -303,7 +303,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(combo.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(combo.mouse_button_steps, MOUSE_BUTTON_STEPS)
         self.assertEqual(combo.consumer_steps, CONSUMER_STEPS)
-        self.assertEqual(combo.default_capture_timeout_sec, 30.0)
+        self.assertEqual(combo.default_capture_timeout_sec, 60.0)
 
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaises(ValueError) as error:
@@ -1271,7 +1271,7 @@ class LoopbackInjectTest(unittest.TestCase):
             capture_result = run_capture("keyboard")
 
         self.assertIs(capture_result, result)
-        self.assertEqual(run.call_args.kwargs["timeout_sec"], 15.0)
+        self.assertEqual(run.call_args.kwargs["timeout_sec"], 20.0)
 
     def test_capture_timeout_reports_zero_progress(self) -> None:
         hid_module = _FakeReadableHidModule(
