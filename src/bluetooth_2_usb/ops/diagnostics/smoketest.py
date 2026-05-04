@@ -57,8 +57,19 @@ class SmokeTest:
         self._path_exists(
             Path("/sys/kernel/config/usb_gadget"), "configfs gadget path is present", "configfs gadget path is missing"
         )
-        udc_list = " ".join(path.name for path in Path("/sys/class/udc").glob("*"))
+        udc_states = _udc_states()
+        udc_list = " ".join(udc_states) if udc_states else ""
         self.record_bool(bool(udc_list), f"UDC is present ({udc_list})", "No UDC detected")
+        if udc_states:
+            configured_udcs = [name for name, state in udc_states.items() if state == "configured"]
+            if configured_udcs:
+                ok("UDC state is configured (" + ", ".join(configured_udcs) + ")")
+            else:
+                self.soft_warn(
+                    "UDC is not configured; relay output is gated until the host attaches. "
+                    + "Current state: "
+                    + ", ".join(f"{name}={state}" for name, state in udc_states.items())
+                )
         self._command_ok(
             ["systemctl", "is-enabled", PATHS.service_unit],
             f"{PATHS.service_unit} is enabled",
@@ -144,6 +155,7 @@ class SmokeTest:
             "expected boot initramfs file": expected_initramfs_file or "<none>",
             "expected boot initramfs path": expected_initramfs_path or "<none>",
             "UDC controllers": udc_list or "<none>",
+            "UDC state": ", ".join(f"{name}={state}" for name, state in udc_states.items()) or "<none>",
             "Readonly mode": readonly,
             "OverlayFS configured": overlay,
             "Root filesystem type": root_filesystem_type,
@@ -374,6 +386,17 @@ def _first_modules_load(cmdline_txt: Path) -> str:
         if token.startswith("modules-load="):
             return token
     return ""
+
+
+def _udc_states() -> dict[str, str]:
+    states: dict[str, str] = {}
+    for path in sorted(Path("/sys/class/udc").glob("*")):
+        try:
+            state = (path / "state").read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            state = "unknown"
+        states[path.name] = state or "unknown"
+    return states
 
 
 def _try(func, default: str = "") -> str:

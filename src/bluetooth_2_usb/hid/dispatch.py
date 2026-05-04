@@ -65,7 +65,18 @@ class HidDispatcher:
         if not self._relay_gate.active:
             self.discard_pending()
             return
+        coalesced_events = self._mouse_delta.pending_event_count
         delta = self._mouse_delta.flush()
+        if coalesced_events:
+            logger.debug(
+                "Flushing mouse delta: coalesced_events=%s x=%s y=%s wheel=%s pan=%s emitted=%s",
+                coalesced_events,
+                delta.x if delta is not None else 0,
+                delta.y if delta is not None else 0,
+                delta.wheel if delta is not None else 0,
+                delta.pan if delta is not None else 0,
+                delta is not None,
+            )
         if delta is None:
             return
         await self._process_mouse_delta(delta)

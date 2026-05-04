@@ -127,9 +127,10 @@ For the supported appliance-style read-only workflow, use
 
 ## Host wake from suspend
 
-Wake-from-suspend support requires a patched Raspberry Pi kernel. For the
-validated custom-kernel workflow, use
-[docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
+> [!WARNING]
+> Wake-from-suspend support requires a patched Raspberry Pi kernel. This is not
+> part of the stock install path. For the validated custom-kernel workflow, use
+> [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
 
 ## Configuration
 
@@ -213,8 +214,9 @@ Use this after cloning into the supported install path.
 
 ### `update`
 
-Fast-forward the managed checkout and call `install` only when the checkout
-actually changed. This is the normal update path for an installed system.
+Fast-forward the managed checkout and reapply `install`. This is the normal
+update path for an installed system, and it rebuilds the managed environment
+even when the checkout is already current.
 
 ### `uninstall`
 
@@ -253,8 +255,8 @@ loopback inject/capture validation.
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
-validation. On Windows, use `scripts/loopback-capture.ps1` as the launcher for
-the same host-capture flow.
+validation. On Windows, use the same Python CLI from an environment that can
+import `hid`; strict Windows event capture uses the Python Raw Input backend.
 
 ### `udev install`
 

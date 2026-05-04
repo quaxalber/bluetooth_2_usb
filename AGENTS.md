@@ -35,76 +35,35 @@ Repo-owned focused guides:
 
 ## Agent deltas
 
-- Constructive criticism, objections, and requests for clarification are
-  welcome and appreciated.
-- When a prompt or part of a prompt seems unclear, risky, internally
-  inconsistent, or worth a second thought, give honest feedback before
-  implementing.
-- Ask concise questions or offer concrete alternatives when clarification would
-  materially improve the result; do not withhold technical concerns to avoid
-  hurting feelings.
-- Treat direct disagreement as normal professional collaboration: surface the
-  concern, explain the tradeoff, and then proceed once the direction is clear.
+- Follow [CONTRIBUTING.md](CONTRIBUTING.md) for contributor workflow, PR policy,
+  review, CI, compatibility, checks, and hardware validation.
 - Prefer the repo venv for checks. Do not silently fall back to system Python
   when the venv workflow applies.
 - For remote Pi work, passwordless sudo is strongly recommended so `sudo -n`
   validation paths do not fail early.
 - Keep changes focused. Update docs when behavior, commands, paths, defaults, or
   validation guidance change.
-- Follow the compatibility policy in `CONTRIBUTING.md`.
-- Do not push directly to `main`. Use `staging` as the integration branch for
-  normal work.
-- Open normal PRs against `staging` and squash-merge them there. Small
-  follow-up review fixes may be pushed directly to `staging` when that is the
-  least disruptive path.
-- Promote validated batches from `staging` to `main` with a normal merge
-  commit.
 - Do not amend commits unless explicitly asked.
 - Do not revert user changes you did not make.
 
 ## Validation expectations
 
-Use the baseline checks from [CONTRIBUTING.md](CONTRIBUTING.md).
-
-If you change installer, diagnostics, or read-only logic, run the full
-operational CLI validation path.
-
-For runtime-affecting changes, validate on real Pi hardware when feasible.
-Minimum Pi-side checks:
-
-- `sudo -n bluetooth_2_usb smoketest --verbose`
-- `sudo -n bluetooth_2_usb debug --duration 10`
-- `sudo -n bluetoothctl show`
-- `sudo -n btmgmt info`
-
-For relay-path changes, also use the host/Pi loopback inject/capture validation from
-`docs/host-relay-loopback.md`.
-
-If destructive Pi flows were not executed, say so explicitly in the final
-summary.
+Use the baseline checks and hardware-validation policy from
+[CONTRIBUTING.md](CONTRIBUTING.md). Use the focused docs above for full
+operational, read-only, remote-wakeup, or loopback validation flows.
 
 ## Review and CI
 
-- Verify each review point against the current code; do not trust old thread
-  state blindly.
-- Also verify grouped nitpicks, summary comments, and non-threaded feedback.
-- If you intentionally disagree with review feedback, document the reason on the
-  PR.
-- If CI fails, inspect the actual failing GitHub Actions step and log before
-  guessing.
+Follow the canonical review and CI policy in [CONTRIBUTING.md](CONTRIBUTING.md).
+Do not duplicate or override CodeRabbit workflow rules here.
 
-CodeRabbit:
+## Final Response Expectations
 
-- Follow the canonical CodeRabbit review policy in `CONTRIBUTING.md`.
-- Do not duplicate or override that policy here.
+Keep final responses concise and decision-useful:
 
-## Final response expectations
-
-When reporting work:
-
-- summarize the relevant checks that were actually run; do not feel obligated to
-  list every single command when a shorter summary is clearer
-- say which checks could not be run and why
-- distinguish workstation validation from real Pi validation
-- call out residual risk, especially for install, diagnostics, read-only mode,
-  and release behavior
+- state what changed and where, in one or two sentences
+- report validation by outcome, not command transcript; mention only the checks
+  that matter
+- clearly name any skipped validation, especially real Pi, live loopback,
+  destructive read-only, or release checks
+- call out residual risk only when it affects the user's next decision

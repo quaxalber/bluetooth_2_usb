@@ -5,7 +5,18 @@ import sys
 import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
+from adafruit_hid.keycode import Keycode
+
+from ..evdev import KeyEvent, ecodes, evdev_to_usb_hid
+from ..hid.constants import (
+    HID_PAGE_CONSUMER,
+    HID_PAGE_GENERIC_DESKTOP,
+    HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_KEYBOARD,
+    HID_USAGE_MOUSE,
+)
 from .capture import (
     CaptureMismatchError,
     CaptureTimeoutError,
@@ -14,8 +25,10 @@ from .capture import (
     KeyboardSequenceMatcher,
     MissingNodeError,
     MouseSequenceMatcher,
+    candidate_progress_details,
+    progress_summary_details,
 )
-from .constants import EXIT_OK
+from .constants import EXIT_ACCESS, EXIT_OK
 from .result import GadgetNodes, LoopbackResult
 from .scenarios import BTN_EXTRA, BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, BTN_SIDE, EV_KEY, EVENT_CODE_NAMES, get_scenario
 
@@ -71,18 +84,59 @@ RI_MOUSE_BUTTON_5_UP = 0x0200
 RI_MOUSE_WHEEL = 0x0400
 RI_MOUSE_HORIZONTAL_WHEEL = 0x0800
 CW_USEDEFAULT = -2147483648
-GENERIC_DESKTOP_USAGE_PAGE = 0x01
-KEYBOARD_USAGE = 0x06
-MOUSE_USAGE = 0x02
-CONSUMER_USAGE_PAGE = 0x0C
-CONSUMER_USAGE = 0x01
 HID_MOUSE_I16_MIN = -32767
 HID_MOUSE_I16_MAX = 32767
+UINT32_ERROR = 0xFFFFFFFF
+RAW_INPUT_BUTTON_FLAGS_MASK = 0xFFFF
+RAW_INPUT_WHEEL_VALUE_SHIFT = 16
+VK_SHIFT = 0x10
+VK_PRIOR = 0x21
+VK_NEXT = 0x22
+VK_END = 0x23
+VK_HOME = 0x24
+VK_LEFT = 0x25
+VK_UP = 0x26
+VK_RIGHT = 0x27
+VK_DOWN = 0x28
+VK_SNAPSHOT = 0x2C
+VK_INSERT = 0x2D
+VK_DELETE = 0x2E
+VK_APPS = 0x5D
+VK_F1 = 0x70
 VK_F13 = 0x7C
 VK_F14 = 0x7D
 VK_F15 = 0x7E
+VK_F24 = 0x87
+VK_SCROLL = 0x91
+VK_LSHIFT = 0xA0
 
-VK_TO_HID = {VK_F13: 104, VK_F14: 105, VK_F15: 106}
+VK_TO_EVDEV = {
+    VK_SHIFT: ecodes.KEY_LEFTSHIFT,
+    VK_PRIOR: ecodes.KEY_PAGEUP,
+    VK_NEXT: ecodes.KEY_PAGEDOWN,
+    VK_END: ecodes.KEY_END,
+    VK_HOME: ecodes.KEY_HOME,
+    VK_LEFT: ecodes.KEY_LEFT,
+    VK_UP: ecodes.KEY_UP,
+    VK_RIGHT: ecodes.KEY_RIGHT,
+    VK_DOWN: ecodes.KEY_DOWN,
+    VK_SNAPSHOT: ecodes.KEY_SYSRQ,
+    VK_INSERT: ecodes.KEY_INSERT,
+    VK_DELETE: ecodes.KEY_DELETE,
+    **{ord(letter): getattr(ecodes, f"KEY_{letter}") for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"},
+    VK_APPS: ecodes.KEY_COMPOSE,
+    **{VK_F1 + index: getattr(ecodes, f"KEY_F{index + 1}") for index in range(24)},
+    VK_SCROLL: ecodes.KEY_SCROLLLOCK,
+    VK_LSHIFT: ecodes.KEY_LEFTSHIFT,
+}
+
+
+def _mapped_hid_usage(evdev_code: int) -> int | None:
+    usage, _name = evdev_to_usb_hid(SimpleNamespace(scancode=evdev_code, keystate=KeyEvent.key_down))
+    return usage
+
+
+VK_TO_HID = {vkey: usage for vkey, evdev_code in VK_TO_EVDEV.items() if (usage := _mapped_hid_usage(evdev_code))}
 
 RAW_MOUSE_BUTTON_BITS = (
     (RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, 0x01),
@@ -445,13 +499,43 @@ def device_matches_candidate(device_name: str, candidate_identities: tuple[str, 
     return stable_device_identity(device_name) in candidate_identities
 
 
+class RawInputKeyboardReportBuilder:
+    def __init__(self) -> None:
+        self._modifier_state = 0
+        self._pressed_keys: tuple[int, ...] = ()
+
+    def report_for(self, vkey: int, *, is_key_up: bool) -> bytes | None:
+        hid_code = VK_TO_HID.get(vkey)
+        if hid_code is None:
+            return None
+        modifier = Keycode.modifier_bit(hid_code)
+        if is_key_up:
+            if modifier:
+                self._modifier_state &= ~modifier
+            else:
+                self._pressed_keys = tuple(key for key in self._pressed_keys if key != hid_code)
+        elif modifier:
+            self._modifier_state |= modifier
+        elif hid_code not in self._pressed_keys:
+            self._pressed_keys = (*self._pressed_keys, hid_code)
+        return self._current_report()
+
+    def _current_report(self) -> bytes:
+        keys = list(self._pressed_keys[:6])
+        keys.extend([0] * (6 - len(keys)))
+        return bytes([self._modifier_state, 0, *keys])
+
+
+_KEYBOARD_EVENT_REPORT_BUILDER = RawInputKeyboardReportBuilder()
+
+
 def keyboard_event_to_report(vkey: int, *, is_key_up: bool) -> bytes | None:
-    hid_code = VK_TO_HID.get(vkey)
-    if hid_code is None:
-        return None
-    if is_key_up:
-        return bytes([0x00] * 8)
-    return bytes([0x00, 0x00, hid_code, 0, 0, 0, 0, 0])
+    return _KEYBOARD_EVENT_REPORT_BUILDER.report_for(vkey, is_key_up=is_key_up)
+
+
+def _reset_keyboard_event_report_builder() -> None:
+    global _KEYBOARD_EVENT_REPORT_BUILDER
+    _KEYBOARD_EVENT_REPORT_BUILDER = RawInputKeyboardReportBuilder()
 
 
 def _mouse_i16_bytes(value: int) -> bytes:
@@ -465,9 +549,11 @@ class RawInputMouseReportBuilder:
 
     def reports_for(self, raw_mouse: RAWMOUSE) -> list[bytes]:
         reports: list[bytes] = []
-        button_flags = raw_mouse.ulButtons & 0xFFFF
+        button_flags = raw_mouse.ulButtons & RAW_INPUT_BUTTON_FLAGS_MASK
         button_changed = self._apply_button_flags(button_flags)
-        wheel_value = ctypes.c_short((raw_mouse.ulButtons >> 16) & 0xFFFF).value
+        wheel_value = ctypes.c_short(
+            (raw_mouse.ulButtons >> RAW_INPUT_WHEEL_VALUE_SHIFT) & RAW_INPUT_BUTTON_FLAGS_MASK
+        ).value
         wheel = wheel_value if button_flags & RI_MOUSE_WHEEL else 0
         pan = wheel_value if button_flags & RI_MOUSE_HORIZONTAL_WHEEL else 0
         if raw_mouse.lLastX or raw_mouse.lLastY or wheel or pan:
@@ -490,7 +576,7 @@ class RawInputMouseReportBuilder:
         return changed
 
 
-def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
+def _unsupported_mouse_buttons(scenario) -> tuple[int, ...]:
     return tuple(
         dict.fromkeys(
             step.code for step in scenario.mouse_button_steps if step.code not in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
@@ -498,8 +584,8 @@ def _unsupported_windows_mouse_button_codes(scenario) -> tuple[int, ...]:
     )
 
 
-def windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
-    skipped_codes = _unsupported_windows_mouse_button_codes(scenario)
+def mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]:
+    skipped_codes = _unsupported_mouse_buttons(scenario)
     skipped_names = tuple(EVENT_CODE_NAMES[EV_KEY].get(code, str(code)) for code in skipped_codes)
     supported_steps = tuple(
         step for step in scenario.mouse_button_steps if step.code in WINDOWS_RAW_INPUT_MOUSE_BUTTON_CODES
@@ -509,12 +595,15 @@ def windows_mouse_button_expectations(scenario) -> tuple[tuple, tuple[str, ...]]
 
 def _get_raw_input_device_name(hdevice: int) -> str:
     size = wintypes.UINT(0)
-    if user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICENAME, None, ctypes.byref(size)) == 0xFFFFFFFF:
+    if (
+        user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICENAME, None, ctypes.byref(size))
+        == UINT32_ERROR
+    ):
         raise OSError("GetRawInputDeviceInfoW failed while sizing device name")
     buffer = ctypes.create_unicode_buffer(size.value)
     if (
         user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICENAME, buffer, ctypes.byref(size))
-        == 0xFFFFFFFF
+        == UINT32_ERROR
     ):
         raise OSError("GetRawInputDeviceInfoW failed while reading device name")
     return _normalize_device_name(buffer.value)
@@ -526,7 +615,7 @@ def _get_raw_input_device_info(hdevice: int) -> dict[str, object]:
     size = wintypes.UINT(ctypes.sizeof(RID_DEVICE_INFO))
     if (
         user32.GetRawInputDeviceInfoW(wintypes.HANDLE(hdevice), RIDI_DEVICEINFO, ctypes.byref(info), ctypes.byref(size))
-        == 0xFFFFFFFF
+        == UINT32_ERROR
     ):
         raise OSError("GetRawInputDeviceInfoW failed while reading device info")
 
@@ -555,14 +644,14 @@ def _get_raw_input_device_info(hdevice: int) -> dict[str, object]:
 def _list_raw_input_devices() -> list[dict[str, object]]:
     count = wintypes.UINT(0)
     entry_size = ctypes.sizeof(RAWINPUTDEVICELIST)
-    if user32.GetRawInputDeviceList(None, ctypes.byref(count), entry_size) == 0xFFFFFFFF:
+    if user32.GetRawInputDeviceList(None, ctypes.byref(count), entry_size) == UINT32_ERROR:
         raise OSError("GetRawInputDeviceList failed while sizing device list")
     if count.value == 0:
         return []
 
     raw_list = (RAWINPUTDEVICELIST * count.value)()
     result = user32.GetRawInputDeviceList(raw_list, ctypes.byref(count), entry_size)
-    if result == 0xFFFFFFFF:
+    if result == UINT32_ERROR:
         raise OSError("GetRawInputDeviceList failed while reading device list")
 
     devices: list[dict[str, object]] = []
@@ -582,13 +671,13 @@ def _list_raw_input_devices() -> list[dict[str, object]]:
 def _register_raw_input(hwnd: int) -> None:
     devices = (RAWINPUTDEVICE * 3)(
         RAWINPUTDEVICE(
-            usUsagePage=GENERIC_DESKTOP_USAGE_PAGE, usUsage=KEYBOARD_USAGE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+            usUsagePage=HID_PAGE_GENERIC_DESKTOP, usUsage=HID_USAGE_KEYBOARD, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
         RAWINPUTDEVICE(
-            usUsagePage=GENERIC_DESKTOP_USAGE_PAGE, usUsage=MOUSE_USAGE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+            usUsagePage=HID_PAGE_GENERIC_DESKTOP, usUsage=HID_USAGE_MOUSE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
         RAWINPUTDEVICE(
-            usUsagePage=CONSUMER_USAGE_PAGE, usUsage=CONSUMER_USAGE, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+            usUsagePage=HID_PAGE_CONSUMER, usUsage=HID_USAGE_CONSUMER_CONTROL, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
     )
     if not user32.RegisterRawInputDevices(devices, len(devices), ctypes.sizeof(RAWINPUTDEVICE)):
@@ -627,10 +716,10 @@ def _create_message_window() -> tuple[int, WNDPROC]:
 def _read_raw_input(lparam: int) -> tuple[RAWINPUT, bytes]:
     size = wintypes.UINT(0)
     header_size = ctypes.sizeof(RAWINPUTHEADER)
-    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, None, ctypes.byref(size), header_size) == 0xFFFFFFFF:
+    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, None, ctypes.byref(size), header_size) == UINT32_ERROR:
         raise OSError("GetRawInputData sizing failed")
     buffer = ctypes.create_string_buffer(size.value)
-    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, buffer, ctypes.byref(size), header_size) == 0xFFFFFFFF:
+    if user32.GetRawInputData(HRAWINPUT(lparam), RID_INPUT, buffer, ctypes.byref(size), header_size) == UINT32_ERROR:
         raise OSError("GetRawInputData read failed")
     raw_bytes = buffer.raw[: size.value]
     if len(raw_bytes) < ctypes.sizeof(RAWINPUT):
@@ -659,6 +748,103 @@ def _extract_raw_hid_reports(raw_bytes: bytes) -> list[bytes]:
     return reports
 
 
+def _raw_input_complete(
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+) -> bool:
+    return (
+        (keyboard_candidate is None or keyboard_candidate.complete)
+        and (mouse_candidate is None or mouse_candidate.complete)
+        and (consumer_candidate is None or consumer_candidate.complete)
+    )
+
+
+def _raw_input_nodes(
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+) -> GadgetNodes:
+    return GadgetNodes(
+        keyboard_node=(keyboard_candidate.matched_name if keyboard_candidate else None),
+        mouse_node=(mouse_candidate.matched_name if mouse_candidate else None),
+        consumer_node=(consumer_candidate.matched_name if consumer_candidate else None),
+    )
+
+
+def _raw_input_progress(
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+) -> dict[str, list[dict[str, object]]]:
+    progress: dict[str, list[dict[str, object]]] = {}
+    for candidate in (keyboard_candidate, mouse_candidate, consumer_candidate):
+        if candidate is None:
+            continue
+        progress.setdefault(candidate.role, []).append(
+            candidate_progress_details(node=candidate.matched_name, matcher=candidate.matcher)
+        )
+    return progress
+
+
+def _raw_input_failure_details(
+    timeout_sec: float,
+    debug: _RawInputDebug,
+    windows_skipped_mouse_buttons: tuple[str, ...],
+    keyboard_candidate: _RawInputCandidate | None = None,
+    mouse_candidate: _RawInputCandidate | None = None,
+    consumer_candidate: _RawInputCandidate | None = None,
+) -> dict[str, object]:
+    progress = _raw_input_progress(keyboard_candidate, mouse_candidate, consumer_candidate)
+    details: dict[str, object] = {
+        "capture_backend": "raw_input",
+        "timeout_sec": timeout_sec,
+        "nodes": _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate).to_dict(),
+        "raw_input_debug": debug.to_dict(),
+        "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
+    }
+    details.update(progress_summary_details(progress))
+    return details
+
+
+def _raw_input_success_result(
+    scenario,
+    timeout_sec: float,
+    debug: _RawInputDebug,
+    keyboard_candidate: _RawInputCandidate | None,
+    mouse_candidate: _RawInputCandidate | None,
+    consumer_candidate: _RawInputCandidate | None,
+    windows_skipped_mouse_buttons: tuple[str, ...],
+) -> LoopbackResult:
+    nodes = _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate)
+    details: dict[str, object] = {
+        "capture_backend": "raw_input",
+        "timeout_sec": timeout_sec,
+        "nodes": nodes.to_dict(),
+        "raw_input_debug": debug.to_dict(),
+    }
+    if keyboard_candidate is not None:
+        details["keyboard_steps_seen"] = keyboard_candidate.matcher.index
+        details["keyboard_reports_seen"] = list(keyboard_candidate.matched_reports)
+    if mouse_candidate is not None:
+        details["mouse_rel_steps_seen"] = mouse_candidate.matcher.rel_index
+        details["mouse_button_steps_seen"] = mouse_candidate.matcher.button_index
+        details["mouse_reports_seen"] = list(mouse_candidate.matched_reports)
+        if windows_skipped_mouse_buttons:
+            details["windows_skipped_mouse_buttons"] = list(windows_skipped_mouse_buttons)
+    if consumer_candidate is not None:
+        details["consumer_steps_seen"] = consumer_candidate.matcher.index
+        details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
+    return LoopbackResult(
+        command="capture",
+        scenario=scenario.name,
+        success=True,
+        exit_code=EXIT_OK,
+        message="Observed expected relay events through Windows Raw Input",
+        details=details,
+    )
+
+
 def _pump_raw_input(
     timeout_sec: float,
     keyboard_candidate_identities: tuple[str, ...],
@@ -670,6 +856,7 @@ def _pump_raw_input(
 ) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     expected_mouse_button_steps = scenario.mouse_button_steps if mouse_button_steps is None else mouse_button_steps
+    keyboard_report_builder = RawInputKeyboardReportBuilder()
     mouse_report_builder = RawInputMouseReportBuilder()
     keyboard_candidate = (
         _RawInputCandidate("keyboard", keyboard_candidate_identities, KeyboardSequenceMatcher(scenario.keyboard_steps))
@@ -717,9 +904,11 @@ def _pump_raw_input(
 
                     if raw.header.dwType == RIM_TYPEKEYBOARD and keyboard_candidate:
                         matched = device_matches_candidate(device_name, keyboard_candidate.candidate_identities)
-                        report = keyboard_event_to_report(
-                            raw.keyboard.VKey, is_key_up=bool(raw.keyboard.Flags & RI_KEY_BREAK)
-                        )
+                        report = None
+                        if matched:
+                            report = keyboard_report_builder.report_for(
+                                raw.keyboard.VKey, is_key_up=bool(raw.keyboard.Flags & RI_KEY_BREAK)
+                            )
                         debug.note_event(
                             role="keyboard",
                             device_name=device_name,
@@ -775,41 +964,15 @@ def _pump_raw_input(
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
 
-            if (
-                (keyboard_candidate is None or keyboard_candidate.complete)
-                and (mouse_candidate is None or mouse_candidate.complete)
-                and (consumer_candidate is None or consumer_candidate.complete)
-            ):
-                nodes = GadgetNodes(
-                    keyboard_node=(keyboard_candidate.matched_name if keyboard_candidate else None),
-                    mouse_node=(mouse_candidate.matched_name if mouse_candidate else None),
-                    consumer_node=(consumer_candidate.matched_name if consumer_candidate else None),
-                )
-                details: dict[str, object] = {
-                    "capture_backend": "raw_input",
-                    "timeout_sec": timeout_sec,
-                    "nodes": nodes.to_dict(),
-                    "raw_input_debug": debug.to_dict(),
-                }
-                if keyboard_candidate is not None:
-                    details["keyboard_steps_seen"] = keyboard_candidate.matcher.index
-                    details["keyboard_reports_seen"] = list(keyboard_candidate.matched_reports)
-                if mouse_candidate is not None:
-                    details["mouse_rel_steps_seen"] = mouse_candidate.matcher.rel_index
-                    details["mouse_button_steps_seen"] = mouse_candidate.matcher.button_index
-                    details["mouse_reports_seen"] = list(mouse_candidate.matched_reports)
-                    if windows_skipped_mouse_buttons:
-                        details["windows_skipped_mouse_buttons"] = list(windows_skipped_mouse_buttons)
-                if consumer_candidate is not None:
-                    details["consumer_steps_seen"] = consumer_candidate.matcher.index
-                    details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
-                return LoopbackResult(
-                    command="capture",
-                    scenario=scenario.name,
-                    success=True,
-                    exit_code=EXIT_OK,
-                    message="Observed expected relay events through Windows Raw Input",
-                    details=details,
+            if _raw_input_complete(keyboard_candidate, mouse_candidate, consumer_candidate):
+                return _raw_input_success_result(
+                    scenario,
+                    timeout_sec,
+                    debug,
+                    keyboard_candidate,
+                    mouse_candidate,
+                    consumer_candidate,
+                    windows_skipped_mouse_buttons,
                 )
 
             time.sleep(0.01)
@@ -820,13 +983,30 @@ def _pump_raw_input(
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
-            details={
-                "capture_backend": "raw_input",
-                "timeout_sec": timeout_sec,
-                "nodes": GadgetNodes(None, None, None).to_dict(),
-                "raw_input_debug": debug.to_dict(),
-                "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
-            },
+            details=_raw_input_failure_details(
+                timeout_sec,
+                debug,
+                windows_skipped_mouse_buttons,
+                keyboard_candidate,
+                mouse_candidate,
+                consumer_candidate,
+            ),
+        )
+    except OSError as exc:
+        return LoopbackResult(
+            command="capture",
+            scenario=scenario.name,
+            success=False,
+            exit_code=EXIT_ACCESS,
+            message=f"Windows Raw Input capture failed: {exc}",
+            details=_raw_input_failure_details(
+                timeout_sec,
+                debug,
+                windows_skipped_mouse_buttons,
+                keyboard_candidate,
+                mouse_candidate,
+                consumer_candidate,
+            ),
         )
     finally:
         if hwnd is not None:
@@ -839,19 +1019,13 @@ def _pump_raw_input(
         success=False,
         exit_code=CaptureTimeoutError.exit_code,
         message=f"Timed out waiting for {scenario.name} events after {timeout_sec}s",
-        details={
-            "capture_backend": "raw_input",
-            "timeout_sec": timeout_sec,
-            "nodes": GadgetNodes(None, None, None).to_dict(),
-            "raw_input_debug": debug.to_dict(),
-            "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
-        },
+        details=_raw_input_failure_details(
+            timeout_sec, debug, windows_skipped_mouse_buttons, keyboard_candidate, mouse_candidate, consumer_candidate
+        ),
     )
 
 
-def _missing_raw_input_node_result(
-    scenario_name: str, message: str, candidate_nodes: GadgetNodeCandidates
-) -> LoopbackResult:
+def _missing_node_result(scenario_name: str, message: str, candidate_nodes: GadgetNodeCandidates) -> LoopbackResult:
     return LoopbackResult(
         command="capture",
         scenario=scenario_name,
@@ -866,33 +1040,31 @@ def _missing_raw_input_node_result(
     )
 
 
-def run_windows_raw_input_capture(
+def run_raw_input_capture(
     scenario_name: str, timeout_sec: float, candidate_nodes: GadgetNodeCandidates
 ) -> LoopbackResult:
     if not IS_WINDOWS:
         raise RuntimeError("Windows Raw Input capture is only available on Windows")
 
     scenario = get_scenario(scenario_name)
-    mouse_button_steps, windows_skipped_mouse_buttons = windows_mouse_button_expectations(scenario)
+    mouse_button_steps, windows_skipped_mouse_buttons = mouse_button_expectations(scenario)
 
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
     consumer_candidate_identities: tuple[str, ...] = ()
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
-            return _missing_raw_input_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
+            return _missing_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
         keyboard_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.keyboard_nodes)
         )
     if scenario.mouse_enabled:
         if not candidate_nodes.mouse_nodes:
-            return _missing_raw_input_node_result(scenario.name, "Mouse HID device was not found", candidate_nodes)
+            return _missing_node_result(scenario.name, "Mouse HID device was not found", candidate_nodes)
         mouse_candidate_identities = extract_device_identities(tuple(info.node for info in candidate_nodes.mouse_nodes))
     if scenario.consumer_enabled:
         if not candidate_nodes.consumer_nodes:
-            return _missing_raw_input_node_result(
-                scenario.name, "Consumer-control HID device was not found", candidate_nodes
-            )
+            return _missing_node_result(scenario.name, "Consumer-control HID device was not found", candidate_nodes)
         consumer_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )

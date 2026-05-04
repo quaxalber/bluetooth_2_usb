@@ -167,7 +167,6 @@ def enable_readonly() -> None:
     )
 
     overlay_before = overlay_status()
-    overlay_changed = False
     try:
         if overlay_before != "enabled":
             if readonly_stack_packages_missing():
@@ -175,7 +174,7 @@ def enable_readonly() -> None:
                     "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
                 )
             run(["raspi-config", "nonint", "enable_overlayfs"])
-            overlay_changed = True
+
         if not readonly_stack_packages_healthy():
             warn("OverlayFS package state is incomplete:")
             print(readonly_stack_package_report())
@@ -201,15 +200,18 @@ def enable_readonly() -> None:
                 )
             else:
                 fail("OverlayFS is still not configured after raspi-config completed.")
+        config.mode = "persistent"
+        write_readonly_config(config)
     except Exception:
-        if overlay_changed:
-            warn("Rolling back OverlayFS enablement after read-only setup validation failed.")
-            run(["raspi-config", "nonint", "disable_overlayfs"], check=False)
-            config.mode = "disabled"
-            write_readonly_config(config)
+        warn(
+            "OverlayFS was requested but validation did not complete. "
+            + "Run `bluetooth_2_usb readonly status` and repair the reported package or boot state before rebooting. "
+            + "See: https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
+            + "#overlayfs-repair-guidance "
+            + "for repair steps. "
+            + "To explicitly disable OverlayFS, run: sudo bluetooth_2_usb readonly disable"
+        )
         raise
-    config.mode = "persistent"
-    write_readonly_config(config)
     ok("OverlayFS has been enabled")
     warn("Boot partition read-only mode is intentionally not changed by this command.")
     warn(
