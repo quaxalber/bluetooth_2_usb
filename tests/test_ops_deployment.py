@@ -101,6 +101,9 @@ class OpsDeploymentTest(unittest.TestCase):
             ):
                 rebuild_venv(venv, root)
 
+            self.assertTrue(venv.is_dir())
+            self.assertTrue((venv / "bin").is_dir())
+
     def test_install_stops_active_service_before_rebuild_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

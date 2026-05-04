@@ -3,17 +3,13 @@
 Thanks for your interest in contributing.
 
 This guide covers the repo-specific workflow that keeps issues actionable,
-changes easy to review, and validation grounded in the supported Raspberry Pi
-deployment model.
+changes easy to review, and validation grounded.
 
 ## Reporting Issues
 
 Thanks for taking the time to report a problem. If you can, please include:
 
 - target host type
-- Raspberry Pi model and Raspberry Pi OS version
-- whether persistent read-only mode is enabled
-- exact commands used
 - output from `bluetooth_2_usb smoketest --verbose`
 - output from `bluetooth_2_usb debug --duration 10`
 - clear reproduction steps
@@ -38,8 +34,7 @@ Please:
 - update docs when behavior, commands, paths, or defaults change
 
 Use a normal PR into `staging` for features, fixes, refactors, and other
-non-trivial changes. Small follow-up review fixes may be pushed directly to
-`staging` when that is the least disruptive way to finish an in-flight review.
+non-trivial changes.
 
 Branch and commit naming:
 
@@ -69,25 +64,6 @@ Merge policy:
 - if you intentionally decline a review suggestion, explain that on the PR
 - if CI fails, inspect the actual failing step and log before guessing
 
-CodeRabbit policy:
-
-- `.coderabbit.yaml` disables automatic review; request CodeRabbit manually when
-  needed, using `@coderabbitai full review` by default
-- treat the first top-level CodeRabbit PR comment as the live status source of
-  truth
-- do not consider review complete until that comment says
-  `no actionable comments` after the latest commit
-- do not use a green `CodeRabbit` check alone as proof that review is finished
-- for the actual findings, inspect the newest review comments and read the
-  section `Prompt for all review comments with AI agents`
-- treat that prompt section as the source of truth for actionable review
-  findings, including nitpicks, outside-diff-range comments, summary comments,
-  and other grouped review items
-- if the first CodeRabbit comment says `review in progress`, wait for completion
-- if it says `paused`, resume the review first (for example, click Resume or
-  post `@coderabbitai resume`) before posting `@coderabbitai full review`
-- if it says `rate limited`, wait and retry `@coderabbitai full review`
-
 ## Development Environment
 
 > [!NOTE]
@@ -114,14 +90,6 @@ If you prefer to work from a fork, replace the clone URL with your fork.
 
 Use this venv for repo-local validation.
 
-## Supported Deployment Model
-
-Please keep code and docs aligned with the supported deployment model:
-
-- install root: `/opt/bluetooth_2_usb`
-- service unit: `bluetooth_2_usb.service`
-- runtime settings: `/etc/default/bluetooth_2_usb`
-
 ## Quality Expectations
 
 ### Python
@@ -129,12 +97,6 @@ Please keep code and docs aligned with the supported deployment model:
 - Python 3.11+
 - format Python with Black at the repository line length (`120`)
 - lint with Ruff
-- avoid magic trailing commas whose only purpose is to force Black to keep a
-  call, literal, or assertion split across multiple lines; keep syntactic
-  trailing commas where Python requires them
-- when splitting strings, avoid implicit adjacent string literals because they
-  are easy to misread after formatting. Prefer explicit concatenation,
-  intermediate variables, or a naturally wrapped data structure.
 - use positional formatting for logger calls so disabled log levels avoid
   formatting work and log aggregators can group stable message templates
 - prefer small, direct control flow over clever abstractions

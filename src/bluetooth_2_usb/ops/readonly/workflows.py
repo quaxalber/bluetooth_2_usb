@@ -200,6 +200,8 @@ def enable_readonly() -> None:
                 )
             else:
                 fail("OverlayFS is still not configured after raspi-config completed.")
+        config.mode = "persistent"
+        write_readonly_config(config)
     except Exception:
         warn(
             "OverlayFS was requested but validation did not complete. "
@@ -210,8 +212,6 @@ def enable_readonly() -> None:
             + "To explicitly disable OverlayFS, run: sudo bluetooth_2_usb readonly disable"
         )
         raise
-    config.mode = "persistent"
-    write_readonly_config(config)
     ok("OverlayFS has been enabled")
     warn("Boot partition read-only mode is intentionally not changed by this command.")
     warn(

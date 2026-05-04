@@ -102,9 +102,12 @@ class _FakeInputDevice:
     async def async_read_loop(self):
         while True:
             event = await self._event_queue.get()
-            if event is None:
-                return
-            yield event
+            try:
+                if event is None:
+                    return
+                yield event
+            finally:
+                self._event_queue.task_done()
 
     def close(self) -> None:
         self.close_calls += 1
@@ -150,7 +153,7 @@ class RuntimeRelayIntegrationTest(unittest.IsolatedAsyncioTestCase):
                 await _wait_until(lambda: hid_gadgets.release_all_calls == 1)
                 baseline_presses = list(hid_gadgets.keyboard.presses)
                 input_events.put_nowait(_FakeKeyEvent(ecodes.KEY_B, _FakeKeyEvent.key_down))
-                await asyncio.sleep(0.01)
+                await asyncio.wait_for(input_events.join(), timeout=1)
                 self.assertEqual(hid_gadgets.keyboard.presses, baseline_presses)
 
                 runtime_events.put_nowait(ShutdownRequested("test"))
