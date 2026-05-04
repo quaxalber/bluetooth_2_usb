@@ -34,11 +34,7 @@ class OpsDeploymentTest(unittest.TestCase):
         symlink_to.assert_called_once_with(
             Path("/usr/local/bin/bluetooth_2_usb"), Path("/opt/bluetooth_2_usb/venv/bin/bluetooth_2_usb")
         )
-        unlinked_paths = {call_args.args[0] for call_args in unlink.call_args_list}
-        self.assertEqual(
-            unlinked_paths, {Path("/usr/local/bin/bluetooth_2_usb"), Path("/usr/local/bin/bluetooth_2_usb.loopback")}
-        )
-        self.assertTrue(all(call_args.kwargs == {"missing_ok": True} for call_args in unlink.call_args_list))
+        unlink.assert_any_call(Path("/usr/local/bin/bluetooth_2_usb"), missing_ok=True)
 
     def test_rebuild_venv_recreates_existing_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

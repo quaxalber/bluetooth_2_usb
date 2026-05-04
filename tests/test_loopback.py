@@ -311,20 +311,28 @@ class ScenarioDefinitionTest(unittest.TestCase):
 
         self.assertEqual(str(error.exception), f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}")
 
-    def test_scenario_summary_reports_counts_without_full_sequences(self) -> None:
+    def test_scenario_summary_reports_counts(self) -> None:
         summary = scenario_summary(SCENARIOS["combo"])
 
-        self.assertEqual(summary["name"], "combo")
-        self.assertEqual(summary["keyboard_steps"], len(SCENARIOS["combo"].keyboard_steps))
-        self.assertEqual(summary["mouse_rel_steps"], len(SCENARIOS["combo"].mouse_rel_steps))
-        self.assertEqual(summary["mouse_button_steps"], len(SCENARIOS["combo"].mouse_button_steps))
-        self.assertEqual(summary["consumer_steps"], len(SCENARIOS["combo"].consumer_steps))
         self.assertEqual(
-            summary["total_steps"],
-            len(SCENARIOS["combo"].keyboard_steps)
-            + len(SCENARIOS["combo"].mouse_rel_steps)
-            + len(SCENARIOS["combo"].mouse_button_steps)
-            + len(SCENARIOS["combo"].consumer_steps),
+            summary,
+            {
+                "name": "combo",
+                "keyboard_steps": len(SCENARIOS["combo"].keyboard_steps),
+                "mouse_rel_steps": len(SCENARIOS["combo"].mouse_rel_steps),
+                "mouse_button_steps": len(SCENARIOS["combo"].mouse_button_steps),
+                "consumer_steps": len(SCENARIOS["combo"].consumer_steps),
+                "total_steps": (
+                    len(SCENARIOS["combo"].keyboard_steps)
+                    + len(SCENARIOS["combo"].mouse_rel_steps)
+                    + len(SCENARIOS["combo"].mouse_button_steps)
+                    + len(SCENARIOS["combo"].consumer_steps)
+                ),
+                "mouse_coalesced_tail_count": SCENARIOS["combo"].mouse_coalesced_tail_count,
+                "default_event_gap_ms": SCENARIOS["combo"].default_event_gap_ms,
+                "default_post_delay_ms": SCENARIOS["combo"].default_post_delay_ms,
+                "default_capture_timeout_sec": SCENARIOS["combo"].default_capture_timeout_sec,
+            },
         )
 
 
@@ -1146,7 +1154,7 @@ class LoopbackInjectTest(unittest.TestCase):
         first_step = scenario.keyboard_steps[0]
         keyboard.write.assert_any_call(first_step.event_type, first_step.code, first_step.value)
 
-    def test_run_inject_uses_compact_expected_summary(self) -> None:
+    def test_run_inject_reports_expected_summary(self) -> None:
         keyboard = Mock()
         mouse = Mock()
         consumer = Mock()
@@ -1161,11 +1169,8 @@ class LoopbackInjectTest(unittest.TestCase):
 
         self.assertTrue(result.success)
         expected = result.details["expected"]
-        self.assertEqual(expected["name"], "combo")
-        self.assertEqual(expected["keyboard_steps"], len(SCENARIOS["combo"].keyboard_steps))
+        self.assertEqual(expected, scenario_summary(SCENARIOS["combo"]))
         self.assertEqual(expected["total_steps"], result.details["injected_event_count"])
-        self.assertNotIsInstance(expected["keyboard_steps"], list)
-        self.assertNotIn("consumer_steps", [key for key, value in expected.items() if isinstance(value, list)])
 
     def test_inject_usage_error_returns_exit_usage(self) -> None:
         stdout = io.StringIO()
@@ -1501,6 +1506,12 @@ class LoopbackInjectTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
+        self.assertEqual(run_backend.call_args.kwargs["scenario_name"], "consumer")
+        self.assertEqual(run_backend.call_args.kwargs["timeout_sec"], SCENARIOS["consumer"].default_capture_timeout_sec)
+        self.assertEqual(
+            run_backend.call_args.kwargs["candidate_nodes"].to_dict(),
+            {"keyboard_nodes": [], "mouse_nodes": [], "consumer_nodes": ["consumer0"]},
+        )
         capture_once.assert_not_called()
 
 

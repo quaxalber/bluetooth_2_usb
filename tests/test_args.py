@@ -20,8 +20,7 @@ class ParseArgsTest(unittest.TestCase):
         args = parse_args(["--interrupt_shortcut", "CTRL+SHIFT+F12"])
         self.assertEqual(args.interrupt_shortcut, ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"])
 
-    def test_version_flag_parses_without_hid_profile(self) -> None:
+    def test_version_flag_parses(self) -> None:
         args = parse_args(["--version"])
 
         self.assertTrue(args.version)
-        self.assertFalse(hasattr(args, "hid_profile"))

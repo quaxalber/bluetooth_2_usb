@@ -117,14 +117,24 @@ class ServiceSettingsTest(unittest.TestCase):
             with self.assertRaises(ServiceSettingsError):
                 load_service_settings(env_file)
 
-    def test_defaults_do_not_emit_hid_profile_flag(self) -> None:
+    def test_default_runtime_argv_matches_default_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "missing"
 
             settings = load_service_settings(env_file)
             argv = build_runtime_argv(settings)
 
-        self.assertNotIn("--hid-profile", argv)
+        self.assertEqual(
+            argv,
+            [
+                "--auto_discover",
+                "--grab_devices",
+                "--interrupt_shortcut",
+                "CTRL+SHIFT+F12",
+                "--log_path",
+                "/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
+            ],
+        )
 
     def test_builds_runtime_argv_does_not_emit_internal_udc_path(self) -> None:
         argv = build_runtime_argv(ServiceSettings(udc_path="/tmp/udc-state"))
