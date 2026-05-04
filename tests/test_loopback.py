@@ -855,6 +855,8 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         )
 
     def test_keyboard_event_to_report_builds_eight_byte_keyboard_reports(self) -> None:
+        capture_windows._reset_keyboard_event_report_builder()
+
         self.assertEqual(
             capture_windows.keyboard_event_to_report(capture_windows.VK_F13, is_key_up=False),
             _keyboard_report(capture_windows.VK_TO_HID[capture_windows.VK_F13]),
@@ -864,6 +866,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         )
 
     def test_keyboard_event_to_report_covers_extended_scenario_keys(self) -> None:
+        capture_windows._reset_keyboard_event_report_builder()
         scenario_vkeys = (
             capture_windows.VK_F24,
             capture_windows.VK_SNAPSHOT,
@@ -878,14 +881,31 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                     capture_windows.keyboard_event_to_report(vkey, is_key_up=False),
                     _keyboard_report(capture_windows.VK_TO_HID[vkey]),
                 )
+                self.assertEqual(
+                    capture_windows.keyboard_event_to_report(vkey, is_key_up=True), _empty_keyboard_report()
+                )
 
     def test_keyboard_event_to_report_covers_standard_keys_and_modifiers(self) -> None:
+        capture_windows._reset_keyboard_event_report_builder()
         k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
 
         self.assertEqual(capture_windows.keyboard_event_to_report(ord("K"), is_key_up=False), _keyboard_report(k_usage))
+        self.assertEqual(capture_windows.keyboard_event_to_report(ord("K"), is_key_up=True), _empty_keyboard_report())
         self.assertEqual(
             capture_windows.keyboard_event_to_report(capture_windows.VK_LSHIFT, is_key_up=False),
             _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
+        )
+        self.assertEqual(
+            capture_windows.keyboard_event_to_report(ord("K"), is_key_up=False),
+            _keyboard_report(k_usage, modifier=LEFT_SHIFT_MODIFIER),
+        )
+        self.assertEqual(
+            capture_windows.keyboard_event_to_report(ord("K"), is_key_up=True),
+            _keyboard_report(modifier=LEFT_SHIFT_MODIFIER),
+        )
+        self.assertEqual(
+            capture_windows.keyboard_event_to_report(capture_windows.VK_LSHIFT, is_key_up=True),
+            _empty_keyboard_report(),
         )
 
     def test_raw_input_keyboard_report_builder_preserves_modifier_state(self) -> None:
@@ -903,6 +923,8 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(builder.report_for(capture_windows.VK_LSHIFT, is_key_up=True), _empty_keyboard_report())
 
     def test_keyboard_event_to_report_ignores_unexpected_keys(self) -> None:
+        capture_windows._reset_keyboard_event_report_builder()
+
         self.assertIsNone(capture_windows.keyboard_event_to_report(NUL, is_key_up=False))
 
     def test_raw_input_mouse_report_builder_builds_16_bit_xy_reports(self) -> None:

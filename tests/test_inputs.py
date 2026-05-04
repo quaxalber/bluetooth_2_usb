@@ -80,7 +80,7 @@ class InputInventoryTest(unittest.TestCase):
         )
         self.assertEqual([device.capabilities for device in devices], [["EV_KEY"], ["EV_REL"], []])
         self.assertEqual([device.relay_candidate for device in devices], [True, True, False])
-        self.assertEqual(devices[0].identity, "AA-BB")
+        self.assertEqual(devices[0].uniq, "AA-BB")
         self.assertIn("permission denied", devices[2].exclusion_reason or "")
         self.assertTrue(all(device.closed for device in (keyboard, mouse, broken)))
 

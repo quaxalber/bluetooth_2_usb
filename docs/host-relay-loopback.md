@@ -118,7 +118,7 @@ discovery step, not the primary event backend. Use a Python environment where
 With the repository virtual environment on Windows:
 
 ```powershell
-.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --scenario keyboard --output json
+.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --scenario node-discovery --output json
 ```
 
 ## 2. Start the host capture

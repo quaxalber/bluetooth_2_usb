@@ -526,8 +526,16 @@ class RawInputKeyboardReportBuilder:
         return bytes([self._modifier_state, 0, *keys])
 
 
+_KEYBOARD_EVENT_REPORT_BUILDER = RawInputKeyboardReportBuilder()
+
+
 def keyboard_event_to_report(vkey: int, *, is_key_up: bool) -> bytes | None:
-    return RawInputKeyboardReportBuilder().report_for(vkey, is_key_up=is_key_up)
+    return _KEYBOARD_EVENT_REPORT_BUILDER.report_for(vkey, is_key_up=is_key_up)
+
+
+def _reset_keyboard_event_report_builder() -> None:
+    global _KEYBOARD_EVENT_REPORT_BUILDER
+    _KEYBOARD_EVENT_REPORT_BUILDER = RawInputKeyboardReportBuilder()
 
 
 def _mouse_i16_bytes(value: int) -> bytes:
