@@ -10,7 +10,13 @@ from unittest.mock import Mock, patch
 
 import usb_hid
 
-from bluetooth_2_usb.gadgets.config import USB_CFG_DIR_NAME, USB_LANGID_EN_US, rebuild_gadget, remove_owned_gadgets
+from bluetooth_2_usb.gadgets.config import (
+    USB_CFG_DIR_NAME,
+    USB_LANGID_EN_US,
+    rebind_gadget,
+    rebuild_gadget,
+    remove_owned_gadgets,
+)
 from bluetooth_2_usb.gadgets.identity import (
     USB_GADGET_PID_COMBO,
     USB_GADGET_VID_LINUX,
@@ -179,6 +185,31 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(hid_gadgets.keyboard)
         self.assertIsNone(hid_gadgets.mouse)
         self.assertIsNone(hid_gadgets.consumer)
+
+    async def test_rebind_delegates_to_config_helper(self) -> None:
+        hid_gadgets = HidGadgets()
+        udc_path = Path("/sys/class/udc/dummy.udc/state")
+
+        with patch("bluetooth_2_usb.gadgets.manager.rebind_gadget", return_value="dummy.udc") as rebind:
+            result = await hid_gadgets.rebind(udc_path, 0.1)
+
+        self.assertEqual(result, "dummy.udc")
+        rebind.assert_called_once_with(udc_path, 0.1)
+
+    async def test_rebind_gadget_resolves_udc_from_state_path(self) -> None:
+        writes = []
+        udc_path = Path("/sys/class/udc/dummy.udc/state")
+
+        with (
+            patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", Path("/sys/kernel/config/usb_gadget/test")),
+            patch.object(Path, "write_text", side_effect=lambda value, encoding: writes.append((value, encoding))),
+            patch("bluetooth_2_usb.gadgets.config.time.sleep") as sleep,
+        ):
+            result = rebind_gadget(udc_path, settle_sec=0.1)
+
+        self.assertEqual(result, "dummy.udc")
+        self.assertEqual(writes, [("\n", "utf-8"), ("dummy.udc\n", "utf-8")])
+        sleep.assert_called_once_with(0.1)
 
     async def test_declared_hidg_paths_use_declared_function_indexes(self) -> None:
         devices = (SimpleNamespace(function_index=2), SimpleNamespace(function_index=7))

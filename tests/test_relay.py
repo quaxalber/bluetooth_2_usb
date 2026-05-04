@@ -1,6 +1,9 @@
 import asyncio
 import errno
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, patch
 
@@ -70,12 +73,21 @@ class _FakeHidGadgets:
         self.mouse = _FakeMouse()
         self.consumer = _FakeConsumer()
         self.release_all_calls = 0
+        self.rebind_calls = []
+        self.enable_calls = 0
 
     async def release_all(self) -> None:
         self.release_all_calls += 1
         await self.keyboard.release_all()
         await self.mouse.release_all()
         await self.consumer.release()
+
+    async def rebind(self, udc_path=None, settle_sec=0.25) -> str:
+        self.rebind_calls.append((udc_path, settle_sec))
+        return "dummy.udc"
+
+    async def enable(self) -> None:
+        self.enable_calls += 1
 
 
 class _OrderedFakeHidGadgets(_FakeHidGadgets):
@@ -144,6 +156,14 @@ def _active_gate() -> RelayGate:
     gate = RelayGate()
     gate.set_host_configured(True)
     return gate
+
+
+async def _wait_until(predicate, timeout: float = 1.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() > deadline:
+            raise TimeoutError("condition was not met")
+        await asyncio.sleep(0)
 
 
 class _FakeInputHandle:
@@ -295,6 +315,43 @@ class RelayGateTest(unittest.TestCase):
         gate.set_host_configured(True)
 
         self.assertTrue(gate.active)
+        self.assertFalse(gate.state.write_suspended)
+
+    def test_suspend_writes_reports_only_first_transition(self) -> None:
+        gate = _active_gate()
+
+        self.assertTrue(gate.suspend_writes())
+        self.assertFalse(gate.suspend_writes())
+
+        self.assertTrue(gate.state.write_suspended)
+
+    def test_resume_writes_clears_only_write_suspension(self) -> None:
+        gate = _active_gate()
+        gate.suspend_writes()
+
+        self.assertTrue(gate.resume_writes())
+        self.assertFalse(gate.resume_writes())
+
+        self.assertTrue(gate.active)
+        self.assertFalse(gate.state.write_suspended)
+
+    def test_resume_writes_does_not_override_user_pause_or_host_disconnect(self) -> None:
+        gate = _active_gate()
+        gate.set_user_enabled(False)
+        gate.suspend_writes()
+
+        self.assertTrue(gate.resume_writes())
+        self.assertFalse(gate.active)
+        self.assertFalse(gate.state.user_enabled)
+        self.assertFalse(gate.state.write_suspended)
+
+        gate = _active_gate()
+        gate.set_host_configured(False)
+        gate.suspend_writes()
+
+        self.assertTrue(gate.resume_writes())
+        self.assertFalse(gate.active)
+        self.assertFalse(gate.state.host_configured)
         self.assertFalse(gate.state.write_suspended)
 
     def test_listeners_only_run_when_active_changes(self) -> None:
@@ -470,6 +527,23 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(gate.active)
         self.assertTrue(gate.state.write_suspended)
+
+    async def test_broken_pipe_observer_runs_for_each_failure_and_warning_logs_once(self) -> None:
+        gate = _active_gate()
+        observer = AsyncMock()
+        dispatcher = HidDispatcher(_FakeHidGadgets(), gate, broken_pipe_observer=observer)
+
+        with self.assertLogs("bluetooth_2_usb.hid.dispatch", level="DEBUG") as logs:
+            await dispatcher._handle_broken_pipe("Key event", "first")
+            await dispatcher._handle_broken_pipe("Key event", "second")
+
+        output = "\n".join(logs.output)
+        self.assertEqual(output.count("BrokenPipeError: USB cable likely disconnected or power-only"), 1)
+        self.assertIn("already suspended", output)
+        self.assertEqual(dispatcher.write_failures, 2)
+        self.assertEqual(observer.await_count, 2)
+        self.assertEqual(observer.await_args_list[0].kwargs["suspension_started"], True)
+        self.assertEqual(observer.await_args_list[1].kwargs["suspension_started"], False)
 
     async def test_blocked_key_write_is_dropped_after_writer_retry_is_exhausted(self) -> None:
         gate = _active_gate()
@@ -808,6 +882,102 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(gate.active)
         self.assertEqual(hid_gadgets.release_all_calls, 0)
+
+    async def test_broken_pipe_experiment_polling_recovers_when_udc_is_configured(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        gate = RelayGate()
+        hid_gadgets = _FakeHidGadgets()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            udc_path = Path(tmpdir) / "dummy.udc" / "state"
+            udc_path.parent.mkdir()
+            udc_path.write_text("configured\n", encoding="utf-8")
+            log_path = Path(tmpdir) / "recovery.log"
+
+            with (
+                patch("bluetooth_2_usb.relay.supervisor.BROKEN_PIPE_EXPERIMENT_LOG_PATH", log_path),
+                patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]),
+            ):
+                async with asyncio.TaskGroup() as task_group:
+                    supervisor = _relay_supervisor(
+                        hid_gadgets=hid_gadgets,
+                        relay_gate=gate,
+                        task_group=task_group,
+                        udc_path=udc_path,
+                        broken_pipe_poll_interval_sec=0.01,
+                    )
+                    run_task = task_group.create_task(supervisor.run(events))
+                    events.put_nowait(UdcStateChanged(UdcState.CONFIGURED))
+                    await asyncio.sleep(0)
+
+                    gate.suspend_writes()
+                    await supervisor._record_broken_pipe(
+                        description="Key event", context="A", write_failures=1, suspension_started=True
+                    )
+                    await _wait_until(lambda: gate.active and not gate.state.write_suspended)
+
+                    events.put_nowait(ShutdownRequested("test"))
+                    await asyncio.wait_for(run_task, timeout=1)
+
+            entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(
+                [entry["event"] for entry in entries], ["broken_pipe", "polling_started", "polling_recovered"]
+            )
+            self.assertEqual(hid_gadgets.rebind_calls, [])
+            self.assertEqual(hid_gadgets.enable_calls, 0)
+
+    async def test_broken_pipe_experiment_runs_rebind_then_rebuild_after_grace_periods(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        gate = RelayGate()
+        hid_gadgets = _FakeHidGadgets()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            udc_path = Path(tmpdir) / "dummy.udc" / "state"
+            udc_path.parent.mkdir()
+            udc_path.write_text("not attached\n", encoding="utf-8")
+            log_path = Path(tmpdir) / "recovery.log"
+
+            with (
+                patch("bluetooth_2_usb.relay.supervisor.BROKEN_PIPE_EXPERIMENT_LOG_PATH", log_path),
+                patch("bluetooth_2_usb.relay.supervisor.BROKEN_PIPE_POLL_GRACE_SEC", 0.01),
+                patch("bluetooth_2_usb.relay.supervisor.BROKEN_PIPE_SOFT_REBIND_WAIT_SEC", 0.01),
+                patch("bluetooth_2_usb.relay.supervisor.BROKEN_PIPE_FULL_REBUILD_WAIT_SEC", 0.01),
+                patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]),
+            ):
+                async with asyncio.TaskGroup() as task_group:
+                    supervisor = _relay_supervisor(
+                        hid_gadgets=hid_gadgets,
+                        relay_gate=gate,
+                        task_group=task_group,
+                        udc_path=udc_path,
+                        broken_pipe_poll_interval_sec=0.01,
+                    )
+                    run_task = task_group.create_task(supervisor.run(events))
+                    events.put_nowait(UdcStateChanged(UdcState.CONFIGURED))
+                    await asyncio.sleep(0)
+
+                    gate.suspend_writes()
+                    await supervisor._record_broken_pipe(
+                        description="Key event", context="A", write_failures=1, suspension_started=True
+                    )
+                    await _wait_until(lambda: hid_gadgets.enable_calls == 1)
+                    await asyncio.sleep(0.03)
+
+                    events.put_nowait(ShutdownRequested("test"))
+                    await asyncio.wait_for(run_task, timeout=1)
+
+            entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            events_seen = [entry["event"] for entry in entries]
+            self.assertIn("broken_pipe", events_seen)
+            self.assertIn("polling_timeout", events_seen)
+            self.assertIn("soft_rebind_started", events_seen)
+            self.assertIn("soft_rebind_succeeded", events_seen)
+            self.assertIn("soft_rebind_timeout", events_seen)
+            self.assertIn("full_rebuild_started", events_seen)
+            self.assertIn("full_rebuild_succeeded", events_seen)
+            self.assertIn("full_rebuild_timeout", events_seen)
+            self.assertEqual(len(hid_gadgets.rebind_calls), 1)
+            self.assertEqual(hid_gadgets.enable_calls, 1)
 
 
 class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):

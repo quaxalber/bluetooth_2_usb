@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import json
 from asyncio import TaskGroup
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum, auto
+from pathlib import Path
 
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
@@ -17,6 +20,7 @@ from ..inputs.inventory import (
 )
 from ..logging import get_logger
 from ..runtime.events import DeviceAdded, DeviceRemoved, RuntimeEvent, ShutdownRequested, UdcState, UdcStateChanged
+from ..runtime.udc import read_udc_state
 from .gate import RelayGate
 from .input import InputRelay
 from .shortcut import ShortcutToggler
@@ -24,6 +28,12 @@ from .shortcut import ShortcutToggler
 logger = get_logger(__name__)
 
 DEVICE_DISCONNECT_ERRNOS = {errno.EBADF, errno.ENODEV, errno.ENOENT}
+BROKEN_PIPE_EXPERIMENT_LOG_PATH = Path("/tmp/bluetooth_2_usb_broken_pipe_recovery.log")
+BROKEN_PIPE_POLL_INTERVAL_SEC = 1.0
+BROKEN_PIPE_POLL_GRACE_SEC = 3.0
+BROKEN_PIPE_SOFT_REBIND_WAIT_SEC = 5.0
+BROKEN_PIPE_FULL_REBUILD_WAIT_SEC = 8.0
+SOFT_REBIND_SETTLE_SEC = 0.25
 
 
 class _SupervisorState(Enum):
@@ -61,6 +71,8 @@ class RelaySupervisor:
         skip_name_prefixes: list[str] | None = None,
         grab_devices: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
+        udc_path: Path | None = None,
+        broken_pipe_poll_interval_sec: float = BROKEN_PIPE_POLL_INTERVAL_SEC,
     ) -> None:
         """
         :param hid_gadgets: Provides the USB HID gadget devices
@@ -71,11 +83,17 @@ class RelaySupervisor:
         :param skip_name_prefixes: A list of device.name prefixes to skip if auto_discover is True
         :param grab_devices: If True, the relay tries to grab exclusive access to each device
         :param shortcut_toggler: ShortcutToggler to allow toggling relaying globally
+        :param udc_path: UDC state file used by the broken-pipe recovery experiment
+        :param broken_pipe_poll_interval_sec: Poll interval for the broken-pipe recovery experiment
         """
+        if broken_pipe_poll_interval_sec <= 0:
+            raise ValueError("broken_pipe_poll_interval_sec must be > 0")
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
         self._task_group = task_group
+        self._udc_path = udc_path
+        self._broken_pipe_poll_interval_sec = broken_pipe_poll_interval_sec
 
         self._device_identifiers = [DeviceIdentifier(identifier) for identifier in (device_identifiers or [])]
         self._auto_discover = auto_discover
@@ -89,6 +107,7 @@ class RelaySupervisor:
 
         self._active_relays: dict[str, _ActiveRelay] = {}
         self._hotplug_probe_tasks: dict[str, asyncio.Task[None]] = {}
+        self._broken_pipe_recovery_task: asyncio.Task[None] | None = None
 
     def _shutdown_requested(self) -> bool:
         return self._state in (_SupervisorState.STOPPING, _SupervisorState.STOPPED)
@@ -110,6 +129,7 @@ class RelaySupervisor:
             return
 
         try:
+            self._relay_gate.add_listener(self._handle_relay_gate_active_change)
             try:
                 initial_devices = list_input_devices()
             except DeviceEnumerationError as exc:
@@ -122,6 +142,8 @@ class RelaySupervisor:
             raise
         finally:
             try:
+                self._relay_gate.remove_listener(self._handle_relay_gate_active_change)
+                self._cancel_broken_pipe_recovery()
                 self._cancel_all_pending_hotplug_probes()
                 for device_path, active_relay in list(self._active_relays.items()):
                     self._relay_task_done(device_path, active_relay.task)
@@ -178,6 +200,7 @@ class RelaySupervisor:
             return
 
         self._state = _SupervisorState.STOPPING
+        self._cancel_broken_pipe_recovery()
         self._cancel_all_pending_hotplug_probes()
 
         was_configured = self._relay_gate.state.host_configured
@@ -187,6 +210,122 @@ class RelaySupervisor:
 
         for device_path in list(self._active_relays):
             self._cancel_active_relay(device_path)
+
+    def _handle_relay_gate_active_change(self, _active: bool) -> None:
+        if self._relay_gate.state.write_suspended and not self._shutdown_requested():
+            self._schedule_broken_pipe_recovery()
+
+    async def _record_broken_pipe(
+        self, *, description: str, context: object, write_failures: int, suspension_started: bool
+    ) -> None:
+        self._append_recovery_log(
+            "broken_pipe",
+            description=description,
+            context=repr(context),
+            write_failures=write_failures,
+            suspension_started=suspension_started,
+        )
+        self._schedule_broken_pipe_recovery()
+
+    def _schedule_broken_pipe_recovery(self) -> None:
+        if self._state is not _SupervisorState.RUNNING or self._shutdown_requested():
+            return
+        if self._broken_pipe_recovery_task is not None and not self._broken_pipe_recovery_task.done():
+            return
+        try:
+            task = self._task_group.create_task(
+                self._run_broken_pipe_recovery_experiment(), name="broken pipe recovery experiment"
+            )
+        except RuntimeError:
+            logger.debug("Ignoring broken-pipe recovery request; TaskGroup is shutting down.")
+            return
+        self._broken_pipe_recovery_task = task
+        task.add_done_callback(self._discard_broken_pipe_recovery_task)
+
+    def _discard_broken_pipe_recovery_task(self, task: asyncio.Task[None]) -> None:
+        if self._broken_pipe_recovery_task is task:
+            self._broken_pipe_recovery_task = None
+
+    def _cancel_broken_pipe_recovery(self) -> None:
+        task = self._broken_pipe_recovery_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._broken_pipe_recovery_task = None
+
+    async def _run_broken_pipe_recovery_experiment(self) -> None:
+        try:
+            if await self._poll_for_configured_recovery("polling", BROKEN_PIPE_POLL_GRACE_SEC, emit_start=True):
+                return
+
+            await self._attempt_soft_rebind_recovery()
+            if await self._poll_for_configured_recovery("soft_rebind", BROKEN_PIPE_SOFT_REBIND_WAIT_SEC):
+                return
+
+            await self._attempt_full_rebuild_recovery()
+            await self._poll_for_configured_recovery("full_rebuild", BROKEN_PIPE_FULL_REBUILD_WAIT_SEC)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._append_recovery_log("recovery_experiment_failed", error=repr(exc))
+            logger.exception("Broken-pipe recovery experiment failed.")
+
+    async def _poll_for_configured_recovery(self, phase: str, grace_sec: float, *, emit_start: bool = False) -> bool:
+        if emit_start:
+            self._append_recovery_log(f"{phase}_started", grace_sec=grace_sec)
+        deadline = asyncio.get_running_loop().time() + grace_sec
+        while not self._shutdown_requested() and self._relay_gate.state.write_suspended:
+            await asyncio.sleep(self._broken_pipe_poll_interval_sec)
+            state = read_udc_state(self._udc_path)
+            if state is UdcState.CONFIGURED:
+                self._relay_gate.set_host_configured(True)
+                resumed = self._relay_gate.resume_writes()
+                self._append_recovery_log(f"{phase}_recovered", recovered=True, resumed=resumed)
+                return True
+            if asyncio.get_running_loop().time() >= deadline:
+                self._append_recovery_log(f"{phase}_timeout", grace_sec=grace_sec, last_udc_state=state.value)
+                return False
+        return not self._relay_gate.state.write_suspended
+
+    async def _attempt_soft_rebind_recovery(self) -> None:
+        self._append_recovery_log("soft_rebind_started", settle_sec=SOFT_REBIND_SETTLE_SEC)
+        try:
+            await self._hid_gadgets.release_all()
+            udc_name = await self._hid_gadgets.rebind(self._udc_path, SOFT_REBIND_SETTLE_SEC)
+        except Exception as exc:
+            self._append_recovery_log("soft_rebind_failed", error=repr(exc))
+            logger.exception("Soft UDC rebind failed during broken-pipe recovery experiment.")
+            return
+        self._append_recovery_log("soft_rebind_succeeded", udc_name=udc_name, recovered=False)
+
+    async def _attempt_full_rebuild_recovery(self) -> None:
+        self._append_recovery_log("full_rebuild_started")
+        try:
+            await self._hid_gadgets.release_all()
+            await self._hid_gadgets.enable()
+        except Exception as exc:
+            self._append_recovery_log("full_rebuild_failed", error=repr(exc))
+            logger.exception("Full gadget rebuild failed during broken-pipe recovery experiment.")
+            return
+        self._append_recovery_log("full_rebuild_succeeded", recovered=False)
+
+    def _append_recovery_log(self, event: str, **fields: object) -> None:
+        state = self._relay_gate.state
+        udc_state = read_udc_state(self._udc_path)
+        entry = {
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "event": event,
+            "udc_state": udc_state.value,
+            "host_configured": state.host_configured,
+            "user_enabled": state.user_enabled,
+            "write_suspended": state.write_suspended,
+            "relay_active": state.active,
+            **fields,
+        }
+        try:
+            with open(BROKEN_PIPE_EXPERIMENT_LOG_PATH, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(entry, sort_keys=True) + "\n")
+        except OSError:
+            logger.warning("Unable to append broken-pipe recovery experiment log.", exc_info=True)
 
     def _device_added(self, device_path: str) -> None:
         if self._state is not _SupervisorState.RUNNING:
@@ -330,6 +469,7 @@ class RelaySupervisor:
                 grab_device=self._grab_devices,
                 relay_gate=self._relay_gate,
                 shortcut_toggler=self._shortcut_toggler,
+                broken_pipe_observer=self._record_broken_pipe,
             ) as relay:
                 logger.info("Activated %s", relay)
                 await relay.async_relay_events_loop()

@@ -44,8 +44,11 @@ handling remains predictable.
 UDC state marks the host side inactive and releases current HID gadget state.
 User pause state is independent, so reconnecting the USB cable does not undo a
 manual pause. User pause and write suspension stop relaying without globally
-releasing HID gadget state. A HID `BrokenPipeError` suspends writes until a
-fresh `UdcStateChanged(UdcState.CONFIGURED)` transition arrives.
+releasing HID gadget state. On the broken-pipe recovery experiment branch, a
+HID `BrokenPipeError` suspends writes and records each failure to
+`/tmp/bluetooth_2_usb_broken_pipe_recovery.log` with the current UDC state. The
+supervisor first polls for a configured UDC state, then tries a soft UDC rebind,
+then tries a full gadget rebuild, logging the outcome of each stage.
 
 ## Hotplug
 

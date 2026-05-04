@@ -17,6 +17,7 @@ References:
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import usb_hid
@@ -134,6 +135,30 @@ def _resolve_udc_name() -> str:
     if not controllers:
         raise FileNotFoundError("No UDC controller was found in /sys/class/udc")
     return controllers[0]
+
+
+def _resolve_udc_name_from_path(udc_path: Path | None) -> str:
+    if udc_path is None:
+        return _resolve_udc_name()
+    if udc_path.name == "state":
+        return udc_path.parent.name
+    return udc_path.name
+
+
+def rebind_gadget(udc_path: Path | None = None, settle_sec: float = 0.25) -> str:
+    """
+    Soft-disconnect and reconnect the managed gadget to its UDC.
+
+    This intentionally leaves the configfs gadget tree intact and only toggles
+    the UDC binding, which makes it useful as a lightweight recovery experiment.
+    """
+    udc_name = _resolve_udc_name_from_path(udc_path)
+    udc_bind_path = USB_GADGET_ROOT / "UDC"
+    _write_text(udc_bind_path, "")
+    if settle_sec > 0:
+        time.sleep(settle_sec)
+    _write_text(udc_bind_path, udc_name)
+    return udc_name
 
 
 def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:

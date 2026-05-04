@@ -93,10 +93,17 @@ class RelayGate:
         self.set_user_enabled(not self._state.user_enabled)
         return self._state.user_enabled
 
-    def suspend_writes(self) -> None:
+    def suspend_writes(self) -> bool:
         previous_state = self.state
         self._state.write_suspended = True
         self._state_changed(previous_state)
+        return not previous_state.write_suspended
+
+    def resume_writes(self) -> bool:
+        previous_state = self.state
+        self._state.write_suspended = False
+        self._state_changed(previous_state)
+        return previous_state.write_suspended
 
     def _state_changed(self, previous_state: RelayGateState) -> None:
         if previous_state == self._state:

@@ -9,7 +9,7 @@ from ..hid.consumer import ExtendedConsumerControl
 from ..hid.keyboard import ExtendedKeyboard
 from ..hid.mouse import ExtendedMouse
 from ..logging import get_logger
-from .config import rebuild_gadget
+from .config import rebind_gadget, rebuild_gadget
 from .layout import build_default_layout
 
 logger = get_logger(__name__)
@@ -163,6 +163,12 @@ class HidGadgets:
         self._enabled = True
 
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)
+
+    async def rebind(self, udc_path: Path | None = None, settle_sec: float = 0.25) -> str:
+        """
+        Soft-disconnect and reconnect the current configfs gadget binding.
+        """
+        return await asyncio.to_thread(rebind_gadget, udc_path, settle_sec)
 
     @property
     def keyboard(self) -> ExtendedKeyboard | None:

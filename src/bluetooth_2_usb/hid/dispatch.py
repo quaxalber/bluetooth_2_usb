@@ -15,6 +15,8 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from ..gadgets.manager import HidGadgets
 
+BrokenPipeObserver = Callable[..., Awaitable[None]]
+
 
 class HidDispatcher:
     """
@@ -25,11 +27,16 @@ class HidDispatcher:
     """
 
     def __init__(
-        self, hid_gadgets: HidGadgets, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
+        self,
+        hid_gadgets: HidGadgets,
+        relay_gate: RelayGate,
+        shortcut_toggler: ShortcutToggler | None = None,
+        broken_pipe_observer: BrokenPipeObserver | None = None,
     ) -> None:
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
+        self._broken_pipe_observer = broken_pipe_observer
         self._mouse_delta = MouseDeltaAccumulator()
         self._hid_write_failures = 0
 
@@ -106,7 +113,7 @@ class HidDispatcher:
             self._hid_write_failures += 1
             logger.debug("%s HID write blocked; dropping %s", description, context)
         except BrokenPipeError:
-            self._handle_broken_pipe()
+            await self._handle_broken_pipe(description, context)
         except Exception:
             self._hid_write_failures += 1
             logger.exception("Unexpected error processing %s", context)
@@ -136,11 +143,23 @@ class HidDispatcher:
             else:
                 await output_gadget.release(key_id)
 
-    def _handle_broken_pipe(self) -> None:
+    async def _handle_broken_pipe(self, description: str, context: object) -> None:
         self._hid_write_failures += 1
-        logger.warning(
-            "BrokenPipeError: USB cable likely disconnected or power-only. "
-            + "Pausing relay until the host reports a fresh configured USB state.\nSee: "
-            + "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
-        )
-        self._relay_gate.suspend_writes()
+        suspension_started = self._relay_gate.suspend_writes()
+        if suspension_started:
+            logger.warning(
+                "BrokenPipeError: USB cable likely disconnected or power-only. "
+                + "Pausing relay until the host reports a fresh configured USB state.\nSee: "
+                + "https://github.com/quaxalber/bluetooth_2_usb/blob/main/TROUBLESHOOTING.md"
+            )
+        else:
+            logger.debug(
+                "%s HID write hit broken pipe while writes are already suspended; dropping %s", description, context
+            )
+        if self._broken_pipe_observer is not None:
+            await self._broken_pipe_observer(
+                description=description,
+                context=context,
+                write_failures=self._hid_write_failures,
+                suspension_started=suspension_started,
+            )

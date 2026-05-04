@@ -4,7 +4,7 @@ import errno
 
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
-from ..hid.dispatch import HidDispatcher
+from ..hid.dispatch import BrokenPipeObserver, HidDispatcher
 from ..logging import get_logger
 from .gate import RelayGate
 from .shortcut import ShortcutToggler
@@ -27,6 +27,7 @@ class InputRelay:
         relay_gate: RelayGate,
         grab_device: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
+        broken_pipe_observer: BrokenPipeObserver | None = None,
     ) -> None:
         """
         :param input_device: The evdev input device
@@ -34,9 +35,10 @@ class InputRelay:
         :param grab_device: Whether to grab the device for exclusive access
         :param relay_gate: RelayGate that indicates whether relaying is active
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
+        :param broken_pipe_observer: Optional observer for HID broken-pipe write failures
         """
         self._input_device = input_device
-        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler)
+        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler, broken_pipe_observer)
         self._grab_device = grab_device
         self._relay_gate = relay_gate
 

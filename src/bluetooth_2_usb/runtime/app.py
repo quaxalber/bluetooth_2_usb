@@ -70,6 +70,7 @@ class Runtime:
             auto_discover=self._config.auto_discover,
             grab_devices=self._config.grab_devices,
             shortcut_toggler=shortcut_toggler,
+            udc_path=self._config.udc_path,
         )
 
     def _build_shortcut_toggler(self, relay_gate: RelayGate) -> ShortcutToggler | None:

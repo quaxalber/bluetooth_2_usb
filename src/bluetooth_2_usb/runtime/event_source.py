@@ -7,6 +7,7 @@ import pyudev
 
 from ..logging import get_logger
 from .events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcState, UdcStateChanged
+from .udc import read_udc_state
 
 logger = get_logger(__name__)
 
@@ -82,8 +83,7 @@ class RuntimeEventSource:
             return UdcState.NOT_ATTACHED
 
         try:
-            with open(self._udc_path, encoding="utf-8") as handle:
-                return UdcState.from_raw(handle.read())
+            return read_udc_state(self._udc_path)
         except OSError:
             logger.debug("Unable to read UDC state from %s", self._udc_path)
             return UdcState.NOT_ATTACHED
