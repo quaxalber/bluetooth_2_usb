@@ -8,51 +8,22 @@ from typing import Any
 
 from adafruit_hid.keycode import Keycode
 
-from ..evdev import evdev_to_usb_hid
+from ..evdev import KeyEvent, evdev_to_usb_hid, is_consumer_key, is_mouse_button
+from ..gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX
+from ..gadgets.layout import HID_FUNC_INDEX_CONSUMER, HID_FUNC_INDEX_KEYBOARD, HID_FUNC_INDEX_MOUSE
+from ..hid.constants import (
+    HID_PAGE_CONSUMER,
+    HID_PAGE_GENERIC_DESKTOP,
+    HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_KEYBOARD,
+    HID_USAGE_MOUSE,
+)
 from .constants import DEFAULT_DEVICE_SUBSTRING, EXIT_ACCESS, EXIT_MISMATCH, EXIT_OK, EXIT_PREREQUISITE, EXIT_TIMEOUT
 from .result import GadgetNodes, LoopbackResult
-from .scenarios import (
-    BTN_BACK,
-    BTN_EXTRA,
-    BTN_FORWARD,
-    BTN_LEFT,
-    BTN_MIDDLE,
-    BTN_RIGHT,
-    BTN_SIDE,
-    BTN_TASK,
-    KEY_VOLUMEDOWN,
-    KEY_VOLUMEUP,
-    REL_HWHEEL,
-    REL_WHEEL,
-    REL_X,
-    REL_Y,
-    get_scenario,
-)
+from .scenarios import EV_REL, EVENT_CODE_NAMES, REL_HWHEEL, REL_WHEEL, REL_X, REL_Y, get_scenario
 
-REPORT_READ_SIZE = 64
-POLL_INTERVAL_SEC = 0.01
-GENERIC_DESKTOP_USAGE_PAGE = 0x01
-KEYBOARD_USAGE = 0x06
-MOUSE_USAGE = 0x02
-CONSUMER_USAGE_PAGE = 0x0C
-CONSUMER_USAGE = 0x01
-GADGET_VENDOR_ID = 0x1D6B
-GADGET_PRODUCT_ID = 0x0104
-
-CONSUMER_USAGES = {KEY_VOLUMEUP: 0x00E9, KEY_VOLUMEDOWN: 0x00EA}
-
-REL_NAMES = {REL_X: "REL_X", REL_Y: "REL_Y", REL_HWHEEL: "REL_HWHEEL", REL_WHEEL: "REL_WHEEL"}
-
-MOUSE_BUTTON_BITS = {
-    BTN_LEFT: 0x01,
-    BTN_RIGHT: 0x02,
-    BTN_MIDDLE: 0x04,
-    BTN_SIDE: 0x08,
-    BTN_EXTRA: 0x10,
-    BTN_FORWARD: 0x20,
-    BTN_BACK: 0x40,
-    BTN_TASK: 0x80,
-}
+HIDAPI_REPORT_READ_SIZE = 64
+HIDAPI_POLL_INTERVAL_SEC = 0.01
 
 
 class CaptureError(RuntimeError):
@@ -83,6 +54,10 @@ class HidDeviceInfo:
     interface_number: int
     usage_page: int
     usage: int
+
+
+def _rel_name(code: int) -> str:
+    return EVENT_CODE_NAMES.get(EV_REL, {}).get(code, str(code))
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,16 +110,14 @@ class KeyboardSequenceMatcher:
         self.index += 1
 
     def _apply_expected_step(self, expected) -> bytes:
-        hid_code, _ = evdev_to_usb_hid(SimpleNamespace(scancode=expected.code, keystate=expected.value))
-        if hid_code is None:
-            raise CaptureMismatchError(f"Expected keyboard step {expected.describe()} is not mappable to HID")
+        hid_code = _expected_keyboard_usage(expected)
         modifier = Keycode.modifier_bit(hid_code)
-        if expected.value == 1:
+        if expected.value == KeyEvent.key_down:
             if modifier:
                 self._modifier_state |= modifier
             elif hid_code not in self._pressed_keys:
                 self._pressed_keys = (*self._pressed_keys, hid_code)
-        elif expected.value == 0:
+        elif expected.value == KeyEvent.key_up:
             if modifier:
                 self._modifier_state &= ~modifier
             else:
@@ -162,6 +135,16 @@ class KeyboardSequenceMatcher:
     @property
     def complete(self) -> bool:
         return self.index >= len(self.expected_steps)
+
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "steps_seen": self.index,
+            "steps_expected": len(self.expected_steps),
+        }
+        if not self.complete:
+            details["next_expected"] = self.expected_steps[self.index].describe()
+        return details
 
 
 @dataclass(slots=True)
@@ -218,12 +201,13 @@ class MouseSequenceMatcher:
         self.button_index += 1
 
     def _apply_button_step(self, expected) -> int:
-        button_bit = MOUSE_BUTTON_BITS.get(expected.code)
-        if button_bit is None:
+        event = SimpleNamespace(scancode=expected.code, keystate=expected.value)
+        if not is_mouse_button(event):
             raise CaptureMismatchError(f"Expected mouse button step {expected.describe()} is not mappable to HID")
-        if expected.value == 1:
+        button_bit = _mapped_hid_usage(expected)
+        if expected.value == KeyEvent.key_down:
             self._button_state |= button_bit
-        elif expected.value == 0:
+        elif expected.value == KeyEvent.key_up:
             self._button_state &= ~button_bit
         return self._button_state
 
@@ -236,24 +220,19 @@ class MouseSequenceMatcher:
         pending_index = self._find_pending_rel_index(code, report_codes)
         if pending_index is None:
             expected = self._pending_rel_remaining[0] if self._pending_rel_remaining else None
-            expected_label = f"; expected {REL_NAMES.get(expected[0], expected[0])}={expected[1]}" if expected else ""
-            raise CaptureMismatchError(
-                "Unexpected mouse relative event " f"{REL_NAMES.get(code, code)}={value}{expected_label}"
-            )
+            expected_label = f"; expected {_rel_name(expected[0])}={expected[1]}" if expected else ""
+            raise CaptureMismatchError(f"Unexpected mouse relative event {_rel_name(code)}={value}{expected_label}")
 
         remaining = self._pending_rel_remaining[pending_index][1]
         if not _same_direction(remaining, value):
             raise CaptureMismatchError(
-                "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}; expected "
-                f"{REL_NAMES.get(code, code)}={remaining}"
+                f"Unexpected mouse relative event {_rel_name(code)}={value}; expected {_rel_name(code)}={remaining}"
             )
 
         if abs(value) > abs(remaining):
             raise CaptureMismatchError(
-                "Unexpected mouse relative event "
-                f"{REL_NAMES.get(code, code)}={value}; exceeds pending "
-                f"{REL_NAMES.get(code, code)}={remaining}"
+                f"Unexpected mouse relative event {_rel_name(code)}={value}; "
+                f"exceeds pending {_rel_name(code)}={remaining}"
             )
 
         remaining -= value
@@ -279,6 +258,21 @@ class MouseSequenceMatcher:
     def complete(self) -> bool:
         return self.rel_complete and self.button_index >= len(self.expected_button_steps)
 
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "rel_steps_seen": self.rel_index,
+            "rel_steps_expected": len(self.expected_rel_steps),
+            "button_steps_seen": self.button_index,
+            "button_steps_expected": len(self.expected_button_steps),
+        }
+        if self._pending_rel_remaining:
+            code, remaining = self._pending_rel_remaining[0]
+            details["next_expected_rel"] = f"{_rel_name(code)}={remaining}"
+        elif self.button_index < len(self.expected_button_steps):
+            details["next_expected_button"] = self.expected_button_steps[self.button_index].describe()
+        return details
+
 
 def _same_direction(expected: int, observed: int) -> bool:
     if expected == 0:
@@ -301,7 +295,7 @@ class ConsumerSequenceMatcher:
             return
 
         expected = self.expected_steps[self.index]
-        expected_usage = CONSUMER_USAGES[expected.code] if expected.value == 1 else 0
+        expected_usage = _expected_consumer_usage(expected)
         if usage != expected_usage:
             raise CaptureMismatchError(f"Unexpected consumer usage 0x{usage:04x}; expected 0x{expected_usage:04x}")
         self.index += 1
@@ -309,6 +303,38 @@ class ConsumerSequenceMatcher:
     @property
     def complete(self) -> bool:
         return self.index >= len(self.expected_steps)
+
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "steps_seen": self.index,
+            "steps_expected": len(self.expected_steps),
+        }
+        if not self.complete:
+            details["next_expected"] = self.expected_steps[self.index].describe()
+        return details
+
+
+def _mapped_hid_usage(expected) -> int:
+    usage, _name = evdev_to_usb_hid(SimpleNamespace(scancode=expected.code, keystate=expected.value))
+    if usage is None:
+        raise CaptureMismatchError(f"Expected step {expected.describe()} is not mappable to HID")
+    return usage
+
+
+def _expected_keyboard_usage(expected) -> int:
+    event = SimpleNamespace(scancode=expected.code, keystate=expected.value)
+    if is_consumer_key(event) or is_mouse_button(event):
+        raise CaptureMismatchError(f"Expected keyboard step {expected.describe()} is not a keyboard key")
+    return _mapped_hid_usage(expected)
+
+
+def _expected_consumer_usage(expected) -> int:
+    event = SimpleNamespace(scancode=expected.code, keystate=expected.value)
+    if not is_consumer_key(event):
+        raise CaptureMismatchError(f"Expected consumer step {expected.describe()} is not a consumer key")
+    usage = _mapped_hid_usage(expected)
+    return usage if expected.value == KeyEvent.key_down else 0
 
 
 @dataclass(slots=True)
@@ -330,6 +356,123 @@ class _CandidateMatcher:
     @property
     def failed(self) -> bool:
         return self.failed_message is not None
+
+
+def matcher_progress_details(
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+) -> dict[str, object]:
+    return matcher.progress_details()
+
+
+def candidate_progress_details(
+    *,
+    node: str | None,
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+    failed_message: str | None = None,
+) -> dict[str, object]:
+    details: dict[str, object] = {"node": node}
+    details.update(matcher_progress_details(matcher))
+    if failed_message is not None:
+        details["failed_message"] = failed_message
+    return details
+
+
+def _candidate_progress(candidate: _CandidateMatcher) -> dict[str, object]:
+    return candidate_progress_details(
+        node=candidate.node, matcher=candidate.matcher, failed_message=candidate.failed_message
+    )
+
+
+def _candidate_progress_score(progress: dict[str, object]) -> int:
+    if "steps_seen" in progress:
+        return int(progress["steps_seen"])
+    return int(progress.get("rel_steps_seen", 0)) + int(progress.get("button_steps_seen", 0))
+
+
+def _progress_by_role(candidates: list[_CandidateMatcher]) -> dict[str, list[dict[str, object]]]:
+    progress: dict[str, list[dict[str, object]]] = {}
+    for candidate in candidates:
+        progress.setdefault(candidate.role, []).append(_candidate_progress(candidate))
+    return progress
+
+
+def _role_summary(role: str, progress_items: list[dict[str, object]]) -> str:
+    if not progress_items:
+        return "0 candidates"
+    progress = max(progress_items, key=_candidate_progress_score)
+    if role == "mouse":
+        rel_seen = progress["rel_steps_seen"]
+        rel_expected = progress["rel_steps_expected"]
+        button_seen = progress["button_steps_seen"]
+        button_expected = progress["button_steps_expected"]
+        suffix = " complete" if progress["complete"] else ""
+        return f"{rel_seen}/{rel_expected} rel, {button_seen}/{button_expected} buttons{suffix}"
+    suffix = " complete" if progress["complete"] else ""
+    return f"{progress['steps_seen']}/{progress['steps_expected']}{suffix}"
+
+
+def _add_best_progress_counts(details: dict[str, object], role: str, progress_items: list[dict[str, object]]) -> None:
+    if not progress_items:
+        return
+    progress = max(progress_items, key=_candidate_progress_score)
+    if role == "keyboard":
+        details["keyboard_steps_seen"] = progress["steps_seen"]
+        details["keyboard_steps_expected"] = progress["steps_expected"]
+    elif role == "mouse":
+        details["mouse_rel_steps_seen"] = progress["rel_steps_seen"]
+        details["mouse_rel_steps_expected"] = progress["rel_steps_expected"]
+        details["mouse_button_steps_seen"] = progress["button_steps_seen"]
+        details["mouse_button_steps_expected"] = progress["button_steps_expected"]
+    elif role == "consumer":
+        details["consumer_steps_seen"] = progress["steps_seen"]
+        details["consumer_steps_expected"] = progress["steps_expected"]
+
+
+def _nodes_from_progress(progress: dict[str, list[dict[str, object]]]) -> GadgetNodes:
+    def _completed_node(role: str) -> str | None:
+        for candidate in progress.get(role, []):
+            if candidate.get("complete"):
+                node = candidate.get("node")
+                return str(node) if node is not None else None
+        return None
+
+    return GadgetNodes(
+        keyboard_node=_completed_node("keyboard"),
+        mouse_node=_completed_node("mouse"),
+        consumer_node=_completed_node("consumer"),
+    )
+
+
+def progress_summary_details(progress: dict[str, list[dict[str, object]]]) -> dict[str, object]:
+    details: dict[str, object] = {}
+    summary: dict[str, str] = {}
+    for role in ("keyboard", "mouse", "consumer"):
+        progress_items = progress.get(role, [])
+        if not progress_items:
+            continue
+        summary[role] = _role_summary(role, progress_items)
+        _add_best_progress_counts(details, role, progress_items)
+    if summary:
+        details["summary"] = summary
+        details["progress"] = progress
+    return details
+
+
+def _capture_failure_details(
+    timeout_sec: float, candidate_nodes: GadgetNodeCandidates, candidates: list[_CandidateMatcher]
+) -> dict[str, object]:
+    progress = _progress_by_role(candidates)
+    details: dict[str, object] = {
+        "capture_backend": "hidapi",
+        "candidates": candidate_nodes.to_dict(),
+        "nodes": _nodes_from_progress(progress).to_dict(),
+        "timeout_sec": timeout_sec,
+    }
+    details.update(progress_summary_details(progress))
+    failed_candidates = [candidate.failed_message for candidate in candidates if candidate.failed_message is not None]
+    if failed_candidates:
+        details["failed_candidates"] = failed_candidates
+    return details
 
 
 def _normalize_keyboard_report(report: bytes) -> bytes | None:
@@ -394,18 +537,18 @@ def _render_hidapi_path(path_value: bytes | str) -> str:
 
 
 def _role_for_device(info: HidDeviceInfo) -> str | None:
-    if info.usage_page == GENERIC_DESKTOP_USAGE_PAGE and info.usage == KEYBOARD_USAGE:
+    if info.usage_page == HID_PAGE_GENERIC_DESKTOP and info.usage == HID_USAGE_KEYBOARD:
         return "keyboard"
-    if info.usage_page == GENERIC_DESKTOP_USAGE_PAGE and info.usage == MOUSE_USAGE:
+    if info.usage_page == HID_PAGE_GENERIC_DESKTOP and info.usage == HID_USAGE_MOUSE:
         return "mouse"
-    if info.usage_page == CONSUMER_USAGE_PAGE and info.usage == CONSUMER_USAGE:
+    if info.usage_page == HID_PAGE_CONSUMER and info.usage == HID_USAGE_CONSUMER_CONTROL:
         return "consumer"
-    if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
-        if info.interface_number == 0:
+    if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
+        if info.interface_number == HID_FUNC_INDEX_KEYBOARD:
             return "keyboard"
-        if info.interface_number == 1:
+        if info.interface_number == HID_FUNC_INDEX_MOUSE:
             return "mouse"
-        if info.interface_number == 2:
+        if info.interface_number == HID_FUNC_INDEX_CONSUMER:
             return "consumer"
     return None
 
@@ -466,7 +609,7 @@ def discover_gadget_node_candidates(
         if role is None:
             continue
         if not _matches_device_substring(info.name, device_substring) and not (
-            info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID
+            info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO
         ):
             continue
         if role == "keyboard":
@@ -535,7 +678,7 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         device.set_nonblocking(True)
         return device
     except OSError as exc:
-        if info.vendor_id == GADGET_VENDOR_ID and info.product_id == GADGET_PRODUCT_ID:
+        if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
                 + "On Linux, from the repository root run `sudo ./venv/bin/bluetooth_2_usb "
@@ -632,7 +775,7 @@ def _capture_once(
                 if candidate.failed or candidate.complete:
                     continue
                 try:
-                    report_values = candidate.device.read(REPORT_READ_SIZE)
+                    report_values = candidate.device.read(HIDAPI_REPORT_READ_SIZE)
                 except OSError as exc:
                     raise CaptureError(f"Failed reading HID reports from {candidate.node}: {exc}") from exc
                 except Exception as exc:
@@ -649,7 +792,7 @@ def _capture_once(
                     candidate.failed_message = f"{candidate.node}: {exc}"
 
             if not progress:
-                time.sleep(POLL_INTERVAL_SEC)
+                time.sleep(HIDAPI_POLL_INTERVAL_SEC)
 
     except CaptureError as exc:
         return LoopbackResult(
@@ -658,12 +801,7 @@ def _capture_once(
             success=False,
             exit_code=exc.exit_code,
             message=str(exc),
-            details={
-                "capture_backend": "hidapi",
-                "candidates": candidate_nodes.to_dict(),
-                "nodes": GadgetNodes(None, None, None).to_dict(),
-                "timeout_sec": timeout_sec,
-            },
+            details=_capture_failure_details(timeout_sec, candidate_nodes, candidates),
         )
     finally:
         for candidate in candidates:
@@ -739,9 +877,9 @@ def run_capture(
         )
 
     if sys.platform == "win32":
-        from .capture_windows import run_windows_raw_input_capture
+        from .capture_windows import run_raw_input_capture
 
-        result = run_windows_raw_input_capture(
+        result = run_raw_input_capture(
             scenario_name=scenario_name, timeout_sec=resolved_timeout_sec, candidate_nodes=candidate_nodes
         )
         result.details["candidates"] = candidate_nodes.to_dict()

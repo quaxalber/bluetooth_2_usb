@@ -3,17 +3,13 @@
 Thanks for your interest in contributing.
 
 This guide covers the repo-specific workflow that keeps issues actionable,
-changes easy to review, and validation grounded in the supported Raspberry Pi
-deployment model.
+changes easy to review, and validation grounded.
 
 ## Reporting Issues
 
 Thanks for taking the time to report a problem. If you can, please include:
 
 - target host type
-- Raspberry Pi model and Raspberry Pi OS version
-- whether persistent read-only mode is enabled
-- exact commands used
 - output from `bluetooth_2_usb smoketest --verbose`
 - output from `bluetooth_2_usb debug --duration 10`
 - clear reproduction steps
@@ -26,6 +22,9 @@ Pi is connected to the target host through the OTG-capable data port.
 
 This repository uses `staging` as its integration branch.
 
+> [!IMPORTANT]
+> Normal project work targets `staging`, not `main`.
+
 Please:
 
 - keep scope focused
@@ -33,14 +32,17 @@ Please:
 - explain what changed and why
 - describe how you tested it
 - update docs when behavior, commands, paths, or defaults change
-- target `staging` for normal work
-- do not target `main` directly for normal project work
 
 Use a normal PR into `staging` for features, fixes, refactors, and other
-non-trivial changes. Small follow-up review fixes may be pushed directly to
-`staging` when that is the least disruptive way to finish an in-flight review.
+non-trivial changes.
 
 Branch and commit naming:
+
+> [!IMPORTANT]
+> Do not use agent- or tool-branded names such as `codex/...` branch prefixes
+> or `[codex] ...` PR titles. Prefer the change type and intent, for example
+> `refactor/simplify-v3-cleanup` and
+> `refactor: simplify v3 cleanup paths`.
 
 - use descriptive branch prefixes such as `feat/`, `fix/`, `docs/`, `refactor/`,
   `test/`, `chore/`
@@ -62,30 +64,12 @@ Merge policy:
 - if you intentionally decline a review suggestion, explain that on the PR
 - if CI fails, inspect the actual failing step and log before guessing
 
-CodeRabbit policy:
-
-- `.coderabbit.yaml` disables automatic review; request CodeRabbit manually when
-  needed, using `@coderabbitai full review` by default
-- treat the first top-level CodeRabbit PR comment as the live status source of
-  truth
-- do not consider review complete until that comment says
-  `no actionable comments` after the latest commit
-- do not use a green `CodeRabbit` check alone as proof that review is finished
-- for the actual findings, inspect the newest review comments and read the
-  section `Prompt for all review comments with AI agents`
-- treat that prompt section as the source of truth for actionable review
-  findings, including nitpicks, outside-diff-range comments, summary comments,
-  and other grouped review items
-- if the first CodeRabbit comment says `review in progress`, wait for completion
-- if it says `paused`, resume the review first (for example, click Resume or
-  post `@coderabbitai resume`) before posting `@coderabbitai full review`
-- if it says `rate limited`, wait and retry `@coderabbitai full review`
-
 ## Development Environment
 
-Meaningful runtime validation requires Linux, and changes that affect USB
-gadget behavior should be tested on a real Raspberry Pi with an OTG-capable
-connection to a target host.
+> [!NOTE]
+> Meaningful runtime validation requires Linux, and changes that affect USB
+> gadget behavior should be tested on a real Raspberry Pi with an OTG-capable
+> connection to a target host.
 
 Basic setup:
 
@@ -106,14 +90,6 @@ If you prefer to work from a fork, replace the clone URL with your fork.
 
 Use this venv for repo-local validation.
 
-## Supported Deployment Model
-
-Please keep code and docs aligned with the supported deployment model:
-
-- install root: `/opt/bluetooth_2_usb`
-- service unit: `bluetooth_2_usb.service`
-- runtime settings: `/etc/default/bluetooth_2_usb`
-
 ## Quality Expectations
 
 ### Python
@@ -121,12 +97,6 @@ Please keep code and docs aligned with the supported deployment model:
 - Python 3.11+
 - format Python with Black at the repository line length (`120`)
 - lint with Ruff
-- avoid magic trailing commas whose only purpose is to force Black to keep a
-  call, literal, or assertion split across multiple lines; keep syntactic
-  trailing commas where Python requires them
-- when splitting strings, avoid implicit adjacent string literals because they
-  are easy to misread after formatting. Prefer explicit concatenation,
-  intermediate variables, or a naturally wrapped data structure.
 - use positional formatting for logger calls so disabled log levels avoid
   formatting work and log aggregators can group stable message templates
 - prefer small, direct control flow over clever abstractions
@@ -142,9 +112,11 @@ Please keep code and docs aligned with the supported deployment model:
 
 ### Compatibility Policy
 
-- keep docs, tests, and code aligned with the current supported product surface
-- do not keep legacy aliases, shell wrappers, removed config keys, deprecated
-  entrypoints, or compatibility shims
+> [!IMPORTANT]
+> Keep docs, tests, and code aligned with the current supported product surface.
+> Do not keep legacy aliases, shell wrappers, removed config keys, deprecated
+> entrypoints, or compatibility shims.
+
 - when an interface changes, update callers and docs to the new interface
   directly instead of preserving old paths
 
@@ -175,40 +147,6 @@ python -m build
 ```
 
 Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
-
-For broad Python formatting churn, also scan for accidental adjacent string
-literals:
-
-```bash
-python - <<'PY'
-from pathlib import Path
-import io
-import subprocess
-import tokenize
-
-for raw_path in subprocess.check_output(["git", "ls-files", "*.py"], text=True).splitlines():
-    path = Path(raw_path)
-    if path.parts and path.parts[0] in {"build", "dist", "venv"}:
-        continue
-    text = path.read_text(encoding="utf-8")
-    tokens = [
-        token
-        for token in tokenize.generate_tokens(io.StringIO(text).readline)
-        if token.type
-        not in {
-            tokenize.NL,
-            tokenize.NEWLINE,
-            tokenize.INDENT,
-            tokenize.DEDENT,
-            tokenize.COMMENT,
-            tokenize.ENCODING,
-        }
-    ]
-    for previous, current in zip(tokens, tokens[1:]):
-        if previous.type == tokenize.STRING and current.type == tokenize.STRING:
-            print(f"{path}:{previous.start[0]}-{current.start[0]}")
-PY
-```
 
 ## Hardware Validation
 

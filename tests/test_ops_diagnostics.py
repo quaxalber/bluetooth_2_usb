@@ -17,7 +17,90 @@ DIAGNOSTICS_REPORT = "bluetooth_2_usb.ops.diagnostics.report"
 DIAGNOSTICS_SMOKETEST = "bluetooth_2_usb.ops.diagnostics.smoketest"
 
 
+class _RfkillEntry:
+    def line(self) -> str:
+        return "rfkill0 type=bluetooth soft=0 hard=0 state=1"
+
+
 class OpsDiagnosticsTest(unittest.TestCase):
+    def run_smoketest_harness(
+        self,
+        smoke: SmokeTest,
+        *,
+        root: Path,
+        dwc2_mode: str = "module",
+        modules_load: str = "",
+        rfkill_entries: list[_RfkillEntry] | None = None,
+        rfkill_blocked: bool = False,
+        udc_states: dict[str, str] | None = None,
+    ) -> list[str]:
+        checked_modules: list[str] = []
+
+        with ExitStack() as stack:
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value=modules_load))
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value=dwc2_mode))
+            stack.enter_context(
+                patch(
+                    f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv",
+                    side_effect=(
+                        AssertionError("known dwc2 mode should not be required") if dwc2_mode == "unknown" else None
+                    ),
+                    return_value="dwc2",
+                )
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path", return_value=root / "config.txt")
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line", return_value="")
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type", return_value="ext4")
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.configured_kernel_image", return_value="kernel8.img")
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.configured_initramfs_file", return_value="")
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
+            )
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}._udc_states", return_value=udc_states or {"dummy.udc": "configured"})
+            )
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=rfkill_entries or [])
+            )
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=rfkill_blocked))
+            stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
+            stack.enter_context(
+                patch.object(
+                    smoke, "_check_modules", side_effect=lambda _token, required: checked_modules.extend(required)
+                )
+            )
+            for method in (
+                "_path_exists",
+                "_command_ok",
+                "_check_overlay_runtime",
+                "_check_initramfs",
+                "_check_readonly",
+            ):
+                stack.enter_context(patch.object(smoke, method))
+            stack.enter_context(patch.object(smoke, "_capture", return_value=(0, "[]")))
+            stack.enter_context(patch.object(smoke, "_relayable_count", return_value=0))
+            stack.enter_context(patch.object(smoke, "_paired_count", return_value=0))
+
+            smoke.run()
+
+        return checked_modules
+
     def test_smoketest_records_structured_probe_results(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=False)
 
@@ -68,126 +151,36 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
     def test_smoketest_downgrades_unknown_dwc2_mode_to_heuristic_warning(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
-        checked_modules = []
-
-        class RfkillEntry:
-            def line(self) -> str:
-                return "rfkill0 type=bluetooth soft=0 hard=0 state=1"
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-
-            with ExitStack() as stack:
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value="modules-load=libcomposite")
-                )
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value="unknown"))
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv",
-                        side_effect=AssertionError("should not require known dwc2 mode"),
-                    )
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path", return_value=root / "config.txt")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
-                )
-                stack.enter_context(
-                    patch(
-                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line", return_value="dtoverlay=dwc2"
-                    )
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type", return_value="ext4")
-                )
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[RfkillEntry()])
-                )
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=False))
-                stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
-                stack.enter_context(
-                    patch.object(
-                        smoke, "_check_modules", side_effect=lambda _token, required: checked_modules.extend(required)
-                    )
-                )
-                for method in (
-                    "_path_exists",
-                    "_command_ok",
-                    "record_bool",
-                    "_check_overlay_runtime",
-                    "_check_initramfs",
-                    "_check_readonly",
-                ):
-                    stack.enter_context(patch.object(smoke, method))
-                stack.enter_context(patch.object(smoke, "_capture", return_value=(0, "[]")))
-                stack.enter_context(patch.object(smoke, "_relayable_count", return_value=0))
-                stack.enter_context(patch.object(smoke, "_paired_count", return_value=0))
-
-                smoke.run()
+            checked_modules = self.run_smoketest_harness(
+                smoke,
+                root=Path(tmpdir),
+                dwc2_mode="unknown",
+                modules_load="modules-load=libcomposite",
+                rfkill_entries=[_RfkillEntry()],
+            )
 
         self.assertEqual(checked_modules, ["libcomposite"])
         self.assertEqual(smoke.soft_warnings, 1)
 
+    def test_smoketest_warns_when_udc_is_not_configured(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.run_smoketest_harness(
+                smoke, root=Path(tmpdir), modules_load="modules-load=dwc2", udc_states={"dummy.udc": "not attached"}
+            )
+
+        warnings = [result for result in smoke.results if result.status is ProbeStatus.WARN]
+        self.assertTrue(any("UDC is not configured" in result.message for result in warnings))
+        self.assertEqual(smoke.summary["UDC state"], "dummy.udc=not attached")
+
     def test_smoketest_records_healthy_rfkill_probe(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
 
-        class RfkillEntry:
-            def line(self) -> str:
-                return "rfkill0 type=bluetooth soft=0 hard=0 state=1"
-
         with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            with ExitStack() as stack:
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value=""))
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value="module"))
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv", return_value="dwc2")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path", return_value=root / "config.txt")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line", return_value="")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type", return_value="ext4")
-                )
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
-                )
-                stack.enter_context(
-                    patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[RfkillEntry()])
-                )
-                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=False))
-                stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
-                stack.enter_context(patch.object(smoke, "_check_modules"))
-                for method in (
-                    "_path_exists",
-                    "_command_ok",
-                    "_check_overlay_runtime",
-                    "_check_initramfs",
-                    "_check_readonly",
-                ):
-                    stack.enter_context(patch.object(smoke, method))
-                stack.enter_context(patch.object(smoke, "_capture", return_value=(0, "[]")))
-                stack.enter_context(patch.object(smoke, "_relayable_count", return_value=0))
-                stack.enter_context(patch.object(smoke, "_paired_count", return_value=0))
-
-                smoke.run()
+            self.run_smoketest_harness(smoke, root=Path(tmpdir), rfkill_entries=[_RfkillEntry()])
 
         rfkill_results = [
             result for result in smoke.results if result.message == "Bluetooth rfkill state is not blocked"

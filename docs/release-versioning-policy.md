@@ -22,7 +22,8 @@ Examples:
 - `v1.1.0`
 - `v2.0.0`
 
-Only tags that match that exact pattern count as release tags for package versioning.
+> [!IMPORTANT]
+> Only exact `vMAJOR.MINOR.PATCH` tags count as official release tags.
 
 That means helper tags such as:
 
@@ -111,12 +112,23 @@ git push origin v1.0.0
 
 ## History rewrites and tag ancestry
 
-Bluetooth-2-USB derives development versions from the most recent reachable
-release tag. If `main` history is rewritten, the latest official release tag
-must be re-anchored to the content-equivalent commit on the rewritten history.
-
-Otherwise `setuptools_scm` can fall back to an incorrect base version such as
-`0.0`, and development builds will no longer advance from the real last release.
+> [!WARNING]
+> Bluetooth-2-USB derives development versions from the most recent reachable
+> release tag. If `main` history is rewritten, the latest official release tag
+> must be re-anchored to the content-equivalent commit on the rewritten history.
+> Otherwise `setuptools_scm` can fall back to an incorrect base version such as
+> `0.0`, and development builds will no longer advance from the real last
+> release.
+>
+> Recovery after a history rewrite:
+>
+> 1. Find the content-equivalent commit for the latest official release tag on
+>    the rewritten `main` history, for example with `git log` or patch-id
+>    comparison.
+> 2. Recreate the annotated release tag at that commit:
+>    `git tag -d <tag>` and `git tag -a <tag> <commit> -m "<release message>"`.
+> 3. Update the remote tag with `git push --force origin <tag>` and update or
+>    replace the GitHub Release entry if one was published.
 
 ## Test tags
 
@@ -127,4 +139,6 @@ Good examples:
 - `hardening-test-install-2026-04-05`
 - `pi-validation-2026-04-06`
 
-Do not create throwaway tags that look like official releases unless you actually intend to ship that release.
+> [!IMPORTANT]
+> Do not create throwaway tags that look like official releases unless you
+> actually intend to ship that release.

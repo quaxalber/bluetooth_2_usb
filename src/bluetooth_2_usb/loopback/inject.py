@@ -9,6 +9,7 @@ from pathlib import Path
 
 from evdev import UInput, ecodes
 
+from ..hid.constants import HI_RES_WHEEL_UNITS_PER_DETENT
 from .constants import (
     COMBO_MOUSE_DELAY_MS,
     DEFAULT_CONSUMER_NAME,
@@ -19,7 +20,7 @@ from .constants import (
     EXIT_PREREQUISITE,
 )
 from .result import LoopbackResult
-from .scenarios import SCENARIOS, get_scenario, scenario_to_dict
+from .scenarios import SCENARIOS, get_scenario, scenario_summary
 
 UINPUT_PATH = Path("/dev/uinput")
 SERVICE_SETTLE_ENV = "B2U_LOOPBACK_SERVICE_SETTLE_SEC"
@@ -39,7 +40,7 @@ def _write_mouse_rel_step(device: UInput, step_event) -> None:
     device.write(step_event.event_type, step_event.code, step_event.value)
     hi_res_code = _HI_RES_REL_CODES.get(step_event.code)
     if step_event.event_type == ecodes.EV_REL and hi_res_code is not None:
-        device.write(step_event.event_type, hi_res_code, step_event.value * 120)
+        device.write(step_event.event_type, hi_res_code, step_event.value * HI_RES_WHEEL_UNITS_PER_DETENT)
 
 
 def _send_mouse_rel_step(device: UInput, step_event, event_gap_ms: int) -> None:
@@ -78,10 +79,11 @@ def _mouse_capabilities() -> dict[int, list[int]]:
 
 
 def _consumer_capabilities() -> dict[int, list[int]]:
-    return {ecodes.EV_KEY: [ecodes.KEY_VOLUMEUP, ecodes.KEY_VOLUMEDOWN]}
+    consumer_codes = sorted({step.code for scenario in SCENARIOS.values() for step in scenario.consumer_steps})
+    return {ecodes.EV_KEY: consumer_codes}
 
 
-def configured_service_settle_sec() -> float:
+def service_settle_sec() -> float:
     raw = os.environ.get(SERVICE_SETTLE_ENV, str(DEFAULT_SERVICE_SETTLE_SEC))
     try:
         settle = float(raw)
@@ -182,7 +184,7 @@ def run_inject(
             details={},
         )
 
-    wait_for_service_settle(configured_service_settle_sec())
+    wait_for_service_settle(service_settle_sec())
 
     keyboard = None
     mouse = None
@@ -283,7 +285,7 @@ def run_inject(
             "pre_delay_ms": pre_delay_ms,
             "event_gap_ms": resolved_event_gap_ms,
             "post_delay_ms": resolved_post_delay_ms,
-            "expected": scenario_to_dict(scenario),
+            "expected": scenario_summary(scenario),
             "injected_event_count": injected_events,
         },
     )

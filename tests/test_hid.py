@@ -2,14 +2,34 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from bluetooth_2_usb.evdev import ecodes
+from bluetooth_2_usb.evdev import KeyEvent, ecodes
 from bluetooth_2_usb.hid.buttons import MouseButtons
+from bluetooth_2_usb.hid.constants import MOUSE_IN_REPORT_LENGTH
 from bluetooth_2_usb.hid.consumer import ExtendedConsumerControl
-from bluetooth_2_usb.hid.descriptors import MOUSE_IN_REPORT_LENGTH
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.hid.keyboard import ExtendedKeyboard
 from bluetooth_2_usb.hid.mouse import ExtendedMouse
 from bluetooth_2_usb.relay.gate import RelayGate
+
+NUL = 0x00
+NO_BUTTONS = NUL
+NO_MOVE = (NUL, NUL, NUL, NUL, NUL, NUL)
+HID_I16_MAX = 32767
+HID_I16_MIN = -32767
+HID_I8_MAX = 127
+HID_I8_MIN = -127
+
+
+def _mouse_report(buttons: int = NO_BUTTONS, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> bytes:
+    return bytes(
+        [
+            buttons,
+            *x.to_bytes(2, "little", signed=True),
+            *y.to_bytes(2, "little", signed=True),
+            wheel & 0xFF,
+            pan & 0xFF,
+        ]
+    )
 
 
 class _FakeKeyboard:
@@ -81,9 +101,9 @@ def _active_gate() -> RelayGate:
 
 
 class _TestKeyEvent:
-    key_down = 1
-    key_hold = 2
-    key_up = 0
+    key_down = KeyEvent.key_down
+    key_hold = KeyEvent.key_hold
+    key_up = KeyEvent.key_up
 
     def __init__(self, scancode: int, keystate: int) -> None:
         self.scancode = scancode
@@ -92,13 +112,13 @@ class _TestKeyEvent:
 
 class _TestRelEvent:
     def __init__(self, code: int, value: int) -> None:
-        self.event = SimpleNamespace(type=2, code=code, value=value)
+        self.event = SimpleNamespace(type=ecodes.EV_REL, code=code, value=value)
 
 
 class _TestSynEvent:
-    type = 0
-    code = 0
-    value = 0
+    type = ecodes.EV_SYN
+    code = ecodes.SYN_REPORT
+    value = ecodes.SYN_REPORT
 
 
 class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
@@ -217,10 +237,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             await mouse.release(MouseButtons.LEFT)
             await mouse.release_all()
 
-        self.assertEqual(
-            device.sent,
-            [bytes([MouseButtons.LEFT, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0, 0])],
-        )
+        self.assertEqual(device.sent, [_mouse_report(MouseButtons.LEFT), _mouse_report(), _mouse_report()])
         sleep.assert_not_called()
 
     async def test_move_uses_16_bit_xy_and_8_bit_wheel_pan(self) -> None:
@@ -235,7 +252,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             mouse = ExtendedMouse(devices=[])
             await mouse.move(x=300, y=-300, wheel=1, pan=-1)
 
-        self.assertEqual(device.sent, [bytes([0x00, 0x2C, 0x01, 0xD4, 0xFE, 0x01, 0xFF])])
+        self.assertEqual(device.sent, [_mouse_report(x=300, y=-300, wheel=1, pan=-1)])
 
     async def test_move_accumulates_fractional_pan_across_calls(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -252,10 +269,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             await mouse.move(pan=-0.5)
             await mouse.move(pan=-0.5)
 
-        self.assertEqual(
-            device.sent,
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]), bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF])],
-        )
+        self.assertEqual(device.sent, [_mouse_report(pan=1), _mouse_report(pan=-1)])
 
     async def test_move_accumulates_fractional_wheel_across_calls(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -272,10 +286,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             await mouse.move(wheel=-0.5)
             await mouse.move(wheel=-0.5)
 
-        self.assertEqual(
-            device.sent,
-            [bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00]), bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00])],
-        )
+        self.assertEqual(device.sent, [_mouse_report(wheel=1), _mouse_report(wheel=-1)])
 
     async def test_move_splits_large_xy_without_widening_wheel_pan(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -291,7 +302,10 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             device.sent,
-            [bytes([0x00, 0xFF, 0x7F, 0x01, 0x80, 0x7F, 0x81]), bytes([0x00, 0x41, 0x1C, 0xBF, 0xE3, 0x49, 0xB7])],
+            [
+                _mouse_report(x=HID_I16_MAX, y=HID_I16_MIN, wheel=HID_I8_MAX, pan=HID_I8_MIN),
+                _mouse_report(x=7233, y=-7233, wheel=73, pan=-73),
+            ],
         )
 
     async def test_move_chunks_large_reports_without_sleep(self) -> None:
@@ -311,14 +325,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             await mouse.move(x=1)
 
         sleep.assert_not_called()
-        self.assertEqual(
-            device.sent,
-            [
-                bytes([0x00, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0x00]),
-                bytes([0x00, 0x41, 0x1C, 0x00, 0x00, 0x00, 0x00]),
-                bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]),
-            ],
-        )
+        self.assertEqual(device.sent, [_mouse_report(x=HID_I16_MAX), _mouse_report(x=7233), _mouse_report(x=1)])
 
     async def test_move_retries_blocked_report_before_advancing(self) -> None:
         device = SimpleNamespace(sent=[])
@@ -339,7 +346,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             mouse = ExtendedMouse(devices=[])
             await mouse.move(x=1)
 
-        expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
+        expected_report = _mouse_report(x=1)
         self.assertEqual(attempts, [expected_report, expected_report])
         self.assertEqual(device.sent, [expected_report])
         sleep.assert_called_once_with(mouse.REPORT_WRITE_RETRY_DELAY_SEC)
@@ -361,7 +368,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(BlockingIOError):
                 await mouse.move(x=1)
 
-        expected_report = bytes([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
+        expected_report = _mouse_report(x=1)
         self.assertEqual(device.attempts, [expected_report] * mouse.REPORT_WRITE_MAX_TRIES)
         self.assertEqual(
             sleep.mock_calls, [call(mouse.REPORT_WRITE_RETRY_DELAY_SEC)] * (mouse.REPORT_WRITE_MAX_TRIES - 1)
@@ -407,10 +414,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
             await mouse.press(MouseButtons.TASK)
             await mouse.release(MouseButtons.TASK)
 
-        self.assertEqual(
-            device.sent,
-            [bytes([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
-        )
+        self.assertEqual(device.sent, [_mouse_report(MouseButtons.TASK), _mouse_report()])
 
 
 class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
@@ -418,9 +422,11 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
-        with patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event):
-            with patch("bluetooth_2_usb.hid.dispatch.KeyEvent", _TestKeyEvent):
-                await dispatcher.dispatch(_TestKeyEvent(ecodes.KEY_VOLUMEUP, _TestKeyEvent.key_up))
+        with (
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.KEY_VOLUMEUP, _TestKeyEvent.key_up))
 
         self.assertEqual(hid_gadgets.consumer.release_calls, 1)
         self.assertEqual(hid_gadgets.mouse.releases, [])
@@ -439,12 +445,67 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
-        with patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event):
-            with patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent):
+        with (
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+        ):
+            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
                 await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
                 await dispatcher.dispatch(_TestSynEvent())
 
         self.assertEqual(hid_gadgets.mouse.moves, [(7, 0, 0, 0)])
+        self.assertTrue(any("coalesced_events=1" in message and "emitted=True" in message for message in logs.output))
+
+    async def test_dispatch_logs_coalesced_mouse_delta_count_on_flush(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate())
+
+        with (
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+        ):
+            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -3))
+                await dispatcher.dispatch(_TestSynEvent())
+
+        self.assertEqual(hid_gadgets.mouse.moves, [(7, -3, 0, 0)])
+        self.assertTrue(any("coalesced_events=2" in message and "emitted=True" in message for message in logs.output))
+
+    async def test_dispatch_logs_fractional_mouse_delta_flush_without_report(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate())
+
+        with (
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+        ):
+            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60))
+                await dispatcher.dispatch(_TestSynEvent())
+
+        self.assertEqual(hid_gadgets.mouse.moves, [])
+        self.assertTrue(any("coalesced_events=1" in message and "emitted=False" in message for message in logs.output))
+
+    async def test_dispatch_inactive_gate_discards_coalesced_count(self) -> None:
+        gate = _active_gate()
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, gate)
+
+        with (
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+        ):
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
+            gate.set_host_configured(False)
+            await dispatcher.flush()
+            gate.set_host_configured(True)
+            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
+                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -3))
+                await dispatcher.flush()
+
+        self.assertEqual(hid_gadgets.mouse.moves, [(0, -3, 0, 0)])
+        self.assertTrue(any("coalesced_events=1" in message for message in logs.output))
 
     async def test_mouse_blocking_write_drops_delta_without_retrying(self) -> None:
         gate = _active_gate()
@@ -452,13 +513,15 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets.mouse.move = Mock(side_effect=BlockingIOError())
         dispatcher = HidDispatcher(hid_gadgets, gate)
 
-        with patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event):
-            with patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent):
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 40000))
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -40000))
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_WHEEL, 200))
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_HWHEEL, -200))
-                await dispatcher.flush()
+        with (
+            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
+            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+        ):
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 40000))
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -40000))
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_WHEEL, 200))
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_HWHEEL, -200))
+            await dispatcher.flush()
 
         hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
         self.assertEqual(dispatcher.write_failures, 1)
