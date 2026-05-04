@@ -91,6 +91,8 @@ PY
 > shows `mkinitramfs: failed to determine device for /`, repair the package
 > state before rebooting:
 
+### OverlayFS Repair Guidance
+
 ```bash
 sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
 sudo dpkg --configure -a
@@ -99,6 +101,19 @@ sudo bluetooth_2_usb readonly enable
 
 That failure mode has been observed on current Raspberry Pi OS releases when
 `initramfs-tools` cannot infer the root device during `overlayroot` setup.
+
+After any failed `readonly enable`, inspect the current state before rebooting:
+
+```bash
+bluetooth_2_usb readonly status
+```
+
+If you explicitly want to back out the requested OverlayFS state, disable it
+before rebooting:
+
+```bash
+sudo bluetooth_2_usb readonly disable
+```
 
 > [!IMPORTANT]
 > Custom kernels must stay fully installed on the Pi before you run

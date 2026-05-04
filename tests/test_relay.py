@@ -559,10 +559,10 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
                 await relay.async_relay_events_loop()
 
         output = "\n".join(logs.output)
-        self.assertIn("Mouse REL input: code=0 value=2 -> x=2 y=0 wheel=0.0 pan=0.0", output)
-        self.assertIn("Mouse REL input: code=1 value=-3 -> x=0 y=-3 wheel=0.0 pan=0.0", output)
-        self.assertIn("Mouse REL input: code=11 value=60 -> x=0 y=0 wheel=0.5 pan=0.0", output)
-        self.assertIn("Mouse REL input: code=12 value=-60 -> x=0 y=0 wheel=0.0 pan=-0.5", output)
+        self.assertIn("Mouse REL input: x=2 y=0 wheel=0.0 pan=0.0", output)
+        self.assertIn("Mouse REL input: x=0 y=-3 wheel=0.0 pan=0.0", output)
+        self.assertIn("Mouse REL input: x=0 y=0 wheel=0.5 pan=0.0", output)
+        self.assertIn("Mouse REL input: x=0 y=0 wheel=0.0 pan=-0.5", output)
 
     async def test_large_mouse_deltas_are_passed_to_gadget_writer(self) -> None:
         gate = _active_gate()

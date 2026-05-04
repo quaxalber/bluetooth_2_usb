@@ -95,10 +95,15 @@ CONSUMER_REPORT_ID = 0x03
 LEFT_SHIFT_MODIFIER = 0x02
 NO_BUTTONS = NUL
 NO_USAGE = NUL
+HID_ONE_BYTE_USAGE_MAX = 0xFF
 HID_I16_MAX = 32767
 HID_I16_MIN = -32767
 HID_I8_MAX = 127
 HID_I8_MIN = -127
+RAW_INPUT_WHEEL_VALUE_SHIFT = capture_windows.RAW_INPUT_WHEEL_VALUE_SHIFT
+RAW_INPUT_POSITIVE_ONE_WHEEL_DELTA = 0x0001 << RAW_INPUT_WHEEL_VALUE_SHIFT
+RAW_INPUT_NEGATIVE_ONE_WHEEL_DELTA = 0xFFFF << RAW_INPUT_WHEEL_VALUE_SHIFT
+PUBLIC_SCENARIO_NAMES = {"keyboard", "mouse", "node-discovery", "consumer", "combo"}
 WINDOWS_USB_ID = f"vid_{usb_udev_hex_u16(USB_GADGET_VID_LINUX)}&pid_{usb_udev_hex_u16(USB_GADGET_PID_COMBO)}"
 WINDOWS_USB_ID_UPPER = WINDOWS_USB_ID.upper()
 
@@ -229,7 +234,7 @@ class _FakeReadableHidModule(_FakeHidModule):
 
 class ScenarioDefinitionTest(unittest.TestCase):
     def test_public_scenarios_are_small_and_intentional(self) -> None:
-        self.assertEqual(set(SCENARIOS), {"keyboard", "mouse", "node-discovery", "consumer", "combo"})
+        self.assertEqual(set(SCENARIOS), PUBLIC_SCENARIO_NAMES)
 
     def test_keyboard_scenario_contains_full_modifier_burst(self) -> None:
         scenario = SCENARIOS["keyboard"]
@@ -288,7 +293,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
                 event = SimpleNamespace(scancode=code, keystate=KeyEvent.key_down)
                 self.assertTrue(is_consumer_key(event))
                 usages.append(_mapped_hid_usage(ExpectedEvent(EV_KEY, code, KeyEvent.key_down)))
-        self.assertTrue(any(usage > 0xFF for usage in usages))
+        self.assertTrue(any(usage > HID_ONE_BYTE_USAGE_MAX for usage in usages))
 
     def test_combo_scenario_contains_keyboard_mouse_and_consumer_sequences(self) -> None:
         combo = SCENARIOS["combo"]
@@ -341,9 +346,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         candidates = discover_gadget_node_candidates(hid_module=hid_module)
 
-        self.assertEqual([info.node for info in candidates.keyboard_nodes], ["kbd0"])
-        self.assertEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
-        self.assertEqual([info.node for info in candidates.consumer_nodes], ["consumer0"])
+        self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["kbd0"])
+        self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
+        self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["consumer0"])
 
     def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(self) -> None:
         hid_module = _FakeHidModule(
@@ -428,9 +433,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         candidates = discover_gadget_node_candidates(hid_module=hid_module)
 
-        self.assertEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
-        self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
-        self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
+        self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
+        self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
+        self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
     def test_discovery_maps_default_linux_gadget_interfaces_by_interface_number(self) -> None:
         hid_module = _FakeHidModule(
@@ -470,9 +475,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
 
         candidates = discover_gadget_node_candidates(hid_module=hid_module)
 
-        self.assertEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
-        self.assertEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
-        self.assertEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
+        self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
+        self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
+        self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
 
     def test_explicit_override_rejects_default_linux_gadget_interface_role_mismatch(self) -> None:
         hid_module = _FakeHidModule(
@@ -851,19 +856,39 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         )
 
     def test_keyboard_event_to_report_covers_extended_scenario_keys(self) -> None:
-        for vkey in (
+        scenario_vkeys = (
             capture_windows.VK_F24,
             capture_windows.VK_SNAPSHOT,
             capture_windows.VK_INSERT,
             capture_windows.VK_DELETE,
             capture_windows.VK_UP,
             capture_windows.VK_APPS,
-        ):
+        )
+        for vkey in scenario_vkeys:
             with self.subTest(vkey=vkey):
                 self.assertEqual(
                     capture_windows.keyboard_event_to_report(vkey, is_key_up=False),
                     _keyboard_report(capture_windows.VK_TO_HID[vkey]),
                 )
+
+    def test_windows_vk_mapping_is_limited_to_loopback_scenario_keys(self) -> None:
+        scenario_key_codes = {step.code for scenario in SCENARIOS.values() for step in scenario.keyboard_steps}
+        mapped_key_codes = set(capture_windows.VK_TO_EVDEV.values())
+
+        self.assertEqual(scenario_key_codes - mapped_key_codes, set())
+        self.assertEqual(
+            {
+                ecodes.KEY_BACKSPACE,
+                ecodes.KEY_TAB,
+                ecodes.KEY_ENTER,
+                ecodes.KEY_SPACE,
+                ecodes.KEY_KP0,
+                ecodes.KEY_RIGHTALT,
+                ecodes.KEY_SEMICOLON,
+            }
+            & mapped_key_codes,
+            set(),
+        )
 
     def test_keyboard_event_to_report_covers_standard_keys_and_modifiers(self) -> None:
         k_usage = _mapped_hid_usage(ExpectedEvent(EV_KEY, KEY_K, KeyEvent.key_down))
@@ -913,7 +938,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_raw_input_mouse_report_builder_builds_horizontal_pan_reports(self) -> None:
         raw_mouse = RAWMOUSE()
-        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
+        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | RAW_INPUT_NEGATIVE_ONE_WHEEL_DELTA
 
         self.assertEqual(
             capture_windows.RawInputMouseReportBuilder().reports_for(raw_mouse),
@@ -969,7 +994,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_raw_input_mouse_report_builder_keeps_wheel_and_motion_reports(self) -> None:
         raw_mouse = RAWMOUSE()
-        raw_mouse.ulButtons = RI_MOUSE_WHEEL | (0x0001 << 16)
+        raw_mouse.ulButtons = RI_MOUSE_WHEEL | RAW_INPUT_POSITIVE_ONE_WHEEL_DELTA
         raw_mouse.lLastX = 300
         raw_mouse.lLastY = -300
 
@@ -980,7 +1005,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
     def test_raw_input_mouse_report_builder_keeps_pan_and_motion_reports(self) -> None:
         raw_mouse = RAWMOUSE()
-        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | (0xFFFF << 16)
+        raw_mouse.ulButtons = RI_MOUSE_HORIZONTAL_WHEEL | RAW_INPUT_NEGATIVE_ONE_WHEEL_DELTA
         raw_mouse.lLastX = 300
         raw_mouse.lLastY = -300
 

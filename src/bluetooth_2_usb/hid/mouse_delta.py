@@ -45,15 +45,7 @@ class MouseDeltaAccumulator:
     def add_event(self, event: RelEvent) -> None:
         x, y, wheel, pan = get_mouse_movement(event)
         self._event_count += 1
-        logger.debug(
-            "Mouse REL input: code=%s value=%s -> x=%s y=%s wheel=%s pan=%s",
-            event.event.code,
-            event.event.value,
-            x,
-            y,
-            wheel,
-            pan,
-        )
+        logger.debug("Mouse REL input: x=%s y=%s wheel=%s pan=%s", x, y, wheel, pan)
         self._x += x
         self._y += y
         if event.event.code == ecodes.REL_WHEEL_HI_RES:

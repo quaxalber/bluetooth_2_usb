@@ -294,16 +294,18 @@ class ReadonlyConfigTest(unittest.TestCase):
             return values.get((str(target), field), "")
 
         stdout = StringIO()
-        with patch(f"{READONLY_STATUS}.load_readonly_config", return_value=config):
-            with patch(f"{READONLY_STATUS}.readonly_mode", return_value="persistent"):
-                with patch(f"{READONLY_STATUS}.overlay_status", return_value="enabled"):
-                    with patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"):
-                        with patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"):
-                            with patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=True):
-                                with patch(f"{READONLY_STATUS}._findmnt_value", side_effect=fake_findmnt):
-                                    with patch(f"{READONLY_STATUS}._mountpoint", return_value=True):
-                                        with redirect_stdout(stdout):
-                                            print_readonly_status()
+        with (
+            patch(f"{READONLY_STATUS}.load_readonly_config", return_value=config),
+            patch(f"{READONLY_STATUS}.readonly_mode", return_value="persistent"),
+            patch(f"{READONLY_STATUS}.overlay_status", return_value="enabled"),
+            patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"),
+            patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"),
+            patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=True),
+            patch(f"{READONLY_STATUS}._findmnt_value", side_effect=fake_findmnt),
+            patch(f"{READONLY_STATUS}._mountpoint", return_value=True),
+            redirect_stdout(stdout),
+        ):
+            print_readonly_status()
 
         output = stdout.getvalue()
         self.assertIn("mode: persistent\n", output)
@@ -314,16 +316,18 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_print_readonly_status_uses_safe_defaults_when_config_cannot_load(self) -> None:
         stdout = StringIO()
-        with patch(f"{READONLY_STATUS}.load_readonly_config", side_effect=OpsError("invalid readonly env")):
-            with patch(f"{READONLY_STATUS}.readonly_mode", return_value="disabled"):
-                with patch(f"{READONLY_STATUS}.overlay_status", return_value="unknown"):
-                    with patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="unknown"):
-                        with patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="unknown"):
-                            with patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=False):
-                                with patch(f"{READONLY_STATUS}._findmnt_value", return_value=""):
-                                    with patch(f"{READONLY_STATUS}._mountpoint", return_value=False):
-                                        with redirect_stdout(stdout):
-                                            print_readonly_status()
+        with (
+            patch(f"{READONLY_STATUS}.load_readonly_config", side_effect=OpsError("invalid readonly env")),
+            patch(f"{READONLY_STATUS}.readonly_mode", return_value="disabled"),
+            patch(f"{READONLY_STATUS}.overlay_status", return_value="unknown"),
+            patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="unknown"),
+            patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="unknown"),
+            patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=False),
+            patch(f"{READONLY_STATUS}._findmnt_value", return_value=""),
+            patch(f"{READONLY_STATUS}._mountpoint", return_value=False),
+            redirect_stdout(stdout),
+        ):
+            print_readonly_status()
 
         output = stdout.getvalue()
         self.assertIn("configured_mode: disabled\n", output)
@@ -362,10 +366,12 @@ class ReadonlyConfigTest(unittest.TestCase):
                     return root / "var/lib/bluetooth"
                 return Path(value)
 
-            with patch(f"{READONLY_UNITS}.PATHS", paths):
-                with patch(f"{READONLY_UNITS}.Path", side_effect=local_path):
-                    with patch(f"{READONLY_UNITS}.output", return_value="mnt-persist.mount"):
-                        write_bluetooth_bind_mount_unit(Path("/mnt/persist/custom/bluetooth"), Path("/mnt/persist"))
+            with (
+                patch(f"{READONLY_UNITS}.PATHS", paths),
+                patch(f"{READONLY_UNITS}.Path", side_effect=local_path),
+                patch(f"{READONLY_UNITS}.output", return_value="mnt-persist.mount"),
+            ):
+                write_bluetooth_bind_mount_unit(Path("/mnt/persist/custom/bluetooth"), Path("/mnt/persist"))
 
             content = unit_path.read_text(encoding="utf-8")
 
@@ -493,6 +499,7 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertEqual(config.mode, "disabled")
         self.assertEqual(written, [])
         self.assertIn("readonly status", stdout.getvalue())
+        self.assertIn("docs/persistent-readonly.md#overlayfs-repair-guidance", stdout.getvalue())
 
     def test_enable_readonly_reports_repair_guidance_when_overlayfs_enable_fails(self) -> None:
         config = ReadonlyConfig(
@@ -527,6 +534,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         write_config.assert_not_called()
         self.assertIn("readonly status", stdout.getvalue())
+        self.assertIn("docs/persistent-readonly.md#overlayfs-repair-guidance", stdout.getvalue())
         self.assertIn("disable OverlayFS", stdout.getvalue())
 
     def test_disable_readonly_disables_overlayfs_and_keeps_persistent_mount_config(self) -> None:
