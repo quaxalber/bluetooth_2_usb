@@ -205,7 +205,8 @@ def enable_readonly() -> None:
             "OverlayFS was requested but validation did not complete. "
             + "Run `bluetooth_2_usb readonly status` and repair the reported package or boot state before rebooting. "
             + "See: https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
-            + "#overlayfs-repair-guidance. "
+            + "#overlayfs-repair-guidance "
+            + "for repair steps. "
             + "To explicitly disable OverlayFS, run: sudo bluetooth_2_usb readonly disable"
         )
         raise
