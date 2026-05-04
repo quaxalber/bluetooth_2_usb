@@ -167,15 +167,8 @@ def update(repo_root: Path) -> None:
             + "Commit, stash, or remove local changes first."
         )
     branch = output(["git", "-C", PATHS.install_dir, "symbolic-ref", "--quiet", "--short", "HEAD"])
-    before = output(["git", "-C", PATHS.install_dir, "rev-parse", "HEAD"])
-    info(f"Fetching origin for branch {branch}")
-    run(["git", "-C", PATHS.install_dir, "fetch", "--tags", "--prune", "origin"])
-    info(f"Fast-forwarding {branch}")
+    info(f"Pulling latest {branch}")
     run(["git", "-C", PATHS.install_dir, "pull", "--ff-only", "origin", branch])
-    after = output(["git", "-C", PATHS.install_dir, "rev-parse", "HEAD"])
-    if before == after:
-        ok("Managed checkout is already up to date; skipping reinstall.")
-        return
     info("Reapplying managed install")
     install(repo_root)
 

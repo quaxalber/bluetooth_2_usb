@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import call, patch
 
 from bluetooth_2_usb.ops.commands import OpsError
-from bluetooth_2_usb.ops.deployment import install, install_cli_links, rebuild_venv, uninstall
+from bluetooth_2_usb.ops.deployment import install, install_cli_links, rebuild_venv, uninstall, update
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
 
@@ -190,6 +190,103 @@ class OpsDeploymentTest(unittest.TestCase):
                 install(root)
 
         self.assertEqual(canonicalized_paths, [paths.env_file])
+
+    def test_update_pulls_current_branch_then_reapplies_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".git").mkdir()
+            paths = ManagedPaths(install_dir=root)
+            commands = []
+
+            def fake_output(command):
+                if command[:4] == ["git", "-C", root, "status"]:
+                    return ""
+                if command[:4] == ["git", "-C", root, "symbolic-ref"]:
+                    return "staging"
+                raise AssertionError(f"unexpected output command: {command}")
+
+            def fake_run(command, **_kwargs):
+                commands.append(command)
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.PATHS", paths),
+                patch("bluetooth_2_usb.ops.deployment.require_commands"),
+                patch("bluetooth_2_usb.ops.deployment.output", side_effect=fake_output),
+                patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run),
+                patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
+            ):
+                update(root)
+
+        self.assertEqual(commands, [["git", "-C", root, "pull", "--ff-only", "origin", "staging"]])
+        managed_install.assert_called_once_with(root)
+
+    def test_update_reapplies_install_even_when_pull_has_no_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".git").mkdir()
+            paths = ManagedPaths(install_dir=root)
+
+            def fake_output(command):
+                if command[:4] == ["git", "-C", root, "status"]:
+                    return ""
+                if command[:4] == ["git", "-C", root, "symbolic-ref"]:
+                    return "staging"
+                raise AssertionError(f"unexpected output command: {command}")
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.PATHS", paths),
+                patch("bluetooth_2_usb.ops.deployment.require_commands"),
+                patch("bluetooth_2_usb.ops.deployment.output", side_effect=fake_output),
+                patch("bluetooth_2_usb.ops.deployment.run"),
+                patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
+            ):
+                update(root)
+
+        managed_install.assert_called_once_with(root)
+
+    def test_update_refuses_dirty_checkout_before_pull_or_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".git").mkdir()
+            paths = ManagedPaths(install_dir=root)
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.PATHS", paths),
+                patch("bluetooth_2_usb.ops.deployment.require_commands"),
+                patch("bluetooth_2_usb.ops.deployment.output", return_value=" M src/file.py"),
+                patch("bluetooth_2_usb.ops.deployment.run") as run_command,
+                patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
+                self.assertRaisesRegex(OpsError, "Refusing to update a dirty managed checkout"),
+            ):
+                update(root)
+
+        run_command.assert_not_called()
+        managed_install.assert_not_called()
+
+    def test_update_does_not_install_when_pull_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".git").mkdir()
+            paths = ManagedPaths(install_dir=root)
+
+            def fake_output(command):
+                if command[:4] == ["git", "-C", root, "status"]:
+                    return ""
+                if command[:4] == ["git", "-C", root, "symbolic-ref"]:
+                    return "staging"
+                raise AssertionError(f"unexpected output command: {command}")
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.PATHS", paths),
+                patch("bluetooth_2_usb.ops.deployment.require_commands"),
+                patch("bluetooth_2_usb.ops.deployment.output", side_effect=fake_output),
+                patch("bluetooth_2_usb.ops.deployment.run", side_effect=OpsError("pull failed")),
+                patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
+                self.assertRaisesRegex(OpsError, "pull failed"),
+            ):
+                update(root)
+
+        managed_install.assert_not_called()
 
     def test_uninstall_cleans_owned_gadgets_without_managing_missing_service(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

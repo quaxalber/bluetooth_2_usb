@@ -1,5 +1,8 @@
 import io
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -9,6 +12,8 @@ from unittest.mock import patch
 from bluetooth_2_usb.ops import cli
 from bluetooth_2_usb.ops.commands import close_log, prepare_log
 from bluetooth_2_usb.ops.paths import ManagedPaths
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class OpsCliTest(unittest.TestCase):
@@ -100,3 +105,56 @@ class OpsCliTest(unittest.TestCase):
 
             self.assertIn("payload", stdout.getvalue())
             self.assertIn("payload", log_path.read_text(encoding="utf-8"))
+
+    def test_gadget_identity_import_does_not_load_usb_hid(self) -> None:
+        self.assert_import_does_not_load_usb_hid("import bluetooth_2_usb.gadgets.identity")
+
+    def test_operational_cli_import_does_not_load_usb_hid(self) -> None:
+        self.assert_import_does_not_load_usb_hid("import bluetooth_2_usb.ops.cli")
+
+    def test_gadgets_package_import_does_not_load_usb_hid(self) -> None:
+        self.assert_import_does_not_load_usb_hid("import bluetooth_2_usb.gadgets")
+
+    def test_validate_env_does_not_load_usb_hid(self) -> None:
+        command = (
+            "import sys; "
+            "from bluetooth_2_usb.cli import run; "
+            "exit_code = run(['--validate-env']); "
+            "print('USB_HID_LOADED=' + str('usb_hid' in sys.modules)); "
+            "raise SystemExit(exit_code)"
+        )
+        completed = self.run_import_probe(command)
+
+        self.assertIn(completed.returncode, {0, 3})
+        self.assertIn("USB_HID_LOADED=False", completed.stdout)
+
+    def test_gadgets_package_lazy_exports_still_work(self) -> None:
+        command = (
+            "from bluetooth_2_usb.gadgets import GadgetLayout, build_default_layout; "
+            "print(GadgetLayout.__name__); "
+            "print(build_default_layout().__class__.__name__)"
+        )
+        completed = self.run_import_probe(command)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("GadgetLayout", completed.stdout)
+
+    def assert_import_does_not_load_usb_hid(self, statement: str) -> None:
+        command = f"{statement}; import sys; print('USB_HID_LOADED=' + str('usb_hid' in sys.modules))"
+        completed = self.run_import_probe(command)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("USB_HID_LOADED=False", completed.stdout)
+
+    def run_import_probe(self, command: str) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(REPO_ROOT / "src")
+        return subprocess.run(
+            [sys.executable, "-c", command],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=REPO_ROOT,
+            timeout=10,
+        )
