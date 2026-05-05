@@ -128,6 +128,17 @@ class OpsCliTest(unittest.TestCase):
         self.assertIn(completed.returncode, {0, 3})
         self.assertIn("USB_HID_LOADED=False", completed.stdout)
 
+    def test_hid_dispatch_import_does_not_load_gadget_manager(self) -> None:
+        command = (
+            "import bluetooth_2_usb.hid.dispatch; "
+            "import sys; "
+            "print('GADGET_MANAGER_LOADED=' + str('bluetooth_2_usb.gadgets.manager' in sys.modules))"
+        )
+        completed = self.run_import_probe(command)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("GADGET_MANAGER_LOADED=False", completed.stdout)
+
     def test_gadgets_package_lazy_exports_still_work(self) -> None:
         command = (
             "from bluetooth_2_usb.gadgets import GadgetLayout, build_default_layout; "

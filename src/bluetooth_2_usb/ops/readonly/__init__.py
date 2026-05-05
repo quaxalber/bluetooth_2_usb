@@ -5,6 +5,7 @@ from .service import restart_b2u_if_installed, stop_b2u_if_installed
 from .status import (
     READONLY_PACKAGES,
     bluetooth_state_persistent,
+    display_readonly_mode,
     machine_id_valid,
     overlay_configured_status,
     overlay_status,
@@ -36,6 +37,7 @@ __all__ = [
     "bluetooth_state_persistent",
     "disable_readonly",
     "enable_readonly",
+    "display_readonly_mode",
     "install_bluetooth_persist_dropin",
     "load_readonly_config",
     "machine_id_valid",

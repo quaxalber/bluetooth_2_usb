@@ -11,7 +11,13 @@ from .. import boot_config
 from ..bluetooth import rfkill_list_bluetooth
 from ..commands import OpsError, ok, output, run, timestamp
 from ..paths import PATHS
-from ..readonly import bluetooth_state_persistent, load_readonly_config, overlay_status, readonly_mode
+from ..readonly import (
+    bluetooth_state_persistent,
+    display_readonly_mode,
+    load_readonly_config,
+    overlay_status,
+    readonly_mode,
+)
 from .redaction import redact
 
 
@@ -63,11 +69,12 @@ def debug_report(duration: int | None) -> int:
                 f"boot_dir={boot_config.detect_boot_dir()}",
                 f"initial_service_state={initial_service_state}",
                 f"overlayfs={overlay_status()}",
-                f"readonly_mode={readonly_mode()}",
+                f"read_only_mode={display_readonly_mode(readonly_mode())}",
                 (
-                    f"bluetooth_state_persistent={'yes' if bluetooth_state_persistent(config) else 'no'}"
+                    "bluetooth_state_persistent_mount="
+                    + ("mounted" if bluetooth_state_persistent(config) else "not_mounted")
                     if config is not None
-                    else "bluetooth_state_persistent=unknown"
+                    else "bluetooth_state_persistent_mount=unknown"
                 ),
                 readonly_config_error,
             ]
@@ -93,7 +100,7 @@ def debug_report(duration: int | None) -> int:
     command_block("Overlay and tmpfs mounts", ["findmnt", "-t", "overlay,tmpfs"], 5)
     command_block("Bluetooth state mount", ["findmnt", "-n", "-T", "/var/lib/bluetooth"], 5)
     if config is not None:
-        command_block("Persistent mount target", ["findmnt", "-n", config.persist_mount], 5)
+        command_block("Persistent state storage mount", ["findmnt", "-n", config.persist_mount], 5)
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
     command_block("Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8)

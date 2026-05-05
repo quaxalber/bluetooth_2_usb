@@ -10,7 +10,7 @@ This is the authoritative Pi-side validation guide for:
 - smoketest and debug validation
 - real device relay validation
 - loopback inject/capture validation
-- persistent read-only validation
+- read-only validation
 - pairing persistence validation
 - uninstall validation
 
@@ -178,15 +178,15 @@ If the Pi is physically attached to a host through the gadget data path, run the
 end-to-end loopback inject/capture validation from
 [host-relay-loopback.md](host-relay-loopback.md).
 
-## Persistent read-only validation
+## Read-only validation
 
 > [!WARNING]
 > This flow uses persistent storage, changes boot/read-only state, and reboots
 > the Pi. Verify `<persist-partition>` with `lsblk -f` before running setup.
 
-Prepare the writable ext4 partition:
+Prepare the persistent ext4 partition:
 
-Replace `<persist-partition>` with the actual writable ext4 partition after
+Replace `<persist-partition>` with the actual persistent ext4 partition after
 verifying it with `lsblk -f`.
 
 ```bash
@@ -211,7 +211,7 @@ done
 > [!TIP]
 > If the enable step fails with `mkinitramfs: failed to determine device for /`,
 > follow the repair step in
-> [persistent-readonly.md](persistent-readonly.md#enable-persistent-read-only-mode),
+> [persistent-readonly.md](persistent-readonly.md#enable-read-only-mode),
 > then rerun `readonly enable` and resume validation here before rebooting.
 
 After reboot:
@@ -275,7 +275,7 @@ Pass criteria:
 
 > [!WARNING]
 > This intentionally cuts power. Run it only after read-only mode and
-> persistent Bluetooth storage have already been validated.
+> persistent Bluetooth storage has already been validated.
 
 Before cutting power:
 

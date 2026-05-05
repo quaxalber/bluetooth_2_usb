@@ -64,22 +64,36 @@ from bluetooth_2_usb.loopback.inject import (
 )
 from bluetooth_2_usb.loopback.result import LoopbackResult
 from bluetooth_2_usb.loopback.scenarios import (
+    COMBO_CAPTURE_TIMEOUT_SEC,
     CONSUMER_CODES,
     CONSUMER_STEPS,
+    DEFAULT_CAPTURE_TIMEOUT_SEC,
+    DEFAULT_EVENT_GAP_MS,
+    DEFAULT_MOUSE_COALESCED_TAIL_COUNT,
     EV_KEY,
     EV_REL,
     EXOTIC_KEYBOARD_CODES,
     EXOTIC_KEYBOARD_STEPS,
     KEY_K,
     KEY_LEFTSHIFT,
+    KEYBOARD_POST_DELAY_MS,
     MOUSE_BUTTON_STEPS,
+    MOUSE_EVENT_GAP_MS,
+    MOUSE_POST_DELAY_MS,
     MOUSE_REL_STEPS,
+    NODE_DISCOVERY_CAPTURE_TIMEOUT_SEC,
     NODE_DISCOVERY_CONSUMER_STEPS,
     NODE_DISCOVERY_KEYBOARD_STEPS,
+    NODE_DISCOVERY_REL_STEPS,
     REL_HWHEEL,
     REL_WHEEL,
     REL_X,
     REL_Y,
+    SCENARIO_COMBO,
+    SCENARIO_CONSUMER,
+    SCENARIO_KEYBOARD,
+    SCENARIO_MOUSE,
+    SCENARIO_NODE_DISCOVERY,
     SCENARIOS,
     ExpectedEvent,
     get_scenario,
@@ -103,7 +117,7 @@ HID_I8_MIN = -127
 RAW_INPUT_WHEEL_VALUE_SHIFT = capture_windows.RAW_INPUT_WHEEL_VALUE_SHIFT
 RAW_INPUT_POSITIVE_ONE_WHEEL_DELTA = 0x0001 << RAW_INPUT_WHEEL_VALUE_SHIFT
 RAW_INPUT_NEGATIVE_ONE_WHEEL_DELTA = 0xFFFF << RAW_INPUT_WHEEL_VALUE_SHIFT
-PUBLIC_SCENARIO_NAMES = {"keyboard", "mouse", "node-discovery", "consumer", "combo"}
+PUBLIC_SCENARIO_NAMES = {SCENARIO_KEYBOARD, SCENARIO_MOUSE, SCENARIO_NODE_DISCOVERY, SCENARIO_CONSUMER, SCENARIO_COMBO}
 WINDOWS_USB_ID = f"vid_{usb_udev_hex_u16(USB_GADGET_VID_LINUX)}&pid_{usb_udev_hex_u16(USB_GADGET_PID_COMBO)}"
 WINDOWS_USB_ID_UPPER = WINDOWS_USB_ID.upper()
 
@@ -237,7 +251,7 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(set(SCENARIOS), PUBLIC_SCENARIO_NAMES)
 
     def test_keyboard_scenario_contains_full_modifier_burst(self) -> None:
-        scenario = SCENARIOS["keyboard"]
+        scenario = SCENARIOS[SCENARIO_KEYBOARD]
 
         self.assertCountEqual(scenario.required_nodes, ("keyboard",))
         self.assertIn(KEY_LEFTSHIFT, [step.code for step in scenario.keyboard_steps])
@@ -245,9 +259,9 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertTrue(any(step.value == KeyEvent.key_down for step in scenario.keyboard_steps))
         self.assertTrue(any(step.value == KeyEvent.key_up for step in scenario.keyboard_steps))
         self.assertTrue(all(step in scenario.keyboard_steps for step in EXOTIC_KEYBOARD_STEPS))
-        self.assertEqual(scenario.default_event_gap_ms, 10)
-        self.assertEqual(scenario.default_post_delay_ms, 6000)
-        self.assertEqual(scenario.default_capture_timeout_sec, 20.0)
+        self.assertEqual(scenario.default_event_gap_ms, DEFAULT_EVENT_GAP_MS)
+        self.assertEqual(scenario.default_post_delay_ms, KEYBOARD_POST_DELAY_MS)
+        self.assertEqual(scenario.default_capture_timeout_sec, DEFAULT_CAPTURE_TIMEOUT_SEC)
 
     def test_loopback_keyboard_candidates_are_production_mapped(self) -> None:
         for code in EXOTIC_KEYBOARD_CODES:
@@ -256,35 +270,36 @@ class ScenarioDefinitionTest(unittest.TestCase):
                 self.assertIsInstance(usage, int)
 
     def test_mouse_scenario_contains_fast_motion_and_all_button_bits(self) -> None:
-        scenario = SCENARIOS["mouse"]
+        scenario = SCENARIOS[SCENARIO_MOUSE]
 
         self.assertCountEqual(scenario.required_nodes, ("mouse",))
         self.assertEqual(scenario.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, MOUSE_BUTTON_STEPS)
-        self.assertEqual(len(scenario.mouse_button_steps), 16)
-        self.assertEqual(scenario.mouse_coalesced_tail_count, 0)
-        self.assertEqual(scenario.default_event_gap_ms, 0)
-        self.assertEqual(scenario.default_post_delay_ms, 1000)
-        self.assertEqual(scenario.default_capture_timeout_sec, 20.0)
+        self.assertEqual(len(scenario.mouse_button_steps), len(MOUSE_BUTTON_STEPS))
+        self.assertEqual(scenario.mouse_coalesced_tail_count, DEFAULT_MOUSE_COALESCED_TAIL_COUNT)
+        self.assertEqual(scenario.default_event_gap_ms, MOUSE_EVENT_GAP_MS)
+        self.assertEqual(scenario.default_post_delay_ms, MOUSE_POST_DELAY_MS)
+        self.assertEqual(scenario.default_capture_timeout_sec, DEFAULT_CAPTURE_TIMEOUT_SEC)
         self.assertGreaterEqual(_mouse_report_count(scenario.mouse_rel_steps), 80)
 
     def test_node_discovery_scenario_contains_minimal_all_role_sequence(self) -> None:
-        scenario = SCENARIOS["node-discovery"]
+        scenario = SCENARIOS[SCENARIO_NODE_DISCOVERY]
 
         self.assertCountEqual(scenario.required_nodes, ("keyboard", "mouse", "consumer"))
         self.assertEqual(scenario.keyboard_steps, NODE_DISCOVERY_KEYBOARD_STEPS)
-        self.assertEqual(scenario.mouse_rel_steps, (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1)))
+        self.assertEqual(scenario.mouse_rel_steps, NODE_DISCOVERY_REL_STEPS)
         self.assertEqual(scenario.mouse_button_steps, ())
         self.assertEqual(scenario.consumer_steps, NODE_DISCOVERY_CONSUMER_STEPS)
         self.assertNotEqual(scenario.consumer_steps, CONSUMER_STEPS)
-        self.assertEqual(scenario.default_capture_timeout_sec, 10.0)
+        self.assertEqual(scenario.default_event_gap_ms, DEFAULT_EVENT_GAP_MS)
+        self.assertEqual(scenario.default_capture_timeout_sec, NODE_DISCOVERY_CAPTURE_TIMEOUT_SEC)
 
     def test_consumer_scenario_contains_representative_consumer_sequence(self) -> None:
-        consumer = SCENARIOS["consumer"]
+        consumer = SCENARIOS[SCENARIO_CONSUMER]
 
         self.assertCountEqual(consumer.required_nodes, ("consumer",))
         self.assertEqual(consumer.consumer_steps, CONSUMER_STEPS)
-        self.assertEqual(consumer.default_capture_timeout_sec, 20.0)
+        self.assertEqual(consumer.default_capture_timeout_sec, DEFAULT_CAPTURE_TIMEOUT_SEC)
 
     def test_loopback_consumer_candidates_are_production_mapped(self) -> None:
         usages = []
@@ -296,14 +311,15 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertTrue(any(usage > HID_ONE_BYTE_USAGE_MAX for usage in usages))
 
     def test_combo_scenario_contains_keyboard_mouse_and_consumer_sequences(self) -> None:
-        combo = SCENARIOS["combo"]
+        combo = SCENARIOS[SCENARIO_COMBO]
 
         self.assertCountEqual(combo.required_nodes, ("keyboard", "mouse", "consumer"))
-        self.assertEqual(combo.keyboard_steps, SCENARIOS["keyboard"].keyboard_steps)
+        self.assertEqual(combo.keyboard_steps, SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps)
         self.assertEqual(combo.mouse_rel_steps, MOUSE_REL_STEPS)
         self.assertEqual(combo.mouse_button_steps, MOUSE_BUTTON_STEPS)
         self.assertEqual(combo.consumer_steps, CONSUMER_STEPS)
-        self.assertEqual(combo.default_capture_timeout_sec, 60.0)
+        self.assertEqual(combo.default_event_gap_ms, DEFAULT_EVENT_GAP_MS)
+        self.assertEqual(combo.default_capture_timeout_sec, COMBO_CAPTURE_TIMEOUT_SEC)
 
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaises(ValueError) as error:
@@ -312,26 +328,26 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(str(error.exception), f"Unknown scenario 'nope'. Expected one of: {', '.join(SCENARIOS)}")
 
     def test_scenario_summary_reports_counts(self) -> None:
-        summary = scenario_summary(SCENARIOS["combo"])
+        summary = scenario_summary(SCENARIOS[SCENARIO_COMBO])
 
         self.assertEqual(
             summary,
             {
-                "name": "combo",
-                "keyboard_steps": len(SCENARIOS["combo"].keyboard_steps),
-                "mouse_rel_steps": len(SCENARIOS["combo"].mouse_rel_steps),
-                "mouse_button_steps": len(SCENARIOS["combo"].mouse_button_steps),
-                "consumer_steps": len(SCENARIOS["combo"].consumer_steps),
+                "name": SCENARIO_COMBO,
+                "keyboard_steps": len(SCENARIOS[SCENARIO_COMBO].keyboard_steps),
+                "mouse_rel_steps": len(SCENARIOS[SCENARIO_COMBO].mouse_rel_steps),
+                "mouse_button_steps": len(SCENARIOS[SCENARIO_COMBO].mouse_button_steps),
+                "consumer_steps": len(SCENARIOS[SCENARIO_COMBO].consumer_steps),
                 "total_steps": (
-                    len(SCENARIOS["combo"].keyboard_steps)
-                    + len(SCENARIOS["combo"].mouse_rel_steps)
-                    + len(SCENARIOS["combo"].mouse_button_steps)
-                    + len(SCENARIOS["combo"].consumer_steps)
+                    len(SCENARIOS[SCENARIO_COMBO].keyboard_steps)
+                    + len(SCENARIOS[SCENARIO_COMBO].mouse_rel_steps)
+                    + len(SCENARIOS[SCENARIO_COMBO].mouse_button_steps)
+                    + len(SCENARIOS[SCENARIO_COMBO].consumer_steps)
                 ),
-                "mouse_coalesced_tail_count": SCENARIOS["combo"].mouse_coalesced_tail_count,
-                "default_event_gap_ms": SCENARIOS["combo"].default_event_gap_ms,
-                "default_post_delay_ms": SCENARIOS["combo"].default_post_delay_ms,
-                "default_capture_timeout_sec": SCENARIOS["combo"].default_capture_timeout_sec,
+                "mouse_coalesced_tail_count": SCENARIOS[SCENARIO_COMBO].mouse_coalesced_tail_count,
+                "default_event_gap_ms": SCENARIOS[SCENARIO_COMBO].default_event_gap_ms,
+                "default_post_delay_ms": SCENARIOS[SCENARIO_COMBO].default_post_delay_ms,
+                "default_capture_timeout_sec": SCENARIOS[SCENARIO_COMBO].default_capture_timeout_sec,
             },
         )
 
@@ -761,17 +777,17 @@ class MouseSequenceMatcherTest(unittest.TestCase):
 
 class ConsumerSequenceMatcherTest(unittest.TestCase):
     def test_consumer_matcher_accepts_expanded_consumer_sequence(self) -> None:
-        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+        matcher = ConsumerSequenceMatcher(SCENARIOS[SCENARIO_CONSUMER].consumer_steps)
 
-        for step in SCENARIOS["consumer"].consumer_steps:
+        for step in SCENARIOS[SCENARIO_CONSUMER].consumer_steps:
             matcher.handle(_consumer_report_for_step(step))
 
         self.assertTrue(matcher.complete)
 
     def test_consumer_matcher_accepts_zero_prefixed_raw_input_reports(self) -> None:
-        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+        matcher = ConsumerSequenceMatcher(SCENARIOS[SCENARIO_CONSUMER].consumer_steps)
 
-        for step in SCENARIOS["consumer"].consumer_steps:
+        for step in SCENARIOS[SCENARIO_CONSUMER].consumer_steps:
             matcher.handle(_consumer_report_for_step(step, report_id=NO_REPORT_ID))
 
         self.assertTrue(matcher.complete)
@@ -798,7 +814,7 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
         self.assertTrue(matcher.complete)
 
     def test_consumer_matcher_rejects_unexpected_usage(self) -> None:
-        matcher = ConsumerSequenceMatcher(SCENARIOS["consumer"].consumer_steps)
+        matcher = ConsumerSequenceMatcher(SCENARIOS[SCENARIO_CONSUMER].consumer_steps)
 
         with self.assertRaises(CaptureMismatchError):
             matcher.handle(bytes([CONSUMER_REPORT_ID, NUL, NUL]))
@@ -1031,7 +1047,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "only available on Windows"):
             capture_windows.run_raw_input_capture(
-                scenario_name="keyboard",
+                scenario_name=SCENARIO_KEYBOARD,
                 timeout_sec=1.0,
                 candidate_nodes=capture_windows.GadgetNodeCandidates(
                     keyboard_nodes=(), mouse_nodes=(), consumer_nodes=()
@@ -1045,7 +1061,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
                 keyboard_candidate_identities=(),
                 mouse_candidate_identities=(),
                 consumer_candidate_identities=(),
-                scenario_name="keyboard",
+                scenario_name=SCENARIO_KEYBOARD,
             )
 
         self.assertFalse(result.success)
@@ -1054,7 +1070,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(result.details["capture_backend"], "raw_input")
 
     def test_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
-        steps, skipped = capture_windows.mouse_button_expectations(SCENARIOS["mouse"])
+        steps, skipped = capture_windows.mouse_button_expectations(SCENARIOS[SCENARIO_MOUSE])
 
         self.assertEqual(skipped, ("BTN_FORWARD", "BTN_BACK", "BTN_TASK"))
         self.assertEqual(len(steps), 10)
@@ -1071,7 +1087,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         candidate.note_report(_keyboard_report_for_code(ecodes.KEY_F13))
 
         result = capture_windows._raw_input_success_result(
-            SCENARIOS["keyboard"], 15.0, debug, candidate, None, None, ()
+            SCENARIOS[SCENARIO_KEYBOARD], 15.0, debug, candidate, None, None, ()
         )
 
         self.assertTrue(result.success)
@@ -1084,7 +1100,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         candidate = capture_windows._RawInputCandidate(
             role="keyboard",
             candidate_identities=(f"hid\\{WINDOWS_USB_ID}&mi_00\\instance",),
-            matcher=KeyboardSequenceMatcher(SCENARIOS["keyboard"].keyboard_steps),
+            matcher=KeyboardSequenceMatcher(SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps),
             matched_name=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_00\\instance\\{{guid}}",
         )
         candidate.matcher.handle(_keyboard_report_for_code(KEY_K))
@@ -1102,7 +1118,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
 
         self.assertEqual(details["capture_backend"], "raw_input")
         self.assertEqual(details["keyboard_steps_seen"], 1)
-        self.assertEqual(details["keyboard_steps_expected"], len(SCENARIOS["keyboard"].keyboard_steps))
+        self.assertEqual(details["keyboard_steps_expected"], len(SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps))
         self.assertEqual(details["nodes"]["keyboard_node"], candidate.matched_name)
         self.assertIn("next_expected", details["progress"]["keyboard"][0])
         self.assertEqual(len(details["raw_input_debug"]["sample_events"]), 12)
@@ -1136,7 +1152,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
     def test_run_inject_rejects_negative_timing_before_sleeping(self) -> None:
         with patch("bluetooth_2_usb.loopback.inject.time.sleep") as sleep:
-            result = run_inject("keyboard", pre_delay_ms=-1)
+            result = run_inject(SCENARIO_KEYBOARD, pre_delay_ms=-1)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_PREREQUISITE)
@@ -1150,14 +1166,14 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.inject.wait_for_service_settle"),
             patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, OSError("mouse failed")]),
         ):
-            result = run_inject("combo")
+            result = run_inject(SCENARIO_COMBO)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_ACCESS)
         keyboard.close.assert_called_once_with()
 
     def test_run_inject_uses_scenario_default_event_gap(self) -> None:
-        scenario = SCENARIOS["keyboard"]
+        scenario = SCENARIOS[SCENARIO_KEYBOARD]
         keyboard = Mock()
 
         with (
@@ -1166,7 +1182,7 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.inject.UInput", return_value=keyboard),
             patch("bluetooth_2_usb.loopback.inject.time.sleep"),
         ):
-            result = run_inject("keyboard", pre_delay_ms=0)
+            result = run_inject(SCENARIO_KEYBOARD, pre_delay_ms=0)
 
         self.assertTrue(result.success)
         self.assertEqual(result.details["event_gap_ms"], scenario.default_event_gap_ms)
@@ -1187,11 +1203,11 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.inject.UInput", side_effect=[keyboard, mouse, consumer]),
             patch("bluetooth_2_usb.loopback.inject.time.sleep"),
         ):
-            result = run_inject("combo", pre_delay_ms=0)
+            result = run_inject(SCENARIO_COMBO, pre_delay_ms=0)
 
         self.assertTrue(result.success)
         expected = result.details["expected"]
-        self.assertEqual(expected, scenario_summary(SCENARIOS["combo"]))
+        self.assertEqual(expected, scenario_summary(SCENARIOS[SCENARIO_COMBO]))
         self.assertEqual(expected["total_steps"], result.details["injected_event_count"])
 
     def test_inject_usage_error_returns_exit_usage(self) -> None:
@@ -1222,7 +1238,7 @@ class LoopbackInjectTest(unittest.TestCase):
             exit_code=0,
             to_dict=lambda: {
                 "command": "capture",
-                "scenario": "combo",
+                "scenario": SCENARIO_COMBO,
                 "success": True,
                 "exit_code": 0,
                 "message": "ok",
@@ -1242,7 +1258,7 @@ class LoopbackInjectTest(unittest.TestCase):
         result = SimpleNamespace(exit_code=0, to_dict=lambda: {}, to_text=lambda: "ok")
 
         with patch("bluetooth_2_usb.loopback.capture.run_capture", return_value=result) as run:
-            exit_code = run_loopback(["capture", "--scenario", "keyboard"])
+            exit_code = run_loopback(["capture", "--scenario", SCENARIO_KEYBOARD])
 
         self.assertEqual(exit_code, 0)
         self.assertIsNone(run.call_args.kwargs["timeout_sec"])
@@ -1261,17 +1277,17 @@ class LoopbackInjectTest(unittest.TestCase):
             ]
         )
         result = LoopbackResult(
-            command="capture", scenario="keyboard", success=True, exit_code=0, message="ok", details={}
+            command="capture", scenario=SCENARIO_KEYBOARD, success=True, exit_code=0, message="ok", details={}
         )
 
         with (
             patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
             patch("bluetooth_2_usb.loopback.capture._capture_once", return_value=result) as run,
         ):
-            capture_result = run_capture("keyboard")
+            capture_result = run_capture(SCENARIO_KEYBOARD)
 
         self.assertIs(capture_result, result)
-        self.assertEqual(run.call_args.kwargs["timeout_sec"], 20.0)
+        self.assertEqual(run.call_args.kwargs["timeout_sec"], DEFAULT_CAPTURE_TIMEOUT_SEC)
 
     def test_capture_timeout_reports_zero_progress(self) -> None:
         hid_module = _FakeReadableHidModule(
@@ -1292,13 +1308,13 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
             patch("bluetooth_2_usb.loopback.capture.time.sleep"),
         ):
-            result = run_capture("keyboard", timeout_sec=0.001)
+            result = run_capture(SCENARIO_KEYBOARD, timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
         self.assertEqual(result.details["keyboard_steps_seen"], 0)
-        self.assertEqual(result.details["keyboard_steps_expected"], len(SCENARIOS["keyboard"].keyboard_steps))
-        self.assertEqual(result.details["summary"]["keyboard"], f"0/{len(SCENARIOS['keyboard'].keyboard_steps)}")
+        self.assertEqual(result.details["keyboard_steps_expected"], len(SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps))
+        self.assertEqual(result.details["summary"]["keyboard"], f"0/{len(SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps)}")
         self.assertEqual(result.details["progress"]["keyboard"][0]["node"], "kbd0")
         self.assertIn("next_expected", result.details["progress"]["keyboard"][0])
 
@@ -1321,7 +1337,7 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
             patch("bluetooth_2_usb.loopback.capture.time.sleep"),
         ):
-            result = run_capture("keyboard", timeout_sec=0.001)
+            result = run_capture(SCENARIO_KEYBOARD, timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1366,7 +1382,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
             with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
-                result = run_capture("node-discovery", timeout_sec=0.001)
+                result = run_capture(SCENARIO_NODE_DISCOVERY, timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1481,7 +1497,7 @@ class LoopbackInjectTest(unittest.TestCase):
                 "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
                 return_value=LoopbackResult(
                     command="capture",
-                    scenario="combo",
+                    scenario=SCENARIO_COMBO,
                     success=True,
                     exit_code=0,
                     message="ok",
@@ -1489,7 +1505,7 @@ class LoopbackInjectTest(unittest.TestCase):
                 ),
             ) as run_backend,
         ):
-            exit_code = run_loopback(["capture", "--scenario", "combo"])
+            exit_code = run_loopback(["capture", "--scenario", SCENARIO_COMBO])
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
@@ -1515,7 +1531,7 @@ class LoopbackInjectTest(unittest.TestCase):
                 "bluetooth_2_usb.loopback.capture_windows.run_raw_input_capture",
                 return_value=LoopbackResult(
                     command="capture",
-                    scenario="consumer",
+                    scenario=SCENARIO_CONSUMER,
                     success=True,
                     exit_code=0,
                     message="ok",
@@ -1524,12 +1540,14 @@ class LoopbackInjectTest(unittest.TestCase):
             ) as run_backend,
             patch("bluetooth_2_usb.loopback.capture._capture_once") as capture_once,
         ):
-            exit_code = run_loopback(["capture", "--scenario", "consumer"])
+            exit_code = run_loopback(["capture", "--scenario", SCENARIO_CONSUMER])
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
-        self.assertEqual(run_backend.call_args.kwargs["scenario_name"], "consumer")
-        self.assertEqual(run_backend.call_args.kwargs["timeout_sec"], SCENARIOS["consumer"].default_capture_timeout_sec)
+        self.assertEqual(run_backend.call_args.kwargs["scenario_name"], SCENARIO_CONSUMER)
+        self.assertEqual(
+            run_backend.call_args.kwargs["timeout_sec"], SCENARIOS[SCENARIO_CONSUMER].default_capture_timeout_sec
+        )
         self.assertEqual(
             run_backend.call_args.kwargs["candidate_nodes"].to_dict(),
             {"keyboard_nodes": [], "mouse_nodes": [], "consumer_nodes": ["consumer0"]},
@@ -1541,7 +1559,7 @@ class LoopbackResultTest(unittest.TestCase):
     def test_to_text_renders_non_json_details_deterministically(self) -> None:
         result = LoopbackResult(
             command="capture",
-            scenario="combo",
+            scenario=SCENARIO_COMBO,
             success=False,
             exit_code=1,
             message="failed",
@@ -1556,7 +1574,7 @@ class LoopbackResultTest(unittest.TestCase):
     def test_to_dict_normalizes_details_for_json_output(self) -> None:
         result = LoopbackResult(
             command="capture",
-            scenario="combo",
+            scenario=SCENARIO_COMBO,
             success=True,
             exit_code=0,
             message="ok",

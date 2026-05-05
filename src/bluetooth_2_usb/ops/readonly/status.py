@@ -126,16 +126,22 @@ def readonly_mode() -> str:
     return "disabled"
 
 
+def display_readonly_mode(mode: str) -> str:
+    if mode == "persistent":
+        return "enabled"
+    return mode
+
+
 def print_readonly_status() -> None:
     config = _load_readonly_config_or_default()
     print("Read-only status")
-    print(f"mode: {readonly_mode()}")
-    print(f"configured_mode: {config.mode}")
+    print(f"read-only mode: {display_readonly_mode(readonly_mode())}")
+    print(f"configured read-only mode: {display_readonly_mode(config.mode)}")
     print(f"overlay_live: {overlay_status()}")
     print(f"overlay_configured: {overlay_configured_status()}")
     print(f"root_filesystem: {_root_filesystem_type()}")
     print(f"root_source: {_findmnt_value('/', 'SOURCE') or '<unknown>'}")
-    print(f"bluetooth_state_persistent: {'yes' if bluetooth_state_persistent(config) else 'no'}")
+    print(f"bluetooth persistent mount: {'mounted' if bluetooth_state_persistent(config) else 'not mounted'}")
     print(f"bluetooth_state_source: {_findmnt_value('/var/lib/bluetooth', 'SOURCE') or '<none>'}")
     print(f"persist_mount: {config.persist_mount}")
     print(f"persist_mount_active: {'yes' if _mountpoint(config.persist_mount) else 'no'}")

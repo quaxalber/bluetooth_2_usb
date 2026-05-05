@@ -14,17 +14,22 @@ _LOG_FILE = None
 _PREVIOUS_STDOUT = None
 _PREVIOUS_STDERR = None
 _RESET = "\033[0m"
+_BOLD = "\033[1m"
 _RED = "\033[31m"
 _GREEN = "\033[32m"
 _YELLOW = "\033[33m"
-_LIGHT_BLUE = "\033[94m"
+_CYAN = "\033[36m"
 
 
-def _style(text: str, color: str) -> str:
+def _style(text: str, *styles: str) -> str:
     isatty = getattr(sys.stdout, "isatty", None)
     if isatty is None or not isatty() or os.environ.get("NO_COLOR"):
         return text
-    return f"{color}{text}{_RESET}"
+    return f"{''.join(styles)}{text}{_RESET}"
+
+
+def bold(message: str) -> str:
+    return _style(message, _BOLD)
 
 
 class OpsError(RuntimeError):
@@ -38,15 +43,27 @@ def timestamp() -> str:
 
 
 def info(message: str) -> None:
-    print(f"{_style('[i]', _LIGHT_BLUE)} {message}")
+    print(_style(f"[i] {message}", _CYAN))
 
 
 def ok(message: str) -> None:
-    print(f"{_style('[+]', _GREEN)} {message}")
+    print(_style(f"[+] {message}", _GREEN))
 
 
 def warn(message: str) -> None:
-    print(f"{_style('[!]', _YELLOW)} {message}")
+    print(_style(f"[!] {message}", _YELLOW))
+
+
+def warn_fail(message: str) -> None:
+    print(_style(f"[!] {message}", _RED))
+
+
+def ok_final(message: str) -> None:
+    print(_style(f"[+] {message}", _BOLD, _GREEN))
+
+
+def fail_final(message: str) -> None:
+    print(_style(f"[!] {message}", _BOLD, _RED))
 
 
 def fail(message: str, exit_code: int = 1) -> None:
