@@ -20,7 +20,7 @@ def write_persist_mount_unit(persist_spec: str, mount_path: Path, fs_type: str) 
     unit_path = Path("/etc/systemd/system") / unit_name
     unit_path.write_text(
         f"""[Unit]
-Description=bluetooth_2_usb writable state storage mount
+Description=bluetooth_2_usb persistent state storage mount
 Before=local-fs.target bluetooth.service {PATHS.service_unit}
 
 [Mount]
@@ -48,7 +48,7 @@ def write_bluetooth_bind_mount_unit(source_dir: Path, persist_mount: Path) -> No
     parent_unit = persist_mount_unit_name(persist_mount)
     PATHS.bluetooth_bind_mount_unit.write_text(
         f"""[Unit]
-Description=bluetooth_2_usb writable Bluetooth state bind mount
+Description=bluetooth_2_usb persistent Bluetooth state bind mount
 After={parent_unit}
 Requires={parent_unit}
 Before=bluetooth.service {PATHS.service_unit}

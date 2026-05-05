@@ -25,6 +25,7 @@ class SmokeTest:
         self.exit_code = 0
         self.soft_warnings = 0
         self.summary: dict[str, str] = {}
+        self.summary_groups: list[tuple[str, list[tuple[str, str]]]] = []
         self.results: list[ProbeResult] = []
 
     def run(self) -> int:
@@ -149,27 +150,43 @@ class SmokeTest:
         self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
         self._check_readonly(readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot)
 
-        self.summary = {
-            "Boot config": str(config_txt),
-            "Cmdline": str(cmdline_txt),
-            "modules-load token": modules_load_value or "<missing>",
-            "required modules": ",".join(required_modules),
-            "expected overlay line": expected_overlay or "<unknown>",
-            "configured kernel image": boot_config.configured_kernel_image(),
-            "configured initramfs file": boot_config.configured_initramfs_file() or "<none>",
-            "expected boot initramfs file": expected_initramfs_file or "<none>",
-            "expected boot initramfs path": expected_initramfs_path or "<none>",
-            "UDC controllers": udc_list or "<none>",
-            "UDC state": ", ".join(f"{name}={state}" for name, state in udc_states.items()) or "<none>",
-            "Read-only mode": display_readonly_mode(readonly),
-            "OverlayFS configured": overlay,
-            "Root filesystem type": root_filesystem_type,
-            "Root overlay active": root_overlay_active,
-            "Bluetooth state writable storage": "mounted" if bluetooth_persistent else "not mounted",
-            "Relayable device count": str(relayable_count),
-            "Paired Bluetooth device count": str(paired_count),
-            "Non-fatal warning count": str(self.soft_warnings),
-        }
+        self.summary_groups = [
+            (
+                "Boot and USB",
+                [
+                    ("Boot config", str(config_txt)),
+                    ("Cmdline", str(cmdline_txt)),
+                    ("modules-load token", modules_load_value or "<missing>"),
+                    ("required modules", ",".join(required_modules)),
+                    ("expected overlay line", expected_overlay or "<unknown>"),
+                    ("configured kernel image", boot_config.configured_kernel_image()),
+                    ("configured initramfs file", boot_config.configured_initramfs_file() or "<none>"),
+                    ("expected boot initramfs file", expected_initramfs_file or "<none>"),
+                    ("expected boot initramfs path", expected_initramfs_path or "<none>"),
+                    ("UDC controllers", udc_list or "<none>"),
+                    ("UDC state", ", ".join(f"{name}={state}" for name, state in udc_states.items()) or "<none>"),
+                ],
+            ),
+            (
+                "Bluetooth",
+                [
+                    ("Relayable device count", str(relayable_count)),
+                    ("Paired Bluetooth device count", str(paired_count)),
+                ],
+            ),
+            (
+                "Read-Only Mode",
+                [
+                    ("Read-only mode", display_readonly_mode(readonly)),
+                    ("OverlayFS configured", overlay),
+                    ("Root filesystem type", root_filesystem_type),
+                    ("Root overlay active", root_overlay_active),
+                    ("Bluetooth persistent mount", "mounted" if bluetooth_persistent else "not mounted"),
+                ],
+            ),
+            ("Result", [("Non-fatal warning count", str(self.soft_warnings))]),
+        ]
+        self.summary = {key: value for _, items in self.summary_groups for key, value in items}
         if self.verbose:
             self._print_verbose(entries, validate_log, service_settings_log, bt_show, btmgmt, inventory)
         self._heading("Summary")
@@ -263,14 +280,14 @@ class SmokeTest:
     ) -> None:
         if bluetooth_persistent:
             ok(
-                "Bluetooth state writable storage is mounted"
+                "Bluetooth persistent mount is mounted"
                 if readonly == "persistent"
-                else "Bluetooth state writable storage is active"
+                else "Bluetooth persistent mount is active"
             )
         elif overlay == "enabled" or readonly == "persistent":
-            self.warn_fail("Bluetooth state writable storage is not mounted")
+            self.warn_fail("Bluetooth persistent mount is not mounted")
         else:
-            ok("Bluetooth state writable storage is not configured")
+            ok("Bluetooth persistent mount is not configured")
         if readonly == "persistent":
             ok("Read-only mode is enabled")
         elif readonly == "unknown":
@@ -364,8 +381,10 @@ class SmokeTest:
 
     def _print_verbose(self, rfkill_entries, *logs: tuple[int, str]) -> None:
         print("\n## Details")
-        for key, value in self.summary.items():
-            print(f"{key}: {value}")
+        for group, items in self.summary_groups:
+            print(f"\n### {group}")
+            for key, value in items:
+                print(f"{key}: {value}")
         titles = [
             "CLI validate-env output",
             "Service settings check",

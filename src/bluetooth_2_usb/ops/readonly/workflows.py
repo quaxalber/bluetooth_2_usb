@@ -87,14 +87,14 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         if bluetooth_was_active:
             run(["systemctl", "start", "bluetooth.service"])
         if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
-            fail("bluetooth.service did not come back up after enabling the writable Bluetooth state bind mount")
+            fail("bluetooth.service did not come back up after enabling the persistent Bluetooth state bind mount")
     finally:
         if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
             run(["systemctl", "start", "bluetooth.service"], check=False)
         elif not bluetooth_was_active and _systemctl_active("bluetooth.service"):
             run(["systemctl", "stop", "bluetooth.service"], check=False)
-        restart_b2u_if_installed(b2u_was_active, "after enabling the writable Bluetooth state bind mount")
-    ok(f"Writable Bluetooth state storage is active at {persist_bluetooth_dir}")
+        restart_b2u_if_installed(b2u_was_active, "after enabling the persistent Bluetooth state bind mount")
+    ok(f"Persistent Bluetooth state storage is active at {persist_bluetooth_dir}")
 
 
 def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
@@ -149,7 +149,7 @@ def enable_readonly() -> None:
         fail("Run bluetooth_2_usb readonly setup --device /dev/... before enabling read-only mode.")
     if not bluetooth_state_persistent(config):
         fail(
-            "Writable Bluetooth state storage is not active. "
+            "Persistent Bluetooth state storage is not active. "
             + "Run bluetooth_2_usb readonly setup --device /dev/... first."
         )
     if not readonly_stack_packages_bootstrap_safe():
@@ -230,4 +230,4 @@ def disable_readonly() -> None:
     config.mode = "disabled"
     write_readonly_config(config)
     ok("OverlayFS has been disabled")
-    warn("Writable Bluetooth state mount configuration was kept. Reboot to return to a writable root filesystem.")
+    warn("Persistent Bluetooth state mount configuration was kept. Reboot to return to a writable root filesystem.")

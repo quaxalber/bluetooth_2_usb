@@ -439,7 +439,7 @@ class ReadonlyConfigTest(unittest.TestCase):
             write_bind.assert_called_once_with(root / "persist" / "bluetooth", root / "persist")
             install_dropin.assert_called_once_with()
             seed_state.assert_called_once_with(root / "persist" / "bluetooth")
-            restart_b2u.assert_called_once_with(False, "after enabling the writable Bluetooth state bind mount")
+            restart_b2u.assert_called_once_with(False, "after enabling the persistent Bluetooth state bind mount")
             self.assertIn(["systemctl", "stop", "bluetooth.service"], commands)
             self.assertIn(["systemctl", "enable", "--now", "mnt-persist.mount"], commands)
             self.assertIn(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"], commands)
@@ -571,9 +571,12 @@ class ReadonlyConfigTest(unittest.TestCase):
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
 
-            disable_readonly()
+            with redirect_stdout(StringIO()) as stdout:
+                disable_readonly()
 
         self.assertEqual(commands, [["raspi-config", "nonint", "disable_overlayfs"]])
         self.assertEqual(config.mode, "disabled")
         self.assertEqual(written, [config])
         self.assertEqual(config.persist_spec, "/dev/disk/by-uuid/abc")
+        self.assertIn("Persistent Bluetooth state mount configuration was kept.", stdout.getvalue())
+        self.assertNotIn("Writable Bluetooth state " + "mount configuration was kept.", stdout.getvalue())
