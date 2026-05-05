@@ -1,16 +1,37 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Protocol
 
 from ..evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from ..evdev.types import InputEvent, KeyEvent, RelEvent, categorize
-from ..gadgets.manager import HidGadgets
 from ..logging import get_logger
 from ..relay.gate import RelayGate
 from ..relay.shortcut import ShortcutToggler
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator
 
 logger = get_logger(__name__)
+
+
+class HidOutput(Protocol):
+    async def press(self, keycode: int) -> None: ...
+
+    async def release(self, keycode: int | None = None) -> None: ...
+
+
+class MouseOutput(HidOutput, Protocol):
+    async def move(self, x: int, y: int, wheel: int = 0, pan: int = 0) -> None: ...
+
+
+class HidOutputs(Protocol):
+    @property
+    def keyboard(self) -> HidOutput | None: ...
+
+    @property
+    def mouse(self) -> MouseOutput | None: ...
+
+    @property
+    def consumer(self) -> HidOutput | None: ...
 
 
 class HidDispatcher:
@@ -22,7 +43,7 @@ class HidDispatcher:
     """
 
     def __init__(
-        self, hid_gadgets: HidGadgets, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
+        self, hid_gadgets: HidOutputs, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
     ) -> None:
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
