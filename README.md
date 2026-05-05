@@ -265,13 +265,13 @@ gadget device nodes.
 
 ### `readonly setup`
 
-Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
+Prepare persistent ext4-backed storage for `/var/lib/bluetooth` before enabling
 read-only mode.
 
 ### `readonly status`
 
 Show the configured and live read-only state, including OverlayFS, root
-filesystem, and writable Bluetooth-state mount status.
+filesystem, and persistent Bluetooth-state mount status.
 
 ### `readonly enable`
 
@@ -292,8 +292,8 @@ Bluetooth-state storage configuration available.
 | `/etc/default/bluetooth_2_usb` | Structured runtime settings |
 | `/etc/default/bluetooth_2_usb_readonly` | Read-only configuration |
 | `/var/log/bluetooth_2_usb` | Operational command and runtime diagnostic output |
-| `/mnt/b2u-persist` | Default writable state mount target |
-| `/mnt/b2u-persist/bluetooth` | Default writable Bluetooth state directory |
+| `/mnt/b2u-persist` | Default persistent mount target |
+| `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |
 | `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |
 
 ## Development and release

@@ -181,7 +181,7 @@ end-to-end loopback inject/capture validation from
 ## Read-only validation
 
 > [!WARNING]
-> This flow uses writable state storage, changes boot/read-only state, and reboots
+> This flow uses persistent storage, changes boot/read-only state, and reboots
 > the Pi. Verify `<persist-partition>` with `lsblk -f` before running setup.
 
 Prepare the writable ext4 partition:
@@ -275,7 +275,7 @@ Pass criteria:
 
 > [!WARNING]
 > This intentionally cuts power. Run it only after read-only mode and
-> writable Bluetooth state storage have already been validated.
+> persistent Bluetooth storage has already been validated.
 
 Before cutting power:
 
@@ -305,7 +305,7 @@ ssh <pi-host> '
 Pass criteria:
 
 - no re-pairing required
-- no broken writable state mount
+- no broken persistent mount
 - no service crash on startup
 
 ## Disable read-only mode again
@@ -346,7 +346,7 @@ Expected outcome:
 
 - service integration is removed
 - checkout remains present
-- writable state mount units are disabled
+- persistent mount units are disabled
 - runtime env files and CLI links are removed
 
 ## What to record

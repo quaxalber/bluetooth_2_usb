@@ -93,7 +93,7 @@ Pay attention to:
 - runtime settings path
 - read-only config path
 - log directory
-- writable Bluetooth-state paths
+- persistent Bluetooth-state paths
 - service unit name
 
 ### 5. Development workflow

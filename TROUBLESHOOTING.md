@@ -118,7 +118,7 @@ Interpretation:
 - the writable Bluetooth state must be mounted where the read-only workflow
   expects it
 - if the paths or config do not match, the system may be booting read-only
-  without the writable BlueZ state mounted correctly
+  without the persistent BlueZ state mounted correctly
 
 For the full setup and validation flow, use
 [docs/persistent-readonly.md](docs/persistent-readonly.md).
