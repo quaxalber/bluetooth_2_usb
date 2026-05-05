@@ -11,7 +11,13 @@ from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .paths import PATHS
-from .readonly import disable_readonly, enable_readonly, print_readonly_status, setup_persistent_bluetooth_state
+from .readonly import (
+    disable_readonly,
+    enable_readonly,
+    migrate_readonly_bluetooth_state,
+    print_readonly_status,
+    setup_persistent_bluetooth_state,
+)
 
 OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev"})
 
@@ -51,6 +57,7 @@ def _main(argv: list[str], *, prog: str) -> int:
     _command_parser(readonly_subparsers, "status", "Show read-only status.")
     _command_parser(readonly_subparsers, "enable", "Enable read-only mode.")
     _command_parser(readonly_subparsers, "disable", "Disable OverlayFS.")
+    _command_parser(readonly_subparsers, "migrate", "Move Bluetooth state back to rootfs.")
 
     udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
     udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
@@ -83,6 +90,7 @@ def _main(argv: list[str], *, prog: str) -> int:
         ("readonly", "setup"),
         ("readonly", "enable"),
         ("readonly", "disable"),
+        ("readonly", "migrate"),
     }:
         prepare_log(log_name)
 
@@ -111,6 +119,8 @@ def _main(argv: list[str], *, prog: str) -> int:
         enable_readonly()
     elif command_path == ("readonly", "disable"):
         disable_readonly()
+    elif command_path == ("readonly", "migrate"):
+        migrate_readonly_bluetooth_state()
     elif command_path == ("udev", "install"):
         ensure_root()
         install_hid_udev_rule(repo_root)

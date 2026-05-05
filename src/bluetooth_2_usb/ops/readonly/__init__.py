@@ -27,7 +27,12 @@ from .units import (
     write_bluetooth_bind_mount_unit,
     write_persist_mount_unit,
 )
-from .workflows import disable_readonly, enable_readonly, setup_persistent_bluetooth_state
+from .workflows import (
+    disable_readonly,
+    enable_readonly,
+    migrate_readonly_bluetooth_state,
+    setup_persistent_bluetooth_state,
+)
 
 __all__ = [
     "READONLY_PACKAGES",
@@ -41,6 +46,7 @@ __all__ = [
     "install_bluetooth_persist_dropin",
     "load_readonly_config",
     "machine_id_valid",
+    "migrate_readonly_bluetooth_state",
     "overlay_configured_status",
     "overlay_status",
     "package_status",
