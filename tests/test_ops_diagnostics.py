@@ -91,7 +91,8 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 "_command_ok",
                 "_check_overlay_runtime",
                 "_check_initramfs",
-                "_check_readonly",
+                "_check_readonly_mode",
+                "_check_bluetooth_persistent",
             ):
                 stack.enter_context(patch.object(smoke, method))
             stack.enter_context(patch.object(smoke, "_capture", return_value=(0, "[]")))
@@ -193,6 +194,83 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertEqual(rfkill_results[0].detail, "rfkill0 type=bluetooth soft=0 hard=0 state=1")
         self.assertEqual(stdout.getvalue().count("[+] Bluetooth rfkill state is not blocked"), 1)
 
+    def test_smoketest_groups_bluetooth_service_and_state_checks_under_bluetooth(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+        current_heading = ""
+        command_headings: list[tuple[str, list[str]]] = []
+        path_headings: list[tuple[str, Path]] = []
+
+        def record_heading(title: str) -> None:
+            nonlocal current_heading
+            current_heading = title
+
+        def record_command(command, _success, _failure):
+            command_headings.append((current_heading, command))
+
+        def record_path(path, _success, _failure):
+            path_headings.append((current_heading, path))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with ExitStack() as stack:
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value="modules-load=dwc2")
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value="module"))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.required_boot_modules_csv", return_value="dwc2")
+                )
+                stack.enter_context(
+                    patch(
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_config_path",
+                        return_value=Path(tmpdir) / "config.txt",
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        f"{DIAGNOSTICS_SMOKETEST}.boot_config.boot_cmdline_path",
+                        return_value=Path(tmpdir) / "cmdline.txt",
+                    )
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_dwc2_overlay_line", return_value="")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.current_root_filesystem_type", return_value="ext4")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.configured_kernel_image", return_value="kernel8.img")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.configured_initramfs_file", return_value="")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.expected_boot_initramfs_file", return_value="")
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_persistent", return_value=False))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_SMOKETEST}._udc_states", return_value={"dummy.udc": "configured"})
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=[]))
+                stack.enter_context(patch.object(smoke, "_heading", side_effect=record_heading))
+                stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
+                stack.enter_context(patch.object(smoke, "_check_modules"))
+                stack.enter_context(patch.object(smoke, "_path_exists", side_effect=record_path))
+                stack.enter_context(patch.object(smoke, "_command_ok", side_effect=record_command))
+                stack.enter_context(patch.object(smoke, "_capture", return_value=(0, "[]")))
+                stack.enter_context(patch.object(smoke, "_relayable_count", return_value=0))
+                stack.enter_context(patch.object(smoke, "_paired_count", return_value=0))
+                stack.enter_context(patch.object(smoke, "_check_overlay_runtime"))
+                stack.enter_context(patch.object(smoke, "_check_initramfs"))
+                stack.enter_context(patch.object(smoke, "_check_readonly_mode"))
+                stack.enter_context(patch.object(smoke, "_check_bluetooth_persistent"))
+
+                smoke.run()
+
+        self.assertIn(("Bluetooth", ["systemctl", "is-active", "bluetooth.service"]), command_headings)
+        self.assertIn(("Bluetooth", Path("/var/lib/bluetooth")), path_headings)
+
     def test_smoketest_verbose_summary_groups_related_items_in_logical_order(self) -> None:
         smoke = SmokeTest(verbose=True, allow_non_pi=True)
 
@@ -214,6 +292,34 @@ class OpsDiagnosticsTest(unittest.TestCase):
             readonly_group.index("Root overlay active:"), readonly_group.index("Bluetooth persistent mount:")
         )
         self.assertEqual(smoke.result_dict()["summary"]["Bluetooth persistent mount"], "not mounted")
+
+    def test_readonly_mode_probe_is_recorded_before_persistent_mount_probe(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+        with redirect_stdout(StringIO()) as stdout:
+            smoke._check_readonly_mode("persistent", "enabled", "yes", post_reboot=True)
+            smoke._check_bluetooth_persistent("persistent", "enabled", bluetooth_persistent=True)
+
+        self.assertLess(
+            stdout.getvalue().index("Read-only mode is enabled"),
+            stdout.getvalue().index("Bluetooth persistent mount is mounted"),
+        )
+
+    def test_disabled_mode_with_persistent_mount_is_soft_warning(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+        with redirect_stdout(StringIO()):
+            smoke._check_bluetooth_persistent("disabled", "disabled", bluetooth_persistent=True)
+
+        self.assertEqual(smoke.exit_code, 0)
+        self.assertEqual(smoke.soft_warnings, 1)
+        self.assertIn("readonly migrate", smoke.results[0].message)
+
+    def test_enabled_mode_without_persistent_mount_fails(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+        with redirect_stdout(StringIO()):
+            smoke._check_bluetooth_persistent("persistent", "enabled", bluetooth_persistent=False)
+
+        self.assertEqual(smoke.exit_code, 1)
+        self.assertEqual(smoke.results[0].message, "Bluetooth persistent mount is not mounted")
 
     def test_debug_report_keeps_writing_when_initial_systemctl_probe_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

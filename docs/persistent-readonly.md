@@ -137,7 +137,18 @@ instead of leaving you with a half-configured read-only boot path.
 bluetooth_2_usb readonly status
 sudo bluetooth_2_usb readonly disable
 sudo reboot
+sudo bluetooth_2_usb readonly migrate
+bluetooth_2_usb smoketest --verbose
 ```
+
+`readonly disable` turns off OverlayFS/read-only mode. It does not move
+Bluetooth state by itself, so smoketest may warn that the persistent Bluetooth
+mount is still active while read-only mode is disabled.
+
+After reboot, run `readonly migrate` to copy Bluetooth state back to the root
+filesystem and unmount the persistent storage. The migration command refuses to
+run while the live root filesystem is still overlay-backed because writes to
+`/var/lib/bluetooth` would not persist safely.
 
 ## Validation
 

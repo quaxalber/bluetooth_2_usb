@@ -323,12 +323,20 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
   fi
   sleep 2
 done
+ssh <pi-host> 'sudo -n bluetooth_2_usb readonly migrate'
+ssh <pi-host> 'sudo -n bluetooth_2_usb smoketest --verbose'
 ```
 
 > [!WARNING]
 > Only run destructive read-only rollback checks after disabling read-only mode
 > and rebooting, once `findmnt -no FSTYPE,SOURCE /` no longer shows `overlay`
 > for the live root filesystem.
+
+Expected outcome:
+
+- read-only mode is disabled
+- Bluetooth state is migrated back to the root filesystem
+- persistent Bluetooth storage is unmounted
 
 ## Uninstall validation
 

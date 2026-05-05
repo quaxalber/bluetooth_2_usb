@@ -107,12 +107,12 @@ class SmokeTest:
             missing_venv = f"Virtualenv interpreter is missing: {PATHS.venv_python}"
             validate_log = (127, missing_venv)
             service_settings_log = (127, missing_venv)
+        self._heading("Bluetooth")
         self._command_ok(
             ["systemctl", "is-active", "bluetooth.service"],
             "bluetooth.service is active",
             "bluetooth.service is not active",
         )
-        self._heading("Bluetooth")
         bt_show = self._capture(["bluetoothctl", "show"])
         self.record_bool(
             bt_show[0] == 0 and bluetooth_controller_powered_from_text(bt_show[1]),
@@ -134,6 +134,10 @@ class SmokeTest:
                 )
         else:
             self.soft_warn("No bluetooth rfkill entries found")
+        paired_count = self._paired_count()
+        self._path_exists(
+            Path("/var/lib/bluetooth"), "Bluetooth state directory exists", "Bluetooth state directory is missing"
+        )
         self._heading("Devices")
         inventory = (
             self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"])
@@ -141,14 +145,11 @@ class SmokeTest:
             else (127, missing_venv)
         )
         relayable_count = self._relayable_count(inventory)
-        paired_count = self._paired_count()
-        self._path_exists(
-            Path("/var/lib/bluetooth"), "Bluetooth state directory exists", "Bluetooth state directory is missing"
-        )
         self._heading("Read-Only Mode")
+        self._check_readonly_mode(readonly, overlay, root_overlay_active, post_reboot)
         self._check_overlay_runtime(overlay, root_overlay_active, post_reboot)
         self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
-        self._check_readonly(readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot)
+        self._check_bluetooth_persistent(readonly, overlay, bluetooth_persistent)
 
         self.summary_groups = [
             (
@@ -275,19 +276,7 @@ class SmokeTest:
         else:
             self.soft_warn(f"Boot initramfs is not present yet ({path})")
 
-    def _check_readonly(
-        self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_persistent: bool, post_reboot: bool
-    ) -> None:
-        if bluetooth_persistent:
-            ok(
-                "Bluetooth persistent mount is mounted"
-                if readonly == "persistent"
-                else "Bluetooth persistent mount is active"
-            )
-        elif overlay == "enabled" or readonly == "persistent":
-            self.warn_fail("Bluetooth persistent mount is not mounted")
-        else:
-            ok("Bluetooth persistent mount is not configured")
+    def _check_readonly_mode(self, readonly: str, overlay: str, root_overlay_active: str, post_reboot: bool) -> None:
         if readonly == "persistent":
             ok("Read-only mode is enabled")
         elif readonly == "unknown":
@@ -306,6 +295,20 @@ class SmokeTest:
             )
         else:
             self.warn_fail("Read-only mode is not enabled")
+
+    def _check_bluetooth_persistent(self, readonly: str, overlay: str, bluetooth_persistent: bool) -> None:
+        if bluetooth_persistent:
+            if readonly == "persistent":
+                ok("Bluetooth persistent mount is mounted")
+            else:
+                self.soft_warn(
+                    "Bluetooth persistent mount is active while read-only mode is disabled; "
+                    + "run bluetooth_2_usb readonly migrate to move state back to rootfs"
+                )
+        elif overlay == "enabled" or readonly == "persistent":
+            self.warn_fail("Bluetooth persistent mount is not mounted")
+        else:
+            ok("Bluetooth persistent mount is not configured")
 
     def _relayable_count(self, inventory: tuple[int, str]) -> int:
         if inventory[0] != 0:

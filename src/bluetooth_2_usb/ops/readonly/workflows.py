@@ -10,6 +10,7 @@ from ..boot_config import (
     configured_initramfs_file,
     configured_kernel_image,
     current_kernel_release,
+    current_root_filesystem_type,
     ensure_bootable_initramfs_for_current_kernel,
     expected_boot_initramfs_file,
     versioned_initrd_candidates,
@@ -30,6 +31,9 @@ from .status import (
 from .units import (
     install_bluetooth_persist_dropin,
     persist_spec_from_device,
+    remove_bluetooth_bind_mount_unit,
+    remove_bluetooth_persist_dropin,
+    remove_persist_mount_unit,
     write_bluetooth_bind_mount_unit,
     write_persist_mount_unit,
 )
@@ -230,4 +234,87 @@ def disable_readonly() -> None:
     config.mode = "disabled"
     write_readonly_config(config)
     ok("OverlayFS has been disabled")
-    warn("Persistent Bluetooth state mount configuration was kept. Reboot to return to a writable root filesystem.")
+    try:
+        live_root = current_root_filesystem_type()
+    except Exception:
+        live_root = "unknown"
+    if live_root == "overlay":
+        warn("The live root filesystem is still overlay-backed until reboot.")
+    if bluetooth_state_persistent(config):
+        warn(
+            "Persistent Bluetooth state is still mounted. Run `sudo bluetooth_2_usb readonly migrate` "
+            + "to move Bluetooth state back to rootfs and unmount persistent storage."
+        )
+
+
+def migrate_readonly_bluetooth_state() -> None:
+    require_commands(["findmnt", "mkdir", "mountpoint", "systemctl", "systemd-escape", "umount"])
+    config = load_readonly_config()
+    if current_root_filesystem_type() == "overlay":
+        fail(
+            "Root filesystem is still overlay-backed. Run `sudo bluetooth_2_usb readonly disable`, reboot, "
+            + "then run `sudo bluetooth_2_usb readonly migrate`."
+        )
+    config.mode = "disabled"
+    if not bluetooth_state_persistent(config):
+        write_readonly_config(config)
+        ok("Bluetooth persistent mount is not active; no migration needed.")
+        return
+
+    bluetooth_was_active = _systemctl_active("bluetooth.service")
+    b2u_was_active = stop_b2u_if_installed("before migrating Bluetooth state back to rootfs")
+    try:
+        run(["systemctl", "stop", "bluetooth.service"])
+        run(["systemctl", "disable", "--now", "var-lib-bluetooth.mount"], check=False)
+        if run(["findmnt", "-rn", "/var/lib/bluetooth"], check=False, capture=True).returncode == 0:
+            run(["umount", "/var/lib/bluetooth"])
+        _copy_persistent_bluetooth_state_to_rootfs(config.persist_bluetooth_dir, Path("/var/lib/bluetooth"))
+
+        persist_unit = output(["systemd-escape", "--path", "--suffix=mount", config.persist_mount])
+        run(["systemctl", "disable", "--now", persist_unit], check=False)
+        if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
+            run(["umount", config.persist_mount])
+        remove_bluetooth_persist_dropin()
+        remove_bluetooth_bind_mount_unit()
+        remove_persist_mount_unit(config.persist_mount)
+        run(["systemctl", "daemon-reload"])
+        write_readonly_config(config)
+    finally:
+        if bluetooth_was_active:
+            run(["systemctl", "start", "bluetooth.service"], check=False)
+        restart_b2u_if_installed(b2u_was_active, "after migrating Bluetooth state back to rootfs")
+    ok("Bluetooth state has been migrated back to rootfs and persistent storage has been unmounted.")
+
+
+def _copy_persistent_bluetooth_state_to_rootfs(source: Path, destination: Path) -> None:
+    if not source.is_dir():
+        fail(f"Persistent Bluetooth state directory is missing: {source}")
+    ignored = {".b2u-seed.lock", ".b2u-seeded", ".b2u-persistent-state"}
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp_dir = destination.with_name(f"{destination.name}.tmp-{uuid.uuid4().hex}")
+    backup_dir = destination.with_name(f"{destination.name}.backup-{uuid.uuid4().hex}")
+    try:
+        temp_dir.mkdir()
+        for child in source.iterdir():
+            if child.name in ignored:
+                continue
+            target = temp_dir / child.name
+            if child.is_dir():
+                shutil.copytree(child, target, symlinks=True, dirs_exist_ok=True)
+            else:
+                shutil.copy2(child, target)
+        had_destination = destination.exists()
+        if had_destination:
+            destination.rename(backup_dir)
+        try:
+            temp_dir.rename(destination)
+        except Exception:
+            if destination.exists():
+                shutil.rmtree(destination)
+            if had_destination:
+                backup_dir.rename(destination)
+            raise
+        else:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)

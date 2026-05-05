@@ -280,8 +280,13 @@ Bluetooth state on separate persistent storage.
 
 ### `readonly disable`
 
-Return the system to normal writable mode while keeping the persistent
-Bluetooth-state storage configuration available.
+Turn off read-only mode. Persistent Bluetooth state remains mounted until it is
+migrated back to the root filesystem.
+
+### `readonly migrate`
+
+Move Bluetooth state from persistent storage back to `/var/lib/bluetooth` on the
+root filesystem, then unmount the persistent storage.
 
 ## Managed paths
 

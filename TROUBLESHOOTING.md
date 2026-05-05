@@ -123,6 +123,11 @@ Interpretation:
 For the full setup and validation flow, use
 [docs/persistent-readonly.md](docs/persistent-readonly.md).
 
+If read-only mode is disabled but the persistent Bluetooth mount is still
+active, run `sudo bluetooth_2_usb readonly migrate` after rebooting onto the
+normal root filesystem. The migrate command copies Bluetooth state back to
+`/var/lib/bluetooth` and unmounts the persistent storage.
+
 ## SSH, ping, or DNS access to the Pi is flaky
 
 Symptom: the Pi looks online enough to suspect it is reachable, but `ssh`,
