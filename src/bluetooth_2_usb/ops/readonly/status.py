@@ -141,7 +141,7 @@ def print_readonly_status() -> None:
     print(f"overlay_configured: {overlay_configured_status()}")
     print(f"root_filesystem: {_root_filesystem_type()}")
     print(f"root_source: {_findmnt_value('/', 'SOURCE') or '<unknown>'}")
-    print(f"bluetooth state writable storage: {'mounted' if bluetooth_state_persistent(config) else 'not mounted'}")
+    print(f"bluetooth persistent mount: {'mounted' if bluetooth_state_persistent(config) else 'not mounted'}")
     print(f"bluetooth_state_source: {_findmnt_value('/var/lib/bluetooth', 'SOURCE') or '<none>'}")
     print(f"persist_mount: {config.persist_mount}")
     print(f"persist_mount_active: {'yes' if _mountpoint(config.persist_mount) else 'no'}")

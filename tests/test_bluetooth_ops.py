@@ -311,7 +311,7 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertIn("read-only mode: enabled\n", output)
         self.assertIn("configured read-only mode: enabled\n", output)
         self.assertIn("overlay_live: enabled\n", output)
-        self.assertIn("bluetooth state writable storage: mounted\n", output)
+        self.assertIn("bluetooth persistent mount: mounted\n", output)
         self.assertIn("persist_device: /dev/sda1\n", output)
 
     def test_print_readonly_status_uses_safe_defaults_when_config_cannot_load(self) -> None:
@@ -331,7 +331,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("configured read-only mode: disabled\n", output)
-        self.assertIn("bluetooth state writable storage: not mounted\n", output)
+        self.assertIn("bluetooth persistent mount: not mounted\n", output)
         self.assertIn("persist_device: <unset>\n", output)
 
     def test_b2u_service_helpers_preserve_inactive_service_state(self) -> None:
@@ -579,4 +579,3 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertEqual(written, [config])
         self.assertEqual(config.persist_spec, "/dev/disk/by-uuid/abc")
         self.assertIn("Persistent Bluetooth state mount configuration was kept.", stdout.getvalue())
-        self.assertNotIn("Writable Bluetooth state " + "mount configuration was kept.", stdout.getvalue())

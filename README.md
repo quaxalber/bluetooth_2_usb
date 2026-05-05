@@ -276,11 +276,11 @@ filesystem, and persistent Bluetooth-state mount status.
 ### `readonly enable`
 
 Switch Raspberry Pi OS into the supported read-only mode while keeping
-Bluetooth state on separate writable storage.
+Bluetooth state on separate persistent storage.
 
 ### `readonly disable`
 
-Return the system to normal writable mode while keeping the writable
+Return the system to normal writable mode while keeping the persistent
 Bluetooth-state storage configuration available.
 
 ## Managed paths

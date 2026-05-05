@@ -13,9 +13,9 @@ def persist_mount_unit_name(mount_path: Path) -> str:
 
 def write_persist_mount_unit(persist_spec: str, mount_path: Path, fs_type: str) -> str:
     if not persist_spec:
-        fail("Writable state mount spec must not be empty.")
+        fail("Persistent state mount spec must not be empty.")
     if "\n" in persist_spec or re.fullmatch(r"[A-Za-z0-9_./:=-]+", persist_spec) is None:
-        fail(f"Writable state mount spec contains unsupported characters: {persist_spec}")
+        fail(f"Persistent state mount spec contains unsupported characters: {persist_spec}")
     unit_name = persist_mount_unit_name(mount_path)
     unit_path = Path("/etc/systemd/system") / unit_name
     unit_path.write_text(

@@ -46,7 +46,7 @@ def _main(argv: list[str], *, prog: str) -> int:
     debug_parser.add_argument("--duration", type=_positive_int)
     readonly_parser = _command_parser(subparsers, "readonly", "Manage read-only operation.")
     readonly_subparsers = readonly_parser.add_subparsers(dest="readonly_command", required=True)
-    setup_parser = _command_parser(readonly_subparsers, "setup", "Prepare writable Bluetooth state storage.")
+    setup_parser = _command_parser(readonly_subparsers, "setup", "Prepare persistent Bluetooth state storage.")
     setup_parser.add_argument("--device", required=True)
     _command_parser(readonly_subparsers, "status", "Show read-only status.")
     _command_parser(readonly_subparsers, "enable", "Enable read-only mode.")

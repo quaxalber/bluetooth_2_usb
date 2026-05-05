@@ -2,35 +2,35 @@
 
 Use this guide when you want an appliance-style Raspberry Pi setup with a
 read-only root filesystem while still keeping Bluetooth pairings and other
-BlueZ state on separate writable ext4 storage.
+BlueZ state on separate persistent ext4 storage.
 
 ## Scope
 
 This workflow:
 
 - enables Raspberry Pi OS OverlayFS for the root filesystem
-- keeps Bluetooth state on a separate writable ext4 filesystem
+- keeps Bluetooth state on a separate persistent ext4 filesystem
 - bind-mounts that Bluetooth state to `/var/lib/bluetooth`
 
 This workflow does not:
 
 - create extra partitions for you automatically
 - repartition the root device for you
-- keep Bluetooth state across reboot without separate writable storage
+- keep Bluetooth state across reboot without separate persistent storage
 
 ## Prerequisites
 
 Before enabling read-only mode:
 
 1. install Bluetooth-2-USB and confirm normal operation first
-2. identify or prepare a writable ext4 partition for Bluetooth state
+2. identify or prepare a persistent ext4 partition for Bluetooth state
 3. make sure you can still recover the Pi over SSH or local console if boot
    policy needs to be reverted
 4. if you run a custom kernel, keep the running kernel fully installed on the
    Pi, including `/lib/modules/$(uname -r)` and either
    `/boot/config-$(uname -r)` or `/proc/config.gz`
 
-## Prepare the writable filesystem
+## Prepare the persistent filesystem
 
 Identify the target device:
 
@@ -47,13 +47,13 @@ sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 > [!IMPORTANT]
 > Replace `<persist-partition>` with the real ext4 partition you intend to use.
 > Double-check the target with `lsblk -f` before formatting or enabling
-> writable Bluetooth state storage.
+> persistent Bluetooth state storage.
 
 > [!WARNING]
-> You can take the writable space from the same physical device that holds the
+> You can take the persistent space from the same physical device that holds the
 > root filesystem, for example by carving out a separate ext4 partition on that
 > SD card or SSD. That avoids extra physical media, but it does not reduce
-> SD-card wear the way moving that writable state to a USB stick or other
+> SD-card wear the way moving that persistent state to a USB stick or other
 > separate storage can. It also increases the risk of partitioning mistakes and
 > gives you less separation during maintenance or recovery.
 

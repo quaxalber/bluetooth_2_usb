@@ -71,10 +71,10 @@ def debug_report(duration: int | None) -> int:
                 f"overlayfs={overlay_status()}",
                 f"read_only_mode={display_readonly_mode(readonly_mode())}",
                 (
-                    "bluetooth_state_writable_storage="
+                    "bluetooth_state_persistent_mount="
                     + ("mounted" if bluetooth_state_persistent(config) else "not_mounted")
                     if config is not None
-                    else "bluetooth_state_writable_storage=unknown"
+                    else "bluetooth_state_persistent_mount=unknown"
                 ),
                 readonly_config_error,
             ]
@@ -100,7 +100,7 @@ def debug_report(duration: int | None) -> int:
     command_block("Overlay and tmpfs mounts", ["findmnt", "-t", "overlay,tmpfs"], 5)
     command_block("Bluetooth state mount", ["findmnt", "-n", "-T", "/var/lib/bluetooth"], 5)
     if config is not None:
-        command_block("Writable state storage mount", ["findmnt", "-n", config.persist_mount], 5)
+        command_block("Persistent state storage mount", ["findmnt", "-n", config.persist_mount], 5)
     if PATHS.readonly_env_file.is_file():
         command_block("Read-only environment file", ["cat", PATHS.readonly_env_file], 5)
     command_block("Service status", ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], 8)

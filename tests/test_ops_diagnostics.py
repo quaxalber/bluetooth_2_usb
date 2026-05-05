@@ -213,7 +213,6 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertLess(
             readonly_group.index("Root overlay active:"), readonly_group.index("Bluetooth persistent mount:")
         )
-        self.assertNotIn("Bluetooth state writable " + "storage:", output)
         self.assertEqual(smoke.result_dict()["summary"]["Bluetooth persistent mount"], "not mounted")
 
     def test_debug_report_keeps_writing_when_initial_systemctl_probe_fails(self) -> None:
@@ -302,7 +301,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 self.assertEqual(debug_report(None), 0)
 
             report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
-            self.assertIn("bluetooth_state_writable_storage=unknown", report)
+            self.assertIn("bluetooth_state_persistent_mount=unknown", report)
             self.assertIn("Read-only config parse error: invalid readonly env", report)
 
     def test_debug_report_records_os_errors_as_command_failures(self) -> None:

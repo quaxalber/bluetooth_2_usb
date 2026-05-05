@@ -184,9 +184,9 @@ end-to-end loopback inject/capture validation from
 > This flow uses persistent storage, changes boot/read-only state, and reboots
 > the Pi. Verify `<persist-partition>` with `lsblk -f` before running setup.
 
-Prepare the writable ext4 partition:
+Prepare the persistent ext4 partition:
 
-Replace `<persist-partition>` with the actual writable ext4 partition after
+Replace `<persist-partition>` with the actual persistent ext4 partition after
 verifying it with `lsblk -f`.
 
 ```bash
