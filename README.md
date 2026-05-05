@@ -120,7 +120,7 @@ across cable disconnects, suspend transitions, and USB resets.
 For implementation details, see
 [docs/runtime-architecture.md](docs/runtime-architecture.md).
 
-## Persistent read-only operation
+## Read-only operation
 
 For the supported appliance-style read-only workflow, use
 [docs/persistent-readonly.md](docs/persistent-readonly.md).
@@ -266,22 +266,22 @@ gadget device nodes.
 ### `readonly setup`
 
 Prepare writable ext4-backed storage for `/var/lib/bluetooth` before enabling
-persistent read-only mode.
+read-only mode.
 
 ### `readonly status`
 
-Show the configured and live persistent read-only state, including OverlayFS,
-root filesystem, and persistent Bluetooth-state mount status.
+Show the configured and live read-only state, including OverlayFS, root
+filesystem, and writable Bluetooth-state mount status.
 
 ### `readonly enable`
 
-Switch Raspberry Pi OS into the supported persistent read-only mode while
-keeping Bluetooth state on separate writable storage.
+Switch Raspberry Pi OS into the supported read-only mode while keeping
+Bluetooth state on separate writable storage.
 
 ### `readonly disable`
 
-Return the system to normal writable mode while keeping the persistent
-Bluetooth-state configuration available.
+Return the system to normal writable mode while keeping the writable
+Bluetooth-state storage configuration available.
 
 ## Managed paths
 
@@ -290,10 +290,10 @@ Bluetooth-state configuration available.
 | `/opt/bluetooth_2_usb` | Managed installation root |
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
 | `/etc/default/bluetooth_2_usb` | Structured runtime settings |
-| `/etc/default/bluetooth_2_usb_readonly` | Persistent read-only configuration |
+| `/etc/default/bluetooth_2_usb_readonly` | Read-only configuration |
 | `/var/log/bluetooth_2_usb` | Operational command and runtime diagnostic output |
-| `/mnt/b2u-persist` | Default persistent mount target |
-| `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |
+| `/mnt/b2u-persist` | Default writable state mount target |
+| `/mnt/b2u-persist/bluetooth` | Default writable Bluetooth state directory |
 | `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |
 
 ## Development and release
@@ -301,7 +301,7 @@ Bluetooth-state configuration available.
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Pi validation flow: [docs/cli-service-test.md](docs/cli-service-test.md)
 - Loopback inject/capture validation: [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
-- Persistent read-only workflow: [docs/persistent-readonly.md](docs/persistent-readonly.md)
+- Read-only workflow: [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - Doc consistency review: [docs/doc-consistency-review.md](docs/doc-consistency-review.md)
 - Release tagging and versioning: [docs/release-versioning-policy.md](docs/release-versioning-policy.md)
 

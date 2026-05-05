@@ -98,7 +98,7 @@ Release notes should describe the current supported product surface only:
 - updates via `bluetooth_2_usb update`
 - diagnostics via `bluetooth_2_usb --validate-env`,
   `bluetooth_2_usb smoketest`, and `bluetooth_2_usb debug`
-- persistent read-only operation only when a separate writable ext4 filesystem
+- read-only operation only when a separate writable ext4 filesystem
   is configured for Bluetooth state
 
 Example:

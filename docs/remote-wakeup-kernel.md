@@ -15,7 +15,7 @@ sleeping or suspended host by sending keyboard input.
   patch
 - the tested setups below are validated for this project
 - the additional build paths below are provided for unvalidated targets that
-  follow the same custom-kernel and persistent read-only flow
+  follow the same custom-kernel and read-only flow
 
 ## Tested setups
 
@@ -172,7 +172,7 @@ Notes for the LLVM fallback:
 > These build paths are unvalidated for this project. They are included so you
 > can build and deploy the matching custom kernel and let
 > `bluetooth_2_usb readonly enable` install the corresponding boot initramfs
-> automatically when you later enable persistent read-only mode. Use the target
+> automatically when you later enable read-only mode. Use the target
 > matrix above for the expected image and initramfs filenames.
 
 ### Raspberry Pi 5
@@ -235,9 +235,9 @@ same matrix when checking or troubleshooting boot artifacts.
 
 > [!IMPORTANT]
 > Do not treat `config-<kernelrelease>` or the matching module tree as optional
-> when you plan to enable persistent read-only mode with a custom kernel.
+> when you plan to enable read-only mode with a custom kernel.
 
-When you later enable persistent read-only mode,
+When you later enable read-only mode,
 `bluetooth_2_usb readonly enable` ensures a bootable initramfs exists for the
 running kernel and installs or reuses the matching boot initramfs file
 automatically. That path depends on the running kernel being fully installed on

@@ -1,4 +1,4 @@
-# Pi Persistent Read-Only
+# Pi Read-Only Mode
 
 Use this guide when you want an appliance-style Raspberry Pi setup with a
 read-only root filesystem while still keeping Bluetooth pairings and other
@@ -16,7 +16,7 @@ This workflow does not:
 
 - create extra partitions for you automatically
 - repartition the root device for you
-- make Bluetooth state persistent without separate writable storage
+- keep Bluetooth state across reboot without separate writable storage
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 > [!IMPORTANT]
 > Replace `<persist-partition>` with the real ext4 partition you intend to use.
 > Double-check the target with `lsblk -f` before formatting or enabling
-> persistent Bluetooth state.
+> writable Bluetooth state storage.
 
 > [!WARNING]
 > You can take the writable space from the same physical device that holds the
@@ -57,7 +57,7 @@ sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 > separate storage can. It also increases the risk of partitioning mistakes and
 > gives you less separation during maintenance or recovery.
 
-## Enable persistent read-only mode
+## Enable read-only mode
 
 Run:
 
@@ -142,5 +142,5 @@ sudo reboot
 ## Validation
 
 For a repeatable validation flow, including post-reboot checks and teardown,
-use the `Persistent read-only validation` section in
-[`cli-service-test.md`](cli-service-test.md#persistent-read-only-validation).
+use the `Read-only validation` section in
+[`cli-service-test.md`](cli-service-test.md#read-only-validation).

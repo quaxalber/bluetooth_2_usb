@@ -15,8 +15,8 @@ Thanks for taking the time to report a problem. If you can, please include:
 - clear reproduction steps
 
 If the problem involves pairing, relay behavior, suspend/wake, service startup,
-or persistent read-only mode, also mention what changed recently and whether the
-Pi is connected to the target host through the OTG-capable data port.
+or read-only mode, also mention what changed recently and whether the Pi is
+connected to the target host through the OTG-capable data port.
 
 ## Pull Requests
 
@@ -151,7 +151,7 @@ Outside a real Pi gadget environment, `--validate-env` may exit with status `3`.
 ## Hardware Validation
 
 If your change affects runtime behavior, installation, service startup, USB
-gadget setup, diagnostics, relay behavior, or persistent read-only operation,
+gadget setup, diagnostics, relay behavior, or read-only operation,
 validate it on a real Pi.
 
 Use these repo-owned guides when they match the task:

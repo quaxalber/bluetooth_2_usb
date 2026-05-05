@@ -10,7 +10,7 @@ This is the authoritative Pi-side validation guide for:
 - smoketest and debug validation
 - real device relay validation
 - loopback inject/capture validation
-- persistent read-only validation
+- read-only validation
 - pairing persistence validation
 - uninstall validation
 
@@ -178,10 +178,10 @@ If the Pi is physically attached to a host through the gadget data path, run the
 end-to-end loopback inject/capture validation from
 [host-relay-loopback.md](host-relay-loopback.md).
 
-## Persistent read-only validation
+## Read-only validation
 
 > [!WARNING]
-> This flow uses persistent storage, changes boot/read-only state, and reboots
+> This flow uses writable state storage, changes boot/read-only state, and reboots
 > the Pi. Verify `<persist-partition>` with `lsblk -f` before running setup.
 
 Prepare the writable ext4 partition:
@@ -211,7 +211,7 @@ done
 > [!TIP]
 > If the enable step fails with `mkinitramfs: failed to determine device for /`,
 > follow the repair step in
-> [persistent-readonly.md](persistent-readonly.md#enable-persistent-read-only-mode),
+> [persistent-readonly.md](persistent-readonly.md#enable-read-only-mode),
 > then rerun `readonly enable` and resume validation here before rebooting.
 
 After reboot:
@@ -275,7 +275,7 @@ Pass criteria:
 
 > [!WARNING]
 > This intentionally cuts power. Run it only after read-only mode and
-> persistent Bluetooth storage have already been validated.
+> writable Bluetooth state storage have already been validated.
 
 Before cutting power:
 
@@ -305,7 +305,7 @@ ssh <pi-host> '
 Pass criteria:
 
 - no re-pairing required
-- no broken persistent mount
+- no broken writable state mount
 - no service crash on startup
 
 ## Disable read-only mode again
@@ -346,7 +346,7 @@ Expected outcome:
 
 - service integration is removed
 - checkout remains present
-- persistent mount units are disabled
+- writable state mount units are disabled
 - runtime env files and CLI links are removed
 
 ## What to record

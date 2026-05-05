@@ -10,8 +10,8 @@ checks, hardware validation, and PR workflow.
 - Primary goal: turn a Raspberry Pi into a USB HID bridge for Bluetooth
   keyboards and mice
 - Main risk areas: USB gadget setup, boot config mutation, managed install
-  re-apply behavior, systemd service behavior, persistent read-only mode, and
-  Pi-side runtime validation
+  re-apply behavior, systemd service behavior, read-only mode, and Pi-side
+  runtime validation
 
 ## Read first
 
