@@ -44,6 +44,34 @@ REL_HWHEEL_HI_RES = ecodes.REL_HWHEEL_HI_RES
 
 EVENT_TYPE_NAMES = {EV_KEY: "EV_KEY", EV_REL: "EV_REL"}
 
+SCENARIO_KEYBOARD = "keyboard"
+SCENARIO_MOUSE = "mouse"
+SCENARIO_NODE_DISCOVERY = "node-discovery"
+SCENARIO_CONSUMER = "consumer"
+SCENARIO_COMBO = "combo"
+
+DEFAULT_MOUSE_COALESCED_TAIL_COUNT = 0
+DEFAULT_EVENT_GAP_MS = 25
+DEFAULT_POST_DELAY_MS = 250
+DEFAULT_CAPTURE_TIMEOUT_SEC = 20.0
+
+KEYBOARD_POST_DELAY_MS = 6000
+MOUSE_EVENT_GAP_MS = 0
+MOUSE_POST_DELAY_MS = 1000
+NODE_DISCOVERY_POST_DELAY_MS = DEFAULT_POST_DELAY_MS
+NODE_DISCOVERY_CAPTURE_TIMEOUT_SEC = 10.0
+COMBO_POST_DELAY_MS = KEYBOARD_POST_DELAY_MS
+COMBO_CAPTURE_TIMEOUT_SEC = 60.0
+
+KEYBOARD_TEXT_BURST = "kEyBoArD"
+KEYBOARD_TEXT_BURST_REPETITIONS = 9
+MOUSE_X_POSITIVE_DELTA = 180000
+MOUSE_X_NEGATIVE_DELTA = -210000
+MOUSE_Y_POSITIVE_DELTA = 210000
+MOUSE_Y_NEGATIVE_DELTA = -180000
+MOUSE_WHEEL_DELTA = 2400
+NODE_DISCOVERY_MOUSE_DELTA = 1
+
 
 def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
     names: dict[int, str] = {}
@@ -88,10 +116,10 @@ class ScenarioDefinition:
     mouse_rel_steps: tuple[ExpectedEvent, ...]
     mouse_button_steps: tuple[ExpectedEvent, ...]
     consumer_steps: tuple[ExpectedEvent, ...]
-    mouse_coalesced_tail_count: int = 0
-    default_event_gap_ms: int = 40
-    default_post_delay_ms: int = 250
-    default_capture_timeout_sec: float = 20.0
+    mouse_coalesced_tail_count: int = DEFAULT_MOUSE_COALESCED_TAIL_COUNT
+    default_event_gap_ms: int = DEFAULT_EVENT_GAP_MS
+    default_post_delay_ms: int = DEFAULT_POST_DELAY_MS
+    default_capture_timeout_sec: float = DEFAULT_CAPTURE_TIMEOUT_SEC
 
     @property
     def keyboard_enabled(self) -> bool:
@@ -118,14 +146,14 @@ class ScenarioDefinition:
 
 
 MOUSE_REL_STEPS = (
-    ExpectedEvent(EV_REL, REL_X, 180000),
-    ExpectedEvent(EV_REL, REL_Y, -180000),
-    ExpectedEvent(EV_REL, REL_X, -210000),
-    ExpectedEvent(EV_REL, REL_Y, 210000),
-    ExpectedEvent(EV_REL, REL_WHEEL, 2400),
-    ExpectedEvent(EV_REL, REL_WHEEL, -2400),
-    ExpectedEvent(EV_REL, REL_HWHEEL, 2400),
-    ExpectedEvent(EV_REL, REL_HWHEEL, -2400),
+    ExpectedEvent(EV_REL, REL_X, MOUSE_X_POSITIVE_DELTA),
+    ExpectedEvent(EV_REL, REL_Y, MOUSE_Y_NEGATIVE_DELTA),
+    ExpectedEvent(EV_REL, REL_X, MOUSE_X_NEGATIVE_DELTA),
+    ExpectedEvent(EV_REL, REL_Y, MOUSE_Y_POSITIVE_DELTA),
+    ExpectedEvent(EV_REL, REL_WHEEL, MOUSE_WHEEL_DELTA),
+    ExpectedEvent(EV_REL, REL_WHEEL, -MOUSE_WHEEL_DELTA),
+    ExpectedEvent(EV_REL, REL_HWHEEL, MOUSE_WHEEL_DELTA),
+    ExpectedEvent(EV_REL, REL_HWHEEL, -MOUSE_WHEEL_DELTA),
 )
 
 EXOTIC_KEYBOARD_CODES = (
@@ -172,7 +200,10 @@ def _press_release_steps(*codes: int) -> tuple[ExpectedEvent, ...]:
 
 
 NODE_DISCOVERY_KEYBOARD_STEPS = _press_release_steps(KEY_F13)
-NODE_DISCOVERY_REL_STEPS = (ExpectedEvent(EV_REL, REL_X, 1), ExpectedEvent(EV_REL, REL_X, -1))
+NODE_DISCOVERY_REL_STEPS = (
+    ExpectedEvent(EV_REL, REL_X, NODE_DISCOVERY_MOUSE_DELTA),
+    ExpectedEvent(EV_REL, REL_X, -NODE_DISCOVERY_MOUSE_DELTA),
+)
 NODE_DISCOVERY_CONSUMER_STEPS = _press_release_steps(KEY_VOLUMEUP, KEY_VOLUMEDOWN)
 
 MOUSE_BUTTON_STEPS = (
@@ -233,52 +264,53 @@ def _append_text_steps(steps: list[ExpectedEvent], text: str) -> None:
 
 
 _KEYBOARD_STEPS: list[ExpectedEvent] = []
-for _ in range(9):
-    _append_text_steps(_KEYBOARD_STEPS, "kEyBoArD")
+for _ in range(KEYBOARD_TEXT_BURST_REPETITIONS):
+    _append_text_steps(_KEYBOARD_STEPS, KEYBOARD_TEXT_BURST)
 TEXT_KEYBOARD_STEPS = tuple(_KEYBOARD_STEPS)
 KEYBOARD_STEPS = TEXT_KEYBOARD_STEPS + EXOTIC_KEYBOARD_STEPS
 
 SCENARIOS = {
-    "keyboard": ScenarioDefinition(
-        name="keyboard",
+    SCENARIO_KEYBOARD: ScenarioDefinition(
+        name=SCENARIO_KEYBOARD,
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=(),
         mouse_button_steps=(),
         consumer_steps=(),
-        default_event_gap_ms=10,
-        default_post_delay_ms=6000,
+        default_post_delay_ms=KEYBOARD_POST_DELAY_MS,
     ),
-    "mouse": ScenarioDefinition(
-        name="mouse",
+    SCENARIO_MOUSE: ScenarioDefinition(
+        name=SCENARIO_MOUSE,
         keyboard_steps=(),
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=(),
-        default_event_gap_ms=0,
-        default_post_delay_ms=1000,
+        default_event_gap_ms=MOUSE_EVENT_GAP_MS,
+        default_post_delay_ms=MOUSE_POST_DELAY_MS,
     ),
-    "node-discovery": ScenarioDefinition(
-        name="node-discovery",
+    SCENARIO_NODE_DISCOVERY: ScenarioDefinition(
+        name=SCENARIO_NODE_DISCOVERY,
         keyboard_steps=NODE_DISCOVERY_KEYBOARD_STEPS,
         mouse_rel_steps=NODE_DISCOVERY_REL_STEPS,
         mouse_button_steps=(),
         consumer_steps=NODE_DISCOVERY_CONSUMER_STEPS,
-        default_event_gap_ms=20,
-        default_post_delay_ms=250,
-        default_capture_timeout_sec=10.0,
+        default_post_delay_ms=NODE_DISCOVERY_POST_DELAY_MS,
+        default_capture_timeout_sec=NODE_DISCOVERY_CAPTURE_TIMEOUT_SEC,
     ),
-    "consumer": ScenarioDefinition(
-        name="consumer", keyboard_steps=(), mouse_rel_steps=(), mouse_button_steps=(), consumer_steps=CONSUMER_STEPS
+    SCENARIO_CONSUMER: ScenarioDefinition(
+        name=SCENARIO_CONSUMER,
+        keyboard_steps=(),
+        mouse_rel_steps=(),
+        mouse_button_steps=(),
+        consumer_steps=CONSUMER_STEPS,
     ),
-    "combo": ScenarioDefinition(
-        name="combo",
+    SCENARIO_COMBO: ScenarioDefinition(
+        name=SCENARIO_COMBO,
         keyboard_steps=KEYBOARD_STEPS,
         mouse_rel_steps=MOUSE_REL_STEPS,
         mouse_button_steps=MOUSE_BUTTON_STEPS,
         consumer_steps=CONSUMER_STEPS,
-        default_event_gap_ms=10,
-        default_post_delay_ms=6000,
-        default_capture_timeout_sec=60.0,
+        default_post_delay_ms=COMBO_POST_DELAY_MS,
+        default_capture_timeout_sec=COMBO_CAPTURE_TIMEOUT_SEC,
     ),
 }
 

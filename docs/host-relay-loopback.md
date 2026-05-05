@@ -188,6 +188,11 @@ On the Pi:
 sudo bluetooth_2_usb loopback inject --scenario combo
 ```
 
+The injector uses a `25` ms default event gap for every scenario except
+`mouse`, which stays at `0` ms to keep its fast-motion stress behavior. Override
+the default with `--event-gap-ms` only when intentionally stress-testing relay
+throughput.
+
 > [!NOTE]
 > When `bluetooth_2_usb.service` is active, the injector waits up to the default
 > service-settle window before emitting events. This avoids racing a freshly
