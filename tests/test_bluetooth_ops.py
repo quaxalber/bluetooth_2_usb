@@ -308,10 +308,10 @@ class ReadonlyConfigTest(unittest.TestCase):
             print_readonly_status()
 
         output = stdout.getvalue()
-        self.assertIn("mode: persistent\n", output)
-        self.assertIn("configured_mode: persistent\n", output)
+        self.assertIn("read-only mode: enabled\n", output)
+        self.assertIn("configured read-only mode: enabled\n", output)
         self.assertIn("overlay_live: enabled\n", output)
-        self.assertIn("bluetooth_state_persistent: yes\n", output)
+        self.assertIn("bluetooth state writable storage: mounted\n", output)
         self.assertIn("persist_device: /dev/sda1\n", output)
 
     def test_print_readonly_status_uses_safe_defaults_when_config_cannot_load(self) -> None:
@@ -330,8 +330,8 @@ class ReadonlyConfigTest(unittest.TestCase):
             print_readonly_status()
 
         output = stdout.getvalue()
-        self.assertIn("configured_mode: disabled\n", output)
-        self.assertIn("bluetooth_state_persistent: no\n", output)
+        self.assertIn("configured read-only mode: disabled\n", output)
+        self.assertIn("bluetooth state writable storage: not mounted\n", output)
         self.assertIn("persist_device: <unset>\n", output)
 
     def test_b2u_service_helpers_preserve_inactive_service_state(self) -> None:
@@ -439,7 +439,7 @@ class ReadonlyConfigTest(unittest.TestCase):
             write_bind.assert_called_once_with(root / "persist" / "bluetooth", root / "persist")
             install_dropin.assert_called_once_with()
             seed_state.assert_called_once_with(root / "persist" / "bluetooth")
-            restart_b2u.assert_called_once_with(False, "after enabling the persistent bind mount")
+            restart_b2u.assert_called_once_with(False, "after enabling the writable Bluetooth state bind mount")
             self.assertIn(["systemctl", "stop", "bluetooth.service"], commands)
             self.assertIn(["systemctl", "enable", "--now", "mnt-persist.mount"], commands)
             self.assertIn(["systemctl", "enable", "--now", "var-lib-bluetooth.mount"], commands)

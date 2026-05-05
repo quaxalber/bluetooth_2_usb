@@ -11,9 +11,10 @@ from ..bluetooth import (
     bluetooth_rfkill_blocked,
     bluetooth_rfkill_entries,
 )
-from ..commands import OpsError, ok, run, warn
+from ..commands import OpsError, bold, fail_final, ok, ok_final, run, warn
+from ..commands import warn_fail as red_warn
 from ..paths import PATHS
-from ..readonly import bluetooth_state_persistent, overlay_status, readonly_mode
+from ..readonly import bluetooth_state_persistent, display_readonly_mode, overlay_status, readonly_mode
 from .types import ProbeResult, ProbeStatus
 
 
@@ -48,6 +49,7 @@ class SmokeTest:
             str(boot_config.boot_initramfs_target_path(expected_initramfs_file)) if expected_initramfs_file else ""
         )
 
+        self._heading("Boot and USB")
         self._check_boot_overlay(config_txt, expected_overlay)
         self._check_modules(modules_load_value, required_modules)
         if dwc2_mode == "unknown":
@@ -70,6 +72,7 @@ class SmokeTest:
                     + "Current state: "
                     + ", ".join(f"{name}={state}" for name, state in udc_states.items())
                 )
+        self._heading("Service and Runtime")
         self._command_ok(
             ["systemctl", "is-enabled", PATHS.service_unit],
             f"{PATHS.service_unit} is enabled",
@@ -108,6 +111,7 @@ class SmokeTest:
             "bluetooth.service is active",
             "bluetooth.service is not active",
         )
+        self._heading("Bluetooth")
         bt_show = self._capture(["bluetoothctl", "show"])
         self.record_bool(
             bt_show[0] == 0 and bluetooth_controller_powered_from_text(bt_show[1]),
@@ -127,9 +131,9 @@ class SmokeTest:
                 self.record_bool(
                     True, "Bluetooth rfkill state is not blocked", "Bluetooth rfkill is blocking the controller", detail
                 )
-                ok("Bluetooth rfkill state is not blocked")
         else:
             self.soft_warn("No bluetooth rfkill entries found")
+        self._heading("Devices")
         inventory = (
             self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"])
             if venv_present
@@ -140,6 +144,7 @@ class SmokeTest:
         self._path_exists(
             Path("/var/lib/bluetooth"), "Bluetooth state directory exists", "Bluetooth state directory is missing"
         )
+        self._heading("Read-Only Mode")
         self._check_overlay_runtime(overlay, root_overlay_active, post_reboot)
         self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
         self._check_readonly(readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot)
@@ -156,21 +161,22 @@ class SmokeTest:
             "expected boot initramfs path": expected_initramfs_path or "<none>",
             "UDC controllers": udc_list or "<none>",
             "UDC state": ", ".join(f"{name}={state}" for name, state in udc_states.items()) or "<none>",
-            "Readonly mode": readonly,
+            "Read-only mode": display_readonly_mode(readonly),
             "OverlayFS configured": overlay,
             "Root filesystem type": root_filesystem_type,
             "Root overlay active": root_overlay_active,
-            "Bluetooth state persistent": "yes" if bluetooth_persistent else "no",
+            "Bluetooth state writable storage": "mounted" if bluetooth_persistent else "not mounted",
             "Relayable device count": str(relayable_count),
             "Paired Bluetooth device count": str(paired_count),
             "Non-fatal warning count": str(self.soft_warnings),
         }
         if self.verbose:
-            self._print_verbose(validate_log, service_settings_log, bt_show, btmgmt, inventory)
+            self._print_verbose(entries, validate_log, service_settings_log, bt_show, btmgmt, inventory)
+        self._heading("Summary")
         if self.exit_code == 0:
-            ok("Smoke test PASSED (with warnings)" if self.soft_warnings else "Smoke test PASSED")
+            ok_final("Smoke test PASSED (with warnings)" if self.soft_warnings else "Smoke test PASSED")
         else:
-            print("[!] Smoke test FAILED")
+            fail_final("Smoke test FAILED")
         return self.exit_code
 
     def result_dict(self) -> dict[str, object]:
@@ -257,16 +263,16 @@ class SmokeTest:
     ) -> None:
         if bluetooth_persistent:
             ok(
-                "Bluetooth state is mounted persistently"
+                "Bluetooth state writable storage is mounted"
                 if readonly == "persistent"
-                else "Bluetooth state persistence is active"
+                else "Bluetooth state writable storage is active"
             )
         elif overlay == "enabled" or readonly == "persistent":
-            self.warn_fail("Bluetooth state is not mounted persistently")
+            self.warn_fail("Bluetooth state writable storage is not mounted")
         else:
-            ok("Bluetooth state persistence is not configured")
+            ok("Bluetooth state writable storage is not configured")
         if readonly == "persistent":
-            ok("Read-only mode is persistent")
+            ok("Read-only mode is enabled")
         elif readonly == "unknown":
             (
                 self.soft_warn("Read-only mode could not be determined")
@@ -277,12 +283,12 @@ class SmokeTest:
             ok("Read-only mode is disabled")
         elif overlay == "enabled" and root_overlay_active == "no":
             (
-                self.warn_fail("Read-only mode is not persistent")
+                self.warn_fail("Read-only mode is not enabled")
                 if post_reboot
-                else self.soft_warn("Read-only mode is not persistent")
+                else self.soft_warn("Read-only mode is not enabled")
             )
         else:
-            self.warn_fail("Read-only mode is not persistent")
+            self.warn_fail("Read-only mode is not enabled")
 
     def _relayable_count(self, inventory: tuple[int, str]) -> int:
         if inventory[0] != 0:
@@ -339,7 +345,7 @@ class SmokeTest:
         self.results.append(ProbeResult(ProbeStatus.WARN, message))
 
     def warn_fail(self, message: str, detail: str = "") -> None:
-        warn(message)
+        red_warn(message)
         if detail:
             print("\n".join(detail.splitlines()[:20]))
         self.exit_code = 1
@@ -352,8 +358,12 @@ class SmokeTest:
             return 127, str(exc)
         return completed.returncode, (completed.stdout + completed.stderr)
 
-    def _print_verbose(self, *logs: tuple[int, str]) -> None:
-        print("\n## Summary")
+    def _heading(self, title: str) -> None:
+        print()
+        print(bold(title))
+
+    def _print_verbose(self, rfkill_entries, *logs: tuple[int, str]) -> None:
+        print("\n## Details")
         for key, value in self.summary.items():
             print(f"{key}: {value}")
         titles = [
@@ -367,7 +377,7 @@ class SmokeTest:
             print(f"\n## {title}")
             print(text or "<no output>")
         print("\n## rfkill bluetooth")
-        print("\n".join(entry.line() for entry in bluetooth_rfkill_entries()) or "<no output>")
+        print("\n".join(entry.line() for entry in rfkill_entries) or "<no output>")
         print("\n## Mount details")
         print(self._capture(["findmnt", "-n", "-T", "/"])[1] or "<no output>")
         print(self._capture(["findmnt", "-n", "-T", "/var/lib/bluetooth"])[1] or "<no output>")

@@ -3,7 +3,8 @@ import signal
 import subprocess
 import tempfile
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -180,7 +181,9 @@ class OpsDiagnosticsTest(unittest.TestCase):
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            self.run_smoketest_harness(smoke, root=Path(tmpdir), rfkill_entries=[_RfkillEntry()])
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                self.run_smoketest_harness(smoke, root=Path(tmpdir), rfkill_entries=[_RfkillEntry()])
 
         rfkill_results = [
             result for result in smoke.results if result.message == "Bluetooth rfkill state is not blocked"
@@ -188,6 +191,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertEqual(len(rfkill_results), 1)
         self.assertEqual(rfkill_results[0].status, ProbeStatus.PASS)
         self.assertEqual(rfkill_results[0].detail, "rfkill0 type=bluetooth soft=0 hard=0 state=1")
+        self.assertEqual(stdout.getvalue().count("[+] Bluetooth rfkill state is not blocked"), 1)
 
     def test_debug_report_keeps_writing_when_initial_systemctl_probe_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -275,7 +279,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 self.assertEqual(debug_report(None), 0)
 
             report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
-            self.assertIn("bluetooth_state_persistent=unknown", report)
+            self.assertIn("bluetooth_state_writable_storage=unknown", report)
             self.assertIn("Read-only config parse error: invalid readonly env", report)
 
     def test_debug_report_records_os_errors_as_command_failures(self) -> None:

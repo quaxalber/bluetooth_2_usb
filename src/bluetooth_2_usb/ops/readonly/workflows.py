@@ -40,7 +40,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         ["blkid", "cp", "findmnt", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape", "umount"]
     )
     if not machine_id_valid():
-        fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
+        fail("/etc/machine-id is missing or invalid. Read-only mode requires a stable machine-id.")
     detected_type = run(["blkid", "-s", "TYPE", "-o", "value", device], check=False, capture=True).stdout.strip()
     if not detected_type:
         fail(f"No filesystem detected on {device}. Create an ext4 filesystem first, then rerun this command.")
@@ -87,14 +87,14 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         if bluetooth_was_active:
             run(["systemctl", "start", "bluetooth.service"])
         if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
-            fail("bluetooth.service did not come back up after enabling the persistent bind mount")
+            fail("bluetooth.service did not come back up after enabling the writable Bluetooth state bind mount")
     finally:
         if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
             run(["systemctl", "start", "bluetooth.service"], check=False)
         elif not bluetooth_was_active and _systemctl_active("bluetooth.service"):
             run(["systemctl", "stop", "bluetooth.service"], check=False)
-        restart_b2u_if_installed(b2u_was_active, "after enabling the persistent bind mount")
-    ok(f"Persistent Bluetooth state is active at {persist_bluetooth_dir}")
+        restart_b2u_if_installed(b2u_was_active, "after enabling the writable Bluetooth state bind mount")
+    ok(f"Writable Bluetooth state storage is active at {persist_bluetooth_dir}")
 
 
 def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
@@ -144,11 +144,14 @@ def enable_readonly() -> None:
     require_commands(["dpkg-query", "raspi-config"])
     config = load_readonly_config()
     if not machine_id_valid():
-        fail("/etc/machine-id is missing or invalid. Persistent read-only mode requires a stable machine-id.")
+        fail("/etc/machine-id is missing or invalid. Read-only mode requires a stable machine-id.")
     if not config.persist_spec:
         fail("Run bluetooth_2_usb readonly setup --device /dev/... before enabling read-only mode.")
     if not bluetooth_state_persistent(config):
-        fail("Persistent Bluetooth state is not active. Run bluetooth_2_usb readonly setup --device /dev/... first.")
+        fail(
+            "Writable Bluetooth state storage is not active. "
+            + "Run bluetooth_2_usb readonly setup --device /dev/... first."
+        )
     if not readonly_stack_packages_bootstrap_safe():
         warn("OverlayFS package state is incomplete:")
         print(readonly_stack_package_report())
@@ -215,7 +218,7 @@ def enable_readonly() -> None:
     ok("OverlayFS has been enabled")
     warn("Boot partition read-only mode is intentionally not changed by this command.")
     warn(
-        "Persistent read-only mode is configured. Reboot, then run bluetooth_2_usb smoketest --verbose "
+        "Read-only mode is configured. Reboot, then run bluetooth_2_usb smoketest --verbose "
         + "and verify reconnect behavior."
     )
 
@@ -227,4 +230,4 @@ def disable_readonly() -> None:
     config.mode = "disabled"
     write_readonly_config(config)
     ok("OverlayFS has been disabled")
-    warn("Persistent Bluetooth mount configuration was kept. Reboot to return to a writable root filesystem.")
+    warn("Writable Bluetooth state mount configuration was kept. Reboot to return to a writable root filesystem.")
