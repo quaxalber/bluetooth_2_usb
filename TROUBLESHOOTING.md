@@ -101,7 +101,7 @@ Interpretation:
 - if the controller looks healthy, switch to an interactive `bluetoothctl`
   session and complete the actual bonding flow there
 
-## Persistent read-only mode does not keep Bluetooth pairings
+## Read-only mode does not keep Bluetooth pairings
 
 Symptom: pairings disappear after reboot or read-only mode does not behave as
 expected.
@@ -115,7 +115,7 @@ grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
 ```
 
 Interpretation:
-- the writable Bluetooth state must be mounted where the read-only workflow
+- the persistent Bluetooth state must be mounted where the read-only workflow
   expects it
 - if the paths or config do not match, the system may be booting read-only
   without the persistent BlueZ state mounted correctly

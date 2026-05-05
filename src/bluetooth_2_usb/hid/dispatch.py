@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from ..evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from ..evdev.types import InputEvent, KeyEvent, RelEvent, categorize
-from ..gadgets.manager import HidGadgets
 from ..logging import get_logger
 from ..relay.gate import RelayGate
 from ..relay.shortcut import ShortcutToggler
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    from ..gadgets.manager import HidGadgets
 
 
 class HidDispatcher:
