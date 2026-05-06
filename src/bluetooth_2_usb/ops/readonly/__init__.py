@@ -13,9 +13,7 @@ from .status import (
     print_readonly_status,
     readonly_mode,
     readonly_stack_package_report,
-    readonly_stack_packages_bootstrap_safe,
     readonly_stack_packages_healthy,
-    readonly_stack_packages_missing,
 )
 from .units import (
     install_bluetooth_persist_dropin,
@@ -49,9 +47,7 @@ __all__ = [
     "print_readonly_status",
     "readonly_mode",
     "readonly_stack_package_report",
-    "readonly_stack_packages_bootstrap_safe",
     "readonly_stack_packages_healthy",
-    "readonly_stack_packages_missing",
     "remove_bluetooth_bind_mount_unit",
     "remove_bluetooth_persist_dropin",
     "remove_persist_mount_unit",

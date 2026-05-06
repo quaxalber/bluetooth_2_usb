@@ -60,14 +60,6 @@ def readonly_stack_packages_healthy() -> bool:
     return all(package_status(package) == "install ok installed" for package in READONLY_PACKAGES)
 
 
-def readonly_stack_packages_bootstrap_safe() -> bool:
-    return all(package_status(package) in {"", "install ok installed"} for package in READONLY_PACKAGES)
-
-
-def readonly_stack_packages_missing() -> bool:
-    return any(package_status(package) != "install ok installed" for package in READONLY_PACKAGES)
-
-
 def readonly_stack_package_report() -> str:
     lines = []
     for package in READONLY_PACKAGES:
