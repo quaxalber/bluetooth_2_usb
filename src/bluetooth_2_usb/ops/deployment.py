@@ -18,7 +18,7 @@ from .readonly import (
 
 DEFAULT_ENV_TEXT = """# Structured runtime configuration for bluetooth_2_usb.service.
 B2U_AUTO_DISCOVER=true
-B2U_DEVICE_IDS=
+B2U_DEVICES=
 B2U_GRAB_DEVICES=true
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
 B2U_LOG_TO_FILE=false

@@ -28,7 +28,7 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_DEBUG=1",
                         "B2U_USB_SERIAL=b2u-test",
                         "B2U_USB_PRODUCT_SUFFIX='pi0w lab'",
-                        "B2U_DEVICE_IDS='mouse, keyboard'",
+                        "B2U_DEVICES='mouse, keyboard'",
                         "B2U_UDC_PATH=/tmp/udc",
                     ]
                 )
@@ -45,7 +45,7 @@ class ServiceSettingsTest(unittest.TestCase):
         self.assertTrue(settings.debug)
         self.assertEqual(settings.usb_serial, "b2u-test")
         self.assertEqual(settings.usb_product_suffix, "pi0w lab")
-        self.assertEqual(settings.device_ids, ["mouse", "keyboard"])
+        self.assertEqual(settings.devices, ["mouse", "keyboard"])
         self.assertEqual(settings.udc_path, "/tmp/udc")
 
     def test_loads_multiple_boolean_spellings(self) -> None:
@@ -60,7 +60,7 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_LOG_TO_FILE=on",
                         "B2U_LOG_PATH=/tmp/debug.log",
                         "B2U_DEBUG=no",
-                        "B2U_DEVICE_IDS=",
+                        "B2U_DEVICES=",
                         "B2U_UDC_PATH=",
                     ]
                 )
@@ -95,7 +95,7 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_LOG_TO_FILE=1",
                         "B2U_LOG_PATH='/tmp/debug log.txt'",
                         "B2U_DEBUG=0",
-                        "B2U_DEVICE_IDS='MX Keys'",
+                        "B2U_DEVICES='MX Keys'",
                         "B2U_UDC_PATH=",
                     ]
                 )
@@ -163,7 +163,7 @@ class ServiceSettingsTest(unittest.TestCase):
     def test_generated_runtime_argv_is_accepted_by_runtime_parser(self) -> None:
         settings = ServiceSettings(
             auto_discover=True,
-            device_ids=["MX Keys", "/dev/input/event3"],
+            devices=["MX Keys", "/dev/input/event3"],
             grab_devices=True,
             interrupt_shortcut="CTRL+SHIFT+F12",
             log_to_file=True,
@@ -178,7 +178,7 @@ class ServiceSettingsTest(unittest.TestCase):
         parsed = CustomArgumentParser().parse_args(argv)
 
         self.assertTrue(parsed.auto_discover)
-        self.assertEqual(parsed.device_ids, ["MX Keys", "/dev/input/event3"])
+        self.assertEqual(parsed.devices, ["MX Keys", "/dev/input/event3"])
         self.assertEqual(parsed.usb_serial, "b2u-test")
         self.assertEqual(parsed.usb_product_suffix, "pi0w")
 
@@ -204,7 +204,7 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_GRAB_DEVICES=yes",
                         "B2U_LOG_TO_FILE=off",
                         "B2U_DEBUG=0",
-                        "B2U_DEVICE_IDS='MX Keys'",
+                        "B2U_DEVICES='MX Keys'",
                     ]
                 )
                 + "\n",
@@ -220,7 +220,7 @@ class ServiceSettingsTest(unittest.TestCase):
                     [
                         "# Managed runtime settings",
                         "B2U_AUTO_DISCOVER=true",
-                        "B2U_DEVICE_IDS='MX Keys'",
+                        "B2U_DEVICES='MX Keys'",
                         "B2U_GRAB_DEVICES=true",
                         "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
                         "B2U_LOG_TO_FILE=false",
@@ -241,7 +241,7 @@ class ServiceSettingsTest(unittest.TestCase):
                 "\n".join(
                     [
                         "B2U_AUTO_DISCOVER=true",
-                        "B2U_DEVICE_IDS=",
+                        "B2U_DEVICES=",
                         "B2U_GRAB_DEVICES=true",
                         "B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12",
                         "B2U_LOG_TO_FILE=false",

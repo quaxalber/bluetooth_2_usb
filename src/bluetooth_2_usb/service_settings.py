@@ -8,13 +8,14 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .gadgets.identity import validate_usb_product_suffix, validate_usb_serial
+from .inputs.filter import parse_devices
 
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
 DEFAULT_LOG_PATH = "/var/log/bluetooth_2_usb/bluetooth_2_usb.log"
 BOOL_KEYS = {"B2U_AUTO_DISCOVER", "B2U_GRAB_DEVICES", "B2U_LOG_TO_FILE", "B2U_DEBUG"}
 RUNTIME_ENV_KEY_ORDER = (
     "B2U_AUTO_DISCOVER",
-    "B2U_DEVICE_IDS",
+    "B2U_DEVICES",
     "B2U_GRAB_DEVICES",
     "B2U_INTERRUPT_SHORTCUT",
     "B2U_LOG_TO_FILE",
@@ -27,7 +28,7 @@ RUNTIME_ENV_KEY_ORDER = (
 ALLOWED_KEYS = BOOL_KEYS | {
     "B2U_INTERRUPT_SHORTCUT",
     "B2U_LOG_PATH",
-    "B2U_DEVICE_IDS",
+    "B2U_DEVICES",
     "B2U_USB_SERIAL",
     "B2U_USB_PRODUCT_SUFFIX",
     "B2U_UDC_PATH",
@@ -41,7 +42,7 @@ class ServiceSettingsError(ValueError):
 @dataclass(slots=True)
 class ServiceSettings:
     auto_discover: bool = True
-    device_ids: list[str] = field(default_factory=list)
+    devices: list[str] = field(default_factory=list)
     grab_devices: bool = True
     interrupt_shortcut: str = "CTRL+SHIFT+F12"
     log_to_file: bool = False
@@ -79,8 +80,8 @@ def _parse_value(raw_value: str) -> str:
     return parts[0]
 
 
-def _parse_device_ids(raw_value: str) -> list[str]:
-    return [device_id.strip() for device_id in raw_value.split(",") if device_id.strip()]
+def _parse_devices(raw_value: str) -> list[str]:
+    return parse_devices(raw_value) if raw_value.strip() else []
 
 
 def _canonical_bool(value: bool) -> str:
@@ -94,8 +95,8 @@ def _quote_if_needed(value: str) -> str:
 def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
     if key == "B2U_AUTO_DISCOVER":
         return _canonical_bool(settings.auto_discover)
-    if key == "B2U_DEVICE_IDS":
-        return _quote_if_needed(", ".join(settings.device_ids))
+    if key == "B2U_DEVICES":
+        return _quote_if_needed(", ".join(settings.devices))
     if key == "B2U_GRAB_DEVICES":
         return _canonical_bool(settings.grab_devices)
     if key == "B2U_INTERRUPT_SHORTCUT":
@@ -156,8 +157,8 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
                 settings.usb_product_suffix = validate_usb_product_suffix(value)
             except ValueError as exc:
                 raise ServiceSettingsError(f"{env_file}:{line_number}: invalid B2U_USB_PRODUCT_SUFFIX: {exc}") from exc
-        elif key == "B2U_DEVICE_IDS":
-            settings.device_ids = _parse_device_ids(value)
+        elif key == "B2U_DEVICES":
+            settings.devices = _parse_devices(value)
         elif key == "B2U_UDC_PATH":
             settings.udc_path = value
 
@@ -217,8 +218,8 @@ def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False)
     argv: list[str] = []
     if settings.auto_discover:
         argv.append("--auto_discover")
-    if settings.device_ids:
-        argv.extend(["--device_ids", ",".join(settings.device_ids)])
+    if settings.devices:
+        argv.extend(["--devices", ",".join(settings.devices)])
     if settings.grab_devices:
         argv.append("--grab_devices")
     if settings.interrupt_shortcut:

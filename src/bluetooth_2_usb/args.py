@@ -1,13 +1,14 @@
 import argparse
 
 from .gadgets.identity import validate_usb_product_suffix, validate_usb_serial
+from .inputs.filter import parse_devices
 
 
-def _parse_device_ids(raw_value: str) -> list[str]:
-    device_ids = [device_id.strip() for device_id in raw_value.split(",") if device_id.strip()]
-    if not device_ids:
-        raise argparse.ArgumentTypeError("DEVICE_IDS must not be empty.")
-    return device_ids
+def _parse_devices(raw_value: str) -> list[str]:
+    try:
+        return parse_devices(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("DEVICES must not be empty.") from exc
 
 
 def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
@@ -86,15 +87,14 @@ class CustomArgumentParser(argparse.ArgumentParser):
             ),
         )
         self.add_argument(
-            "--device_ids",
-            "-i",
-            type=_parse_device_ids,
+            "--devices",
+            type=_parse_devices,
             default=None,
             help=(
-                "Comma-separated list of identifiers for input devices to be relayed.\n"
-                + "An identifier is either the input device path, the MAC address or any "
-                + "case-insensitive substring of the device name.\n"
-                + "Example: --device_ids '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\n"
+                "Comma-separated list of devices to be relayed.\n"
+                + "Each value may match an input device path, uniq, phys, Bluetooth MAC address, "
+                + "or case-insensitive substring of the device name.\n"
+                + "Example: --devices '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'\n"
                 + "Default: None"
             ),
         )
@@ -194,7 +194,7 @@ class _HelpAction(argparse._HelpAction):
 
 class Arguments:
     __slots__ = [
-        "_device_ids",
+        "_devices",
         "_auto_discover",
         "_grab_devices",
         "_interrupt_shortcut",
@@ -211,7 +211,7 @@ class Arguments:
 
     def __init__(
         self,
-        device_ids: list[str] | None,
+        devices: list[str] | None,
         auto_discover: bool,
         grab_devices: bool,
         interrupt_shortcut: list[str] | None,
@@ -225,7 +225,7 @@ class Arguments:
         validate_env: bool,
         output: str,
     ) -> None:
-        self._device_ids = device_ids
+        self._devices = devices
         self._auto_discover = auto_discover
         self._grab_devices = grab_devices
         self._interrupt_shortcut = interrupt_shortcut
@@ -240,8 +240,8 @@ class Arguments:
         self._output = output
 
     @property
-    def device_ids(self) -> list[str] | None:
-        return self._device_ids
+    def devices(self) -> list[str] | None:
+        return self._devices
 
     @property
     def auto_discover(self) -> bool:
@@ -313,7 +313,7 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         raise SystemExit(2)
 
     return Arguments(
-        device_ids=args.device_ids,
+        devices=args.devices,
         auto_discover=args.auto_discover,
         grab_devices=args.grab_devices,
         interrupt_shortcut=args.interrupt_shortcut,

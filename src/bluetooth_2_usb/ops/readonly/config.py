@@ -52,8 +52,12 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         path,
     )
 
+    mode = values.get("B2U_READONLY_MODE", "disabled")
+    if mode not in {"enabled", "disabled"}:
+        fail(f"Refusing to load invalid B2U_READONLY_MODE from {path}: {mode}")
+
     return ReadonlyConfig(
-        mode=values.get("B2U_READONLY_MODE", "disabled"),
+        mode=mode,
         persist_mount=persist_mount,
         persist_bluetooth_dir=persist_bluetooth_dir,
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),

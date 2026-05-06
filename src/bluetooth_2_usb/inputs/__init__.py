@@ -1,4 +1,4 @@
-from .identifier import DeviceIdentifier, DeviceIdentifierType
+from .filter import DeviceFilter, DeviceFilterType
 from .inventory import (
     DeviceEnumerationError,
     InputDeviceMetadata,
@@ -9,8 +9,8 @@ from .inventory import (
 
 __all__ = [
     "DeviceEnumerationError",
-    "DeviceIdentifier",
-    "DeviceIdentifierType",
+    "DeviceFilter",
+    "DeviceFilterType",
     "InputDeviceMetadata",
     "describe_input_devices",
     "inventory_to_text",

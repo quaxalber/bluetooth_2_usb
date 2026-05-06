@@ -86,7 +86,7 @@ class CliTest(unittest.TestCase):
         args = SimpleNamespace(
             auto_discover=False,
             debug=False,
-            device_ids=[],
+            devices=[],
             grab_devices=False,
             interrupt_shortcut=None,
             list_devices=False,

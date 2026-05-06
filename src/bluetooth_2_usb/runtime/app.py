@@ -71,7 +71,7 @@ class Runtime:
             hid_gadgets=hid_gadgets,
             relay_gate=relay_gate,
             task_group=task_group,
-            device_identifiers=list(self._config.device_ids),
+            devices=list(self._config.devices),
             auto_discover=self._config.auto_discover,
             grab_devices=self._config.grab_devices,
             shortcut_toggler=shortcut_toggler,

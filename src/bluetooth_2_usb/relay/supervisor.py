@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
-from ..inputs.identifier import DeviceIdentifier
+from ..inputs.filter import DeviceFilter
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
@@ -56,7 +56,7 @@ class RelaySupervisor:
         hid_gadgets: HidGadgets,
         relay_gate: RelayGate,
         task_group: TaskGroup,
-        device_identifiers: list[str] | None = None,
+        devices: list[str] | None = None,
         auto_discover: bool = False,
         skip_name_prefixes: list[str] | None = None,
         grab_devices: bool = False,
@@ -66,7 +66,7 @@ class RelaySupervisor:
         :param hid_gadgets: Provides the USB HID gadget devices
         :param relay_gate: RelayGate to indicate whether relaying is active
         :param task_group: Runtime task group used for event waiters and relay tasks
-        :param device_identifiers: A list of path, MAC, or name fragments to identify devices to relay
+        :param devices: A list of path, uniq, phys, MAC, or name fragments to match devices to relay
         :param auto_discover: If True, relays all valid input devices except those skipped
         :param skip_name_prefixes: A list of device.name prefixes to skip if auto_discover is True
         :param grab_devices: If True, the relay tries to grab exclusive access to each device
@@ -77,7 +77,7 @@ class RelaySupervisor:
         self._shortcut_toggler = shortcut_toggler
         self._task_group = task_group
 
-        self._device_identifiers = [DeviceIdentifier(identifier) for identifier in (device_identifiers or [])]
+        self._device_filters = [DeviceFilter(device) for device in (devices or [])]
         self._auto_discover = auto_discover
         self._skip_name_prefixes = (
             tuple(skip_name_prefixes) if skip_name_prefixes is not None else DEFAULT_SKIP_NAME_PREFIXES
@@ -345,7 +345,7 @@ class RelaySupervisor:
     def _device_matches_relay_filters(self, device: InputDevice) -> bool:
         """
         Decide if a device should be relayed based on auto_discover,
-        skip_name_prefixes, or user-specified device_identifiers.
+        skip_name_prefixes, or user-specified device filters.
 
         :param device: The input device to check
         :return: True if we should relay it, False otherwise
@@ -358,4 +358,4 @@ class RelaySupervisor:
                 return False
             return True
 
-        return any(identifier.matches(device) for identifier in self._device_identifiers)
+        return any(device_filter.matches(device) for device_filter in self._device_filters)

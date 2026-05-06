@@ -368,7 +368,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        candidates = discover_gadget_node_candidates(hid_module=hid_module)
+        candidates = discover_gadget_node_candidates(devices=USB_PRODUCT_NAME, hid_module=hid_module)
 
         self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["kbd0"])
         self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
@@ -382,7 +382,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        candidates = discover_gadget_node_candidates(hid_module=hid_module)
+        candidates = discover_gadget_node_candidates(devices=USB_PRODUCT_NAME, hid_module=hid_module)
 
         self.assertEqual(candidates.keyboard_nodes, ())
         self.assertEqual(candidates.mouse_nodes, ())
@@ -397,9 +397,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(MissingNodeError, "Multiple keyboard HID devices"):
-            discover_gadget_nodes(hid_module=hid_module)
+            discover_gadget_nodes(devices=USB_PRODUCT_NAME, hid_module=hid_module)
 
-    def test_discovery_can_filter_duplicate_gadgets_by_serial(self) -> None:
+    def test_discovery_can_filter_duplicate_gadgets_by_uniq(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
@@ -445,13 +445,13 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        candidates = discover_gadget_node_candidates(device_serial="pi0w-serial", hid_module=hid_module)
+        candidates = discover_gadget_node_candidates(devices="pi0w-serial", hid_module=hid_module)
 
         self.assertEqual([info.node for info in candidates.keyboard_nodes], ["pi0w-kbd"])
         self.assertEqual([info.node for info in candidates.mouse_nodes], ["pi0w-mouse"])
         self.assertEqual([info.node for info in candidates.consumer_nodes], ["pi0w-consumer"])
 
-    def test_discovery_reports_missing_serial_filter(self) -> None:
+    def test_discovery_reports_missing_device_filter(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry(
@@ -467,10 +467,10 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        with self.assertRaisesRegex(MissingNodeError, "serial 'pi4b-serial'"):
-            discover_gadget_node_candidates(device_serial="pi4b-serial", hid_module=hid_module)
+        with self.assertRaisesRegex(MissingNodeError, "No HID devices matched 'pi4b-serial'"):
+            discover_gadget_node_candidates(devices="pi4b-serial", hid_module=hid_module)
 
-    def test_explicit_override_bypasses_auto_detection(self) -> None:
+    def test_path_filters_select_exact_nodes(self) -> None:
         hid_module = _FakeHidModule(
             [
                 _hid_entry("kbd-a", usage_page=HID_PAGE_GENERIC_DESKTOP, usage=HID_USAGE_KEYBOARD),
@@ -479,9 +479,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        nodes = discover_gadget_nodes(
-            keyboard_node="kbd-a", mouse_node="mouse-a", consumer_node="consumer-a", hid_module=hid_module
-        )
+        nodes = discover_gadget_nodes(devices="kbd-a,mouse-a,consumer-a", hid_module=hid_module)
 
         self.assertEqual(nodes.keyboard_node, "kbd-a")
         self.assertEqual(nodes.mouse_node, "mouse-a")
@@ -526,7 +524,9 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        candidates = discover_gadget_node_candidates(hid_module=hid_module)
+        candidates = discover_gadget_node_candidates(
+            devices="1-2.1.2:1.0,1-2.1.2:1.1,1-2.1.2:1.2", hid_module=hid_module
+        )
 
         self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
         self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
@@ -568,55 +568,11 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
             ]
         )
 
-        candidates = discover_gadget_node_candidates(hid_module=hid_module)
+        candidates = discover_gadget_node_candidates(devices=USB_SERIAL_NUMBER, hid_module=hid_module)
 
         self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
         self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
         self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
-
-    def test_explicit_override_rejects_default_linux_gadget_interface_role_mismatch(self) -> None:
-        hid_module = _FakeHidModule(
-            [
-                _hid_entry(
-                    "1-2.1.2:1.0",
-                    device_name=USB_PRODUCT_NAME,
-                    serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VID_LINUX,
-                    product_id=USB_GADGET_PID_COMBO,
-                    interface_number=HID_FUNC_INDEX_KEYBOARD,
-                    usage_page=0,
-                    usage=0,
-                ),
-                _hid_entry(
-                    "1-2.1.2:1.1",
-                    device_name=USB_PRODUCT_NAME,
-                    serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VID_LINUX,
-                    product_id=USB_GADGET_PID_COMBO,
-                    interface_number=HID_FUNC_INDEX_MOUSE,
-                    usage_page=0,
-                    usage=0,
-                ),
-                _hid_entry(
-                    "1-2.1.2:1.2",
-                    device_name=USB_PRODUCT_NAME,
-                    serial=USB_SERIAL_NUMBER,
-                    vendor_id=USB_GADGET_VID_LINUX,
-                    product_id=USB_GADGET_PID_COMBO,
-                    interface_number=HID_FUNC_INDEX_CONSUMER,
-                    usage_page=0,
-                    usage=0,
-                ),
-            ]
-        )
-
-        with self.assertRaisesRegex(MissingNodeError, "Keyboard HID device has role mouse"):
-            discover_gadget_nodes(
-                keyboard_node="1-2.1.2:1.1",
-                mouse_node="1-2.1.2:1.0",
-                consumer_node="1-2.1.2:1.2",
-                hid_module=hid_module,
-            )
 
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
@@ -1320,7 +1276,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.loopback.capture.run_capture", return_value=result):
             with redirect_stdout(stdout):
-                exit_code = run_loopback(["capture", "--output", "json"])
+                exit_code = run_loopback(["capture", "--devices", USB_PRODUCT_NAME, "--output", "json"])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(stdout.getvalue())["details"]["keyboard_steps_seen"], 6)
@@ -1329,7 +1285,7 @@ class LoopbackInjectTest(unittest.TestCase):
         result = SimpleNamespace(exit_code=0, to_dict=lambda: {}, to_text=lambda: "ok")
 
         with patch("bluetooth_2_usb.loopback.capture.run_capture", return_value=result) as run:
-            exit_code = run_loopback(["capture", "--scenario", SCENARIO_KEYBOARD])
+            exit_code = run_loopback(["capture", "--devices", USB_PRODUCT_NAME, "--scenario", SCENARIO_KEYBOARD])
 
         self.assertEqual(exit_code, 0)
         self.assertIsNone(run.call_args.kwargs["timeout_sec"])
@@ -1355,7 +1311,7 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
             patch("bluetooth_2_usb.loopback.capture._capture_once", return_value=result) as run,
         ):
-            capture_result = run_capture(SCENARIO_KEYBOARD)
+            capture_result = run_capture(SCENARIO_KEYBOARD, devices=USB_PRODUCT_NAME)
 
         self.assertIs(capture_result, result)
         self.assertEqual(run.call_args.kwargs["timeout_sec"], DEFAULT_CAPTURE_TIMEOUT_SEC)
@@ -1379,7 +1335,7 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
             patch("bluetooth_2_usb.loopback.capture.time.sleep"),
         ):
-            result = run_capture(SCENARIO_KEYBOARD, timeout_sec=0.001)
+            result = run_capture(SCENARIO_KEYBOARD, devices=USB_PRODUCT_NAME, timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1408,7 +1364,7 @@ class LoopbackInjectTest(unittest.TestCase):
             patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module),
             patch("bluetooth_2_usb.loopback.capture.time.sleep"),
         ):
-            result = run_capture(SCENARIO_KEYBOARD, timeout_sec=0.001)
+            result = run_capture(SCENARIO_KEYBOARD, devices=USB_PRODUCT_NAME, timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1453,7 +1409,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
             with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
-                result = run_capture(SCENARIO_NODE_DISCOVERY, timeout_sec=0.001)
+                result = run_capture(SCENARIO_NODE_DISCOVERY, devices=USB_PRODUCT_NAME, timeout_sec=0.001)
 
         self.assertFalse(result.success)
         self.assertEqual(result.exit_code, EXIT_TIMEOUT)
@@ -1470,17 +1426,17 @@ class LoopbackInjectTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
             with redirect_stdout(stdout):
-                exit_code = run_loopback(["capture", "--keyboard-node", "/definitely/missing/node"])
+                exit_code = run_loopback(["capture", "--devices", "/definitely/missing/node"])
 
         self.assertEqual(exit_code, EXIT_PREREQUISITE)
-        self.assertIn("Keyboard HID device was not found", stdout.getvalue())
+        self.assertIn("No HID devices matched", stdout.getvalue())
 
     def test_reports_busy_lock_cleanly(self) -> None:
         stdout = io.StringIO()
 
         with patch("bluetooth_2_usb.loopback.cli.loopback_session", side_effect=LoopbackBusyError("busy")):
             with redirect_stdout(stdout):
-                exit_code = run_loopback(["capture"])
+                exit_code = run_loopback(["capture", "--devices", USB_PRODUCT_NAME])
 
         self.assertEqual(exit_code, LoopbackBusyError.exit_code)
         self.assertIn("busy", stdout.getvalue())
@@ -1499,8 +1455,7 @@ class LoopbackInjectTest(unittest.TestCase):
 
     def test_windows_capture_uses_raw_input_backend_for_non_consumer_scenarios(self) -> None:
         candidate_nodes = discover_gadget_node_candidates(
-            keyboard_node="kbd0",
-            mouse_node="mouse0",
+            devices="kbd0,mouse0",
             hid_module=_FakeHidModule(
                 [
                     _hid_entry(
@@ -1576,7 +1531,7 @@ class LoopbackInjectTest(unittest.TestCase):
                 ),
             ) as run_backend,
         ):
-            exit_code = run_loopback(["capture", "--scenario", SCENARIO_COMBO])
+            exit_code = run_loopback(["capture", "--devices", USB_PRODUCT_NAME, "--scenario", SCENARIO_COMBO])
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()
@@ -1611,7 +1566,7 @@ class LoopbackInjectTest(unittest.TestCase):
             ) as run_backend,
             patch("bluetooth_2_usb.loopback.capture._capture_once") as capture_once,
         ):
-            exit_code = run_loopback(["capture", "--scenario", SCENARIO_CONSUMER])
+            exit_code = run_loopback(["capture", "--devices", USB_PRODUCT_NAME, "--scenario", SCENARIO_CONSUMER])
 
         self.assertEqual(exit_code, 0)
         run_backend.assert_called_once()

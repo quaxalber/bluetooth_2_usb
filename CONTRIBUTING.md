@@ -40,13 +40,13 @@ For new-device support requests, also include a local capture from the real
 device when possible. See [docs/device-capture.md](docs/device-capture.md).
 
 ```bash
-sudo bluetooth_2_usb device capture --device /dev/input/eventX --duration 30 --grab
+sudo bluetooth_2_usb device capture --devices /dev/input/eventX --duration 30 --grab
 ```
 
 Use raw live mode only when a maintainer asks for every event and report:
 
 ```bash
-sudo bluetooth_2_usb device capture --device /dev/input/eventX --duration 30 --grab --live-mode raw
+sudo bluetooth_2_usb device capture --devices /dev/input/eventX --duration 30 --grab --live-mode raw
 ```
 
 The generated JSONL artifact may include typed keys, button presses, raw report

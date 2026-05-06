@@ -83,7 +83,7 @@ class _CaptureHandle:
 
 async def capture_device(
     *,
-    selector: str,
+    devices: str,
     duration_sec: int,
     output_path: Path | None,
     grab: bool,
@@ -95,9 +95,9 @@ async def capture_device(
 ) -> Path:
     started_monotonic = time.monotonic()
     interrupted = False
-    devices = linux.select_input_devices(selector)
-    handles = [_CaptureHandle(device=device, hidraw_nodes=[], opened_hidraw=[]) for device in devices]
-    output_path = output_path or _default_output_path(selector, devices)
+    input_devices = linux.select_input_devices(devices)
+    handles = [_CaptureHandle(device=device, hidraw_nodes=[], opened_hidraw=[]) for device in input_devices]
+    output_path = output_path or _default_output_path(devices, input_devices, live_mode)
     created_parent = output_path.parent if not output_path.parent.exists() else None
     output_path.parent.mkdir(parents=True, exist_ok=True)
     hostname = socket.gethostname()
@@ -116,7 +116,7 @@ async def capture_device(
                     "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "duration_sec": duration_sec,
                     "live_mode": live_mode,
-                    "device_selector": selector,
+                    "devices": devices,
                     "matched_devices": [
                         {"path": getattr(handle.device, "path", ""), "name": getattr(handle.device, "name", "")}
                         for handle in handles
@@ -676,11 +676,53 @@ def _event_code_name(event_type: int | None, code: int | None) -> str | None:
     return str(code)
 
 
-def _default_output_path(selector: str, devices: list[InputDevice]) -> Path:
-    names = [getattr(device, "name", "") for device in devices if getattr(device, "name", "")]
-    source = "_".join(names[:2]) if names else selector
+def _default_output_path(devices_filter: str, devices: list[InputDevice], live_mode: LiveMode) -> Path:
+    source = _device_name_source(devices) or devices_filter
     slug = _slug(source) or "device"
-    return Path.cwd() / "device_capture" / f"device_capture_{slug}_{timestamp()}.jsonl"
+    mode_suffix = "_raw" if live_mode == "raw" else ""
+    return Path.cwd() / "device_capture" / f"{slug}{mode_suffix}_{timestamp()}.jsonl"
+
+
+def _device_name_source(devices: list[InputDevice]) -> str:
+    names = _unique_device_names(devices)
+    if not names:
+        return ""
+    common_prefix = _common_name_prefix(names)
+    if common_prefix:
+        return common_prefix
+    return "_".join(names[:2])
+
+
+def _unique_device_names(devices: list[InputDevice]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for device in devices:
+        name = getattr(device, "name", "")
+        if not name:
+            continue
+        normalized = _slug(name)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        names.append(name)
+    return names
+
+
+def _common_name_prefix(names: list[str]) -> str:
+    if len(names) < 2:
+        return names[0] if names else ""
+    tokenized = [name.split() for name in names]
+    prefix: list[str] = []
+    for tokens in zip(*tokenized, strict=False):
+        lowered = {token.lower() for token in tokens}
+        if len(lowered) != 1:
+            break
+        prefix.append(tokens[0])
+    if len(prefix) < 2:
+        return ""
+    if all(len(prefix) == len(tokens) for tokens in tokenized):
+        return names[0]
+    return " ".join(prefix)
 
 
 def _slug(value: str) -> str:

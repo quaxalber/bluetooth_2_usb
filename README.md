@@ -114,11 +114,6 @@ The service runs one asyncio runtime that turns UDC cable state, input hotplug,
 and shutdown signals into typed runtime events. A relay supervisor consumes
 those events and owns all per-device relay tasks.
 
-Relaying starts only when the USB device controller reports `configured`.
-Relaying pauses, and all HID gadget state is released, when the controller
-leaves `configured`. That keeps host-visible keys and buttons from sticking
-across cable disconnects, suspend transitions, and USB resets.
-
 For implementation details, see
 [docs/runtime-architecture.md](docs/runtime-architecture.md).
 
@@ -155,7 +150,7 @@ Default content:
 
 ```bash
 B2U_AUTO_DISCOVER=true
-B2U_DEVICE_IDS=
+B2U_DEVICES=
 B2U_GRAB_DEVICES=true
 B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
 B2U_LOG_TO_FILE=false
@@ -170,8 +165,8 @@ Meaning:
 
 - `B2U_AUTO_DISCOVER=true` is the easiest default. It relays all suitable
   readable input devices except known excluded platform devices.
-- `B2U_DEVICE_IDS` pins the runtime to a specific set of event paths,
-  Bluetooth MACs, and/or case-insensitive name fragments, for example
+- `B2U_DEVICES` pins the runtime to a specific set of event paths, `uniq`,
+  `phys`, Bluetooth MACs, and/or case-insensitive name fragments, for example
   `/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys`.
 - `B2U_GRAB_DEVICES=true` grabs the selected input devices so the Pi stops
   consuming their local events. That is usually what you want for an
@@ -198,7 +193,7 @@ sudo systemctl restart bluetooth_2_usb.service
 | CLI argument | Environment setting | Explanation |
 | --- | --- | --- |
 | `--auto_discover, -a` | `B2U_AUTO_DISCOVER` | Relay all suitable readable input devices automatically. This is the best default when you want the Pi to behave like a simple appliance. |
-| `--device_ids DEVICE_IDS, -i DEVICE_IDS` | `B2U_DEVICE_IDS` | Pin the runtime to a specific comma-separated list of event paths, Bluetooth MACs, and case-insensitive name fragments. |
+| `--devices DEVICES` | `B2U_DEVICES` | Pin the runtime to a specific comma-separated list of event paths, `uniq`, `phys`, Bluetooth MACs, and case-insensitive name fragments. |
 | `--grab_devices, -g` | `B2U_GRAB_DEVICES` | Grab the selected input devices so the Pi no longer consumes their local events while they are being relayed. |
 | `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | `B2U_INTERRUPT_SHORTCUT` | Define a plus-separated key chord that toggles relaying at runtime. Example: `-s CTRL+SHIFT+F12`. |
 | `--log_to_file, -f` | `B2U_LOG_TO_FILE` | Add file logging in addition to stdout logging. |
@@ -207,7 +202,7 @@ sudo systemctl restart bluetooth_2_usb.service
 | `--usb_serial USB_SERIAL` | `B2U_USB_SERIAL` | Override the host-visible USB gadget serial. Leave unset to use a stable per-install generated serial. |
 | `--usb_product_suffix USB_PRODUCT_SUFFIX` | `B2U_USB_PRODUCT_SUFFIX` | Append a short suffix to the host-visible USB product name for multi-Pi diagnostics. |
 | n/a | `B2U_UDC_PATH` | Optional advanced override for systems with multiple gadget-capable controllers. |
-| `--list_devices, -l` | n/a | List readable input devices and exit. Use this before setting `B2U_DEVICE_IDS` or `--device_ids` if you want to confirm the paths and names the runtime actually sees. |
+| `--list_devices, -l` | n/a | List readable input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
 | `--validate-env` | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
 | `--output {text,json}` | n/a | Choose the output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
 | `--version, -v` | n/a | Print the installed version and exit. |
@@ -276,8 +271,10 @@ loopback inject/capture validation.
 
 Capture host-side gadget HID reports and verify that the relay emitted the
 expected sequence. This is the host-side half of the loopback inject/capture
-validation. On Windows, use the same Python CLI from an environment that can
-import `hid`; strict Windows event capture uses the Python Raw Input backend.
+validation. Pass `--devices` with a gadget path, `uniq`, `phys`, Bluetooth
+MAC-shaped `uniq`, or product-name fragment. On Windows, use the same Python
+CLI from an environment that can import `hid`; strict Windows event capture
+uses the Python Raw Input backend.
 
 ### `device capture`
 
@@ -287,7 +284,7 @@ device. For full guidance, use
 [docs/device-capture.md](docs/device-capture.md).
 
 ```bash
-sudo bluetooth_2_usb device capture --device /dev/input/event4 --duration 30 --grab
+sudo bluetooth_2_usb device capture --devices /dev/input/event4 --duration 30 --grab
 ```
 
 ### `udev install`

@@ -46,12 +46,8 @@ class InputDeviceMetadata:
     relay_candidate: bool
     exclusion_reason: str | None
 
-    @property
-    def identity(self) -> str:
-        return self.uniq or self.phys or "-"
-
     def to_dict(self) -> dict[str, object]:
-        return asdict(self) | {"identity": self.identity}
+        return asdict(self)
 
 
 def auto_discover_exclusion_reason(
@@ -133,13 +129,21 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
     table = Table(box=box.MINIMAL_DOUBLE_HEAD, expand=False, header_style="bold", pad_edge=False, show_lines=False)
     table.add_column("Status", no_wrap=True, width=7)
     table.add_column("Device", min_width=18, overflow="fold")
-    table.add_column("Identity", min_width=16, overflow="fold")
+    table.add_column("Phys", min_width=16, overflow="fold")
+    table.add_column("Uniq", min_width=16, overflow="fold")
     table.add_column("Path", min_width=18, overflow="fold")
     table.add_column("Exclusion Reason", min_width=20, overflow="fold")
 
     for device in devices:
         status = "relay" if device.relay_candidate else "skip"
-        table.add_row(status, device.name or "-", device.identity, device.path, device.exclusion_reason or "")
+        table.add_row(
+            status,
+            device.name or "-",
+            device.phys or "-",
+            device.uniq or "-",
+            device.path,
+            device.exclusion_reason or "",
+        )
 
     output = io.StringIO()
     console = Console(
@@ -147,7 +151,7 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
         force_terminal=False,
         no_color=True,
         color_system=None,
-        width=shutil.get_terminal_size(fallback=(100, 20)).columns,
+        width=max(shutil.get_terminal_size(fallback=(140, 20)).columns, 140),
     )
     console.print(table)
     return output.getvalue().rstrip()

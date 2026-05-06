@@ -81,13 +81,13 @@ sudo bluetooth_2_usb debug --duration 10
 On Linux:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery --output json
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 Experimental: macOS
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery --output json
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 > [!NOTE]
@@ -99,7 +99,7 @@ On Windows:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\src"
-python -m bluetooth_2_usb loopback capture --scenario node-discovery --output json
+python -m bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
@@ -118,7 +118,7 @@ discovery step, not the primary event backend. Use a Python environment where
 With the repository virtual environment on Windows:
 
 ```powershell
-.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --scenario node-discovery --output json
+.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 ## 2. Start the host capture
@@ -126,14 +126,13 @@ With the repository virtual environment on Windows:
 From the repository checkout on the host:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario combo
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario combo
 ```
 
-Default behavior:
+Capture behavior:
 
-- detects the gadget HID device by product name and HID usage
-- accepts `--device-serial` to select one Pi when multiple Bluetooth-2-USB
-  gadgets are attached to the same host
+- requires `--devices` to select the gadget HID device by path, `uniq`, `phys`,
+  Bluetooth MAC-shaped `uniq`, or case-insensitive product-name fragment
 - waits up to the scenario-specific timeout for the complete sequence (`20`
   seconds by default; `node-discovery` uses `10` seconds and `combo` uses `60`
   seconds)
@@ -143,22 +142,20 @@ Default behavior:
   in parallel against the same host/Pi pair
 
 When multiple Bluetooth-2-USB gadgets are attached, select the target by its
-host-visible USB serial:
+host-visible USB serial exposed as `uniq`:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario combo \
-  --device-serial '<usb serial>'
+  --devices '<usb serial>'
 ```
 
-If automatic detection is ambiguous, pin the nodes explicitly:
+If discovery is ambiguous, pass multiple comma-separated filters:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario combo \
-  --keyboard-node '<candidate keyboard path>' \
-  --mouse-node '<candidate mouse path>' \
-  --consumer-node '<candidate consumer path>'
+  --devices '<keyboard path>,<mouse path>,<consumer path>'
 ```
 
 Keep this command running while you trigger the Pi-side injection.
@@ -169,9 +166,7 @@ with the minimal discovery scenario:
 ```bash
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario node-discovery \
-  --keyboard-node '<candidate keyboard path>' \
-  --mouse-node '<candidate mouse path>' \
-  --consumer-node '<candidate consumer path>'
+  --devices '<keyboard path>,<mouse path>,<consumer path>'
 ```
 
 Then, on the Pi:
@@ -298,28 +293,28 @@ complete Raw Input event stream.
 Keyboard-only:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario keyboard
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario keyboard
 sudo bluetooth_2_usb loopback inject --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario mouse
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario mouse
 sudo bluetooth_2_usb loopback inject --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario consumer
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario consumer
 sudo bluetooth_2_usb loopback inject --scenario consumer
 ```
 
 Minimal node discovery:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery
 sudo bluetooth_2_usb loopback inject --scenario node-discovery
 ```
 

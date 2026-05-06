@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from bluetooth_2_usb import cli
 from bluetooth_2_usb.ops.devices import collector
+from bluetooth_2_usb.ops.devices.cli import _CliProgress
 from bluetooth_2_usb.ops.devices.cli import run as run_device
 from bluetooth_2_usb.ops.devices.linux import (
     DeviceSelectionError,
@@ -19,6 +20,7 @@ from bluetooth_2_usb.ops.devices.linux import (
     select_input_devices,
 )
 from bluetooth_2_usb.ops.devices.result import json_line, normalize
+from bluetooth_2_usb.ops.devices.validate import validate_capture
 
 
 class _FakeInputDevice:
@@ -121,13 +123,79 @@ class _PendingFutureInputDevice(_FakeInputDevice):
         return _Reader()
 
 
+def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
+    path.write_text("".join(json_line(record) for record in records), encoding="utf-8")
+
+
+def _minimal_capture_records(*, live_mode: str = "summarized", warning: str | None = None) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = [
+        {
+            "record_type": "capture_start",
+            "schema_version": 1,
+            "tool": "bluetooth_2_usb device capture",
+            "started_at": "2026-05-06T01:02:03Z",
+            "duration_sec": 30,
+            "live_mode": live_mode,
+            "devices": "/dev/input/event1",
+            "matched_devices": [{"path": "/dev/input/event1", "name": "Keyboard"}],
+        },
+        {"record_type": "input_device", "path": "/dev/input/event1", "name": "Keyboard"},
+        {"record_type": "evdev_capabilities", "path": "/dev/input/event1", "capabilities": {}},
+        {"record_type": "udev_properties", "path": "/dev/input/event1", "properties": {}},
+        {"record_type": "sysfs_snapshot", "path": "/dev/input/event1", "files": []},
+        {"record_type": "capture_note", "path": "/dev/input/event1", "message": "grabbed input device"},
+    ]
+    if live_mode == "raw":
+        records.append(
+            {
+                "record_type": "evdev_event",
+                "path": "/dev/input/event1",
+                "type": 1,
+                "type_name": "EV_KEY",
+                "code": 30,
+                "code_name": "KEY_A",
+                "value": 1,
+            }
+        )
+    else:
+        records.extend(
+            [
+                {
+                    "record_type": "evdev_key_snapshot",
+                    "path": "/dev/input/event1",
+                    "type": 1,
+                    "type_name": "EV_KEY",
+                    "code": 30,
+                    "code_name": "KEY_A",
+                },
+                {
+                    "record_type": "evdev_axis_snapshot",
+                    "path": "/dev/input/event1",
+                    "type": 2,
+                    "type_name": "EV_REL",
+                    "code": 0,
+                    "code_name": "REL_X",
+                },
+                {"record_type": "evdev_sync_summary", "path": "/dev/input/event1", "syn_report_count": 1},
+            ]
+        )
+    if warning is not None:
+        records.append({"record_type": "capture_warning", "source": "hidraw", "message": warning})
+    counts: dict[str, int] = {}
+    for record in records:
+        record_type = str(record["record_type"])
+        counts[record_type] = counts.get(record_type, 0) + 1
+    records.append({"record_type": "capture_end", "elapsed_sec": 30.0, "interrupted": False, "counts": counts})
+    return records
+
+
 class DeviceCaptureTest(unittest.TestCase):
     def test_top_level_device_command_delegates_to_device_cli(self) -> None:
         with patch("bluetooth_2_usb.ops.devices.run", return_value=23) as device_run:
-            exit_code = cli.run(["device", "capture", "--device", "/dev/input/event1"])
+            exit_code = cli.run(["device", "capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 23)
-        device_run.assert_called_once_with(["capture", "--device", "/dev/input/event1"])
+        device_run.assert_called_once_with(["capture", "--devices", "/dev/input/event1"])
 
     def test_device_capture_help_does_not_load_usb_hid(self) -> None:
         stdout = io.StringIO()
@@ -135,26 +203,63 @@ class DeviceCaptureTest(unittest.TestCase):
             run_device(["capture", "--help"])
 
         self.assertEqual(raised.exception.code, 0)
-        self.assertIn("--device DEVICE", stdout.getvalue())
+        self.assertIn("--devices DEVICE", stdout.getvalue())
         self.assertIn("--live-mode", stdout.getvalue())
 
     def test_device_capture_defaults_to_summarized_live_mode(self) -> None:
-        with patch(
-            "bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")
-        ) as capture:
-            exit_code = run_device(["capture", "--device", "/dev/input/event1"])
+        with (
+            patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
+            patch("bluetooth_2_usb.ops.devices.cli._print_capture_summary"),
+        ):
+            exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(capture.call_args.kwargs["live_mode"], "summarized")
 
     def test_device_capture_accepts_raw_live_mode(self) -> None:
-        with patch(
-            "bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")
-        ) as capture:
-            exit_code = run_device(["capture", "--device", "/dev/input/event1", "--live-mode", "raw"])
+        with (
+            patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
+            patch("bluetooth_2_usb.ops.devices.cli._print_capture_summary"),
+        ):
+            exit_code = run_device(["capture", "--devices", "/dev/input/event1", "--live-mode", "raw"])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(capture.call_args.kwargs["live_mode"], "raw")
+
+    def test_device_validate_is_not_public_command(self) -> None:
+        stderr = io.StringIO()
+        with patch("sys.stderr", stderr), self.assertRaises(SystemExit) as raised:
+            run_device(["validate", "--help"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("invalid choice", stderr.getvalue())
+
+    def test_device_capture_prints_internal_validation_summary(self) -> None:
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            _write_jsonl(output, _minimal_capture_records())
+            with (
+                patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=output),
+                patch("sys.stdout", stdout),
+            ):
+                exit_code = run_device(["capture", "--devices", "/dev/input/event1", "--output", str(output)])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Capture summary: mode=summarized matched=1 live=yes warnings=0", stdout.getvalue())
+
+    def test_capture_progress_status_line_stays_compact(self) -> None:
+        progress = _CliProgress()
+        progress.evdev_events = 12
+        progress.hidraw_reports = 3
+        progress.key_codes.update({"KEY_A", "BTN_LEFT"})
+        progress.rel_codes.add("REL_X")
+        progress.abs_codes.add("ABS_X")
+        progress.hidraw_paths.add("hidraw0:8B")
+
+        line = progress._render_text()
+
+        self.assertEqual(line, "events=12 keys=2 axes=2 hidraw=3 groups=1")
 
     def test_select_input_device_accepts_exact_path_and_closes_nonmatches(self) -> None:
         selected = _FakeInputDevice("/dev/input/event1", "Keyboard")
@@ -174,7 +279,7 @@ class DeviceCaptureTest(unittest.TestCase):
             patch("bluetooth_2_usb.ops.devices.cli.capture_device", side_effect=PermissionError("denied")),
             patch("sys.stderr", stderr),
         ):
-            exit_code = run_device(["capture", "--device", "/dev/input/event1"])
+            exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 3)
         self.assertIn("Device capture failed: denied", stderr.getvalue())
@@ -186,7 +291,7 @@ class DeviceCaptureTest(unittest.TestCase):
             patch("bluetooth_2_usb.ops.devices.cli.capture_device", side_effect=KeyboardInterrupt),
             patch("sys.stderr", stderr),
         ):
-            exit_code = run_device(["capture", "--device", "/dev/input/event1"])
+            exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 130)
         self.assertIn("Device capture interrupted", stderr.getvalue())
@@ -276,7 +381,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=1,
                         output_path=output,
                         grab=True,
@@ -309,7 +414,7 @@ class DeviceCaptureTest(unittest.TestCase):
                     os.chdir(tmpdir)
                     output = asyncio.run(
                         collector.capture_device(
-                            selector="Apple",
+                            devices="Apple",
                             duration_sec=0,
                             output_path=None,
                             grab=False,
@@ -321,9 +426,125 @@ class DeviceCaptureTest(unittest.TestCase):
                 finally:
                     os.chdir(previous_cwd)
 
-            self.assertEqual(output.name, "device_capture_apple_inc_magic_trackpad_20260506_010203.jsonl")
+            self.assertEqual(output.name, "apple_inc_magic_trackpad_20260506_010203.jsonl")
             self.assertEqual(output.parent, Path(tmpdir) / "device_capture")
             self.assertTrue(output.exists())
+
+    def test_capture_default_output_path_deduplicates_matched_device_names(self) -> None:
+        keyboard = _FakeInputDevice("/dev/input/event1", "quaxalber USB Combo Device")
+        mouse = _FakeInputDevice("/dev/input/event2", "quaxalber USB Combo Device")
+        consumer = _FakeInputDevice("/dev/input/event3", "quaxalber USB Combo Device")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_cwd = Path.cwd()
+            with (
+                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
+                patch(
+                    "bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[keyboard, mouse, consumer]
+                ),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                try:
+                    os.chdir(tmpdir)
+                    output = asyncio.run(
+                        collector.capture_device(
+                            devices="b2u28bc43209b9e4a56",
+                            duration_sec=0,
+                            output_path=None,
+                            grab=False,
+                            include_hidraw=False,
+                            max_report_bytes=8,
+                            max_sysfs_file_bytes=8,
+                        )
+                    )
+                finally:
+                    os.chdir(previous_cwd)
+
+            self.assertEqual(output.name, "quaxalber_usb_combo_device_20260506_010203.jsonl")
+
+    def test_capture_default_output_path_uses_common_name_prefix_for_suffixed_nodes(self) -> None:
+        touchpad = _FakeInputDevice("/dev/input/event14", "Sony Interactive Entertainment Wireless Controller Touchpad")
+        motion = _FakeInputDevice(
+            "/dev/input/event13", "Sony Interactive Entertainment Wireless Controller Motion Sensors"
+        )
+        controller = _FakeInputDevice("/dev/input/event12", "Sony Interactive Entertainment Wireless Controller")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_cwd = Path.cwd()
+            with (
+                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
+                patch(
+                    "bluetooth_2_usb.ops.devices.linux.select_input_devices",
+                    return_value=[touchpad, motion, controller],
+                ),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                try:
+                    os.chdir(tmpdir)
+                    output = asyncio.run(
+                        collector.capture_device(
+                            devices="Sony",
+                            duration_sec=0,
+                            output_path=None,
+                            grab=False,
+                            include_hidraw=False,
+                            max_report_bytes=8,
+                            max_sysfs_file_bytes=8,
+                        )
+                    )
+                finally:
+                    os.chdir(previous_cwd)
+
+            self.assertEqual(output.name, "sony_interactive_entertainment_wireless_controller_20260506_010203.jsonl")
+
+    def test_raw_capture_default_output_path_includes_raw_suffix(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "Keyboard")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_cwd = Path.cwd()
+            with (
+                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
+                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                try:
+                    os.chdir(tmpdir)
+                    output = asyncio.run(
+                        collector.capture_device(
+                            devices="keyboard",
+                            duration_sec=0,
+                            output_path=None,
+                            grab=False,
+                            include_hidraw=False,
+                            max_report_bytes=8,
+                            max_sysfs_file_bytes=8,
+                            live_mode="raw",
+                        )
+                    )
+                finally:
+                    os.chdir(previous_cwd)
+
+            self.assertEqual(output.name, "keyboard_raw_20260506_010203.jsonl")
+
+    def test_raw_capture_explicit_output_path_is_not_renamed(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "Keyboard")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "custom.jsonl"
+            with (
+                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                result = asyncio.run(
+                    collector.capture_device(
+                        devices="keyboard",
+                        duration_sec=0,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                        live_mode="raw",
+                    )
+                )
+
+        self.assertEqual(result, output)
 
     def test_capture_hands_default_output_to_sudo_user(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Keyboard")
@@ -340,7 +561,7 @@ class DeviceCaptureTest(unittest.TestCase):
                     os.chdir(tmpdir)
                     output = asyncio.run(
                         collector.capture_device(
-                            selector="keyboard",
+                            devices="keyboard",
                             duration_sec=0,
                             output_path=None,
                             grab=False,
@@ -371,7 +592,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="AA:BB:CC:DD:EE:FF",
+                        devices="AA:BB:CC:DD:EE:FF",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -401,7 +622,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="keyboard",
+                        devices="keyboard",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -442,7 +663,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="keyboard",
+                        devices="keyboard",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -469,7 +690,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="keyboard",
+                        devices="keyboard",
                         duration_sec=1,
                         output_path=output,
                         grab=True,
@@ -501,7 +722,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="keyboard",
+                        devices="keyboard",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -527,7 +748,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -562,7 +783,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -607,7 +828,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -645,7 +866,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -699,7 +920,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=1,
                         output_path=output,
                         grab=False,
@@ -725,7 +946,7 @@ class DeviceCaptureTest(unittest.TestCase):
                 with self.assertRaises(asyncio.CancelledError):
                     asyncio.run(
                         collector.capture_device(
-                            selector="/dev/input/event1",
+                            devices="/dev/input/event1",
                             duration_sec=30,
                             output_path=output,
                             grab=False,
@@ -752,7 +973,7 @@ class DeviceCaptureTest(unittest.TestCase):
             ):
                 asyncio.run(
                     collector.capture_device(
-                        selector="/dev/input/event1",
+                        devices="/dev/input/event1",
                         duration_sec=0,
                         output_path=output,
                         grab=False,
@@ -764,6 +985,135 @@ class DeviceCaptureTest(unittest.TestCase):
 
         self.assertIsNotNone(device.pending_future)
         self.assertFalse(device.pending_future.cancelled())
+
+    def test_validate_capture_accepts_summarized_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            _write_jsonl(path, _minimal_capture_records())
+
+            report = validate_capture(path, generated_output=True)
+
+        self.assertTrue(report.valid)
+        self.assertEqual(report.live_mode, "summarized")
+        self.assertTrue(report.captured["evdev_key_snapshot"])
+        self.assertFalse(report.errors)
+
+    def test_validate_capture_accepts_raw_capture_with_raw_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_raw_20260506_010203.jsonl"
+            _write_jsonl(path, _minimal_capture_records(live_mode="raw"))
+
+            report = validate_capture(path, generated_output=True)
+
+        self.assertTrue(report.valid)
+        self.assertEqual(report.live_mode, "raw")
+        self.assertTrue(report.captured["evdev_event_raw"])
+        self.assertNotIn("raw capture filename is missing _raw suffix", report.warnings)
+
+    def test_validate_capture_warns_for_generated_raw_capture_without_raw_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            _write_jsonl(path, _minimal_capture_records(live_mode="raw"))
+
+            report = validate_capture(path, generated_output=True)
+
+        self.assertTrue(report.valid)
+        self.assertIn("raw capture filename is missing _raw suffix", report.warnings)
+
+    def test_validate_capture_warns_for_generated_summarized_capture_with_raw_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_raw_20260506_010203.jsonl"
+            _write_jsonl(path, _minimal_capture_records())
+
+            report = validate_capture(path, generated_output=True)
+
+        self.assertTrue(report.valid)
+        self.assertIn("summarized capture filename contains _raw suffix", report.warnings)
+
+    def test_validate_capture_skips_filename_warnings_for_explicit_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "custom.jsonl"
+            _write_jsonl(path, _minimal_capture_records(live_mode="raw"))
+
+            report = validate_capture(path)
+
+        self.assertTrue(report.valid)
+        self.assertNotIn("raw capture filename is missing _raw suffix", report.warnings)
+        self.assertNotIn("filename does not match generated naming scheme", report.warnings)
+
+    def test_validate_capture_does_not_warn_for_keyboard_only_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            records = [
+                record for record in _minimal_capture_records() if record["record_type"] != "evdev_axis_snapshot"
+            ]
+            _write_jsonl(path, records)
+
+            report = validate_capture(path)
+
+        self.assertTrue(report.valid)
+        self.assertNotIn("no relative or absolute axis evidence captured", report.warnings)
+
+    def test_validate_capture_does_not_warn_for_axis_only_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "pointer_20260506_010203.jsonl"
+            records = [record for record in _minimal_capture_records() if record["record_type"] != "evdev_key_snapshot"]
+            _write_jsonl(path, records)
+
+            report = validate_capture(path)
+
+        self.assertTrue(report.valid)
+        self.assertNotIn("no key/button evidence captured", report.warnings)
+
+    def test_validate_capture_reports_malformed_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            path.write_text("{not json}\n", encoding="utf-8")
+
+            report = validate_capture(path)
+
+        self.assertFalse(report.valid)
+        self.assertEqual(report.parse_error_count, 1)
+
+    def test_validate_capture_reports_missing_start_and_end(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            _write_jsonl(path, [{"record_type": "input_device", "path": "/dev/input/event1"}])
+
+            report = validate_capture(path)
+
+        self.assertFalse(report.valid)
+        self.assertIn("first record is not capture_start", report.errors)
+        self.assertIn("missing capture_end record", report.errors)
+
+    def test_validate_capture_warns_for_unredacted_mac_and_capture_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            records = _minimal_capture_records(warning="no matching hidraw node discovered")
+            records[1]["uniq"] = "AA:BB:CC:DD:EE:FF"
+            _write_jsonl(path, records)
+
+            report = validate_capture(path)
+
+        self.assertTrue(report.valid)
+        self.assertIn("no matching hidraw node discovered", report.warnings)
+        self.assertIn("1 lines still contain diagnostics-redactable values", report.warnings)
+
+    def test_validate_capture_warns_when_no_live_evidence_was_captured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            records = _minimal_capture_records()
+            records = [
+                record
+                for record in records
+                if record["record_type"] not in {"evdev_key_snapshot", "evdev_axis_snapshot", "evdev_sync_summary"}
+            ]
+            _write_jsonl(path, records)
+
+            report = validate_capture(path)
+
+        self.assertTrue(report.valid)
+        self.assertIn("no live input evidence captured", report.warnings)
 
 
 if __name__ == "__main__":

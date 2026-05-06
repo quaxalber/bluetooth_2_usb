@@ -130,12 +130,7 @@ class _FakeTaskGroup:
 
 
 def _relay_supervisor(**overrides):
-    args = {
-        "hid_gadgets": _FakeHidGadgets(),
-        "relay_gate": RelayGate(),
-        "task_group": _FakeTaskGroup(),
-        "device_identifiers": [],
-    }
+    args = {"hid_gadgets": _FakeHidGadgets(), "relay_gate": RelayGate(), "task_group": _FakeTaskGroup(), "devices": []}
     args.update(overrides)
     return RelaySupervisor(**args)
 
@@ -726,7 +721,7 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device):
                 with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
                     async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, device_identifiers=["target"])
+                        supervisor = _relay_supervisor(task_group=task_group, devices=["target"])
                         run_task = task_group.create_task(supervisor.run(events))
                         events.put_nowait(DeviceAdded("/dev/input/event7"))
                         await asyncio.wait_for(relay_started.wait(), timeout=1)

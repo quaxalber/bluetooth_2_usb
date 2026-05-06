@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    device_ids: tuple[str, ...]
+    devices: tuple[str, ...]
     auto_discover: bool
     grab_devices: bool
     interrupt_shortcut: tuple[str, ...]
@@ -24,7 +24,7 @@ class RuntimeConfig:
 
 def runtime_config_from_args(args: Arguments, *, udc_path: Path | None) -> RuntimeConfig:
     return RuntimeConfig(
-        device_ids=tuple(args.device_ids or ()),
+        devices=tuple(args.devices or ()),
         auto_discover=args.auto_discover,
         grab_devices=args.grab_devices,
         interrupt_shortcut=tuple(args.interrupt_shortcut or ()),

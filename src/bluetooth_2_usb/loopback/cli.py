@@ -3,14 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .constants import (
-    DEFAULT_CONSUMER_NAME,
-    DEFAULT_DEVICE_SUBSTRING,
-    DEFAULT_KEYBOARD_NAME,
-    DEFAULT_MOUSE_NAME,
-    EXIT_INTERRUPTED,
-    EXIT_USAGE,
-)
+from .constants import DEFAULT_CONSUMER_NAME, DEFAULT_KEYBOARD_NAME, DEFAULT_MOUSE_NAME, EXIT_INTERRUPTED, EXIT_USAGE
 from .result import LoopbackResult
 from .scenarios import SCENARIO_NAMES
 from .session import LOOPBACK_LOCK_PATH, LoopbackBusyError, LoopbackInterrupted, loopback_session
@@ -69,14 +62,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--timeout-sec", type=float, default=None, help="Timeout waiting for relay events. Default: scenario-specific"
     )
     capture.add_argument(
-        "--device-substring",
-        default=DEFAULT_DEVICE_SUBSTRING,
-        help=f"Substring used to detect gadget HID devices. Default: {DEFAULT_DEVICE_SUBSTRING}",
+        "--devices",
+        required=True,
+        help=(
+            "Comma-separated host-side gadget device filters. Each filter may match path, uniq, phys, "
+            "Bluetooth MAC, or name fragment."
+        ),
     )
-    capture.add_argument("--device-serial", default=None, help="Host-visible USB serial used to select one gadget.")
-    capture.add_argument("--keyboard-node", default=None, help="Explicit keyboard HID device path override.")
-    capture.add_argument("--mouse-node", default=None, help="Explicit mouse HID device path override.")
-    capture.add_argument("--consumer-node", default=None, help="Explicit consumer-control HID device path override.")
     capture.add_argument("--output", choices=["text", "json"], default="text", help="Output format. Default: text")
 
     return parser
@@ -157,15 +149,7 @@ def run(argv: list[str] | None = None) -> int:
             else:
                 from .capture import run_capture
 
-                result = run_capture(
-                    scenario_name=args.scenario,
-                    timeout_sec=args.timeout_sec,
-                    device_substring=args.device_substring,
-                    device_serial=args.device_serial,
-                    keyboard_node=args.keyboard_node,
-                    mouse_node=args.mouse_node,
-                    consumer_node=args.consumer_node,
-                )
+                result = run_capture(scenario_name=args.scenario, timeout_sec=args.timeout_sec, devices=args.devices)
     except LoopbackBusyError as exc:
         result = LoopbackResult(
             command=args.command,

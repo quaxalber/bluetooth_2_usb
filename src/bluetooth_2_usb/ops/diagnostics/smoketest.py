@@ -262,7 +262,7 @@ class SmokeTest:
             ok("Root overlay is inactive")
 
     def _check_initramfs(self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str) -> None:
-        should_require = overlay == "enabled" or root_overlay_active == "yes" or readonly == "persistent"
+        should_require = overlay == "enabled" or root_overlay_active == "yes" or readonly == "enabled"
         if not expected_path:
             if should_require:
                 self.warn_fail("Boot initramfs target could not be determined")
@@ -282,14 +282,14 @@ class SmokeTest:
         if bluetooth_persistent:
             ok(
                 "Bluetooth persistent mount is mounted"
-                if readonly == "persistent"
+                if readonly == "enabled"
                 else "Bluetooth persistent mount is active"
             )
-        elif overlay == "enabled" or readonly == "persistent":
+        elif overlay == "enabled" or readonly == "enabled":
             self.warn_fail("Bluetooth persistent mount is not mounted")
         else:
             ok("Bluetooth persistent mount is not configured")
-        if readonly == "persistent":
+        if readonly == "enabled":
             ok("Read-only mode is enabled")
         elif readonly == "unknown":
             (
