@@ -26,6 +26,13 @@ class DeviceFilterTest(unittest.TestCase):
         self.assertIs(device_filter.type, DeviceFilterType.MAC)
         self.assertTrue(device_filter.matches(device))
 
+    def test_mac_filter_matches_device_phys_with_input_suffix(self) -> None:
+        device_filter = DeviceFilter("aa:bb:cc:dd:ee:ff")
+        device = SimpleNamespace(path="/dev/input/event7", phys="AA-BB-CC-DD-EE-FF/input0", uniq="", name="keyboard")
+
+        self.assertIs(device_filter.type, DeviceFilterType.MAC)
+        self.assertTrue(device_filter.matches(device))
+
     def test_text_filter_matches_by_uniq(self) -> None:
         device_filter = DeviceFilter("b2u28bc43209b9e4a56")
         device = SimpleNamespace(

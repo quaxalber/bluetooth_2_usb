@@ -220,12 +220,16 @@ def migrate_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> bool:
 
     original_text = env_file.read_text(encoding="utf-8")
     original_lines = original_text.splitlines()
-    has_devices = any(_line_key(line) == "B2U_DEVICES" for line in original_lines)
+    has_legacy_devices = any(_line_key(line) == "B2U_DEVICE_IDS" for line in original_lines)
+    has_devices = any(_line_key(line) == "B2U_DEVICES" and not _line_value_is_blank(line) for line in original_lines)
     updated_lines: list[str] = []
     changed = False
 
     for line in original_lines:
         key = _line_key(line)
+        if key == "B2U_DEVICES" and has_legacy_devices and not has_devices:
+            changed = True
+            continue
         if key != "B2U_DEVICE_IDS":
             updated_lines.append(line)
             continue
@@ -250,6 +254,14 @@ def _line_key(raw_line: str) -> str | None:
         return None
     key, _raw_value = raw_line.split("=", 1)
     return key.strip()
+
+
+def _line_value_is_blank(raw_line: str) -> bool:
+    _key, raw_value = raw_line.split("=", 1)
+    try:
+        return _parse_value(raw_value) == ""
+    except ServiceSettingsError:
+        return False
 
 
 def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False) -> list[str]:

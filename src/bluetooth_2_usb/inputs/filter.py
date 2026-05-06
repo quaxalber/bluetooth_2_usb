@@ -66,7 +66,7 @@ class DeviceFilter:
             return self._value == path
         if self.type is DeviceFilterType.MAC:
             device_uniq = uniq.lower().replace("-", ":")
-            device_phys = phys.lower().replace("-", ":")
+            device_phys = phys.lower().replace("-", ":").split("/", 1)[0]
             return self._normalized_value in {device_uniq, device_phys}
         return (
             self._value == path or self._value == uniq or self._value == phys or self._normalized_value in name.lower()

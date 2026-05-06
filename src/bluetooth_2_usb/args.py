@@ -82,7 +82,8 @@ class CustomArgumentParser(argparse.ArgumentParser):
             action="store_true",
             default=False,
             help=(
-                "Enable auto-discovery mode. All readable input devices will be relayed automatically.\n"
+                "Enable auto-discovery mode. All readable input devices will be relayed automatically "
+                + "except known excluded platform devices.\n"
                 + "Default: disabled"
             ),
         )
@@ -104,7 +105,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             action="store_true",
             default=False,
             help=(
-                "Grab the input devices, i.e., suppress any events on your relay device.\n"
+                "Grab the input devices, suppressing local events on the Pi while the devices are relayed.\n"
                 + "Devices are not grabbed by default."
             ),
         )
@@ -131,21 +132,21 @@ class CustomArgumentParser(argparse.ArgumentParser):
             "-f",
             action="store_true",
             default=False,
-            help="Add a handler that logs to file, additionally to stdout.",
+            help="Add file logging in addition to stdout logging.",
         )
         self.add_argument(
             "--log_path",
             "-p",
             type=str,
             default="/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
-            help="The path of the log file\nDefault: /var/log/bluetooth_2_usb/bluetooth_2_usb.log",
+            help="Path of the log file used when file logging is enabled.\nDefault: /var/log/bluetooth_2_usb/bluetooth_2_usb.log",
         )
         self.add_argument(
             "--debug",
             "-d",
             action="store_true",
             default=False,
-            help="Enable debug mode (Increases log verbosity)\nDefault: disabled",
+            help="Enable debug mode and increase log verbosity.\nDefault: disabled",
         )
         self.add_argument(
             "--usb_serial",
