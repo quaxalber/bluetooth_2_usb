@@ -104,7 +104,7 @@ def debug_report(duration: int | None) -> int:
             "bash",
             "-lc",
             "for f in /sys/kernel/config/usb_gadget/*/strings/0x409/{manufacturer,product,serialnumber}; "
-            + "do [ -f \"$f\" ] && printf '%s=' \"$f\" && cat \"$f\"; done; "
+            + 'do [ -f "$f" ] && printf \'%s=\' "$f" && cat "$f"; done; '
             + "test -f /var/lib/bluetooth_2_usb/usb_identity.json && "
             + "printf 'state=' && cat /var/lib/bluetooth_2_usb/usb_identity.json || true",
         ],

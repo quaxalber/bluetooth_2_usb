@@ -61,9 +61,7 @@ def usb_udev_hex_u16(value: int) -> str:
 def validate_usb_serial(value: str) -> str:
     serial = value.strip()
     if not USB_SERIAL_PATTERN.fullmatch(serial):
-        raise ValueError(
-            "USB serial must be 1-64 characters and contain only ASCII letters, digits, '.', '_', or '-'."
-        )
+        raise ValueError("USB serial must be 1-64 characters and contain only ASCII letters, digits, '.', '_', or '-'.")
     return serial
 
 
