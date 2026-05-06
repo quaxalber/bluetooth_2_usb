@@ -146,32 +146,46 @@ the managed service. The service reads structured runtime settings from:
 /etc/default/bluetooth_2_usb
 ```
 
+Default managed-service values:
+
+| Environment setting | Default value |
+| --- | --- |
+| `B2U_AUTO_DISCOVER` | `true` |
+| `B2U_DEVICES` | empty |
+| `B2U_GRAB_DEVICES` | `true` |
+| `B2U_INTERRUPT_SHORTCUT` | `CTRL+SHIFT+F12` |
+| `B2U_LOG_TO_FILE` | `false` |
+| `B2U_LOG_PATH` | `/var/log/bluetooth_2_usb/bluetooth_2_usb.log` |
+| `B2U_DEBUG` | `false` |
+| `B2U_USB_SERIAL` | empty |
+| `B2U_USB_PRODUCT_SUFFIX` | empty |
+| `B2U_UDC_PATH` | empty |
+
 After editing the runtime settings:
 
 ```bash
 sudo systemctl restart bluetooth_2_usb.service
 ```
 
-The table below is the reference for managed-service defaults and the matching
-runtime CLI arguments.
+Runtime CLI and environment reference:
 
-| CLI argument | Environment setting | Managed default | Explanation |
-| --- | --- | --- | --- |
-| `--auto_discover, -a` | `B2U_AUTO_DISCOVER` | `true` | Enable auto-discovery mode. All readable input devices are relayed automatically except known excluded platform devices. |
-| `--devices DEVICES` | `B2U_DEVICES` | empty | Comma-separated list of devices to relay. Each value may match an input device path, `uniq`, `phys`, Bluetooth MAC address, or case-insensitive substring of the device name. Example: `--devices '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'`. |
-| `--grab_devices, -g` | `B2U_GRAB_DEVICES` | `true` | Grab the input devices, suppressing local events on the Pi while the devices are relayed. |
-| `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | `B2U_INTERRUPT_SHORTCUT` | `CTRL+SHIFT+F12` | A plus-separated list of key names to press simultaneously in order to toggle relaying. |
-| `--log_to_file, -f` | `B2U_LOG_TO_FILE` | `false` | Add file logging in addition to stdout logging. |
-| `--log_path LOG_PATH, -p LOG_PATH` | `B2U_LOG_PATH` | `/var/log/bluetooth_2_usb/bluetooth_2_usb.log` | Path of the log file used when file logging is enabled. |
-| `--debug, -d` | `B2U_DEBUG` | `false` | Enable debug mode and increase log verbosity. |
-| `--usb_serial USB_SERIAL` | `B2U_USB_SERIAL` | empty | Override the host-visible USB gadget serial. If unset, the managed service uses a stable per-install generated serial. |
-| `--usb_product_suffix USB_PRODUCT_SUFFIX` | `B2U_USB_PRODUCT_SUFFIX` | empty | Append a short suffix to the host-visible USB product name for diagnostics. |
-| n/a | `B2U_UDC_PATH` | empty | Optional advanced override for systems with multiple gadget-capable controllers. |
-| `--list_devices, -l` | n/a | n/a | List all available input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
-| `--validate-env` | n/a | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
-| `--output {text,json}` | n/a | `text` | Output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
-| `--version, -v` | n/a | n/a | Display the version number of this software and exit. |
-| `--help, -h` | n/a | n/a | Show built-in CLI help and exit. |
+| CLI argument | Environment setting | Explanation |
+| --- | --- | --- |
+| `--auto_discover, -a` | `B2U_AUTO_DISCOVER` | Enable auto-discovery mode. All readable input devices are relayed automatically except known excluded platform devices. |
+| `--devices DEVICES` | `B2U_DEVICES` | Comma-separated list of devices to relay. Each value may match an input device path, `uniq`, `phys`, Bluetooth MAC address, or case-insensitive substring of the device name. Example: `--devices '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'`. |
+| `--grab_devices, -g` | `B2U_GRAB_DEVICES` | Grab the input devices, suppressing local events on the Pi while the devices are relayed. |
+| `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | `B2U_INTERRUPT_SHORTCUT` | A plus-separated list of key names to press simultaneously in order to toggle relaying. |
+| `--log_to_file, -f` | `B2U_LOG_TO_FILE` | Add file logging in addition to stdout logging. |
+| `--log_path LOG_PATH, -p LOG_PATH` | `B2U_LOG_PATH` | Path of the log file used when file logging is enabled. |
+| `--debug, -d` | `B2U_DEBUG` | Enable debug mode and increase log verbosity. |
+| `--usb_serial USB_SERIAL` | `B2U_USB_SERIAL` | Override the host-visible USB gadget serial. If unset, the managed service uses a stable per-install generated serial. |
+| `--usb_product_suffix USB_PRODUCT_SUFFIX` | `B2U_USB_PRODUCT_SUFFIX` | Append a short suffix to the host-visible USB product name for diagnostics. |
+| n/a | `B2U_UDC_PATH` | Optional advanced override for systems with multiple gadget-capable controllers. |
+| `--list_devices, -l` | n/a | List all available input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
+| `--validate-env` | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
+| `--output {text,json}` | n/a | Output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
+| `--version, -v` | n/a | Display the version number of this software and exit. |
+| `--help, -h` | n/a | Show built-in CLI help and exit. |
 
 > [!NOTE]
 > Despite the project name, broad auto-discovery can also relay other suitable
