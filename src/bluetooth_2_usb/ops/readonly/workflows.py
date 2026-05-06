@@ -14,18 +14,17 @@ from ..boot_config import (
     expected_boot_initramfs_file,
     versioned_initrd_candidates,
 )
-from ..commands import fail, info, ok, output, require_commands, run, warn
+from ..commands import backup_file, fail, info, ok, output, require_commands, run, warn
 from .config import ReadonlyConfig, load_readonly_config, write_readonly_config
 from .service import _systemctl_active, restart_b2u_if_installed, stop_b2u_if_installed
 from .status import (
+    READONLY_PACKAGES,
     bluetooth_state_persistent,
     machine_id_valid,
     overlay_configured_status,
     overlay_status,
     readonly_stack_package_report,
-    readonly_stack_packages_bootstrap_safe,
     readonly_stack_packages_healthy,
-    readonly_stack_packages_missing,
 )
 from .units import (
     install_bluetooth_persist_dropin,
@@ -34,10 +33,25 @@ from .units import (
     write_persist_mount_unit,
 )
 
+INITRAMFS_CONF = Path("/etc/initramfs-tools/initramfs.conf")
+
 
 def setup_persistent_bluetooth_state(device: str) -> None:
     require_commands(
-        ["blkid", "cp", "findmnt", "mkdir", "mount", "mountpoint", "systemctl", "systemd-escape", "umount"]
+        [
+            "apt-get",
+            "blkid",
+            "cp",
+            "dpkg",
+            "dpkg-query",
+            "findmnt",
+            "mkdir",
+            "mount",
+            "mountpoint",
+            "systemctl",
+            "systemd-escape",
+            "umount",
+        ]
     )
     if not machine_id_valid():
         fail("/etc/machine-id is missing or invalid. Read-only mode requires a stable machine-id.")
@@ -46,6 +60,7 @@ def setup_persistent_bluetooth_state(device: str) -> None:
         fail(f"No filesystem detected on {device}. Create an ext4 filesystem first, then rerun this command.")
     if detected_type != "ext4":
         fail(f"Expected ext4 on {device}, got {detected_type}")
+    _ensure_readonly_stack_installed()
 
     current = load_readonly_config()
     persist_mount = current.persist_mount
@@ -95,6 +110,80 @@ def setup_persistent_bluetooth_state(device: str) -> None:
             run(["systemctl", "stop", "bluetooth.service"], check=False)
         restart_b2u_if_installed(b2u_was_active, "after enabling the persistent Bluetooth state bind mount")
     ok(f"Persistent Bluetooth state storage is active at {persist_bluetooth_dir}")
+
+
+def _ensure_readonly_stack_installed() -> None:
+    info("Installing read-only mode prerequisites")
+    run(["apt-get", "update", "-y"])
+
+    initramfs_install = run(
+        ["apt-get", "install", "-y", "--no-install-recommends", "initramfs-tools"], check=False, capture=True
+    )
+    if initramfs_install.returncode != 0:
+        warn("Initial initramfs-tools install did not complete cleanly; attempting package configuration repair.")
+        _print_completed_output(initramfs_install)
+    _ensure_initramfs_modules_most()
+    if initramfs_install.returncode != 0:
+        _configure_pending_packages()
+
+    install = run(
+        ["apt-get", "install", "-y", "--no-install-recommends", *READONLY_PACKAGES], check=False, capture=True
+    )
+    if install.returncode != 0:
+        warn(
+            "Read-only prerequisite package install did not complete cleanly; attempting package configuration repair."
+        )
+        _print_completed_output(install)
+    _configure_pending_packages()
+
+    if not readonly_stack_packages_healthy():
+        warn("OverlayFS package state is incomplete:")
+        print(readonly_stack_package_report())
+        fail(
+            "Read-only prerequisite package setup did not complete cleanly. Rerun readonly setup after fixing apt/dpkg."
+        )
+
+
+def _configure_pending_packages() -> None:
+    completed = run(["dpkg", "--configure", "-a"], check=False, capture=True)
+    if completed.returncode != 0:
+        _print_completed_output(completed)
+        fail("dpkg could not finish configuring read-only prerequisite packages.")
+
+
+def _print_completed_output(completed) -> None:
+    output_text = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part and part.strip())
+    if output_text:
+        print(output_text)
+
+
+def _ensure_initramfs_modules_most(path: Path = INITRAMFS_CONF) -> None:
+    if path.is_file():
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    else:
+        lines = []
+
+    changed = False
+    found = False
+    updated_lines = []
+    for line in lines:
+        if re.fullmatch(r"\s*MODULES\s*=.*", line) and not line.lstrip().startswith("#"):
+            found = True
+            if line != "MODULES=most":
+                changed = True
+            updated_lines.append("MODULES=most")
+        else:
+            updated_lines.append(line)
+
+    if not found:
+        updated_lines.append("MODULES=most")
+        changed = True
+
+    if not changed:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    backup_file(path)
+    path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
 
 
 def _seed_bluetooth_state(persist_bluetooth_dir: Path) -> None:
@@ -152,11 +241,12 @@ def enable_readonly() -> None:
             "Persistent Bluetooth state storage is not active. "
             + "Run bluetooth_2_usb readonly setup --device /dev/... first."
         )
-    if not readonly_stack_packages_bootstrap_safe():
+    if not readonly_stack_packages_healthy():
         warn("OverlayFS package state is incomplete:")
         print(readonly_stack_package_report())
         fail(
-            "OverlayFS package setup did not complete cleanly. Repair the package state before enabling read-only mode."
+            "Read-only prerequisite packages are not fully installed. "
+            + "Rerun bluetooth_2_usb readonly setup --device /dev/... before enabling read-only mode."
         )
 
     kernel_release = current_kernel_release()
@@ -172,18 +262,14 @@ def enable_readonly() -> None:
     overlay_before = overlay_status()
     try:
         if overlay_before != "enabled":
-            if readonly_stack_packages_missing():
-                info(
-                    "OverlayFS prerequisites are not fully installed yet; raspi-config will install or finish them now."
-                )
             run(["raspi-config", "nonint", "enable_overlayfs"])
 
         if not readonly_stack_packages_healthy():
             warn("OverlayFS package state is incomplete:")
             print(readonly_stack_package_report())
             fail(
-                "OverlayFS package setup did not complete cleanly. "
-                + "Repair the package state before enabling read-only mode."
+                "Read-only prerequisite packages are not fully installed. "
+                + "Rerun bluetooth_2_usb readonly setup --device /dev/... before enabling read-only mode."
             )
 
         target = ensure_bootable_initramfs_for_current_kernel()
@@ -208,10 +294,7 @@ def enable_readonly() -> None:
     except Exception:
         warn(
             "OverlayFS was requested but validation did not complete. "
-            + "Run `bluetooth_2_usb readonly status` and repair the reported package or boot state before rebooting. "
-            + "See: https://github.com/quaxalber/bluetooth_2_usb/blob/main/docs/persistent-readonly.md"
-            + "#overlayfs-repair-guidance "
-            + "for repair steps. "
+            + "Run `bluetooth_2_usb readonly status` and inspect the reported package or boot state before rebooting. "
             + "To explicitly disable OverlayFS, run: sudo bluetooth_2_usb readonly disable"
         )
         raise

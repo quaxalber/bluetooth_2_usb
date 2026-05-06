@@ -59,6 +59,10 @@ sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 
 ## Enable read-only mode
 
+The setup step installs the OverlayFS and initramfs prerequisites, configures
+initramfs-tools for read-only operation, and prepares persistent Bluetooth
+state storage.
+
 Run:
 
 ```bash
@@ -85,22 +89,6 @@ else:
     print(f"boot initramfs: {path}")
 PY
 ```
-
-> [!TIP]
-> If `readonly enable` fails while `overlayroot` is being installed and the log
-> shows `mkinitramfs: failed to determine device for /`, repair the package
-> state before rebooting:
-
-### OverlayFS Repair Guidance
-
-```bash
-sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
-sudo dpkg --configure -a
-sudo bluetooth_2_usb readonly enable
-```
-
-That failure mode has been observed on current Raspberry Pi OS releases when
-`initramfs-tools` cannot infer the root device during `overlayroot` setup.
 
 After any failed `readonly enable`, inspect the current state before rebooting:
 
