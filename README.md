@@ -145,7 +145,51 @@ For the validated custom-kernel workflow, use
 
 Runtime behavior can be configured temporarily with CLI arguments when
 launching manually, or persistently through `/etc/default/bluetooth_2_usb` for
-the managed service. After editing the environment file, restart the service:
+the managed service. The service reads structured runtime settings from:
+
+```bash
+/etc/default/bluetooth_2_usb
+```
+
+Default content:
+
+```bash
+B2U_AUTO_DISCOVER=true
+B2U_DEVICE_IDS=
+B2U_GRAB_DEVICES=true
+B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
+B2U_LOG_TO_FILE=false
+B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
+B2U_DEBUG=false
+B2U_USB_SERIAL=
+B2U_USB_PRODUCT_SUFFIX=
+B2U_UDC_PATH=
+```
+
+Meaning:
+
+- `B2U_AUTO_DISCOVER=true` is the easiest default. It relays all suitable
+  readable input devices except known excluded platform devices.
+- `B2U_DEVICE_IDS` pins the runtime to a specific set of event paths,
+  Bluetooth MACs, and/or case-insensitive name fragments, for example
+  `/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys`.
+- `B2U_GRAB_DEVICES=true` grabs the selected input devices so the Pi stops
+  consuming their local events. That is usually what you want for an
+  appliance-like setup, but it also means the Pi will not keep using those
+  inputs locally while they are grabbed.
+- `B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12` defines a key chord that toggles
+  relaying on and off.
+- `B2U_LOG_TO_FILE=false` disables file logging by default.
+- `B2U_LOG_PATH=...` controls the file path used when file logging is enabled.
+- `B2U_DEBUG=false` keeps normal log verbosity.
+- `B2U_USB_SERIAL` overrides the host-visible USB gadget serial. Leave empty to
+  use a stable per-install generated serial.
+- `B2U_USB_PRODUCT_SUFFIX` appends a short suffix to the host-visible USB
+  product name so multi-Pi diagnostics can distinguish gadgets.
+- `B2U_UDC_PATH` is optional and only needed when you must pin UDC detection on
+  a system with multiple gadget-capable controllers.
+
+After editing the runtime settings:
 
 ```bash
 sudo systemctl restart bluetooth_2_usb.service
@@ -160,6 +204,8 @@ sudo systemctl restart bluetooth_2_usb.service
 | `--log_to_file, -f` | `B2U_LOG_TO_FILE` | Add file logging in addition to stdout logging. |
 | `--log_path LOG_PATH, -p LOG_PATH` | `B2U_LOG_PATH` | Override the path used with `--log_to_file`. |
 | `--debug, -d` | `B2U_DEBUG` | Increase log verbosity for manual troubleshooting. |
+| `--usb_serial USB_SERIAL` | `B2U_USB_SERIAL` | Override the host-visible USB gadget serial. Leave unset to use a stable per-install generated serial. |
+| `--usb_product_suffix USB_PRODUCT_SUFFIX` | `B2U_USB_PRODUCT_SUFFIX` | Append a short suffix to the host-visible USB product name for multi-Pi diagnostics. |
 | n/a | `B2U_UDC_PATH` | Optional advanced override for systems with multiple gadget-capable controllers. |
 | `--list_devices, -l` | n/a | List readable input devices and exit. Use this before setting `B2U_DEVICE_IDS` or `--device_ids` if you want to confirm the paths and names the runtime actually sees. |
 | `--validate-env` | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |

@@ -592,6 +592,7 @@ def _filter_explicit_override(
 
 def discover_gadget_node_candidates(
     device_substring: str = DEFAULT_DEVICE_SUBSTRING,
+    device_serial: str | None = None,
     keyboard_node: str | None = None,
     mouse_node: str | None = None,
     consumer_node: str | None = None,
@@ -612,6 +613,8 @@ def discover_gadget_node_candidates(
             info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO
         ):
             continue
+        if device_serial is not None and info.serial != device_serial:
+            continue
         if role == "keyboard":
             keyboard_nodes.append(info)
         elif role == "mouse":
@@ -627,6 +630,10 @@ def discover_gadget_node_candidates(
         consumer_nodes = _filter_explicit_override(infos, consumer_node, "Consumer-control", "consumer")
 
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
+        if device_serial is not None:
+            raise MissingNodeError(
+                f"No HID devices matched {device_substring!r} with serial {device_serial!r} through hidapi enumeration"
+            )
         raise MissingNodeError(f"No HID devices matched {device_substring!r} through hidapi enumeration")
 
     return GadgetNodeCandidates(
@@ -638,6 +645,7 @@ def discover_gadget_node_candidates(
 
 def discover_gadget_nodes(
     device_substring: str = DEFAULT_DEVICE_SUBSTRING,
+    device_serial: str | None = None,
     keyboard_node: str | None = None,
     mouse_node: str | None = None,
     consumer_node: str | None = None,
@@ -645,6 +653,7 @@ def discover_gadget_nodes(
 ) -> GadgetNodes:
     candidates = discover_gadget_node_candidates(
         device_substring=device_substring,
+        device_serial=device_serial,
         keyboard_node=keyboard_node,
         mouse_node=mouse_node,
         consumer_node=consumer_node,
@@ -846,6 +855,7 @@ def run_capture(
     scenario_name: str,
     timeout_sec: float | None = None,
     device_substring: str = DEFAULT_DEVICE_SUBSTRING,
+    device_serial: str | None = None,
     keyboard_node: str | None = None,
     mouse_node: str | None = None,
     consumer_node: str | None = None,
@@ -861,6 +871,7 @@ def run_capture(
         hid_module = _load_hidapi()
         candidate_nodes = discover_gadget_node_candidates(
             device_substring=device_substring,
+            device_serial=device_serial,
             keyboard_node=keyboard_node,
             mouse_node=mouse_node,
             consumer_node=consumer_node,

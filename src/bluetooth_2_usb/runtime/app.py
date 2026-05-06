@@ -4,6 +4,7 @@ import asyncio
 import signal
 from dataclasses import dataclass
 
+from ..gadgets.identity import load_or_create_usb_identity
 from ..gadgets.manager import HidGadgets
 from ..logging import get_logger
 from ..relay.gate import RelayGate
@@ -43,7 +44,11 @@ class Runtime:
 
     async def run(self) -> None:
         relay_gate = RelayGate()
-        hid_gadgets = HidGadgets()
+        identity = load_or_create_usb_identity(
+            serial_override=self._config.usb_serial, product_suffix=self._config.usb_product_suffix
+        )
+        logger.info("Using USB gadget identity: product=%r serial=%r", identity.product_name, identity.serial_number)
+        hid_gadgets = HidGadgets(identity)
         await hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(relay_gate)

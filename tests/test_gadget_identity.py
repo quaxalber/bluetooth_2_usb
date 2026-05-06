@@ -10,8 +10,12 @@ from bluetooth_2_usb.gadgets.identity import (
     USB_MANUFACTURER,
     USB_PRODUCT_NAME,
     USB_SERIAL_NUMBER,
+    load_or_create_usb_identity,
+    product_name_with_suffix,
     usb_configfs_hex_u16,
     usb_udev_hex_u16,
+    validate_usb_product_suffix,
+    validate_usb_serial,
 )
 from bluetooth_2_usb.ops.hid_udev_rule import install_hid_udev_rule
 
@@ -27,6 +31,39 @@ class GadgetIdentityTest(unittest.TestCase):
         self.assertEqual(USB_MANUFACTURER, "quaxalber")
         self.assertEqual(USB_PRODUCT_NAME, "USB Combo Device")
         self.assertEqual(USB_SERIAL_NUMBER, "213374badcafe")
+
+    def test_load_or_create_usb_identity_persists_generated_serial(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / "usb_identity.json"
+
+            first = load_or_create_usb_identity(product_suffix="pi0w", state_path=state_path)
+            second = load_or_create_usb_identity(product_suffix="pi0w", state_path=state_path)
+
+        self.assertEqual(first.product_name, "USB Combo Device pi0w")
+        self.assertEqual(first.serial_number, second.serial_number)
+        self.assertRegex(first.serial_number, r"^b2u[0-9a-f]{16}$")
+
+    def test_load_or_create_usb_identity_prefers_explicit_serial(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / "usb_identity.json"
+
+            identity = load_or_create_usb_identity(
+                serial_override="b2upi4b", product_suffix="pi4b", state_path=state_path
+            )
+
+        self.assertEqual(identity.product_name, "USB Combo Device pi4b")
+        self.assertEqual(identity.serial_number, "b2upi4b")
+        self.assertFalse(state_path.exists())
+
+    def test_usb_identity_validation_rejects_unsafe_values(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_usb_serial("not ok")
+        with self.assertRaises(ValueError):
+            validate_usb_product_suffix("pi4b\nbad")
+
+    def test_product_name_with_suffix_keeps_default_when_suffix_is_empty(self) -> None:
+        self.assertEqual(product_name_with_suffix(""), USB_PRODUCT_NAME)
+        self.assertEqual(product_name_with_suffix("pi4b"), "USB Combo Device pi4b")
 
     def test_static_udev_rule_uses_canonical_usb_identity(self) -> None:
         rule_text = (Path(__file__).parents[1] / "udev/70-bluetooth_2_usb_hidapi.rules").read_text(encoding="utf-8")

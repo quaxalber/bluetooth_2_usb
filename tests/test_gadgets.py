@@ -16,6 +16,7 @@ from bluetooth_2_usb.gadgets.identity import (
     USB_GADGET_VID_LINUX,
     USB_PRODUCT_NAME,
     USB_SERIAL_NUMBER,
+    UsbIdentity,
     usb_configfs_hex_u16,
 )
 from bluetooth_2_usb.gadgets.layout import (
@@ -225,6 +226,14 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(layout.devices[0].wakeup_on_write)
         self.assertFalse(layout.devices[1].wakeup_on_write)
         self.assertFalse(layout.devices[2].wakeup_on_write)
+
+    async def test_default_layout_accepts_runtime_usb_identity(self) -> None:
+        identity = UsbIdentity(product_name="USB Combo Device pi0w", serial_number="b2upi0w")
+
+        layout = build_default_layout(identity)
+
+        self.assertEqual(layout.product_name, "USB Combo Device pi0w")
+        self.assertEqual(layout.serial_number, "b2upi0w")
 
     async def test_gadget_hid_device_passes_protocol_and_subclass_when_required(self) -> None:
         init_calls = []

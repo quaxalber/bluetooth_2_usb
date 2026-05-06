@@ -132,6 +132,8 @@ venv/bin/bluetooth_2_usb loopback capture --scenario combo
 Default behavior:
 
 - detects the gadget HID device by product name and HID usage
+- accepts `--device-serial` to select one Pi when multiple Bluetooth-2-USB
+  gadgets are attached to the same host
 - waits up to the scenario-specific timeout for the complete sequence (`20`
   seconds by default; `node-discovery` uses `10` seconds and `combo` uses `60`
   seconds)
@@ -139,6 +141,15 @@ Default behavior:
   not assume the local desktop will process the same inputs during that window
 - uses a single loopback lock file; do not run multiple inject/capture sessions
   in parallel against the same host/Pi pair
+
+When multiple Bluetooth-2-USB gadgets are attached, select the target by its
+host-visible USB serial:
+
+```bash
+venv/bin/bluetooth_2_usb loopback capture \
+  --scenario combo \
+  --device-serial '<usb serial>'
+```
 
 If automatic detection is ambiguous, pin the nodes explicitly:
 

@@ -399,6 +399,77 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         with self.assertRaisesRegex(MissingNodeError, "Multiple keyboard HID devices"):
             discover_gadget_nodes(hid_module=hid_module)
 
+    def test_discovery_can_filter_duplicate_gadgets_by_serial(self) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry(
+                    "pi0w-kbd",
+                    device_name=USB_PRODUCT_NAME,
+                    serial="pi0w-serial",
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
+                    interface_number=HID_FUNC_INDEX_KEYBOARD,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "pi0w-mouse",
+                    device_name=USB_PRODUCT_NAME,
+                    serial="pi0w-serial",
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
+                    interface_number=HID_FUNC_INDEX_MOUSE,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "pi0w-consumer",
+                    device_name=USB_PRODUCT_NAME,
+                    serial="pi0w-serial",
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
+                    interface_number=HID_FUNC_INDEX_CONSUMER,
+                    usage_page=0,
+                    usage=0,
+                ),
+                _hid_entry(
+                    "pi4b-kbd",
+                    device_name=USB_PRODUCT_NAME,
+                    serial="pi4b-serial",
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
+                    interface_number=HID_FUNC_INDEX_KEYBOARD,
+                    usage_page=0,
+                    usage=0,
+                ),
+            ]
+        )
+
+        candidates = discover_gadget_node_candidates(device_serial="pi0w-serial", hid_module=hid_module)
+
+        self.assertEqual([info.node for info in candidates.keyboard_nodes], ["pi0w-kbd"])
+        self.assertEqual([info.node for info in candidates.mouse_nodes], ["pi0w-mouse"])
+        self.assertEqual([info.node for info in candidates.consumer_nodes], ["pi0w-consumer"])
+
+    def test_discovery_reports_missing_serial_filter(self) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry(
+                    "pi0w-kbd",
+                    device_name=USB_PRODUCT_NAME,
+                    serial="pi0w-serial",
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
+                    interface_number=HID_FUNC_INDEX_KEYBOARD,
+                    usage_page=0,
+                    usage=0,
+                )
+            ]
+        )
+
+        with self.assertRaisesRegex(MissingNodeError, "serial 'pi4b-serial'"):
+            discover_gadget_node_candidates(device_serial="pi4b-serial", hid_module=hid_module)
+
     def test_explicit_override_bypasses_auto_detection(self) -> None:
         hid_module = _FakeHidModule(
             [
