@@ -124,7 +124,14 @@ class _PendingFutureInputDevice(_FakeInputDevice):
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
-    path.write_text("".join(json_line(record) for record in records), encoding="utf-8")
+    normalized = [dict(record) for record in records]
+    if normalized and normalized[-1].get("record_type") == "capture_end":
+        counts: dict[str, int] = {}
+        for record in normalized[:-1]:
+            record_type = str(record["record_type"])
+            counts[record_type] = counts.get(record_type, 0) + 1
+        normalized[-1] = {**normalized[-1], "counts": counts}
+    path.write_text("".join(json_line(record) for record in normalized), encoding="utf-8")
 
 
 def _minimal_capture_records(*, live_mode: str = "summarized", warning: str | None = None) -> list[dict[str, object]]:
@@ -560,6 +567,34 @@ class DeviceCaptureTest(unittest.TestCase):
                     os.chdir(previous_cwd)
 
             self.assertEqual(output.name, "keyboard_raw_20260506_010203.jsonl")
+
+    def test_capture_default_output_path_failure_closes_selected_devices(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "Keyboard")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_cwd = Path.cwd()
+            (Path(tmpdir) / "device_capture").write_text("not a directory", encoding="utf-8")
+            with (
+                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
+                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+            ):
+                try:
+                    os.chdir(tmpdir)
+                    with self.assertRaises(FileExistsError):
+                        asyncio.run(
+                            collector.capture_device(
+                                devices="keyboard",
+                                duration_sec=0,
+                                output_path=None,
+                                grab=False,
+                                include_hidraw=False,
+                                max_report_bytes=8,
+                                max_sysfs_file_bytes=8,
+                            )
+                        )
+                finally:
+                    os.chdir(previous_cwd)
+
+        self.assertTrue(device.closed)
 
     def test_raw_capture_explicit_output_path_is_not_renamed(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Keyboard")
@@ -1124,6 +1159,20 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertIn("first record is not capture_start", report.errors)
         self.assertIn("missing capture_end record", report.errors)
 
+    def test_validate_capture_reports_missing_record_type_from_end_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
+            records = [
+                record for record in _minimal_capture_records() if record["record_type"] != "evdev_axis_snapshot"
+            ]
+            records[-1]["counts"] = {"evdev_axis_snapshot": 1}
+            path.write_text("".join(json_line(record) for record in records), encoding="utf-8")
+
+            report = validate_capture(path)
+
+        self.assertFalse(report.valid)
+        self.assertIn("capture_end count mismatch for evdev_axis_snapshot: expected 1, saw 0", report.errors)
+
     def test_validate_capture_warns_for_unredacted_mac_and_capture_warning(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "keyboard_20260506_010203.jsonl"
@@ -1146,10 +1195,6 @@ class DeviceCaptureTest(unittest.TestCase):
                 for record in records
                 if record["record_type"] not in {"evdev_key_snapshot", "evdev_axis_snapshot", "evdev_sync_summary"}
             ]
-            records[-1]["counts"] = {
-                record_type: sum(1 for record in records[:-1] if record["record_type"] == record_type)
-                for record_type in {str(record["record_type"]) for record in records[:-1]}
-            }
             _write_jsonl(path, records)
 
             report = validate_capture(path)

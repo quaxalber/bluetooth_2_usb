@@ -111,11 +111,11 @@ def validate_capture(path: Path, *, generated_output: bool = False) -> CaptureVa
         expected_counts = {
             str(key): int(value) for key, value in end["counts"].items() if _int_or_none(value) is not None
         }
-        for record_type, count in record_counts.items():
-            if expected_counts.get(record_type) not in {None, count}:
-                errors.append(
-                    f"capture_end count mismatch for {record_type}: expected {expected_counts.get(record_type)}, saw {count}"
-                )
+        for record_type in sorted(set(expected_counts) | set(record_counts)):
+            expected = expected_counts.get(record_type)
+            actual = record_counts.get(record_type, 0)
+            if expected is not None and expected != actual:
+                errors.append(f"capture_end count mismatch for {record_type}: expected {expected}, saw {actual}")
 
     matched_devices = _matched_devices(start.get("matched_devices"))
     duration_sec = _int_or_none(start.get("duration_sec"))

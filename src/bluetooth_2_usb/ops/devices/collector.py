@@ -97,12 +97,13 @@ async def capture_device(
     interrupted = False
     input_devices = linux.select_input_devices(devices)
     handles = [_CaptureHandle(device=device, hidraw_nodes=[], opened_hidraw=[]) for device in input_devices]
-    output_path = output_path or _default_output_path(devices, input_devices, live_mode)
-    created_parent = output_path.parent if not output_path.parent.exists() else None
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    hostname = socket.gethostname()
+    created_parent: Path | None = None
 
     try:
+        output_path = output_path or _default_output_path(devices, input_devices, live_mode)
+        created_parent = output_path.parent if not output_path.parent.exists() else None
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        hostname = socket.gethostname()
         with output_path.open("w", encoding="utf-8") as output_file:
             writer = JsonlWriter(output_file, hostname=hostname)
             writer_lock = asyncio.Lock()
