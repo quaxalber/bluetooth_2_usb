@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -151,7 +152,7 @@ def _configure_pending_packages() -> None:
         fail("dpkg could not finish configuring read-only prerequisite packages.")
 
 
-def _print_completed_output(completed) -> None:
+def _print_completed_output(completed: subprocess.CompletedProcess[str]) -> None:
     output_text = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part and part.strip())
     if output_text:
         print(output_text)
