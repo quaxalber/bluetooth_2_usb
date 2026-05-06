@@ -73,6 +73,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_DEVICE_SUBSTRING,
         help=f"Substring used to detect gadget HID devices. Default: {DEFAULT_DEVICE_SUBSTRING}",
     )
+    capture.add_argument("--device-serial", default=None, help="Host-visible USB serial used to select one gadget.")
     capture.add_argument("--keyboard-node", default=None, help="Explicit keyboard HID device path override.")
     capture.add_argument("--mouse-node", default=None, help="Explicit mouse HID device path override.")
     capture.add_argument("--consumer-node", default=None, help="Explicit consumer-control HID device path override.")
@@ -160,6 +161,7 @@ def run(argv: list[str] | None = None) -> int:
                     scenario_name=args.scenario,
                     timeout_sec=args.timeout_sec,
                     device_substring=args.device_substring,
+                    device_serial=args.device_serial,
                     keyboard_node=args.keyboard_node,
                     mouse_node=args.mouse_node,
                     consumer_node=args.consumer_node,
