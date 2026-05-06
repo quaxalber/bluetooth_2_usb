@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from bluetooth_2_usb.evdev import ecodes
 from bluetooth_2_usb.inputs.filter import DeviceFilter, DeviceFilterType
-from bluetooth_2_usb.inputs.inventory import auto_discover_exclusion_reason, describe_input_devices, inventory_to_text
+from bluetooth_2_usb.inputs.inventory import auto_relay_exclusion_reason, describe_input_devices, inventory_to_text
 
 
 class DeviceFilterTest(unittest.TestCase):
@@ -90,15 +90,15 @@ class _FakeInputDevice:
 
 
 class InputInventoryTest(unittest.TestCase):
-    def test_auto_discover_excludes_default_noise_prefixes_case_insensitively(self) -> None:
+    def test_auto_relay_excludes_default_noise_prefixes_case_insensitively(self) -> None:
         device = _FakeInputDevice(path="/dev/input/event0", name="GPIO Keys", capabilities={ecodes.EV_KEY: []})
 
-        self.assertEqual(auto_discover_exclusion_reason(device), "name prefix gpio")
+        self.assertEqual(auto_relay_exclusion_reason(device), "name prefix gpio")
 
-    def test_auto_discover_exclusion_reason_uses_general_supported_capabilities_wording(self) -> None:
+    def test_auto_relay_exclusion_reason_uses_general_supported_capabilities_wording(self) -> None:
         device = _FakeInputDevice(path="/dev/input/event0", name="Sensor", capabilities={})
 
-        self.assertEqual(auto_discover_exclusion_reason(device), "missing supported relay capabilities")
+        self.assertEqual(auto_relay_exclusion_reason(device), "missing supported relay capabilities")
 
     def test_describe_input_devices_reports_mixed_candidates_and_closes_devices(self) -> None:
         keyboard = _FakeInputDevice(

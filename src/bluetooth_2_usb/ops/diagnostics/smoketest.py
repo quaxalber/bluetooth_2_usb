@@ -136,7 +136,7 @@ class SmokeTest:
             self.soft_warn("No bluetooth rfkill entries found")
         self._heading("Devices")
         inventory = (
-            self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"])
+            self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list", "--output", "json"])
             if venv_present
             else (127, missing_venv)
         )

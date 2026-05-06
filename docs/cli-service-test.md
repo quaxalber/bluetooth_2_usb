@@ -252,7 +252,7 @@ Before reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list --output json
 '
 ```
 
@@ -267,7 +267,7 @@ After reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list --output json
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 '
 ```

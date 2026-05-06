@@ -50,7 +50,7 @@ class InputDeviceMetadata:
         return asdict(self)
 
 
-def auto_discover_exclusion_reason(
+def auto_relay_exclusion_reason(
     device: InputDevice, skip_name_prefixes: tuple[str, ...] = DEFAULT_SKIP_NAME_PREFIXES
 ) -> str | None:
     name = (device.name or "").strip()
@@ -107,7 +107,7 @@ def describe_input_devices(
                 capabilities = []
                 exclusion_reason = f"failed to read capabilities ({exc})"
             else:
-                exclusion_reason = auto_discover_exclusion_reason(device, skip_name_prefixes)
+                exclusion_reason = auto_relay_exclusion_reason(device, skip_name_prefixes)
 
             metadata.append(
                 InputDeviceMetadata(

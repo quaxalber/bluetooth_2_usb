@@ -155,6 +155,9 @@ Use this venv for repo-local validation.
 
 - when an interface changes, update callers and docs to the new interface
   directly instead of preserving old paths
+- the only compatibility exception is install/update-time normalization of
+  existing managed env files; normalization must remove old keys and write the
+  current supported keys rather than keeping legacy names as product surface
 
 ### Documentation
 

@@ -12,13 +12,13 @@ class ParseArgsTest(unittest.TestCase):
 
     def test_invalid_shortcut_key_is_rejected(self) -> None:
         with self.assertRaises(SystemExit) as ctx:
-            parse_args(["--interrupt_shortcut", "CTRL+SHIFT+NOPE"])
+            parse_args(["--shortcut", "CTRL+SHIFT+NOPE"])
 
         self.assertEqual(ctx.exception.code, 2)
 
     def test_shortcut_aliases_are_normalized(self) -> None:
-        args = parse_args(["--interrupt_shortcut", "CTRL+SHIFT+F12"])
-        self.assertEqual(args.interrupt_shortcut, ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"])
+        args = parse_args(["--shortcut", "CTRL+SHIFT+F12"])
+        self.assertEqual(args.shortcut, ["KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"])
 
     def test_version_flag_parses(self) -> None:
         args = parse_args(["--version"])

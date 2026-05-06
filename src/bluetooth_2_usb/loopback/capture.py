@@ -813,11 +813,11 @@ def _capture_once(
 
 
 def run_capture(
-    scenario_name: str, devices: str, timeout_sec: float | None = None, grab_devices: bool = True
+    scenario_name: str, devices: str, timeout_sec: float | None = None, grab: bool = True
 ) -> LoopbackResult:
     # hidapi capture does not offer exclusive-grab semantics; keep the parameter
     # for CLI parity with other backends.
-    _ = grab_devices
+    _ = grab
     scenario = get_scenario(scenario_name)
     resolved_timeout_sec = scenario.default_capture_timeout_sec if timeout_sec is None else timeout_sec
 

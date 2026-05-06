@@ -13,23 +13,13 @@ from bluetooth_2_usb.runtime.events import ShutdownRequested
 class RuntimeConfigTest(unittest.TestCase):
     def test_runtime_config_from_args_normalizes_mutable_cli_values(self) -> None:
         args = SimpleNamespace(
-            auto_discover=True,
-            debug=False,
-            devices=["/dev/input/event7"],
-            grab_devices=True,
-            interrupt_shortcut=["KEY_LEFTCTRL", "KEY_F12"],
-            log_path="/tmp/b2u.log",
-            log_to_file=True,
-            usb_serial="b2utest",
-            usb_product_suffix="pi0w",
+            auto=True, debug=False, devices=["/dev/input/event7"], grab=True, shortcut=["KEY_LEFTCTRL", "KEY_F12"]
         )
 
         config = runtime_config_from_args(args, udc_path=Path("/tmp/udc-state"))
 
         self.assertEqual(config.devices, ("/dev/input/event7",))
-        self.assertEqual(config.interrupt_shortcut, ("KEY_LEFTCTRL", "KEY_F12"))
-        self.assertEqual(config.usb_serial, "b2utest")
-        self.assertEqual(config.usb_product_suffix, "pi0w")
+        self.assertEqual(config.shortcut, ("KEY_LEFTCTRL", "KEY_F12"))
         self.assertEqual(config.udc_path, Path("/tmp/udc-state"))
 
 
@@ -37,18 +27,7 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
     def _runtime(self) -> Runtime:
         return Runtime(
             runtime_config_from_args(
-                SimpleNamespace(
-                    auto_discover=False,
-                    debug=False,
-                    devices=[],
-                    grab_devices=False,
-                    interrupt_shortcut=[],
-                    log_path="",
-                    log_to_file=False,
-                    usb_serial="",
-                    usb_product_suffix="",
-                ),
-                udc_path=None,
+                SimpleNamespace(auto=False, debug=False, devices=[], grab=False, shortcut=[]), udc_path=None
             )
         )
 

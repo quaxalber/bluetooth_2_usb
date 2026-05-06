@@ -14,11 +14,11 @@ class CliTest(unittest.TestCase):
     def test_graceful_shutdown_timeout_leaves_room_for_systemd_stop_budget(self) -> None:
         self.assertEqual(GRACEFUL_SHUTDOWN_TIMEOUT_SEC, 4.0)
 
-    def test_list_devices_error_returns_environment_exit(self) -> None:
+    def test_list_error_returns_environment_exit(self) -> None:
         with patch(
             "bluetooth_2_usb.inputs.inventory.describe_input_devices", side_effect=DeviceEnumerationError("denied")
         ):
-            exit_code = cli.run(["--list_devices"])
+            exit_code = cli.run(["--list"])
 
         self.assertEqual(exit_code, cli.EXIT_ENVIRONMENT)
 
@@ -59,7 +59,7 @@ class CliTest(unittest.TestCase):
             json.loads(stdout.getvalue()), {"configfs": True, "ok": True, "udc_path": None, "udc_present": True}
         )
 
-    def test_list_devices_json_output(self) -> None:
+    def test_list_json_output(self) -> None:
         stdout = io.StringIO()
         devices = [
             InputDeviceMetadata(
@@ -75,7 +75,7 @@ class CliTest(unittest.TestCase):
 
         with patch("bluetooth_2_usb.inputs.inventory.describe_input_devices", return_value=devices):
             with redirect_stdout(stdout):
-                exit_code = cli.run(["--list_devices", "--output", "json"])
+                exit_code = cli.run(["--list", "--output", "json"])
 
         self.assertEqual(exit_code, cli.EXIT_OK)
         self.assertEqual(json.loads(stdout.getvalue())[0]["path"], "/dev/input/event1")
@@ -84,14 +84,12 @@ class CliTest(unittest.TestCase):
         runtime = AsyncMock()
 
         args = SimpleNamespace(
-            auto_discover=False,
+            auto=False,
             debug=False,
             devices=[],
-            grab_devices=False,
-            interrupt_shortcut=None,
-            list_devices=False,
-            log_path="",
-            log_to_file=False,
+            grab=False,
+            shortcut=None,
+            list=False,
             output="text",
             validate_env=False,
             version=False,

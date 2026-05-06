@@ -12,7 +12,7 @@ from ..inputs.filter import DeviceFilter
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
-    auto_discover_exclusion_reason,
+    auto_relay_exclusion_reason,
     list_input_devices,
 )
 from ..logging import get_logger
@@ -57,9 +57,9 @@ class RelaySupervisor:
         relay_gate: RelayGate,
         task_group: TaskGroup,
         devices: list[str] | None = None,
-        auto_discover: bool = False,
+        auto_relay: bool = False,
         skip_name_prefixes: list[str] | None = None,
-        grab_devices: bool = False,
+        grab_device: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
@@ -67,9 +67,9 @@ class RelaySupervisor:
         :param relay_gate: RelayGate to indicate whether relaying is active
         :param task_group: Runtime task group used for event waiters and relay tasks
         :param devices: A list of path, uniq, phys, MAC, or name fragments to match devices to relay
-        :param auto_discover: If True, relays all valid input devices except those skipped
-        :param skip_name_prefixes: A list of device.name prefixes to skip if auto_discover is True
-        :param grab_devices: If True, the relay tries to grab exclusive access to each device
+        :param auto_relay: If True, relays all valid input devices except those skipped
+        :param skip_name_prefixes: A list of device.name prefixes to skip if auto_relay is True
+        :param grab_device: If True, the relay tries to grab exclusive access to each device
         :param shortcut_toggler: ShortcutToggler to allow toggling relaying globally
         """
         self._hid_gadgets = hid_gadgets
@@ -78,12 +78,12 @@ class RelaySupervisor:
         self._task_group = task_group
 
         self._device_filters = [DeviceFilter(device) for device in (devices or [])]
-        self._auto_discover = auto_discover
+        self._auto_relay = auto_relay
         self._skip_name_prefixes = (
             tuple(skip_name_prefixes) if skip_name_prefixes is not None else DEFAULT_SKIP_NAME_PREFIXES
         )
 
-        self._grab_devices = grab_devices
+        self._grab_device = grab_device
 
         self._state = _SupervisorState.NEW
 
@@ -327,7 +327,7 @@ class RelaySupervisor:
             async with InputRelay(
                 device,
                 self._hid_gadgets,
-                grab_device=self._grab_devices,
+                grab_device=self._grab_device,
                 relay_gate=self._relay_gate,
                 shortcut_toggler=self._shortcut_toggler,
             ) as relay:
@@ -344,17 +344,17 @@ class RelaySupervisor:
 
     def _device_matches_relay_filters(self, device: InputDevice) -> bool:
         """
-        Decide if a device should be relayed based on auto_discover,
+        Decide if a device should be relayed based on auto relay,
         skip_name_prefixes, or user-specified device filters.
 
         :param device: The input device to check
         :return: True if we should relay it, False otherwise
         :rtype: bool
         """
-        if self._auto_discover:
-            exclusion_reason = auto_discover_exclusion_reason(device, self._skip_name_prefixes)
+        if self._auto_relay:
+            exclusion_reason = auto_relay_exclusion_reason(device, self._skip_name_prefixes)
             if exclusion_reason is not None:
-                logger.debug("Skipping %s during auto-discovery: %s", device, exclusion_reason)
+                logger.debug("Skipping %s during auto relay: %s", device, exclusion_reason)
                 return False
             return True
 

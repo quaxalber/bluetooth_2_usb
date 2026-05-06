@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from bluetooth_2_usb.service_settings import canonicalize_service_settings_bools, migrate_service_settings
+from bluetooth_2_usb.service_settings import canonicalize_service_settings_bools, normalize_service_settings_file
 
 from . import boot_config
 from .bluetooth import clear_bluetooth_rfkill_soft_blocks
@@ -17,16 +17,11 @@ from .readonly import (
 )
 
 DEFAULT_ENV_TEXT = """# Structured runtime configuration for bluetooth_2_usb.service.
-B2U_AUTO_DISCOVER=true
+B2U_AUTO=true
 B2U_DEVICES=
 B2U_GRAB_DEVICES=true
-B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_LOG_TO_FILE=false
-B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
+B2U_SHORTCUT=CTRL+SHIFT+F12
 B2U_DEBUG=false
-B2U_USB_SERIAL=
-B2U_USB_PRODUCT_SUFFIX=
-B2U_UDC_PATH=
 """
 
 
@@ -141,7 +136,7 @@ def install(repo_root: Path, *, recreate_venv: bool = False) -> None:
 
     install_service_unit(repo_root)
     write_default_env_file()
-    migrate_service_settings(PATHS.env_file)
+    normalize_service_settings_file(PATHS.env_file)
     canonicalize_service_settings_bools(PATHS.env_file)
     run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
     install_cli_links()

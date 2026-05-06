@@ -1,6 +1,5 @@
 import argparse
 
-from .gadgets.identity import validate_usb_product_suffix, validate_usb_serial
 from .inputs.filter import parse_devices
 
 
@@ -11,7 +10,7 @@ def _parse_devices(raw_value: str) -> list[str]:
         raise argparse.ArgumentTypeError("DEVICES must not be empty.") from exc
 
 
-def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
+def _parse_shortcut(raw_value: str) -> list[str]:
     from .evdev import ecodes
 
     alias_map = {
@@ -44,22 +43,6 @@ def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
     return parsed_keys
 
 
-def _parse_usb_serial(raw_value: str) -> str:
-    if not raw_value:
-        return ""
-    try:
-        return validate_usb_serial(raw_value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(str(exc)) from exc
-
-
-def _parse_usb_product_suffix(raw_value: str) -> str:
-    try:
-        return validate_usb_product_suffix(raw_value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(str(exc)) from exc
-
-
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(
@@ -77,12 +60,12 @@ class CustomArgumentParser(argparse.ArgumentParser):
 
     def _add_arguments(self) -> None:
         self.add_argument(
-            "--auto_discover",
+            "--auto",
             "-a",
             action="store_true",
             default=False,
             help=(
-                "Enable auto-discovery mode. All readable input devices will be relayed automatically "
+                "Enable auto relay. All readable input devices will be relayed automatically "
                 + "except known excluded platform devices.\n"
                 + "Default: disabled"
             ),
@@ -100,7 +83,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             ),
         )
         self.add_argument(
-            "--grab_devices",
+            "--grab",
             "-g",
             action="store_true",
             default=False,
@@ -110,9 +93,9 @@ class CustomArgumentParser(argparse.ArgumentParser):
             ),
         )
         self.add_argument(
-            "--interrupt_shortcut",
+            "--shortcut",
             "-s",
-            type=_parse_interrupt_shortcut,
+            type=_parse_shortcut,
             default=None,
             help=(
                 "A plus-separated list of key names to press simultaneously in order to "
@@ -121,25 +104,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             ),
         )
         self.add_argument(
-            "--list_devices",
-            "-l",
-            action="store_true",
-            default=False,
-            help="List all available input devices and exit.",
-        )
-        self.add_argument(
-            "--log_to_file",
-            "-f",
-            action="store_true",
-            default=False,
-            help="Add file logging in addition to stdout logging.",
-        )
-        self.add_argument(
-            "--log_path",
-            "-p",
-            type=str,
-            default="/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
-            help="Path of the log file used when file logging is enabled.\nDefault: /var/log/bluetooth_2_usb/bluetooth_2_usb.log",
+            "--list", "-l", action="store_true", default=False, help="List all available input devices and exit."
         )
         self.add_argument(
             "--debug",
@@ -147,21 +112,6 @@ class CustomArgumentParser(argparse.ArgumentParser):
             action="store_true",
             default=False,
             help="Enable debug mode and increase log verbosity.\nDefault: disabled",
-        )
-        self.add_argument(
-            "--usb_serial",
-            type=_parse_usb_serial,
-            default="",
-            help=(
-                "Override the host-visible USB gadget serial. If unset, the managed service uses a "
-                + "stable per-install generated serial."
-            ),
-        )
-        self.add_argument(
-            "--usb_product_suffix",
-            type=_parse_usb_product_suffix,
-            default="",
-            help="Append a short suffix to the host-visible USB product name for diagnostics.",
         )
         self.add_argument(
             "--version",
@@ -180,7 +130,7 @@ class CustomArgumentParser(argparse.ArgumentParser):
             "--output",
             choices=["text", "json"],
             default="text",
-            help="Output format for --list_devices and --validate-env. Default: text",
+            help="Output format for --list and --validate-env. Default: text",
         )
         self.add_argument(
             "--help", "-h", action="help", default=argparse.SUPPRESS, help="Show this help message and exit."
@@ -194,48 +144,26 @@ class _HelpAction(argparse._HelpAction):
 
 
 class Arguments:
-    __slots__ = [
-        "_devices",
-        "_auto_discover",
-        "_grab_devices",
-        "_interrupt_shortcut",
-        "_list_devices",
-        "_log_to_file",
-        "_log_path",
-        "_debug",
-        "_usb_serial",
-        "_usb_product_suffix",
-        "_version",
-        "_validate_env",
-        "_output",
-    ]
+    __slots__ = ["_devices", "_auto", "_grab", "_shortcut", "_list", "_debug", "_version", "_validate_env", "_output"]
 
     def __init__(
         self,
         devices: list[str] | None,
-        auto_discover: bool,
-        grab_devices: bool,
-        interrupt_shortcut: list[str] | None,
-        list_devices: bool,
-        log_to_file: bool,
-        log_path: str,
+        auto: bool,
+        grab: bool,
+        shortcut: list[str] | None,
+        list_: bool,
         debug: bool,
-        usb_serial: str,
-        usb_product_suffix: str,
         version: bool,
         validate_env: bool,
         output: str,
     ) -> None:
         self._devices = devices
-        self._auto_discover = auto_discover
-        self._grab_devices = grab_devices
-        self._interrupt_shortcut = interrupt_shortcut
-        self._list_devices = list_devices
-        self._log_to_file = log_to_file
-        self._log_path = log_path
+        self._auto = auto
+        self._grab = grab
+        self._shortcut = shortcut
+        self._list = list_
         self._debug = debug
-        self._usb_serial = usb_serial
-        self._usb_product_suffix = usb_product_suffix
         self._version = version
         self._validate_env = validate_env
         self._output = output
@@ -245,40 +173,24 @@ class Arguments:
         return self._devices
 
     @property
-    def auto_discover(self) -> bool:
-        return self._auto_discover
+    def auto(self) -> bool:
+        return self._auto
 
     @property
-    def grab_devices(self) -> bool:
-        return self._grab_devices
+    def grab(self) -> bool:
+        return self._grab
 
     @property
-    def interrupt_shortcut(self) -> list[str] | None:
-        return self._interrupt_shortcut
+    def shortcut(self) -> list[str] | None:
+        return self._shortcut
 
     @property
-    def list_devices(self) -> bool:
-        return self._list_devices
-
-    @property
-    def log_to_file(self) -> bool:
-        return self._log_to_file
-
-    @property
-    def log_path(self) -> str:
-        return self._log_path
+    def list(self) -> bool:
+        return self._list
 
     @property
     def debug(self) -> bool:
         return self._debug
-
-    @property
-    def usb_serial(self) -> str:
-        return self._usb_serial
-
-    @property
-    def usb_product_suffix(self) -> str:
-        return self._usb_product_suffix
 
     @property
     def version(self) -> bool:
@@ -315,15 +227,11 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
 
     return Arguments(
         devices=args.devices,
-        auto_discover=args.auto_discover,
-        grab_devices=args.grab_devices,
-        interrupt_shortcut=args.interrupt_shortcut,
-        list_devices=args.list_devices,
-        log_to_file=args.log_to_file,
-        log_path=args.log_path,
+        auto=args.auto,
+        grab=args.grab,
+        shortcut=args.shortcut,
+        list_=args.list,
         debug=args.debug,
-        usb_serial=args.usb_serial,
-        usb_product_suffix=args.usb_product_suffix,
         version=args.version,
         validate_env=args.validate_env,
         output=args.output,

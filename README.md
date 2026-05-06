@@ -117,30 +117,9 @@ those events and owns all per-device relay tasks.
 For implementation details, see
 [docs/runtime-architecture.md](docs/runtime-architecture.md).
 
-## Read-only operation
-
-For the supported appliance-style read-only workflow, use
-[docs/persistent-readonly.md](docs/persistent-readonly.md).
-
-## Host wake from suspend
-
-The normal install path focuses on reliable HID relay while the target host is
-awake. Waking a suspended target host requires USB remote wake behavior from
-the Pi gadget side, and that currently depends on kernel support outside the
-stock Raspberry Pi OS path.
-
-For the validated custom-kernel workflow, use
-[docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
-
-> [!WARNING]
-> Wake-from-suspend support requires a patched Raspberry Pi kernel. This is not
-> part of the stock install path.
-
 ## Runtime settings and CLI reference
 
-Runtime behavior can be configured temporarily with CLI arguments when
-launching manually, or persistently through `/etc/default/bluetooth_2_usb` for
-the managed service. The service reads structured runtime settings from:
+Manual runs use CLI flags. The managed service reads runtime settings from:
 
 ```bash
 /etc/default/bluetooth_2_usb
@@ -150,16 +129,11 @@ Default managed-service values:
 
 | Environment setting | Default value |
 | --- | --- |
-| `B2U_AUTO_DISCOVER` | `true` |
+| `B2U_AUTO` | `true` |
 | `B2U_DEVICES` | empty |
 | `B2U_GRAB_DEVICES` | `true` |
-| `B2U_INTERRUPT_SHORTCUT` | `CTRL+SHIFT+F12` |
-| `B2U_LOG_TO_FILE` | `false` |
-| `B2U_LOG_PATH` | `/var/log/bluetooth_2_usb/bluetooth_2_usb.log` |
+| `B2U_SHORTCUT` | `CTRL+SHIFT+F12` |
 | `B2U_DEBUG` | `false` |
-| `B2U_USB_SERIAL` | empty |
-| `B2U_USB_PRODUCT_SUFFIX` | empty |
-| `B2U_UDC_PATH` | empty |
 
 After editing the runtime settings:
 
@@ -171,26 +145,36 @@ Runtime CLI and environment reference:
 
 | CLI argument | Environment setting | Explanation |
 | --- | --- | --- |
-| `--auto_discover, -a` | `B2U_AUTO_DISCOVER` | Enable auto-discovery mode. All readable input devices are relayed automatically except known excluded platform devices. |
+| `--auto, -a` | `B2U_AUTO` | Enable auto relay. All readable input devices are relayed automatically except known excluded platform devices. |
 | `--devices DEVICES` | `B2U_DEVICES` | Comma-separated list of devices to relay. Each value may match an input device path, `uniq`, `phys`, Bluetooth MAC address, or case-insensitive substring of the device name. Example: `--devices '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'`. |
-| `--grab_devices, -g` | `B2U_GRAB_DEVICES` | Grab the input devices, suppressing local events on the Pi while the devices are relayed. |
-| `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | `B2U_INTERRUPT_SHORTCUT` | A plus-separated list of key names to press simultaneously in order to toggle relaying. |
-| `--log_to_file, -f` | `B2U_LOG_TO_FILE` | Add file logging in addition to stdout logging. |
-| `--log_path LOG_PATH, -p LOG_PATH` | `B2U_LOG_PATH` | Path of the log file used when file logging is enabled. |
+| `--grab, -g` | `B2U_GRAB_DEVICES` | Grab the input devices, suppressing local events on the Pi while the devices are relayed. |
+| `--shortcut SHORTCUT, -s SHORTCUT` | `B2U_SHORTCUT` | A plus-separated list of key names to press simultaneously in order to toggle relaying. |
 | `--debug, -d` | `B2U_DEBUG` | Enable debug mode and increase log verbosity. |
-| `--usb_serial USB_SERIAL` | `B2U_USB_SERIAL` | Override the host-visible USB gadget serial. If unset, the managed service uses a stable per-install generated serial. |
-| `--usb_product_suffix USB_PRODUCT_SUFFIX` | `B2U_USB_PRODUCT_SUFFIX` | Append a short suffix to the host-visible USB product name for diagnostics. |
-| n/a | `B2U_UDC_PATH` | Optional advanced override for systems with multiple gadget-capable controllers. |
-| `--list_devices, -l` | n/a | List all available input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
+| `--list, -l` | n/a | List all available input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
 | `--validate-env` | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
-| `--output {text,json}` | n/a | Output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
+| `--output {text,json}` | n/a | Output format for `--list` and `--validate-env`. Use `json` for scripting or automation. |
 | `--version, -v` | n/a | Display the version number of this software and exit. |
 | `--help, -h` | n/a | Show built-in CLI help and exit. |
 
 > [!NOTE]
-> Despite the project name, broad auto-discovery can also relay other suitable
+> Despite the project name, broad auto relay can also relay other suitable
 > Linux input devices that are visible on the Pi. The intended primary use case
 > remains Bluetooth keyboard and mouse bridging.
+
+## Read-only operation
+
+For the supported appliance-style read-only workflow, use
+[docs/persistent-readonly.md](docs/persistent-readonly.md).
+
+## Host wake from suspend
+
+The stock install path focuses on reliable HID relay while the target host is
+awake. For wake-from-suspend support, use the validated custom-kernel workflow
+in [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
+
+> [!NOTE]
+> Wake-from-suspend support requires a patched Raspberry Pi kernel and is not
+> part of the stock install path.
 
 ## Operational command reference
 

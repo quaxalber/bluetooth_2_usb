@@ -9,7 +9,7 @@ from logging import DEBUG
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .logging import add_file_handler, get_logger
+from .logging import get_logger
 from .version import get_versioned_name
 
 if TYPE_CHECKING:
@@ -109,9 +109,6 @@ def configure_logging(args: Arguments) -> None:
     if args.debug:
         get_logger().setLevel(DEBUG)
 
-    if args.log_to_file:
-        add_file_handler(args.log_path)
-
     logger.debug("CLI args: %s", args)
 
 
@@ -119,7 +116,7 @@ async def async_run(args: Arguments) -> int:
     if args.version:
         return print_version()
 
-    if args.list_devices:
+    if args.list:
         from .inputs.inventory import DeviceEnumerationError, describe_input_devices, inventory_to_text
 
         try:

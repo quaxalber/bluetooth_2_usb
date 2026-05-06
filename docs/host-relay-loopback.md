@@ -42,7 +42,7 @@ nodes are live before running `combo`.
 
 - the Pi is connected to the host through the OTG-capable data path
 - `bluetooth_2_usb.service` is active on the Pi
-- `B2U_AUTO_DISCOVER=true` is enabled in `/etc/default/bluetooth_2_usb`
+- `B2U_AUTO=true` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
 - the host Python environment has `hidapi` installed for gadget discovery
 
@@ -354,7 +354,7 @@ instead.
 ### Host capture times out
 
 - the relay service on the Pi may not be active
-- auto-discovery may be off
+- auto relay may be off
 - the Pi may not have picked up the temporary virtual devices
 - the host gadget HID device may be present but not currently carrying reports
 - on Windows, candidate enumeration may be fine while Raw Input still sees the
@@ -364,7 +364,7 @@ Check on the Pi:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-sudo bluetooth_2_usb --list_devices --output json
+sudo bluetooth_2_usb --list --output json
 sudo journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 

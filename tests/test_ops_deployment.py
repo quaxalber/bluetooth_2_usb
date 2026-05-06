@@ -217,8 +217,8 @@ class OpsDeploymentTest(unittest.TestCase):
             canonicalized_paths = []
             call_order = []
 
-            def record_migrate(path: Path) -> bool:
-                call_order.append(("migrate", path))
+            def record_normalize(path: Path) -> bool:
+                call_order.append(("normalize", path))
                 return True
 
             def record_canonicalize(path: Path) -> bool:
@@ -252,8 +252,10 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_service_unit"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_cli_links"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.activate_service_unit"))
-                migrate = stack.enter_context(
-                    patch("bluetooth_2_usb.ops.deployment.migrate_service_settings", side_effect=record_migrate)
+                normalize = stack.enter_context(
+                    patch(
+                        "bluetooth_2_usb.ops.deployment.normalize_service_settings_file", side_effect=record_normalize
+                    )
                 )
                 stack.enter_context(
                     patch(
@@ -265,9 +267,9 @@ class OpsDeploymentTest(unittest.TestCase):
 
                 install(root)
 
-        migrate.assert_called_once_with(paths.env_file)
+        normalize.assert_called_once_with(paths.env_file)
         self.assertEqual(canonicalized_paths, [paths.env_file])
-        self.assertEqual(call_order[:2], [("migrate", paths.env_file), ("canonicalize", paths.env_file)])
+        self.assertEqual(call_order[:2], [("normalize", paths.env_file), ("canonicalize", paths.env_file)])
         rebuild.assert_called_once_with(paths.install_dir / "venv", paths.install_dir, recreate=False)
 
     def test_update_pulls_current_branch_then_reapplies_install(self) -> None:
