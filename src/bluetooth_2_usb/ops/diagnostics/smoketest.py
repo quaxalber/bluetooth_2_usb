@@ -165,6 +165,7 @@ class SmokeTest:
                     ("expected boot initramfs path", expected_initramfs_path or "<none>"),
                     ("UDC controllers", udc_list or "<none>"),
                     ("UDC state", ", ".join(f"{name}={state}" for name, state in udc_states.items()) or "<none>"),
+                    ("USB gadget identity", _usb_gadget_identity()),
                 ],
             ),
             (
@@ -426,6 +427,23 @@ def _udc_states() -> dict[str, str]:
             state = "unknown"
         states[path.name] = state or "unknown"
     return states
+
+
+def _usb_gadget_identity() -> str:
+    gadget_roots = sorted(Path("/sys/kernel/config/usb_gadget").glob("*"))
+    for gadget_root in gadget_roots:
+        strings_root = gadget_root / "strings" / "0x409"
+        values = []
+        for name in ("manufacturer", "product", "serialnumber"):
+            try:
+                value = (strings_root / name).read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                value = ""
+            if value:
+                values.append(f"{name}={value}")
+        if values:
+            return f"{gadget_root.name}: " + ", ".join(values)
+    return "<none>"
 
 
 def _try(func, default: str = "") -> str:

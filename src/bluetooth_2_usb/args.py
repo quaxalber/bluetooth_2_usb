@@ -1,5 +1,7 @@
 import argparse
 
+from .gadgets.identity import validate_usb_product_suffix, validate_usb_serial
+
 
 def _parse_device_ids(raw_value: str) -> list[str]:
     device_ids = [device_id.strip() for device_id in raw_value.split(",") if device_id.strip()]
@@ -39,6 +41,22 @@ def _parse_interrupt_shortcut(raw_value: str) -> list[str]:
     if not parsed_keys:
         raise argparse.ArgumentTypeError("Shortcut must contain at least one key.")
     return parsed_keys
+
+
+def _parse_usb_serial(raw_value: str) -> str:
+    if not raw_value:
+        return ""
+    try:
+        return validate_usb_serial(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def _parse_usb_product_suffix(raw_value: str) -> str:
+    try:
+        return validate_usb_product_suffix(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 class CustomArgumentParser(argparse.ArgumentParser):
@@ -130,6 +148,21 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Enable debug mode (Increases log verbosity)\nDefault: disabled",
         )
         self.add_argument(
+            "--usb_serial",
+            type=_parse_usb_serial,
+            default="",
+            help=(
+                "Override the host-visible USB gadget serial. If unset, the managed service uses a "
+                + "stable per-install generated serial."
+            ),
+        )
+        self.add_argument(
+            "--usb_product_suffix",
+            type=_parse_usb_product_suffix,
+            default="",
+            help="Append a short suffix to the host-visible USB product name for diagnostics.",
+        )
+        self.add_argument(
             "--version",
             "-v",
             action="store_true",
@@ -169,6 +202,8 @@ class Arguments:
         "_log_to_file",
         "_log_path",
         "_debug",
+        "_usb_serial",
+        "_usb_product_suffix",
         "_version",
         "_validate_env",
         "_output",
@@ -184,6 +219,8 @@ class Arguments:
         log_to_file: bool,
         log_path: str,
         debug: bool,
+        usb_serial: str,
+        usb_product_suffix: str,
         version: bool,
         validate_env: bool,
         output: str,
@@ -196,6 +233,8 @@ class Arguments:
         self._log_to_file = log_to_file
         self._log_path = log_path
         self._debug = debug
+        self._usb_serial = usb_serial
+        self._usb_product_suffix = usb_product_suffix
         self._version = version
         self._validate_env = validate_env
         self._output = output
@@ -231,6 +270,14 @@ class Arguments:
     @property
     def debug(self) -> bool:
         return self._debug
+
+    @property
+    def usb_serial(self) -> str:
+        return self._usb_serial
+
+    @property
+    def usb_product_suffix(self) -> str:
+        return self._usb_product_suffix
 
     @property
     def version(self) -> bool:
@@ -274,6 +321,8 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         log_to_file=args.log_to_file,
         log_path=args.log_path,
         debug=args.debug,
+        usb_serial=args.usb_serial,
+        usb_product_suffix=args.usb_product_suffix,
         version=args.version,
         validate_env=args.validate_env,
         output=args.output,

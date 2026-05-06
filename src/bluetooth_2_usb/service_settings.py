@@ -7,6 +7,8 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .gadgets.identity import validate_usb_product_suffix, validate_usb_serial
+
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
 DEFAULT_LOG_PATH = "/var/log/bluetooth_2_usb/bluetooth_2_usb.log"
 BOOL_KEYS = {"B2U_AUTO_DISCOVER", "B2U_GRAB_DEVICES", "B2U_LOG_TO_FILE", "B2U_DEBUG"}
@@ -18,9 +20,18 @@ RUNTIME_ENV_KEY_ORDER = (
     "B2U_LOG_TO_FILE",
     "B2U_LOG_PATH",
     "B2U_DEBUG",
+    "B2U_USB_SERIAL",
+    "B2U_USB_PRODUCT_SUFFIX",
     "B2U_UDC_PATH",
 )
-ALLOWED_KEYS = BOOL_KEYS | {"B2U_INTERRUPT_SHORTCUT", "B2U_LOG_PATH", "B2U_DEVICE_IDS", "B2U_UDC_PATH"}
+ALLOWED_KEYS = BOOL_KEYS | {
+    "B2U_INTERRUPT_SHORTCUT",
+    "B2U_LOG_PATH",
+    "B2U_DEVICE_IDS",
+    "B2U_USB_SERIAL",
+    "B2U_USB_PRODUCT_SUFFIX",
+    "B2U_UDC_PATH",
+}
 
 
 class ServiceSettingsError(ValueError):
@@ -36,6 +47,8 @@ class ServiceSettings:
     log_to_file: bool = False
     log_path: str = DEFAULT_LOG_PATH
     debug: bool = False
+    usb_serial: str = ""
+    usb_product_suffix: str = ""
     udc_path: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -93,6 +106,10 @@ def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
         return _quote_if_needed(settings.log_path)
     if key == "B2U_DEBUG":
         return _canonical_bool(settings.debug)
+    if key == "B2U_USB_SERIAL":
+        return _quote_if_needed(settings.usb_serial)
+    if key == "B2U_USB_PRODUCT_SUFFIX":
+        return _quote_if_needed(settings.usb_product_suffix)
     if key == "B2U_UDC_PATH":
         return _quote_if_needed(settings.udc_path)
     raise ServiceSettingsError(f"Unexpected runtime settings key: {key!r}")
@@ -129,6 +146,16 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
             settings.log_path = value
         elif key == "B2U_DEBUG":
             settings.debug = _parse_bool(value, key)
+        elif key == "B2U_USB_SERIAL":
+            try:
+                settings.usb_serial = validate_usb_serial(value) if value else ""
+            except ValueError as exc:
+                raise ServiceSettingsError(f"{env_file}:{line_number}: invalid B2U_USB_SERIAL: {exc}") from exc
+        elif key == "B2U_USB_PRODUCT_SUFFIX":
+            try:
+                settings.usb_product_suffix = validate_usb_product_suffix(value)
+            except ValueError as exc:
+                raise ServiceSettingsError(f"{env_file}:{line_number}: invalid B2U_USB_PRODUCT_SUFFIX: {exc}") from exc
         elif key == "B2U_DEVICE_IDS":
             settings.device_ids = _parse_device_ids(value)
         elif key == "B2U_UDC_PATH":
@@ -202,6 +229,10 @@ def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False)
         argv.extend(["--log_path", settings.log_path])
     if settings.debug or append_debug:
         argv.append("--debug")
+    if settings.usb_serial:
+        argv.extend(["--usb_serial", settings.usb_serial])
+    if settings.usb_product_suffix:
+        argv.extend(["--usb_product_suffix", settings.usb_product_suffix])
     return argv
 
 

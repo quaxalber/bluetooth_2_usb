@@ -22,7 +22,7 @@ import usb_hid
 
 from ..hid.constants import MOUSE_CONFIGFS_REPORT_LENGTH, MOUSE_IN_REPORT_LENGTH
 from ..hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
-from .identity import USB_PRODUCT_NAME, USB_SERIAL_NUMBER
+from .identity import USB_PRODUCT_NAME, USB_SERIAL_NUMBER, UsbIdentity
 
 USB_CFG_REQUIRED_ATTR = 0x80
 """USB configuration bmAttributes bit 7: required by the USB specification."""
@@ -176,7 +176,9 @@ class GadgetLayout:
     max_speed: str | None = None
 
 
-def build_default_layout() -> GadgetLayout:
+def build_default_layout(identity: UsbIdentity | None = None) -> GadgetLayout:
+    resolved_product_name = USB_PRODUCT_NAME if identity is None else identity.product_name
+    resolved_serial_number = USB_SERIAL_NUMBER if identity is None else identity.serial_number
     return GadgetLayout(
         devices=(
             GadgetHidDevice.from_existing(
@@ -207,8 +209,8 @@ def build_default_layout() -> GadgetLayout:
             ),
         ),
         bcd_device=USB_DEV_RELEASE_BCD,
-        product_name=USB_PRODUCT_NAME,
-        serial_number=USB_SERIAL_NUMBER,
+        product_name=resolved_product_name,
+        serial_number=resolved_serial_number,
         max_power=USB_CFG_MAX_POWER_MA,
         bm_attributes=USB_CFG_BM_ATTR_COMBO,
         max_speed=USB_GADGET_MAX_SPEED,

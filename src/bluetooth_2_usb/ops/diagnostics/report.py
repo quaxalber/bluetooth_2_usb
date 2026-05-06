@@ -98,6 +98,18 @@ def debug_report(duration: int | None) -> int:
     )
     command_block("cmdline.txt", ["cat", boot_config.boot_cmdline_path()], 5)
     command_block("UDC controllers", ["ls", "/sys/class/udc"], 5)
+    command_block(
+        "USB gadget identity",
+        [
+            "bash",
+            "-lc",
+            "for f in /sys/kernel/config/usb_gadget/*/strings/0x409/{manufacturer,product,serialnumber}; "
+            + "do [ -f \"$f\" ] && printf '%s=' \"$f\" && cat \"$f\"; done; "
+            + "test -f /var/lib/bluetooth_2_usb/usb_identity.json && "
+            + "printf 'state=' && cat /var/lib/bluetooth_2_usb/usb_identity.json || true",
+        ],
+        5,
+    )
     command_block("Overlay and tmpfs mounts", ["findmnt", "-t", "overlay,tmpfs"], 5)
     command_block("Bluetooth state mount", ["findmnt", "-n", "-T", "/var/lib/bluetooth"], 5)
     if config is not None:

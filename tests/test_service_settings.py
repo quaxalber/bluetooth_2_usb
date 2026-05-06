@@ -26,6 +26,8 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_LOG_TO_FILE=1",
                         "B2U_LOG_PATH='/tmp/custom log.txt'",
                         "B2U_DEBUG=1",
+                        "B2U_USB_SERIAL=b2u-test",
+                        "B2U_USB_PRODUCT_SUFFIX='pi0w lab'",
                         "B2U_DEVICE_IDS='mouse, keyboard'",
                         "B2U_UDC_PATH=/tmp/udc",
                     ]
@@ -41,6 +43,8 @@ class ServiceSettingsTest(unittest.TestCase):
         self.assertTrue(settings.log_to_file)
         self.assertEqual(settings.log_path, "/tmp/custom log.txt")
         self.assertTrue(settings.debug)
+        self.assertEqual(settings.usb_serial, "b2u-test")
+        self.assertEqual(settings.usb_product_suffix, "pi0w lab")
         self.assertEqual(settings.device_ids, ["mouse", "keyboard"])
         self.assertEqual(settings.udc_path, "/tmp/udc")
 
@@ -117,6 +121,14 @@ class ServiceSettingsTest(unittest.TestCase):
             with self.assertRaises(ServiceSettingsError):
                 load_service_settings(env_file)
 
+    def test_invalid_usb_identity_setting_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("B2U_USB_SERIAL='not ok'\n", encoding="utf-8")
+
+            with self.assertRaises(ServiceSettingsError):
+                load_service_settings(env_file)
+
     def test_default_runtime_argv_matches_default_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "missing"
@@ -157,6 +169,8 @@ class ServiceSettingsTest(unittest.TestCase):
             log_to_file=True,
             log_path="/tmp/bluetooth 2 usb.log",
             debug=True,
+            usb_serial="b2u-test",
+            usb_product_suffix="pi0w",
             udc_path="/tmp/internal-udc-state",
         )
         argv = build_runtime_argv(settings)
@@ -165,6 +179,8 @@ class ServiceSettingsTest(unittest.TestCase):
 
         self.assertTrue(parsed.auto_discover)
         self.assertEqual(parsed.device_ids, ["MX Keys", "/dev/input/event3"])
+        self.assertEqual(parsed.usb_serial, "b2u-test")
+        self.assertEqual(parsed.usb_product_suffix, "pi0w")
 
     def test_canonicalize_service_settings_quotes_interrupt_shortcut_when_needed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -210,6 +226,8 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_LOG_TO_FILE=false",
                         "B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
                         "B2U_DEBUG=false",
+                        "B2U_USB_SERIAL=",
+                        "B2U_USB_PRODUCT_SUFFIX=",
                         "B2U_UDC_PATH=",
                     ]
                 )
@@ -229,6 +247,8 @@ class ServiceSettingsTest(unittest.TestCase):
                         "B2U_LOG_TO_FILE=false",
                         "B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log",
                         "B2U_DEBUG=false",
+                        "B2U_USB_SERIAL=",
+                        "B2U_USB_PRODUCT_SUFFIX=",
                         "B2U_UDC_PATH=",
                     ]
                 )

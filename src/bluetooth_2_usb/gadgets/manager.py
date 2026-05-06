@@ -10,6 +10,7 @@ from ..hid.keyboard import ExtendedKeyboard
 from ..hid.mouse import ExtendedMouse
 from ..logging import get_logger
 from .config import rebuild_gadget
+from .identity import UsbIdentity
 from .layout import build_default_layout
 
 logger = get_logger(__name__)
@@ -26,10 +27,11 @@ class HidGadgets:
     HIDG_NODE_READY_TIMEOUT_SEC = 2.0
     HIDG_NODE_POLL_INTERVAL_SEC = 0.05
 
-    def __init__(self) -> None:
+    def __init__(self, identity: UsbIdentity | None = None) -> None:
         """
         Initialize without enabling devices. Call enable() to enable them.
         """
+        self._identity = identity
         self._clear_gadget_state()
 
     def _clear_gadget_state(self) -> None:
@@ -42,7 +44,7 @@ class HidGadgets:
 
         :return: A list of configured HID layout device declarations.
         """
-        return list(build_default_layout().devices)
+        return list(build_default_layout(self._identity).devices)
 
     def declared_hidg_paths(self) -> tuple[Path, ...]:
         """
@@ -148,13 +150,13 @@ class HidGadgets:
         """
         self._clear_gadget_state()
         self.prune_stale_hidg_nodes()
-        enabled_devices = list(rebuild_gadget(build_default_layout()))
+        enabled_devices = list(rebuild_gadget(build_default_layout(self._identity)))
         try:
             await self.validate_hidg_nodes(enabled_devices)
         except RuntimeError:
             logger.warning("Retrying HID gadget initialization after stale node validation failure")
             self.prune_stale_hidg_nodes(self._hidg_paths(enabled_devices), remove_character_devices=True)
-            enabled_devices = list(rebuild_gadget(build_default_layout()))
+            enabled_devices = list(rebuild_gadget(build_default_layout(self._identity)))
             await self.validate_hidg_nodes(enabled_devices)
 
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)

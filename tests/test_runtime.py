@@ -20,12 +20,16 @@ class RuntimeConfigTest(unittest.TestCase):
             interrupt_shortcut=["KEY_LEFTCTRL", "KEY_F12"],
             log_path="/tmp/b2u.log",
             log_to_file=True,
+            usb_serial="b2utest",
+            usb_product_suffix="pi0w",
         )
 
         config = runtime_config_from_args(args, udc_path=Path("/tmp/udc-state"))
 
         self.assertEqual(config.device_ids, ("/dev/input/event7",))
         self.assertEqual(config.interrupt_shortcut, ("KEY_LEFTCTRL", "KEY_F12"))
+        self.assertEqual(config.usb_serial, "b2utest")
+        self.assertEqual(config.usb_product_suffix, "pi0w")
         self.assertEqual(config.udc_path, Path("/tmp/udc-state"))
 
 
@@ -41,6 +45,8 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                     interrupt_shortcut=[],
                     log_path="",
                     log_to_file=False,
+                    usb_serial="",
+                    usb_product_suffix="",
                 ),
                 udc_path=None,
             )
