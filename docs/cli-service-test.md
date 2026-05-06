@@ -109,6 +109,9 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
 done
 ```
 
+The installer reuses a valid managed virtual environment. Use
+`install --recreate-venv` when validating a clean environment rebuild.
+
 After reboot:
 
 ```bash
@@ -131,7 +134,10 @@ ssh <pi-host> 'sudo -n bluetooth_2_usb update'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
-after reapplying the managed install and restarting the service.
+after reapplying the managed install and restarting the service. The update
+path reuses a valid managed virtual environment; use
+`sudo -n bluetooth_2_usb update --recreate-venv` after dependency removals,
+suspected venv corruption, or clean-install release validation.
 
 Reboot and repeat the post-boot smoketest checks if the updated change touched boot
 configuration or other reboot-sensitive behavior.

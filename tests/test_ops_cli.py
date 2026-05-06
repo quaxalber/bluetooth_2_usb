@@ -36,6 +36,46 @@ class OpsCliTest(unittest.TestCase):
 
         setup.assert_called_once_with("/dev/sda1")
 
+    def test_install_reuses_managed_venv_by_default(self) -> None:
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.prepare_log"),
+            patch("bluetooth_2_usb.ops.cli.install") as install,
+        ):
+            self.assertEqual(cli.main(["install"]), 0)
+
+        install.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=False)
+
+    def test_install_recreate_venv_flag_dispatches_to_install(self) -> None:
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.prepare_log"),
+            patch("bluetooth_2_usb.ops.cli.install") as install,
+        ):
+            self.assertEqual(cli.main(["install", "--recreate-venv"]), 0)
+
+        install.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=True)
+
+    def test_update_reuses_managed_venv_by_default(self) -> None:
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.prepare_log"),
+            patch("bluetooth_2_usb.ops.cli.update") as update,
+        ):
+            self.assertEqual(cli.main(["update"]), 0)
+
+        update.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=False)
+
+    def test_update_recreate_venv_flag_dispatches_to_update(self) -> None:
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.prepare_log"),
+            patch("bluetooth_2_usb.ops.cli.update") as update,
+        ):
+            self.assertEqual(cli.main(["update", "--recreate-venv"]), 0)
+
+        update.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=True)
+
     def test_nested_operational_commands_dispatch_to_selected_workflow(self) -> None:
         cases = (
             (["readonly", "status"], "print_readonly_status"),
