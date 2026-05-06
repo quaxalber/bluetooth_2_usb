@@ -36,66 +36,128 @@ class OpsDeploymentTest(unittest.TestCase):
         )
         unlink.assert_any_call(Path("/usr/local/bin/bluetooth_2_usb"), missing_ok=True)
 
-    def test_rebuild_venv_recreates_existing_environment(self) -> None:
+    def test_rebuild_venv_reuses_existing_valid_environment(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             venv = root / "venv"
             (venv / "bin").mkdir(parents=True)
+            (venv / "bin/python").touch()
+            (venv / "bin/pip").touch()
             (venv / "marker").write_text("previous", encoding="utf-8")
 
-            def fake_recreate_venv(target: Path) -> None:
-                (target / "bin").mkdir(parents=True)
-                (target / "marker").write_text("new", encoding="utf-8")
-
             with (
-                patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv),
+                patch("bluetooth_2_usb.ops.deployment.recreate_venv") as recreate,
                 patch("bluetooth_2_usb.ops.deployment.run") as run,
             ):
                 rebuild_venv(venv, root)
 
-            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "new")
+            recreate.assert_not_called()
+            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "previous")
+            self.assertEqual(
+                run.call_args_list[0], call([venv / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
+            )
+            self.assertEqual(run.call_args_list[1], call([venv / "bin/pip", "install", "--upgrade", root]))
             self.assertEqual(
                 run.call_args_list[-1], call([venv / "bin/python", "-m", "bluetooth_2_usb", "--version"], capture=True)
             )
+
+    def test_rebuild_venv_creates_missing_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            venv = root / "venv"
+
+            def fake_recreate_venv(target: Path) -> None:
+                (target / "bin").mkdir(parents=True)
+                (target / "bin/python").touch()
+                (target / "bin/pip").touch()
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv) as recreate,
+                patch("bluetooth_2_usb.ops.deployment.run"),
+            ):
+                rebuild_venv(venv, root)
+
+            recreate.assert_called_once_with(venv)
+            self.assertTrue((venv / "bin/python").is_file())
+            self.assertTrue((venv / "bin/pip").is_file())
+
+    def test_rebuild_venv_recreates_invalid_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            venv = root / "venv"
+            (venv / "bin").mkdir(parents=True)
+            (venv / "bin/python").touch()
+
+            def fake_recreate_venv(target: Path) -> None:
+                (target / "bin").mkdir(parents=True, exist_ok=True)
+                (target / "bin/python").touch()
+                (target / "bin/pip").touch()
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv) as recreate,
+                patch("bluetooth_2_usb.ops.deployment.run"),
+            ):
+                rebuild_venv(venv, root)
+
+            recreate.assert_called_once_with(venv)
+
+    def test_rebuild_venv_recreate_flag_removes_existing_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            venv = root / "venv"
+            (venv / "bin").mkdir(parents=True)
+            (venv / "bin/python").touch()
+            (venv / "bin/pip").touch()
+            (venv / "marker").write_text("previous", encoding="utf-8")
+
+            def fake_recreate_venv(target: Path) -> None:
+                (target / "marker").write_text("new", encoding="utf-8")
+
+            with (
+                patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv) as recreate,
+                patch("bluetooth_2_usb.ops.deployment.run"),
+            ):
+                rebuild_venv(venv, root, recreate=True)
+
+            recreate.assert_called_once_with(venv)
+            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "new")
 
     def test_rebuild_venv_fails_loudly_when_package_install_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             venv = root / "venv"
             (venv / "bin").mkdir(parents=True)
+            (venv / "bin/python").touch()
+            (venv / "bin/pip").touch()
             (venv / "marker").write_text("previous", encoding="utf-8")
-
-            def fake_recreate_venv(target: Path) -> None:
-                (target / "bin").mkdir(parents=True)
-                (target / "marker").write_text("new", encoding="utf-8")
 
             def fake_run(command, **_kwargs):
                 if command[:2] == [venv / "bin/pip", "install"] and command[-1] == root:
                     raise OpsError("package install failed")
 
             with (
-                patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv),
+                patch("bluetooth_2_usb.ops.deployment.recreate_venv"),
                 patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run),
                 self.assertRaisesRegex(OpsError, "package install failed"),
             ):
                 rebuild_venv(venv, root)
 
-            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "new")
+            self.assertEqual((venv / "marker").read_text(encoding="utf-8"), "previous")
 
     def test_rebuild_venv_fails_loudly_when_version_check_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             venv = root / "venv"
-
-            def fake_recreate_venv(target: Path) -> None:
-                (target / "bin").mkdir(parents=True)
+            (venv / "bin").mkdir(parents=True)
+            (venv / "bin/python").touch()
+            (venv / "bin/pip").touch()
 
             def fake_run(command, **_kwargs):
                 if command[:3] == [venv / "bin/python", "-m", "bluetooth_2_usb"]:
                     raise OpsError("version check failed")
 
             with (
-                patch("bluetooth_2_usb.ops.deployment.recreate_venv", side_effect=fake_recreate_venv),
+                patch("bluetooth_2_usb.ops.deployment.recreate_venv"),
                 patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run),
                 self.assertRaisesRegex(OpsError, "version check failed"),
             ):
@@ -135,16 +197,17 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_dwc2_overlay"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_modules_load"))
-                stack.enter_context(
+                rebuild = stack.enter_context(
                     patch("bluetooth_2_usb.ops.deployment.rebuild_venv", side_effect=OpsError("venv failed"))
                 )
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run))
 
                 with self.assertRaises(OpsError):
-                    install(root)
+                    install(root, recreate_venv=True)
 
         self.assertIn(["systemctl", "stop", paths.service_unit], commands)
         self.assertNotIn(["systemctl", "start", paths.service_unit], commands)
+        rebuild.assert_called_once_with(paths.install_dir / "venv", paths.install_dir, recreate=True)
 
     def test_install_canonicalizes_managed_env_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -175,7 +238,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.clear_bluetooth_rfkill_soft_blocks"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_dwc2_overlay"))
                 stack.enter_context(patch(f"{BOOT_CONFIG}.normalize_modules_load"))
-                stack.enter_context(patch("bluetooth_2_usb.ops.deployment.rebuild_venv", return_value=None))
+                rebuild = stack.enter_context(patch("bluetooth_2_usb.ops.deployment.rebuild_venv", return_value=None))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_service_unit"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_cli_links"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.activate_service_unit"))
@@ -190,6 +253,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 install(root)
 
         self.assertEqual(canonicalized_paths, [paths.env_file])
+        rebuild.assert_called_once_with(paths.install_dir / "venv", paths.install_dir, recreate=False)
 
     def test_update_pulls_current_branch_then_reapplies_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -215,10 +279,10 @@ class OpsDeploymentTest(unittest.TestCase):
                 patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run),
                 patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
             ):
-                update(root)
+                update(root, recreate_venv=True)
 
         self.assertEqual(commands, [["git", "-C", root, "pull", "--ff-only", "origin", "staging"]])
-        managed_install.assert_called_once_with(root)
+        managed_install.assert_called_once_with(root, recreate_venv=True)
 
     def test_update_reapplies_install_even_when_pull_has_no_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -242,7 +306,7 @@ class OpsDeploymentTest(unittest.TestCase):
             ):
                 update(root)
 
-        managed_install.assert_called_once_with(root)
+        managed_install.assert_called_once_with(root, recreate_venv=False)
 
     def test_update_refuses_dirty_checkout_before_pull_or_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

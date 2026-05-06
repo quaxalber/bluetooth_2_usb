@@ -40,8 +40,18 @@ def _main(argv: list[str], *, prog: str) -> int:
     parser = argparse.ArgumentParser(prog=prog)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    _command_parser(subparsers, "install", "Apply the managed system install.")
-    _command_parser(subparsers, "update", "Fast-forward and reapply the managed install.")
+    install_parser = _command_parser(subparsers, "install", "Apply the managed system install.")
+    install_parser.add_argument(
+        "--recreate-venv",
+        action="store_true",
+        help="Delete and recreate the managed virtual environment instead of reusing a valid one.",
+    )
+    update_parser = _command_parser(subparsers, "update", "Fast-forward and reapply the managed install.")
+    update_parser.add_argument(
+        "--recreate-venv",
+        action="store_true",
+        help="Delete and recreate the managed virtual environment instead of reusing a valid one.",
+    )
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
@@ -92,9 +102,9 @@ def _main(argv: list[str], *, prog: str) -> int:
         prepare_log(log_name)
 
     if command_path == ("install",):
-        install(repo_root)
+        install(repo_root, recreate_venv=namespace.recreate_venv)
     elif command_path == ("update",):
-        update(repo_root)
+        update(repo_root, recreate_venv=namespace.recreate_venv)
     elif command_path == ("uninstall",):
         uninstall()
     elif command_path == ("smoketest",):

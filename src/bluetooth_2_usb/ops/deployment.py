@@ -60,9 +60,13 @@ def recreate_venv(venv_dir: Path) -> None:
     run(["python3", "-m", "venv", venv_dir])
 
 
-def rebuild_venv(venv_dir: Path, package_dir: Path) -> None:
-    shutil.rmtree(venv_dir, ignore_errors=True)
-    recreate_venv(venv_dir)
+def venv_usable(venv_dir: Path) -> bool:
+    return (venv_dir / "bin/python").is_file() and (venv_dir / "bin/pip").is_file()
+
+
+def rebuild_venv(venv_dir: Path, package_dir: Path, *, recreate: bool = False) -> None:
+    if recreate or not venv_usable(venv_dir):
+        recreate_venv(venv_dir)
     run([venv_dir / "bin/pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
     run([venv_dir / "bin/pip", "install", "--upgrade", package_dir])
     run([venv_dir / "bin/python", "-m", "bluetooth_2_usb", "--version"], capture=True)
@@ -81,7 +85,7 @@ def service_installed() -> bool | None:
     return any(line.split(None, 1)[0] == PATHS.service_unit for line in completed.stdout.splitlines() if line.split())
 
 
-def install(repo_root: Path) -> None:
+def install(repo_root: Path, *, recreate_venv: bool = False) -> None:
     require_commands(["apt-get", "awk", "grep", "git", "install", "python3", "sed", "systemctl"])
     if repo_root != PATHS.install_dir:
         fail(f"Clone this repository to {PATHS.install_dir} and rerun install from there.")
@@ -123,8 +127,14 @@ def install(repo_root: Path) -> None:
         info(f"Stopping {PATHS.service_unit} before rebuilding the managed installation")
         run(["systemctl", "stop", PATHS.service_unit])
 
-    info(f"Rebuilding virtual environment at {PATHS.install_dir / 'venv'}")
-    rebuild_venv(PATHS.install_dir / "venv", PATHS.install_dir)
+    venv_dir = PATHS.install_dir / "venv"
+    if recreate_venv:
+        info(f"Recreating virtual environment at {venv_dir}")
+    elif venv_usable(venv_dir):
+        info(f"Updating virtual environment at {venv_dir}")
+    else:
+        info(f"Creating virtual environment at {venv_dir}")
+    rebuild_venv(venv_dir, PATHS.install_dir, recreate=recreate_venv)
     ok(f"Virtual environment updated at {PATHS.install_dir / 'venv'}")
 
     install_service_unit(repo_root)
@@ -152,7 +162,7 @@ def install(repo_root: Path) -> None:
     info("   Then run: sudo bluetooth_2_usb readonly enable")
 
 
-def update(repo_root: Path) -> None:
+def update(repo_root: Path, *, recreate_venv: bool = False) -> None:
     require_commands(["git"])
     if repo_root != PATHS.install_dir:
         fail(f"Clone this repository to {PATHS.install_dir} and rerun update from there.")
@@ -167,7 +177,7 @@ def update(repo_root: Path) -> None:
     info(f"Pulling latest {branch}")
     run(["git", "-C", PATHS.install_dir, "pull", "--ff-only", "origin", branch])
     info("Reapplying managed install")
-    install(repo_root)
+    install(repo_root, recreate_venv=recreate_venv)
 
 
 def uninstall() -> None:

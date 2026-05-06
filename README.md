@@ -182,13 +182,16 @@ console command.
 ### `install`
 
 Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
-Use this after cloning into the supported install path.
+Use this after cloning into the supported install path. The managed virtual
+environment is reused when it is valid; pass `--recreate-venv` to delete and
+recreate it before installing.
 
 ### `update`
 
 Fast-forward the managed checkout and reapply `install`. This is the normal
-update path for an installed system, and it rebuilds the managed environment
-even when the checkout is already current.
+update path for an installed system. The managed virtual environment is reused
+when it is valid; pass `--recreate-venv` after dependency removals, suspected
+venv corruption, or clean-install release validation.
 
 ### `uninstall`
 

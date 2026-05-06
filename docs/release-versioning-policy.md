@@ -72,10 +72,12 @@ This avoids hard-coded version strings in runtime code and keeps these outputs a
 - installed service/runtime logs
 
 The managed `/opt/bluetooth_2_usb` clone-based install works with that
-versioning model. The installer rebuilds the venv from the checked-out Git
-tree in `/opt/bluetooth_2_usb`, so an install from the exact tagged commit will
-show that exact release version. A separate release artifact install is not required for
-the runtime to report `1.0.0`.
+versioning model. The installer updates the managed venv from the checked-out
+Git tree in `/opt/bluetooth_2_usb`, so an install from the exact tagged commit
+will show that exact release version. Use `install --recreate-venv` or
+`update --recreate-venv` when release validation requires a clean environment
+rebuild. A separate release artifact install is not required for the runtime to
+report `1.0.0`.
 
 In practice:
 
