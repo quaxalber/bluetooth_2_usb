@@ -242,6 +242,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_service_unit"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.install_cli_links"))
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.activate_service_unit"))
+                migrate = stack.enter_context(patch("bluetooth_2_usb.ops.deployment.migrate_service_settings"))
                 stack.enter_context(
                     patch(
                         "bluetooth_2_usb.ops.deployment.canonicalize_service_settings_bools",
@@ -252,6 +253,7 @@ class OpsDeploymentTest(unittest.TestCase):
 
                 install(root)
 
+        migrate.assert_called_once_with(paths.env_file)
         self.assertEqual(canonicalized_paths, [paths.env_file])
         rebuild.assert_called_once_with(paths.install_dir / "venv", paths.install_dir, recreate=False)
 

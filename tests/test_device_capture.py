@@ -401,6 +401,44 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual([record["record_type"] for record in records].count("evdev_key_snapshot"), 1)
         self.assertFalse(records[-1]["interrupted"])
 
+    def test_capture_progress_receives_matched_devices(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "Keyboard")
+        started_devices = []
+
+        class Progress:
+            def capture_started(self, devices, output_path: Path) -> None:
+                started_devices.extend(devices)
+
+            def evdev_event(self, device, event) -> None:
+                pass
+
+            def hidraw_report(self, path: Path, report: bytes) -> None:
+                pass
+
+            def capture_finished(self, output_path: Path, *, interrupted: bool) -> None:
+                pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=0,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                        progress=Progress(),
+                    )
+                )
+
+        self.assertEqual(started_devices, [device])
+
     def test_capture_default_output_path_uses_matched_device_name_and_timestamp(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Apple Inc. Magic Trackpad")
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1108,6 +1146,10 @@ class DeviceCaptureTest(unittest.TestCase):
                 for record in records
                 if record["record_type"] not in {"evdev_key_snapshot", "evdev_axis_snapshot", "evdev_sync_summary"}
             ]
+            records[-1]["counts"] = {
+                record_type: sum(1 for record in records[:-1] if record["record_type"] == record_type)
+                for record_type in {str(record["record_type"]) for record in records[:-1]}
+            }
             _write_jsonl(path, records)
 
             report = validate_capture(path)

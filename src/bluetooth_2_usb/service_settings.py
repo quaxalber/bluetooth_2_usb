@@ -214,6 +214,44 @@ def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bo
     return True
 
 
+def migrate_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> bool:
+    if not env_file.exists():
+        return False
+
+    original_text = env_file.read_text(encoding="utf-8")
+    original_lines = original_text.splitlines()
+    has_devices = any(_line_key(line) == "B2U_DEVICES" for line in original_lines)
+    updated_lines: list[str] = []
+    changed = False
+
+    for line in original_lines:
+        key = _line_key(line)
+        if key != "B2U_DEVICE_IDS":
+            updated_lines.append(line)
+            continue
+        changed = True
+        if not has_devices:
+            updated_lines.append(line.replace("B2U_DEVICE_IDS", "B2U_DEVICES", 1))
+            has_devices = True
+
+    if not changed:
+        return False
+
+    updated_text = "\n".join(updated_lines)
+    if original_text.endswith("\n"):
+        updated_text += "\n"
+    env_file.write_text(updated_text, encoding="utf-8")
+    return True
+
+
+def _line_key(raw_line: str) -> str | None:
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in raw_line:
+        return None
+    key, _raw_value = raw_line.split("=", 1)
+    return key.strip()
+
+
 def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False) -> list[str]:
     argv: list[str] = []
     if settings.auto_discover:

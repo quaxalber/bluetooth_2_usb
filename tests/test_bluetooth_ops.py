@@ -212,6 +212,33 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             self.assertEqual(load_readonly_config(path), config)
 
+    def test_readonly_config_loads_persistent_mode_as_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "readonly.env"
+            path.write_text(
+                "\n".join(
+                    [
+                        'B2U_READONLY_MODE="persistent"',
+                        'B2U_PERSIST_MOUNT="/mnt/persist"',
+                        'B2U_PERSIST_BLUETOOTH_DIR="/mnt/persist/bluetooth"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            config = load_readonly_config(path)
+
+        self.assertEqual(config.mode, "enabled")
+
+    def test_write_readonly_config_normalizes_persistent_mode_to_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "readonly.env"
+
+            write_readonly_config(ReadonlyConfig(mode="persistent"), path)
+
+            self.assertIn('B2U_READONLY_MODE="enabled"', path.read_text(encoding="utf-8"))
+
     def test_readonly_config_rejects_unexpected_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"

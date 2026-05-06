@@ -10,6 +10,7 @@ from bluetooth_2_usb.service_settings import (
     build_runtime_shell_command,
     canonicalize_service_settings_bools,
     load_service_settings,
+    migrate_service_settings,
 )
 
 
@@ -82,6 +83,32 @@ class ServiceSettingsTest(unittest.TestCase):
 
             with self.assertRaises(ServiceSettingsError):
                 load_service_settings(env_file)
+
+    def test_migrate_service_settings_renames_legacy_device_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("# Settings\nB2U_DEVICE_IDS='keyboard, mouse'\n", encoding="utf-8")
+
+            changed = migrate_service_settings(env_file)
+            settings = load_service_settings(env_file)
+            migrated_text = env_file.read_text(encoding="utf-8")
+
+        self.assertTrue(changed)
+        self.assertEqual(settings.devices, ["keyboard", "mouse"])
+        self.assertEqual(migrated_text, "# Settings\nB2U_DEVICES='keyboard, mouse'\n")
+
+    def test_migrate_service_settings_drops_legacy_device_ids_when_devices_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("B2U_DEVICE_IDS=keyboard\nB2U_DEVICES=mouse\n", encoding="utf-8")
+
+            changed = migrate_service_settings(env_file)
+            settings = load_service_settings(env_file)
+            migrated_text = env_file.read_text(encoding="utf-8")
+
+        self.assertTrue(changed)
+        self.assertEqual(settings.devices, ["mouse"])
+        self.assertEqual(migrated_text, "B2U_DEVICES=mouse\n")
 
     def test_builds_runtime_argv_and_shell_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from bluetooth_2_usb.service_settings import canonicalize_service_settings_bools
+from bluetooth_2_usb.service_settings import canonicalize_service_settings_bools, migrate_service_settings
 
 from . import boot_config
 from .bluetooth import clear_bluetooth_rfkill_soft_blocks
@@ -141,6 +141,7 @@ def install(repo_root: Path, *, recreate_venv: bool = False) -> None:
 
     install_service_unit(repo_root)
     write_default_env_file()
+    migrate_service_settings(PATHS.env_file)
     canonicalize_service_settings_bools(PATHS.env_file)
     run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
     install_cli_links()

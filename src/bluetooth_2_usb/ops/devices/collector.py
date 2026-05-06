@@ -107,7 +107,7 @@ async def capture_device(
             writer = JsonlWriter(output_file, hostname=hostname)
             writer_lock = asyncio.Lock()
             if progress is not None:
-                progress.capture_started(devices, output_path)
+                progress.capture_started(input_devices, output_path)
             writer.write(
                 {
                     "record_type": "capture_start",
