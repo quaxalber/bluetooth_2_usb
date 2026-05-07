@@ -1,7 +1,6 @@
 import asyncio
 import signal
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -16,19 +15,16 @@ class RuntimeConfigTest(unittest.TestCase):
             auto=True, debug=False, devices=["/dev/input/event7"], grab=True, shortcut=["KEY_LEFTCTRL", "KEY_F12"]
         )
 
-        config = runtime_config_from_args(args, udc_path=Path("/tmp/udc-state"))
+        config = runtime_config_from_args(args)
 
         self.assertEqual(config.devices, ("/dev/input/event7",))
         self.assertEqual(config.shortcut, ("KEY_LEFTCTRL", "KEY_F12"))
-        self.assertEqual(config.udc_path, Path("/tmp/udc-state"))
 
 
 class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
     def _runtime(self) -> Runtime:
         return Runtime(
-            runtime_config_from_args(
-                SimpleNamespace(auto=False, debug=False, devices=[], grab=False, shortcut=[]), udc_path=None
-            )
+            runtime_config_from_args(SimpleNamespace(auto=False, debug=False, devices=[], grab=False, shortcut=[]))
         )
 
     async def test_signal_handlers_request_runtime_shutdown(self) -> None:

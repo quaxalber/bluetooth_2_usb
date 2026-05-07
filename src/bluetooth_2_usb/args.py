@@ -1,4 +1,5 @@
 import argparse
+from dataclasses import dataclass
 
 from .inputs.filter import parse_devices
 
@@ -143,70 +144,20 @@ class _HelpAction(argparse._HelpAction):
         parser.exit()
 
 
+@dataclass(frozen=True, slots=True)
 class Arguments:
-    __slots__ = ["_devices", "_auto", "_grab", "_shortcut", "_list", "_debug", "_version", "_validate_env", "_output"]
-
-    def __init__(
-        self,
-        devices: list[str] | None,
-        auto: bool,
-        grab: bool,
-        shortcut: list[str] | None,
-        list_: bool,
-        debug: bool,
-        version: bool,
-        validate_env: bool,
-        output: str,
-    ) -> None:
-        self._devices = devices
-        self._auto = auto
-        self._grab = grab
-        self._shortcut = shortcut
-        self._list = list_
-        self._debug = debug
-        self._version = version
-        self._validate_env = validate_env
-        self._output = output
-
-    @property
-    def devices(self) -> list[str] | None:
-        return self._devices
-
-    @property
-    def auto(self) -> bool:
-        return self._auto
-
-    @property
-    def grab(self) -> bool:
-        return self._grab
-
-    @property
-    def shortcut(self) -> list[str] | None:
-        return self._shortcut
-
-    @property
-    def list(self) -> bool:
-        return self._list
-
-    @property
-    def debug(self) -> bool:
-        return self._debug
-
-    @property
-    def version(self) -> bool:
-        return self._version
-
-    @property
-    def validate_env(self) -> bool:
-        return self._validate_env
-
-    @property
-    def output(self) -> str:
-        return self._output
+    devices: list[str] | None
+    auto: bool
+    grab: bool
+    shortcut: list[str] | None
+    list: bool
+    debug: bool
+    version: bool
+    validate_env: bool
+    output: str
 
     def __str__(self) -> str:
-        slot_values = [f"{slot[1:]}={getattr(self, slot)}" for slot in self.__slots__]
-        return ", ".join(slot_values)
+        return ", ".join(f"{field}={getattr(self, field)}" for field in self.__dataclass_fields__)
 
 
 def parse_args(argv: list[str] | None = None) -> Arguments:
@@ -230,7 +181,7 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         auto=args.auto,
         grab=args.grab,
         shortcut=args.shortcut,
-        list_=args.list,
+        list=args.list,
         debug=args.debug,
         version=args.version,
         validate_env=args.validate_env,

@@ -25,19 +25,19 @@ class InputRelay:
         input_device: InputDevice,
         hid_gadgets: HidGadgets,
         relay_gate: RelayGate,
-        grab_device: bool = False,
+        grab: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
         :param input_device: The evdev input device
         :param hid_gadgets: Provides references to Keyboard, Mouse, ConsumerControl
-        :param grab_device: Whether to grab the device for exclusive access
+        :param grab: Whether to grab the device for exclusive access
         :param relay_gate: RelayGate that indicates whether relaying is active
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
         """
         self._input_device = input_device
         self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler)
-        self._grab_device = grab_device
+        self._grab = grab
         self._relay_gate = relay_gate
 
         self._currently_grabbed = False
@@ -95,14 +95,14 @@ class InputRelay:
             self._dispatcher.discard_pending()
 
     def _update_grab_state(self, active: bool) -> None:
-        if self._grab_device and active and not self._currently_grabbed:
+        if self._grab and active and not self._currently_grabbed:
             try:
                 self._input_device.grab()
                 self._currently_grabbed = True
                 logger.debug("Grabbed %s", self._input_device)
             except Exception as ex:
                 logger.warning("Could not grab %s: %s", self._input_device, ex)
-        elif self._grab_device and not active and self._currently_grabbed:
+        elif self._grab and not active and self._currently_grabbed:
             try:
                 self._input_device.ungrab()
                 self._currently_grabbed = False

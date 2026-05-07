@@ -59,7 +59,7 @@ class RelaySupervisor:
         devices: list[str] | None = None,
         auto_relay: bool = False,
         skip_name_prefixes: list[str] | None = None,
-        grab_device: bool = False,
+        grab: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
     ) -> None:
         """
@@ -69,7 +69,7 @@ class RelaySupervisor:
         :param devices: A list of path, uniq, phys, MAC, or name fragments to match devices to relay
         :param auto_relay: If True, relays all valid input devices except those skipped
         :param skip_name_prefixes: A list of device.name prefixes to skip if auto_relay is True
-        :param grab_device: If True, the relay tries to grab exclusive access to each device
+        :param grab: If True, the relay tries to grab exclusive access to each device
         :param shortcut_toggler: ShortcutToggler to allow toggling relaying globally
         """
         self._hid_gadgets = hid_gadgets
@@ -83,7 +83,7 @@ class RelaySupervisor:
             tuple(skip_name_prefixes) if skip_name_prefixes is not None else DEFAULT_SKIP_NAME_PREFIXES
         )
 
-        self._grab_device = grab_device
+        self._grab = grab
 
         self._state = _SupervisorState.NEW
 
@@ -327,7 +327,7 @@ class RelaySupervisor:
             async with InputRelay(
                 device,
                 self._hid_gadgets,
-                grab_device=self._grab_device,
+                grab=self._grab,
                 relay_gate=self._relay_gate,
                 shortcut_toggler=self._shortcut_toggler,
             ) as relay:

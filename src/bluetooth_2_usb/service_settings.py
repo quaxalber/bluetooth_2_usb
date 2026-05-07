@@ -10,8 +10,8 @@ from pathlib import Path
 from .inputs.filter import parse_devices
 
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
-BOOL_KEYS = {"B2U_AUTO", "B2U_GRAB_DEVICES", "B2U_DEBUG"}
-RUNTIME_ENV_KEY_ORDER = ("B2U_AUTO", "B2U_DEVICES", "B2U_GRAB_DEVICES", "B2U_SHORTCUT", "B2U_DEBUG")
+BOOL_KEYS = {"B2U_AUTO", "B2U_GRAB", "B2U_DEBUG"}
+RUNTIME_ENV_KEY_ORDER = ("B2U_AUTO", "B2U_DEVICES", "B2U_GRAB", "B2U_SHORTCUT", "B2U_DEBUG")
 ALLOWED_KEYS = BOOL_KEYS | {"B2U_SHORTCUT", "B2U_DEVICES"}
 
 
@@ -77,7 +77,7 @@ def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
         return _canonical_bool(settings.auto)
     if key == "B2U_DEVICES":
         return _quote_if_needed(", ".join(settings.devices))
-    if key == "B2U_GRAB_DEVICES":
+    if key == "B2U_GRAB":
         return _canonical_bool(settings.grab)
     if key == "B2U_SHORTCUT":
         return _quote_if_needed(settings.shortcut)
@@ -107,7 +107,7 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
         value = _parse_value(raw_value)
         if key == "B2U_AUTO":
             settings.auto = _parse_bool(value, key)
-        elif key == "B2U_GRAB_DEVICES":
+        elif key == "B2U_GRAB":
             settings.grab = _parse_bool(value, key)
         elif key == "B2U_SHORTCUT":
             settings.shortcut = value
@@ -177,6 +177,7 @@ def normalize_service_settings_file(env_file: Path = DEFAULT_ENV_FILE) -> bool:
     key_migrations = {
         "B2U_AUTO_DISCOVER": "B2U_AUTO",
         "B2U_DEVICE_IDS": "B2U_DEVICES",
+        "B2U_GRAB_DEVICES": "B2U_GRAB",
         "B2U_INTERRUPT_SHORTCUT": "B2U_SHORTCUT",
     }
     removed_keys = {"B2U_LOG_PATH", "B2U_LOG_TO_FILE", "B2U_UDC_PATH", "B2U_USB_SERIAL", "B2U_USB_PRODUCT_SUFFIX"}

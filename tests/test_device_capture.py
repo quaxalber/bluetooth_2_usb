@@ -212,6 +212,7 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("--devices DEVICE", stdout.getvalue())
         self.assertIn("--live-mode", stdout.getvalue())
+        self.assertNotIn("--format", stdout.getvalue())
 
     def test_device_capture_defaults_to_summarized_live_mode(self) -> None:
         with (

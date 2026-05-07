@@ -22,7 +22,7 @@ class ServiceSettingsTest(unittest.TestCase):
                 "\n".join(
                     [
                         "B2U_AUTO=0",
-                        "B2U_GRAB_DEVICES=1",
+                        "B2U_GRAB=1",
                         "B2U_SHORTCUT=CTRL+SHIFT+F12",
                         "B2U_DEBUG=1",
                         "B2U_DEVICES='mouse, keyboard'",
@@ -44,13 +44,7 @@ class ServiceSettingsTest(unittest.TestCase):
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
                 "\n".join(
-                    [
-                        "B2U_AUTO=false",
-                        "B2U_GRAB_DEVICES=yes",
-                        "B2U_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_DEBUG=no",
-                        "B2U_DEVICES=",
-                    ]
+                    ["B2U_AUTO=false", "B2U_GRAB=yes", "B2U_SHORTCUT=CTRL+SHIFT+F12", "B2U_DEBUG=no", "B2U_DEVICES="]
                 )
                 + "\n",
                 encoding="utf-8",
@@ -133,6 +127,19 @@ class ServiceSettingsTest(unittest.TestCase):
         self.assertEqual(settings.shortcut, "CTRL + SHIFT + F12")
         self.assertEqual(migrated_text, "B2U_AUTO=true\nB2U_SHORTCUT='CTRL + SHIFT + F12'\n")
 
+    def test_normalize_service_settings_renames_legacy_grab_devices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("B2U_GRAB_DEVICES=false\n", encoding="utf-8")
+
+            changed = normalize_service_settings_file(env_file)
+            settings = load_service_settings(env_file)
+            migrated_text = env_file.read_text(encoding="utf-8")
+
+        self.assertTrue(changed)
+        self.assertFalse(settings.grab)
+        self.assertEqual(migrated_text, "B2U_GRAB=false\n")
+
     def test_normalize_service_settings_removes_removed_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"
@@ -154,13 +161,7 @@ class ServiceSettingsTest(unittest.TestCase):
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
                 "\n".join(
-                    [
-                        "B2U_AUTO=1",
-                        "B2U_GRAB_DEVICES=1",
-                        "B2U_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_DEBUG=0",
-                        "B2U_DEVICES='MX Keys'",
-                    ]
+                    ["B2U_AUTO=1", "B2U_GRAB=1", "B2U_SHORTCUT=CTRL+SHIFT+F12", "B2U_DEBUG=0", "B2U_DEVICES='MX Keys'"]
                 )
                 + "\n",
                 encoding="utf-8",
@@ -222,7 +223,7 @@ class ServiceSettingsTest(unittest.TestCase):
                         "# Managed runtime settings",
                         "B2U_AUTO=1",
                         "",
-                        "B2U_GRAB_DEVICES=yes",
+                        "B2U_GRAB=yes",
                         "B2U_DEBUG=0",
                         "B2U_DEVICES='MX Keys'",
                     ]
@@ -241,7 +242,7 @@ class ServiceSettingsTest(unittest.TestCase):
                         "# Managed runtime settings",
                         "B2U_AUTO=true",
                         "B2U_DEVICES='MX Keys'",
-                        "B2U_GRAB_DEVICES=true",
+                        "B2U_GRAB=true",
                         "B2U_SHORTCUT=CTRL+SHIFT+F12",
                         "B2U_DEBUG=false",
                     ]
@@ -254,13 +255,7 @@ class ServiceSettingsTest(unittest.TestCase):
             env_file = Path(tmpdir) / "bluetooth_2_usb"
             env_file.write_text(
                 "\n".join(
-                    [
-                        "B2U_AUTO=true",
-                        "B2U_DEVICES=",
-                        "B2U_GRAB_DEVICES=true",
-                        "B2U_SHORTCUT=CTRL+SHIFT+F12",
-                        "B2U_DEBUG=false",
-                    ]
+                    ["B2U_AUTO=true", "B2U_DEVICES=", "B2U_GRAB=true", "B2U_SHORTCUT=CTRL+SHIFT+F12", "B2U_DEBUG=false"]
                 )
                 + "\n",
                 encoding="utf-8",

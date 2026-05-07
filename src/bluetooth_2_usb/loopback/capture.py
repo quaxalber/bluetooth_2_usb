@@ -586,10 +586,12 @@ def _iter_hid_infos(hid_module: Any) -> list[HidDeviceInfo]:
 def discover_gadget_node_candidates(devices: str, hid_module: Any | None = None) -> GadgetNodeCandidates:
     hid_module = _load_hidapi() if hid_module is None else hid_module
     infos = _iter_hid_infos(hid_module)
+    if not devices.strip():
+        raise ValueError("devices must not be empty")
     try:
         device_filters = [DeviceFilter(device) for device in parse_devices(devices)]
     except ValueError as exc:
-        raise MissingNodeError("DEVICES must not be empty") from exc
+        raise MissingNodeError("Invalid device filter list") from exc
 
     keyboard_nodes: list[HidDeviceInfo] = []
     mouse_nodes: list[HidDeviceInfo] = []
@@ -812,12 +814,7 @@ def _capture_once(
     )
 
 
-def run_capture(
-    scenario_name: str, devices: str, timeout_sec: float | None = None, grab: bool = True
-) -> LoopbackResult:
-    # hidapi capture does not offer exclusive-grab semantics; keep the parameter
-    # for CLI parity with other backends.
-    _ = grab
+def run_capture(scenario_name: str, devices: str, timeout_sec: float | None = None) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     resolved_timeout_sec = scenario.default_capture_timeout_sec if timeout_sec is None else timeout_sec
 

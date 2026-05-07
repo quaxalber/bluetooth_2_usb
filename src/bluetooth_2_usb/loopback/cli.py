@@ -104,15 +104,25 @@ def _validate_args(args: argparse.Namespace) -> LoopbackResult | None:
                 details={},
             )
 
-    if args.command == "capture" and args.timeout_sec is not None and args.timeout_sec <= 0:
-        return LoopbackResult(
-            command="capture",
-            scenario=args.scenario,
-            success=False,
-            exit_code=EXIT_USAGE,
-            message="--timeout-sec must be > 0",
-            details={},
-        )
+    if args.command == "capture":
+        if args.timeout_sec is not None and args.timeout_sec <= 0:
+            return LoopbackResult(
+                command="capture",
+                scenario=args.scenario,
+                success=False,
+                exit_code=EXIT_USAGE,
+                message="--timeout-sec must be > 0",
+                details={},
+            )
+        if not args.devices.strip():
+            return LoopbackResult(
+                command="capture",
+                scenario=args.scenario,
+                success=False,
+                exit_code=EXIT_USAGE,
+                message="--devices must not be empty",
+                details={},
+            )
     return None
 
 

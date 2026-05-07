@@ -16,7 +16,6 @@ References:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import usb_hid
@@ -123,13 +122,6 @@ def _maybe_write_wakeup_on_write(device_root: Path, enabled: bool) -> None:
 
 
 def _resolve_udc_name() -> str:
-    override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
-    if override_path:
-        candidate = Path(override_path)
-        if candidate.name == "state":
-            return candidate.parent.name
-        return candidate.name
-
     controllers = sorted(entry.name for entry in Path("/sys/class/udc").iterdir())
     if not controllers:
         raise FileNotFoundError("No UDC controller was found in /sys/class/udc")

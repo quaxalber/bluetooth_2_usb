@@ -1290,6 +1290,15 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIsNone(run.call_args.kwargs["timeout_sec"])
 
+    def test_capture_cli_rejects_blank_devices_as_usage_error(self) -> None:
+        stdout = io.StringIO()
+
+        with redirect_stdout(stdout):
+            exit_code = run_loopback(["capture", "--devices", "", "--scenario", SCENARIO_KEYBOARD])
+
+        self.assertEqual(exit_code, EXIT_USAGE)
+        self.assertIn("--devices must not be empty", stdout.getvalue())
+
     def test_capture_uses_scenario_default_timeout(self) -> None:
         hid_module = _FakeHidModule(
             [

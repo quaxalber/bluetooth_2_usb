@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.runtime.event_source import RuntimeEventSource
+from bluetooth_2_usb.runtime.event_source import RuntimeEventSource, _discover_udc_state_path
 from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, UdcState, UdcStateChanged
 
 
@@ -39,7 +39,12 @@ class _FakeMonitor:
 
 class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
     def _build_source(
-        self, events: asyncio.Queue, *, monitor: _FakeMonitor, udc_path: Path | None = None, poll_interval: float = 0.01
+        self,
+        events: asyncio.Queue,
+        *,
+        monitor: _FakeMonitor,
+        udc_path: Path | None = Path("/missing/udc-state"),
+        poll_interval: float = 0.01,
     ) -> RuntimeEventSource:
         with patch("bluetooth_2_usb.runtime.event_source.pyudev.Context", return_value=object()):
             with patch("bluetooth_2_usb.runtime.event_source.pyudev.Monitor.from_netlink", return_value=monitor):
@@ -113,13 +118,28 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
     async def test_runtime_event_source_treats_missing_udc_path_as_not_attached(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
-        source = self._build_source(queue, monitor=monitor, udc_path=None)
+        with patch("bluetooth_2_usb.runtime.event_source._discover_udc_state_path", return_value=None):
+            source = self._build_source(queue, monitor=monitor, udc_path=None)
 
         task = asyncio.create_task(source.run())
         self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached"))
 
         source.stop()
         await asyncio.wait_for(task, timeout=1)
+        monitor.close()
+
+    async def test_runtime_event_source_discovers_udc_state_path_when_not_injected(self) -> None:
+        monitor = _FakeMonitor()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            udc_root = Path(tmpdir)
+            controller = udc_root / "20980000.usb"
+            controller.mkdir()
+            state = controller / "state"
+            state.write_text("configured\n", encoding="utf-8")
+
+            with patch("bluetooth_2_usb.runtime.event_source.Path", return_value=udc_root):
+                self.assertEqual(_discover_udc_state_path(), state)
+
         monitor.close()
 
     async def test_runtime_event_source_stops_when_start_monitoring_fails(self) -> None:

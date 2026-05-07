@@ -16,11 +16,13 @@ class RuntimeEventSource:
     Emits runtime events from UDC state polling and udev input hotplug.
     """
 
-    def __init__(self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5) -> None:
+    def __init__(
+        self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None = None, poll_interval: float = 0.5
+    ) -> None:
         if poll_interval <= 0:
             raise ValueError("poll_interval must be > 0")
         self._events = events
-        self._udc_path = udc_path
+        self._udc_path = _discover_udc_state_path() if udc_path is None else udc_path
         self._poll_interval = poll_interval
 
         self._stop_event = asyncio.Event()
@@ -116,3 +118,33 @@ class RuntimeEventSource:
         elif action == "remove":
             logger.debug("Input device removed: %s", device_node)
             self._events.put_nowait(DeviceRemoved(device_node))
+
+
+def _discover_udc_state_path() -> Path | None:
+    udc_root = Path("/sys/class/udc")
+    if not udc_root.is_dir():
+        return None
+
+    controllers = sorted(entry for entry in udc_root.iterdir() if entry.is_dir())
+    if not controllers:
+        return None
+
+    scored_controllers: list[tuple[int, str, Path]] = []
+    for controller in controllers:
+        candidate = controller / "state"
+        if not candidate.is_file():
+            continue
+
+        name = controller.name.lower()
+        score = 0
+        if any(token in name for token in ("otg", "gadget", "dwc2")):
+            score += 100
+        if name.startswith("2098") or name.startswith("fe98"):
+            score += 25
+        scored_controllers.append((score, controller.name, candidate))
+
+    if not scored_controllers:
+        return None
+
+    scored_controllers.sort(key=lambda item: (-item[0], item[1]))
+    return scored_controllers[0][2]

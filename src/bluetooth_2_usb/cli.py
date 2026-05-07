@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 from dataclasses import dataclass
 from logging import DEBUG
@@ -43,11 +42,6 @@ class EnvironmentStatus:
 
 
 def get_udc_path() -> Path | None:
-    override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
-    if override_path:
-        candidate = Path(override_path)
-        return candidate if candidate.is_file() else None
-
     udc_root = Path("/sys/class/udc")
     if not udc_root.is_dir():
         return None
@@ -153,7 +147,7 @@ async def async_run(args: Arguments) -> int:
     from .runtime.app import Runtime
     from .runtime.config import runtime_config_from_args
 
-    runtime = Runtime(runtime_config_from_args(args, udc_path=env_status.udc_path))
+    runtime = Runtime(runtime_config_from_args(args))
     await runtime.run()
 
     return EXIT_OK

@@ -38,21 +38,8 @@ connected to the target host through the OTG-capable data port.
 
 For new-device support requests, also include a local capture from the real
 device when possible. See [docs/device-capture.md](docs/device-capture.md).
-
-```bash
-sudo bluetooth_2_usb device capture --devices /dev/input/eventX --duration 30 --grab
-```
-
-Use raw live mode only when a maintainer asks for every event and report:
-
-```bash
-sudo bluetooth_2_usb device capture --devices /dev/input/eventX --duration 30 --grab --live-mode raw
-```
-
-The generated JSONL artifact may include typed keys, button presses, raw report
-bytes, MAC addresses, and unique device IDs. The default summarized mode is
-preferred for new-device support because it keeps compact per-axis snapshots
-and report summaries. Review captures before sharing them publicly.
+Review captures before sharing them publicly because they may contain typed keys,
+button presses, raw report bytes, MAC addresses, and unique device IDs.
 
 ## Pull Requests
 

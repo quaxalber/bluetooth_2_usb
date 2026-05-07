@@ -50,7 +50,7 @@ class Runtime:
         await hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(relay_gate)
-        self._event_source = RuntimeEventSource(self._events, udc_path=self._config.udc_path)
+        self._event_source = RuntimeEventSource(self._events)
 
         handlers = self._install_signal_handlers()
         try:
@@ -71,7 +71,7 @@ class Runtime:
             task_group=task_group,
             devices=list(self._config.devices),
             auto_relay=self._config.auto,
-            grab_device=self._config.grab,
+            grab=self._config.grab,
             shortcut_toggler=shortcut_toggler,
         )
 

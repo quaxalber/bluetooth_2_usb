@@ -52,7 +52,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=("JSONL output path. Default: " "./device_capture/<matched-device-name>[_raw]_<timestamp>.jsonl"),
     )
-    capture.add_argument("--format", choices=["jsonl"], default="jsonl", help="Output format. Default: jsonl")
     capture.add_argument(
         "--grab", action="store_true", help="Exclusively grab all matched input event devices during capture."
     )

@@ -336,7 +336,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_aexit_ignores_ebadf_from_ungrab_on_disappeared_device(self) -> None:
         gate = _active_gate()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EBADF)
-        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab=True, relay_gate=gate)
 
         async with relay:
             self.assertEqual(input_device.grab_calls, 1)
@@ -348,7 +348,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_aenter_defers_grab_while_relaying_is_paused(self) -> None:
         gate = RelayGate()
         input_device = _FakeGrabInputDevice()
-        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab=True, relay_gate=gate)
 
         async with relay:
             self.assertEqual(input_device.grab_calls, 0)
@@ -360,7 +360,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_unexpected_ungrab_error_preserves_grab_tracking_for_retry(self) -> None:
         gate = _active_gate()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EIO)
-        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab=True, relay_gate=gate)
 
         async with relay:
             with self.assertLogs("bluetooth_2_usb", level="WARNING"):
@@ -400,7 +400,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _FakeGrabInputDevice(
             [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down), _TestSynEvent()]
         )
-        relay = InputRelay(input_device, hid_gadgets, grab_device=True, relay_gate=gate, shortcut_toggler=toggler)
+        relay = InputRelay(input_device, hid_gadgets, grab=True, relay_gate=gate, shortcut_toggler=toggler)
 
         async with relay:
             await relay.async_relay_events_loop()
