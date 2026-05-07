@@ -215,12 +215,6 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
 done
 ```
 
-> [!TIP]
-> If the enable step fails with `mkinitramfs: failed to determine device for /`,
-> follow the repair step in
-> [persistent-readonly.md](persistent-readonly.md#enable-read-only-mode),
-> then rerun `readonly enable` and resume validation here before rebooting.
-
 After reboot:
 
 ```bash
