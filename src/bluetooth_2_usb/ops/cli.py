@@ -4,11 +4,13 @@ import argparse
 import json
 import sys
 from contextlib import redirect_stdout
+from pathlib import Path
 
 from .commands import OpsError, close_log, ensure_root, fail, prepare_log
 from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
+from .paths import PATHS
 from .readonly import disable_readonly, enable_readonly, print_readonly_status, setup_persistent_bluetooth_state
 
 OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev", "device"})
@@ -66,7 +68,12 @@ def _main(argv: list[str], *, prog: str) -> int:
 
     udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
     udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
-    _command_parser(udev_subparsers, "install", "Install the host-side hidapi udev rule.")
+    udev_install_parser = _command_parser(udev_subparsers, "install", "Install the host-side hidapi udev rule.")
+    udev_install_parser.add_argument(
+        "--repo-root",
+        default=None,
+        help=("Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. " + f"Default: {PATHS.install_dir}"),
+    )
 
     namespace, remainder = parser.parse_known_args(argv)
     if remainder:
@@ -117,7 +124,8 @@ def _main(argv: list[str], *, prog: str) -> int:
         disable_readonly()
     elif command_path == ("udev", "install"):
         ensure_root()
-        install_hid_udev_rule()
+        repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else None
+        install_hid_udev_rule(repo_root)
     else:
         fail(f"Unhandled operational command: {' '.join(command_path)}")
     return 0

@@ -79,11 +79,10 @@ class GadgetIdentityTest(unittest.TestCase):
             rule_dst = Path(tmpdir) / "rules.d/70-bluetooth_2_usb_hidapi.rules"
 
             with (
-                patch("bluetooth_2_usb.ops.hid_udev_rule.PATHS", SimpleNamespace(install_dir=repo_root)),
                 patch("bluetooth_2_usb.ops.hid_udev_rule.RULE_DST", rule_dst),
                 patch("bluetooth_2_usb.ops.hid_udev_rule.run", return_value=SimpleNamespace(returncode=0)) as run,
             ):
-                install_hid_udev_rule()
+                install_hid_udev_rule(repo_root)
 
         self.assertIn(
             call(

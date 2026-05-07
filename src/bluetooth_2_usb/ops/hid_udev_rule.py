@@ -10,8 +10,9 @@ from .paths import PATHS
 RULE_DST = Path("/etc/udev/rules.d/70-bluetooth_2_usb_hidapi.rules")
 
 
-def install_hid_udev_rule() -> None:
-    rule_src = PATHS.install_dir / "udev/70-bluetooth_2_usb_hidapi.rules"
+def install_hid_udev_rule(repo_root: Path | None = None) -> None:
+    source_root = PATHS.install_dir if repo_root is None else repo_root
+    rule_src = source_root / "udev/70-bluetooth_2_usb_hidapi.rules"
     if not rule_src.is_file():
         fail(f"Rule source not found: {rule_src}")
     if run(["getent", "group", "input"], check=False, capture=True).returncode != 0:

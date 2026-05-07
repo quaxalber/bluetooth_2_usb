@@ -280,6 +280,13 @@ gadget device nodes.
 sudo bluetooth_2_usb udev install
 ```
 
+From a host checkout or development virtual environment, point the command at
+the checkout that contains the rule source:
+
+```bash
+sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
+```
+
 ### `readonly setup`
 
 Prepare persistent ext4-backed storage for `/var/lib/bluetooth` before enabling

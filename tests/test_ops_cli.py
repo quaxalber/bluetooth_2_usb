@@ -93,9 +93,12 @@ class OpsCliTest(unittest.TestCase):
                 ):
                     self.assertEqual(cli.main(argv), 0)
 
-                command.assert_called_once()
+                if argv == ["udev", "install"]:
+                    command.assert_called_once_with(None)
+                else:
+                    command.assert_called_once()
 
-    def test_udev_install_help_does_not_expose_repo_root_option(self) -> None:
+    def test_udev_install_help_exposes_repo_root_option(self) -> None:
         stdout = io.StringIO()
 
         with redirect_stdout(stdout):
@@ -103,11 +106,25 @@ class OpsCliTest(unittest.TestCase):
                 cli.main(["udev", "install", "--help"], prog="bluetooth_2_usb")
 
         self.assertEqual(raised.exception.code, 0)
-        self.assertNotIn("--repo-root", stdout.getvalue())
+        self.assertIn("--repo-root REPO_ROOT", stdout.getvalue())
+
+    def test_udev_install_dispatches_repo_root_to_host_rule_installer(self) -> None:
+        with (
+            patch("bluetooth_2_usb.ops.cli.ensure_root"),
+            patch("bluetooth_2_usb.ops.cli.install_hid_udev_rule") as install_rule,
+        ):
+            self.assertEqual(cli.main(["udev", "install", "--repo-root", str(REPO_ROOT)]), 0)
+
+        install_rule.assert_called_once_with(REPO_ROOT.resolve())
 
     def test_repo_root_is_rejected(self) -> None:
         with self.assertRaises(SystemExit) as raised, patch("sys.stderr", new=io.StringIO()):
             cli.main(["install", "--repo-root", str(REPO_ROOT)], prog="bluetooth_2_usb")
+
+        self.assertEqual(raised.exception.code, 2)
+
+        with self.assertRaises(SystemExit) as raised, patch("sys.stderr", new=io.StringIO()):
+            cli.main(["update", "--repo-root", str(REPO_ROOT)], prog="bluetooth_2_usb")
 
         self.assertEqual(raised.exception.code, 2)
 

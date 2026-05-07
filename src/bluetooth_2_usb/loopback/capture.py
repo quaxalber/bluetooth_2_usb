@@ -653,8 +653,10 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
-                + "On Linux, run `sudo bluetooth_2_usb udev install`. Reconnect the Pi, and ensure the user is "
-                + "in the input group with `sudo usermod -aG input $USER` before starting a new login session."
+                + 'On Linux, run `sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"` '
+                + "from the repository root, or for a managed install run `sudo bluetooth_2_usb udev install`. "
+                + "Reconnect the Pi, and ensure the user is in the input group with "
+                + "`sudo usermod -aG input $USER` before starting a new login session."
             ) from exc
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
     except Exception as exc:
