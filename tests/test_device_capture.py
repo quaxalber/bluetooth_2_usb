@@ -212,7 +212,9 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("--devices DEVICE", stdout.getvalue())
         self.assertIn("--live-mode", stdout.getvalue())
+        self.assertIn("--max-file-bytes", stdout.getvalue())
         self.assertNotIn("--format", stdout.getvalue())
+        self.assertNotIn("--max-sysfs-file-bytes", stdout.getvalue())
 
     def test_device_capture_defaults_to_summarized_live_mode(self) -> None:
         with (
@@ -223,6 +225,16 @@ class DeviceCaptureTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(capture.call_args.kwargs["live_mode"], "summarized")
+
+    def test_device_capture_passes_max_file_bytes_to_collector(self) -> None:
+        with (
+            patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
+            patch("bluetooth_2_usb.ops.devices.cli._print_capture_summary"),
+        ):
+            exit_code = run_device(["capture", "--devices", "/dev/input/event1", "--max-file-bytes", "123"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(capture.call_args.kwargs["max_sysfs_file_bytes"], 123)
 
     def test_device_capture_accepts_raw_live_mode(self) -> None:
         with (

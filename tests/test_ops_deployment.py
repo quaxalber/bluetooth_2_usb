@@ -203,7 +203,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run))
 
                 with self.assertRaises(OpsError):
-                    install(root, recreate_venv=True)
+                    install(recreate_venv=True)
 
         self.assertIn(["systemctl", "stop", paths.service_unit], commands)
         self.assertNotIn(["systemctl", "start", paths.service_unit], commands)
@@ -265,7 +265,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 )
                 stack.enter_context(patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run))
 
-                install(root)
+                install()
 
         normalize.assert_called_once_with(paths.env_file)
         self.assertEqual(canonicalized_paths, [paths.env_file])
@@ -296,10 +296,10 @@ class OpsDeploymentTest(unittest.TestCase):
                 patch("bluetooth_2_usb.ops.deployment.run", side_effect=fake_run),
                 patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
             ):
-                update(root, recreate_venv=True)
+                update(recreate_venv=True)
 
         self.assertEqual(commands, [["git", "-C", root, "pull", "--ff-only", "origin", "staging"]])
-        managed_install.assert_called_once_with(root, recreate_venv=True)
+        managed_install.assert_called_once_with(recreate_venv=True)
 
     def test_update_reapplies_install_even_when_pull_has_no_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -321,9 +321,9 @@ class OpsDeploymentTest(unittest.TestCase):
                 patch("bluetooth_2_usb.ops.deployment.run"),
                 patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
             ):
-                update(root)
+                update()
 
-        managed_install.assert_called_once_with(root, recreate_venv=False)
+        managed_install.assert_called_once_with(recreate_venv=False)
 
     def test_update_refuses_dirty_checkout_before_pull_or_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -339,7 +339,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
                 self.assertRaisesRegex(OpsError, "Refusing to update a dirty managed checkout"),
             ):
-                update(root)
+                update()
 
         run_command.assert_not_called()
         managed_install.assert_not_called()
@@ -365,7 +365,7 @@ class OpsDeploymentTest(unittest.TestCase):
                 patch("bluetooth_2_usb.ops.deployment.install") as managed_install,
                 self.assertRaisesRegex(OpsError, "pull failed"),
             ):
-                update(root)
+                update()
 
         managed_install.assert_not_called()
 

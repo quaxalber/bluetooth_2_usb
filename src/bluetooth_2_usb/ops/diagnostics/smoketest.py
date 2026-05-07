@@ -19,7 +19,7 @@ from .types import ProbeResult, ProbeStatus
 
 
 class SmokeTest:
-    def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
+    def __init__(self, *, verbose: bool, allow_non_pi: bool = False) -> None:
         self.verbose = verbose
         self.allow_non_pi = allow_non_pi
         self.exit_code = 0

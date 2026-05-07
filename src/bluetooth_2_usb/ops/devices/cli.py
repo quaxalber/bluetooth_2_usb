@@ -74,7 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum bytes retained from one hidraw report. Default: 4096",
     )
     capture.add_argument(
-        "--max-sysfs-file-bytes",
+        "--max-file-bytes",
         type=_positive_int,
         default=65536,
         help="Maximum bytes retained from one sysfs metadata file. Default: 65536",
@@ -98,7 +98,7 @@ def run(argv: list[str] | None = None) -> int:
                 grab=args.grab,
                 include_hidraw=args.include_hidraw,
                 max_report_bytes=args.max_report_bytes,
-                max_sysfs_file_bytes=args.max_sysfs_file_bytes,
+                max_sysfs_file_bytes=args.max_file_bytes,
                 live_mode=args.live_mode,
                 progress=progress,
             )

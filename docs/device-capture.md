@@ -26,6 +26,19 @@ Use it when collecting support data so the Pi desktop/session does not also
 consume the same input. While grabbed, those inputs may not control the Pi
 locally.
 
+## Arguments
+
+| Argument | Meaning |
+| --- | --- |
+| `--devices DEVICES` | Comma-separated source input-device filters. Required. |
+| `--duration DURATION_SEC` | Capture duration in seconds. Default: `30`. |
+| `--output PATH` | JSONL output path. Default: generated under `./device_capture/`. |
+| `--grab` | Exclusively grab matched input event devices during capture. |
+| `--include-hidraw`, `--no-include-hidraw` | Include matching hidraw reports when available. Default: enabled. |
+| `--live-mode {summarized,raw}` | Choose compact summaries or raw event/report records. Default: `summarized`. |
+| `--max-report-bytes BYTES` | Maximum bytes retained from one hidraw report. Default: `4096`. |
+| `--max-file-bytes BYTES` | Maximum bytes retained from one metadata file. Default: `65536`. |
+
 ## Name Or MAC Filter
 
 ```bash

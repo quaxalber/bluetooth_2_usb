@@ -60,12 +60,6 @@ python3 -m pip install -r requirements-host-capture.txt
 On Linux, install the udev rule once:
 
 ```bash
-sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
-```
-
-For a managed host-side install, use:
-
-```bash
 sudo bluetooth_2_usb udev install
 ```
 
@@ -75,6 +69,30 @@ Recommended baseline checks on the Pi:
 sudo bluetooth_2_usb smoketest --verbose
 sudo bluetooth_2_usb debug --duration 10
 ```
+
+## Arguments
+
+### `loopback inject`
+
+| Argument | Meaning |
+| --- | --- |
+| `--scenario SCENARIO` | Deterministic scenario to inject. Default: `combo`. |
+| `--pre-delay-ms MS` | Delay after virtual device creation. Default: `1000`. |
+| `--event-gap-ms MS` | Delay between emitted events. Default: scenario-specific. |
+| `--post-delay-ms MS` | Delay after injection before closing virtual devices. Default: scenario-specific. |
+| `--keyboard-name NAME` | Virtual keyboard device name. |
+| `--mouse-name NAME` | Virtual mouse device name. |
+| `--consumer-name NAME` | Virtual consumer-control device name. |
+| `--output {text,json}` | Choose the output format. Default: `text`. |
+
+### `loopback capture`
+
+| Argument | Meaning |
+| --- | --- |
+| `--scenario SCENARIO` | Expected scenario to observe. Default: `combo`. |
+| `--timeout-sec SECONDS` | Timeout waiting for relay events. Default: scenario-specific. |
+| `--devices DEVICES` | Comma-separated host-side gadget device filters. Required. |
+| `--output {text,json}` | Choose the output format. Default: `text`. |
 
 ## 1. Confirm host-side enumeration
 
@@ -345,11 +363,8 @@ ls -l /dev/bus/usb/*/*
 If needed:
 
 ```bash
-sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
+sudo bluetooth_2_usb udev install
 ```
-
-For a managed host-side install, run `sudo bluetooth_2_usb udev install`
-instead.
 
 ### Host capture times out
 

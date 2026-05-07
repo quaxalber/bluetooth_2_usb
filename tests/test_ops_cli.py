@@ -44,7 +44,7 @@ class OpsCliTest(unittest.TestCase):
         ):
             self.assertEqual(cli.main(["install"]), 0)
 
-        install.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=False)
+        install.assert_called_once_with(recreate_venv=False)
 
     def test_install_recreate_venv_flag_dispatches_to_install(self) -> None:
         with (
@@ -54,7 +54,7 @@ class OpsCliTest(unittest.TestCase):
         ):
             self.assertEqual(cli.main(["install", "--recreate-venv"]), 0)
 
-        install.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=True)
+        install.assert_called_once_with(recreate_venv=True)
 
     def test_update_reuses_managed_venv_by_default(self) -> None:
         with (
@@ -64,7 +64,7 @@ class OpsCliTest(unittest.TestCase):
         ):
             self.assertEqual(cli.main(["update"]), 0)
 
-        update.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=False)
+        update.assert_called_once_with(recreate_venv=False)
 
     def test_update_recreate_venv_flag_dispatches_to_update(self) -> None:
         with (
@@ -74,7 +74,7 @@ class OpsCliTest(unittest.TestCase):
         ):
             self.assertEqual(cli.main(["update", "--recreate-venv"]), 0)
 
-        update.assert_called_once_with(ManagedPaths().install_dir, recreate_venv=True)
+        update.assert_called_once_with(recreate_venv=True)
 
     def test_nested_operational_commands_dispatch_to_selected_workflow(self) -> None:
         cases = (
@@ -95,7 +95,7 @@ class OpsCliTest(unittest.TestCase):
 
                 command.assert_called_once()
 
-    def test_udev_install_help_exposes_repo_root_option(self) -> None:
+    def test_udev_install_help_does_not_expose_repo_root_option(self) -> None:
         stdout = io.StringIO()
 
         with redirect_stdout(stdout):
@@ -103,8 +103,19 @@ class OpsCliTest(unittest.TestCase):
                 cli.main(["udev", "install", "--help"], prog="bluetooth_2_usb")
 
         self.assertEqual(raised.exception.code, 0)
-        self.assertIn("--repo-root REPO_ROOT", stdout.getvalue())
-        self.assertIn("udev/70-bluetooth_2_usb_hidapi.rules", stdout.getvalue())
+        self.assertNotIn("--repo-root", stdout.getvalue())
+
+    def test_repo_root_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as raised, patch("sys.stderr", new=io.StringIO()):
+            cli.main(["install", "--repo-root", str(REPO_ROOT)], prog="bluetooth_2_usb")
+
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_smoketest_allow_non_pi_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as raised, patch("sys.stderr", new=io.StringIO()):
+            cli.main(["smoketest", "--allow-non-pi"], prog="bluetooth_2_usb")
+
+        self.assertEqual(raised.exception.code, 2)
 
     def test_device_capture_routes_through_operational_cli(self) -> None:
         with patch("bluetooth_2_usb.ops.devices.run", return_value=23) as capture:
@@ -114,9 +125,8 @@ class OpsCliTest(unittest.TestCase):
 
     def test_smoketest_json_output_prints_structured_result(self) -> None:
         class FakeSmokeTest:
-            def __init__(self, *, verbose: bool, allow_non_pi: bool) -> None:
+            def __init__(self, *, verbose: bool) -> None:
                 self.verbose = verbose
-                self.allow_non_pi = allow_non_pi
 
             def run(self) -> int:
                 print("probe text")

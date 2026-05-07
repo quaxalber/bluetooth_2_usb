@@ -131,6 +131,15 @@ In practice this means the running kernel release needs its module tree under
 `/boot/config-$(uname -r)` or `/proc/config.gz`, otherwise the command aborts
 instead of leaving you with a half-configured read-only boot path.
 
+## Arguments
+
+| Command | Argument | Meaning |
+| --- | --- | --- |
+| `readonly setup` | `--device DEVICE` | Persistent storage block device to format and mount. Required. |
+| `readonly status` | n/a | This command has no command-specific arguments. |
+| `readonly enable` | n/a | This command has no command-specific arguments. |
+| `readonly disable` | n/a | This command has no command-specific arguments. |
+
 ## Disable read-only mode
 
 ```bash

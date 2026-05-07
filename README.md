@@ -181,7 +181,8 @@ in [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
 Managed deployment commands use the same `bluetooth_2_usb` CLI as the runtime.
 During the initial source-tree install, run the module with `PYTHONPATH`
 pointed at the checkout. After installation, use the managed `bluetooth_2_usb`
-console command.
+console command. Use built-in `--help` for the complete command-specific
+interface.
 
 ### `install`
 
@@ -191,13 +192,8 @@ environment is reused when it is valid; pass `--recreate-venv` to delete and
 recreate it before installing.
 
 ```bash
-sudo bluetooth_2_usb install --repo-root /opt/bluetooth_2_usb
+sudo bluetooth_2_usb install
 ```
-
-| Argument | Meaning |
-| --- | --- |
-| `--repo-root PATH` | Source checkout to install. Default: `/opt/bluetooth_2_usb`. |
-| `--recreate-venv` | Delete and recreate the managed virtual environment before installing. |
 
 ### `update`
 
@@ -210,11 +206,6 @@ venv corruption, or clean-install release validation.
 sudo bluetooth_2_usb update
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--repo-root PATH` | Managed checkout to update. Default: `/opt/bluetooth_2_usb`. |
-| `--recreate-venv` | Delete and recreate the managed virtual environment before reinstalling. |
-
 ### `uninstall`
 
 Remove the managed system integration while leaving the checkout in place. Use
@@ -224,10 +215,6 @@ clone.
 ```bash
 sudo bluetooth_2_usb uninstall
 ```
-
-| Argument | Meaning |
-| --- | --- |
-| `--repo-root PATH` | Accepted for command consistency. Default: `/opt/bluetooth_2_usb`. |
 
 ### `smoketest`
 
@@ -239,13 +226,6 @@ healthy.
 sudo bluetooth_2_usb smoketest --verbose
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--verbose` | Print fuller diagnostics, including the collected summary data. |
-| `--allow-non-pi` | Allow non-Raspberry Pi hosts for local CLI validation. |
-| `--output {text,json}` | Choose the output format. JSON output is written to stdout for automation; probe text is redirected to stderr. |
-| `--repo-root PATH` | Accepted for command consistency. Default: `/opt/bluetooth_2_usb`. |
-
 ### `debug`
 
 Collect a redacted diagnostics report and optionally run a bounded live
@@ -256,31 +236,16 @@ you need a report to share.
 sudo bluetooth_2_usb debug --duration DURATION_SEC
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
-| `--repo-root PATH` | Accepted for command consistency. Default: `/opt/bluetooth_2_usb`. |
-
 ### `loopback inject`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
 test sequence into the running relay service. This is the Pi-side half of the
-loopback inject/capture validation.
+loopback inject/capture validation. For scenario and option details, use
+[docs/host-relay-loopback.md](docs/host-relay-loopback.md).
 
 ```bash
 bluetooth_2_usb loopback inject --scenario SCENARIO
 ```
-
-| Argument | Meaning |
-| --- | --- |
-| `--scenario SCENARIO` | Deterministic scenario to inject. Default: `combo`. |
-| `--pre-delay-ms MS` | Delay after virtual device creation. Default: `1000`. |
-| `--event-gap-ms MS` | Delay between emitted events. Default: scenario-specific. |
-| `--post-delay-ms MS` | Delay after injection before closing virtual devices. Default: scenario-specific. |
-| `--keyboard-name NAME` | Virtual keyboard device name. |
-| `--mouse-name NAME` | Virtual mouse device name. |
-| `--consumer-name NAME` | Virtual consumer-control device name. |
-| `--output {text,json}` | Choose the output format. Default: `text`. |
 
 ### `loopback capture`
 
@@ -295,13 +260,6 @@ uses the Python Raw Input backend.
 bluetooth_2_usb loopback capture --scenario SCENARIO --devices DEVICE_FILTER
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--scenario SCENARIO` | Expected scenario to observe. Default: `combo`. |
-| `--timeout-sec SECONDS` | Timeout waiting for relay events. Default: scenario-specific. |
-| `--devices DEVICES` | Comma-separated host-side gadget device filters. Required. |
-| `--output {text,json}` | Choose the output format. Default: `text`. |
-
 ### `device capture`
 
 Capture source-device metadata and live evidence for adding support for a new
@@ -313,17 +271,6 @@ device. For full guidance and sharing cautions, use
 sudo bluetooth_2_usb device capture --devices DEVICE_FILTER --duration DURATION_SEC --grab
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--devices DEVICES` | Comma-separated source input-device filters. Required. |
-| `--duration DURATION_SEC` | Capture duration in seconds. Default: `30`. |
-| `--output PATH` | JSONL output path. Default: generated under `./device_capture/`. |
-| `--grab` | Exclusively grab matched input event devices during capture. |
-| `--include-hidraw`, `--no-include-hidraw` | Include matching hidraw reports when available. Default: enabled. |
-| `--live-mode {summarized,raw}` | Choose compact summaries or raw event/report records. Default: `summarized`. |
-| `--max-report-bytes BYTES` | Maximum bytes retained from one hidraw report. Default: `4096`. |
-| `--max-sysfs-file-bytes BYTES` | Maximum bytes retained from one sysfs metadata file. Default: `65536`. |
-
 ### `udev install`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
@@ -333,23 +280,15 @@ gadget device nodes.
 sudo bluetooth_2_usb udev install
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--repo-root PATH` | Checkout containing `udev/70-bluetooth_2_usb_hidapi.rules`. Default: `/opt/bluetooth_2_usb`. |
-
 ### `readonly setup`
 
 Prepare persistent ext4-backed storage for `/var/lib/bluetooth` before enabling
-read-only mode.
+read-only mode. For setup, enable/disable, and validation details, use
+[docs/persistent-readonly.md](docs/persistent-readonly.md).
 
 ```bash
 sudo bluetooth_2_usb readonly setup --device DEVICE
 ```
-
-| Argument | Meaning |
-| --- | --- |
-| `--device DEVICE` | Persistent storage block device to format and mount. Required. |
-| `--repo-root PATH` | Accepted for command consistency. Default: `/opt/bluetooth_2_usb`. |
 
 ### `readonly status`
 
@@ -360,10 +299,6 @@ filesystem, and persistent Bluetooth-state mount status.
 bluetooth_2_usb readonly status
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| n/a | This command has no command-specific arguments. |
-
 ### `readonly enable`
 
 Switch Raspberry Pi OS into the supported read-only mode while keeping
@@ -373,10 +308,6 @@ Bluetooth state on separate persistent storage.
 sudo bluetooth_2_usb readonly enable
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `--repo-root PATH` | Accepted for command consistency. Default: `/opt/bluetooth_2_usb`. |
-
 ### `readonly disable`
 
 Return the system to normal writable mode while keeping the persistent
@@ -385,10 +316,6 @@ Bluetooth-state storage configuration available.
 ```bash
 sudo bluetooth_2_usb readonly disable
 ```
-
-| Argument | Meaning |
-| --- | --- |
-| `--repo-root PATH` | Accepted for command consistency. Default: `/opt/bluetooth_2_usb`. |
 
 ## Managed paths
 

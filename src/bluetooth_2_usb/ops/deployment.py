@@ -25,8 +25,8 @@ B2U_DEBUG=false
 """
 
 
-def install_service_unit(repo_root: Path) -> None:
-    shutil.copy2(repo_root / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit)
+def install_service_unit() -> None:
+    shutil.copy2(PATHS.install_dir / "bluetooth_2_usb.service", Path("/etc/systemd/system") / PATHS.service_unit)
     (Path("/etc/systemd/system") / PATHS.service_unit).chmod(0o644)
 
 
@@ -82,10 +82,8 @@ def service_installed() -> bool | None:
     return any(line.split(None, 1)[0] == PATHS.service_unit for line in completed.stdout.splitlines() if line.split())
 
 
-def install(repo_root: Path, *, recreate_venv: bool = False) -> None:
+def install(*, recreate_venv: bool = False) -> None:
     require_commands(["apt-get", "awk", "grep", "git", "install", "python3", "sed", "systemctl"])
-    if repo_root != PATHS.install_dir:
-        fail(f"Clone this repository to {PATHS.install_dir} and rerun install from there.")
     if not (PATHS.install_dir / ".git").is_dir():
         fail(f"Expected a git checkout at {PATHS.install_dir}.")
 
@@ -134,7 +132,7 @@ def install(repo_root: Path, *, recreate_venv: bool = False) -> None:
     rebuild_venv(venv_dir, PATHS.install_dir, recreate=recreate_venv)
     ok(f"Virtual environment updated at {PATHS.install_dir / 'venv'}")
 
-    install_service_unit(repo_root)
+    install_service_unit()
     write_default_env_file()
     normalize_service_settings_file(PATHS.env_file)
     canonicalize_service_settings_bools(PATHS.env_file)
@@ -160,10 +158,8 @@ def install(repo_root: Path, *, recreate_venv: bool = False) -> None:
     info("   Then run: sudo bluetooth_2_usb readonly enable")
 
 
-def update(repo_root: Path, *, recreate_venv: bool = False) -> None:
+def update(*, recreate_venv: bool = False) -> None:
     require_commands(["git"])
-    if repo_root != PATHS.install_dir:
-        fail(f"Clone this repository to {PATHS.install_dir} and rerun update from there.")
     if not (PATHS.install_dir / ".git").is_dir():
         fail(f"Expected a git checkout at {PATHS.install_dir}.")
     if output(["git", "-C", PATHS.install_dir, "status", "--porcelain", "--untracked-files=all"]):
@@ -175,7 +171,7 @@ def update(repo_root: Path, *, recreate_venv: bool = False) -> None:
     info(f"Pulling latest {branch}")
     run(["git", "-C", PATHS.install_dir, "pull", "--ff-only", "origin", branch])
     info("Reapplying managed install")
-    install(repo_root, recreate_venv=recreate_venv)
+    install(recreate_venv=recreate_venv)
 
 
 def uninstall() -> None:
