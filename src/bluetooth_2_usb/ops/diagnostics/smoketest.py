@@ -318,10 +318,10 @@ class SmokeTest:
     ) -> None:
         if bluetooth_storage == "persistent":
             self.pass_probe("Bluetooth state is stored on persistent storage")
+        elif overlay == "enabled" or readonly == "enabled" or root_overlay_active == "yes":
+            self.warn_fail("Bluetooth persistent state is required but not mounted")
         elif bluetooth_storage == "rootfs":
             self.pass_probe("Bluetooth state is stored on rootfs")
-        elif overlay == "enabled" or readonly == "enabled":
-            self.warn_fail("Bluetooth persistent state is required but not mounted")
         elif bluetooth_storage == "missing":
             self.warn_fail("Bluetooth state directory is missing")
         else:

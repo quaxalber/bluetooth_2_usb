@@ -297,6 +297,19 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertNotIn("[+] Root filesystem is writable", output)
         self.assertNotIn("[+] Bluetooth state is stored on rootfs", output)
 
+    def test_smoketest_rejects_rootfs_bluetooth_state_when_readonly_is_active(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            smoke._heading("Read-Only Mode")
+            smoke._check_readonly("enabled", "enabled", "yes", False, "rootfs", True)
+
+        output = stdout.getvalue()
+        self.assertIn("[!] Bluetooth persistent state is required but not mounted", output)
+        self.assertNotIn("[+] Bluetooth state is stored on rootfs", output)
+        self.assertEqual(smoke.section_statuses["Read-Only Mode"], ProbeStatus.FAIL)
+
     def test_smoketest_verbose_keeps_detailed_pass_lines_without_section_success_messages(self) -> None:
         smoke = SmokeTest(verbose=True, allow_non_pi=True)
 

@@ -113,6 +113,8 @@ def readonly_mode() -> str:
         root_fstype = current_root_filesystem_type()
     except Exception:
         return "unknown"
+    if not root_fstype or root_fstype == "unknown":
+        return "unknown"
     if root_fstype == "overlay":
         return "enabled"
     return "disabled"

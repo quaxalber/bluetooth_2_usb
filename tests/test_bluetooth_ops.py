@@ -389,6 +389,7 @@ class ReadonlyConfigTest(unittest.TestCase):
             patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"),
             patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"),
             patch(f"{READONLY_STATUS}.bluetooth_state_persistent", return_value=True),
+            patch(f"{READONLY_STATUS}.bluetooth_state_storage", return_value="persistent"),
             patch(f"{READONLY_STATUS}._findmnt_value", side_effect=fake_findmnt),
             patch(f"{READONLY_STATUS}._mountpoint", return_value=True),
             redirect_stdout(stdout),
