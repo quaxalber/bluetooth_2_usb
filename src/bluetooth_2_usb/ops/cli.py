@@ -11,7 +11,13 @@ from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .paths import PATHS
-from .readonly import disable_readonly, enable_readonly, print_readonly_status, setup_persistent_bluetooth_state
+from .readonly import (
+    disable_readonly,
+    enable_readonly,
+    migrate_bluetooth_state_to_rootfs,
+    print_readonly_status,
+    setup_persistent_bluetooth_state,
+)
 
 OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev", "device"})
 
@@ -65,6 +71,7 @@ def _main(argv: list[str], *, prog: str) -> int:
     _command_parser(readonly_subparsers, "status", "Show read-only status.")
     _command_parser(readonly_subparsers, "enable", "Enable read-only mode.")
     _command_parser(readonly_subparsers, "disable", "Disable OverlayFS.")
+    _command_parser(readonly_subparsers, "migrate", "Move persistent Bluetooth state back to the root filesystem.")
 
     udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
     udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
@@ -85,7 +92,7 @@ def _main(argv: list[str], *, prog: str) -> int:
         ensure_root()
 
     log_name = "_".join(command_path)
-    if command_path in {
+    prepare_command_log = command_path in {
         ("install",),
         ("update",),
         ("uninstall",),
@@ -94,7 +101,11 @@ def _main(argv: list[str], *, prog: str) -> int:
         ("readonly", "setup"),
         ("readonly", "enable"),
         ("readonly", "disable"),
-    }:
+        ("readonly", "migrate"),
+    }
+    if command_path == ("smoketest",) and namespace.output == "json":
+        prepare_command_log = False
+    if prepare_command_log:
         prepare_log(log_name)
 
     if command_path == ("install",):
@@ -107,7 +118,9 @@ def _main(argv: list[str], *, prog: str) -> int:
         smoke_test = SmokeTest(verbose=namespace.verbose)
         if namespace.output == "json":
             with redirect_stdout(sys.stderr):
+                prepare_log(log_name)
                 exit_code = smoke_test.run()
+                close_log()
             print(json.dumps(smoke_test.result_dict(), sort_keys=True))
         else:
             exit_code = smoke_test.run()
@@ -122,6 +135,8 @@ def _main(argv: list[str], *, prog: str) -> int:
         enable_readonly()
     elif command_path == ("readonly", "disable"):
         disable_readonly()
+    elif command_path == ("readonly", "migrate"):
+        migrate_bluetooth_state_to_rootfs()
     elif command_path == ("udev", "install"):
         ensure_root()
         repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else None

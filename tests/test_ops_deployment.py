@@ -380,7 +380,6 @@ class OpsDeploymentTest(unittest.TestCase):
                 bluetooth_service_dropin_dir=root,
             )
             config = ReadonlyConfig(
-                mode="disabled",
                 persist_mount=root / "persist",
                 persist_bluetooth_dir=root / "persist" / "bluetooth",
                 persist_spec="",

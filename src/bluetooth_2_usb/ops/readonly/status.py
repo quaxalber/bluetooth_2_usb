@@ -113,7 +113,7 @@ def readonly_mode() -> str:
         root_fstype = current_root_filesystem_type()
     except Exception:
         return "unknown"
-    if root_fstype == "overlay" and bluetooth_state_persistent():
+    if root_fstype == "overlay":
         return "enabled"
     return "disabled"
 
@@ -122,21 +122,43 @@ def display_readonly_mode(mode: str) -> str:
     return mode
 
 
+def bluetooth_state_storage(config: ReadonlyConfig | None = None) -> str:
+    resolved = config
+    if resolved is None:
+        try:
+            resolved = load_readonly_config()
+        except Exception as exc:
+            logger.warning("Unable to read read-only configuration: %s", exc)
+            resolved = None
+    state_dir = Path("/var/lib/bluetooth")
+    if not state_dir.exists():
+        return "missing"
+    if resolved is not None and bluetooth_state_persistent(resolved):
+        return "persistent"
+    try:
+        if run(["mountpoint", "-q", state_dir], check=False).returncode == 0:
+            return "unknown"
+    except (FileNotFoundError, OpsError, OSError):
+        return "unknown"
+    return "rootfs"
+
+
 def print_readonly_status() -> None:
     config = _load_readonly_config_or_default()
+    state_storage = bluetooth_state_storage(config)
     print("Read-only status")
     print(f"read-only mode: {display_readonly_mode(readonly_mode())}")
-    print(f"configured read-only mode: {display_readonly_mode(config.mode)}")
     print(f"overlay_live: {overlay_status()}")
     print(f"overlay_configured: {overlay_configured_status()}")
     print(f"root_filesystem: {_root_filesystem_type()}")
     print(f"root_source: {_findmnt_value('/', 'SOURCE') or '<unknown>'}")
-    print(f"bluetooth persistent mount: {'mounted' if bluetooth_state_persistent(config) else 'not mounted'}")
+    print(f"bluetooth state storage: {state_storage}")
     print(f"bluetooth_state_source: {_findmnt_value('/var/lib/bluetooth', 'SOURCE') or '<none>'}")
     print(f"persist_mount: {config.persist_mount}")
     print(f"persist_mount_active: {'yes' if _mountpoint(config.persist_mount) else 'no'}")
     print(f"persist_device: {config.persist_device or '<unset>'}")
     print(f"persist_spec: {config.persist_spec or '<unset>'}")
+    print(f"migration available: {'yes' if readonly_mode() == 'disabled' and state_storage == 'persistent' else 'no'}")
 
 
 def _root_filesystem_type() -> str:

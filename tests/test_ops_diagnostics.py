@@ -40,6 +40,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
         with ExitStack() as stack:
             stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.readonly_mode", return_value="disabled"))
             stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.overlay_status", return_value="disabled"))
+            stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_state_storage", return_value="rootfs"))
             stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}._first_modules_load", return_value=modules_load))
             stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.boot_config.dwc2_mode", return_value=dwc2_mode))
             stack.enter_context(
@@ -80,6 +81,9 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_entries", return_value=rfkill_entries or [])
             )
             stack.enter_context(patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_rfkill_blocked", return_value=rfkill_blocked))
+            stack.enter_context(
+                patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_controller_powered_from_text", return_value=True)
+            )
             stack.enter_context(patch.object(smoke, "_check_boot_overlay"))
             stack.enter_context(
                 patch.object(
@@ -215,7 +219,115 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertEqual(len(rfkill_results), 1)
         self.assertEqual(rfkill_results[0].status, ProbeStatus.PASS)
         self.assertEqual(rfkill_results[0].detail, "rfkill0 type=bluetooth soft=0 hard=0 state=1")
-        self.assertEqual(stdout.getvalue().count("[+] Bluetooth rfkill state is not blocked"), 1)
+        self.assertNotIn("[+] Bluetooth rfkill state is not blocked", stdout.getvalue())
+
+    def test_smoketest_non_verbose_prints_section_success_messages(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                self.run_smoketest_harness(smoke, root=Path(tmpdir), rfkill_entries=[_RfkillEntry()])
+
+        output = stdout.getvalue()
+        self.assertIn("Boot and USB\n[+] All checks passed", output)
+        self.assertIn("Service and Runtime\n[+] All checks passed", output)
+        self.assertIn("Bluetooth\n[+] All checks passed", output)
+
+    def test_smoketest_non_verbose_suppresses_routine_pass_lines_but_records_probes(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            smoke._heading("Bluetooth")
+            smoke.pass_probe("btmgmt info succeeded")
+            smoke.pass_probe("Bluetooth rfkill state is not blocked", "rfkill0 type=bluetooth soft=0 hard=0 state=1")
+            smoke._heading("Summary")
+
+        output = stdout.getvalue()
+        self.assertIn("Bluetooth\n[+] All checks passed", output)
+        self.assertNotIn("btmgmt info succeeded", output)
+        self.assertNotIn("Bluetooth rfkill state is not blocked", output)
+        self.assertEqual(
+            [result.message for result in smoke.results],
+            ["btmgmt info succeeded", "Bluetooth rfkill state is not blocked"],
+        )
+
+    def test_smoketest_non_verbose_skips_section_success_when_section_warns(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                self.run_smoketest_harness(
+                    smoke, root=Path(tmpdir), modules_load="modules-load=dwc2", udc_states={"dummy.udc": "not attached"}
+                )
+
+        output = stdout.getvalue()
+        boot_section = output[output.index("Boot and USB") : output.index("Service and Runtime")]
+        self.assertIn("UDC is not configured", boot_section)
+        self.assertNotIn("[+] All checks passed", boot_section)
+
+    def test_smoketest_non_verbose_keeps_device_counts_visible(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+        inventory = (0, '[{"relay_candidate": true}, {"relay_candidate": false}, {"relay_candidate": true}]')
+
+        stdout = StringIO()
+        with redirect_stdout(stdout), patch(f"{DIAGNOSTICS_SMOKETEST}.bluetooth_paired_count", return_value=1):
+            smoke._heading("Devices")
+            self.assertEqual(smoke._relayable_count(inventory), 2)
+            self.assertEqual(smoke._paired_count(), 1)
+
+        output = stdout.getvalue()
+        self.assertIn("[+] Relayable input devices detected (2)", output)
+        self.assertIn("[+] Paired Bluetooth devices detected (1)", output)
+
+    def test_smoketest_non_verbose_prints_compact_readonly_summary(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            smoke._heading("Read-Only Mode")
+            smoke._check_overlay_runtime("disabled", "no", False)
+            smoke._check_readonly("disabled", "disabled", "no", False, "rootfs", False)
+            smoke._print_readonly_summary("disabled", "disabled", "no", "rootfs")
+
+        output = stdout.getvalue()
+        self.assertIn("[+] disabled: rootfs writable, Bluetooth state on rootfs", output)
+        self.assertNotIn("[+] Root filesystem is writable", output)
+        self.assertNotIn("[+] Bluetooth state is stored on rootfs", output)
+
+    def test_smoketest_verbose_keeps_detailed_pass_lines_without_section_success_messages(self) -> None:
+        smoke = SmokeTest(verbose=True, allow_non_pi=True)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            smoke._heading("Bluetooth")
+            smoke.pass_probe("btmgmt info succeeded")
+            smoke._heading("Summary")
+
+        output = stdout.getvalue()
+        self.assertIn("[+] btmgmt info succeeded", output)
+        self.assertNotIn("[+] All checks passed", output)
+
+    def test_smoketest_capture_uses_20_second_timeout(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=True)
+
+        def fake_run(command, *, check=True, capture=False, timeout=None):
+            self.assertEqual(command, ["slow-probe"])
+            self.assertFalse(check)
+            self.assertTrue(capture)
+            self.assertEqual(timeout, 20)
+
+            class Completed:
+                returncode = 0
+                stdout = "ok\n"
+                stderr = ""
+
+            return Completed()
+
+        with patch(f"{DIAGNOSTICS_SMOKETEST}.run", side_effect=fake_run):
+            self.assertEqual(smoke._capture(["slow-probe"]), (0, "ok\n"))
 
     def test_smoketest_verbose_summary_groups_related_items_in_logical_order(self) -> None:
         smoke = SmokeTest(verbose=True, allow_non_pi=True)
@@ -231,20 +343,20 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertLess(output.index("### Read-Only Mode"), output.index("### Result"))
 
         readonly_group = output[output.index("### Read-Only Mode") : output.index("### Result")]
-        self.assertLess(readonly_group.index("Read-only mode:"), readonly_group.index("OverlayFS configured:"))
-        self.assertLess(readonly_group.index("OverlayFS configured:"), readonly_group.index("Root filesystem type:"))
-        self.assertLess(readonly_group.index("Root filesystem type:"), readonly_group.index("Root overlay active:"))
+        self.assertLess(readonly_group.index("Read-only state:"), readonly_group.index("OverlayFS boot setting:"))
+        self.assertLess(readonly_group.index("OverlayFS boot setting:"), readonly_group.index("Root filesystem type:"))
+        self.assertLess(readonly_group.index("Root filesystem type:"), readonly_group.index("Root source:"))
+        self.assertLess(readonly_group.index("Root source:"), readonly_group.index("Bluetooth state storage:"))
         self.assertLess(
-            readonly_group.index("Root overlay active:"), readonly_group.index("Bluetooth persistent mount:")
+            readonly_group.index("Bluetooth state storage:"), readonly_group.index("Bluetooth state source:")
         )
-        self.assertEqual(smoke.result_dict()["summary"]["Bluetooth persistent mount"], "not mounted")
+        self.assertEqual(smoke.result_dict()["summary"]["Bluetooth state storage"], "rootfs")
 
     def test_debug_report_keeps_writing_when_initial_systemctl_probe_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             paths = ManagedPaths(install_dir=root / "missing-install", log_dir=root / "logs")
             config = ReadonlyConfig(
-                mode="disabled",
                 persist_mount=root / "persist",
                 persist_bluetooth_dir=root / "persist" / "bluetooth",
                 persist_spec="",
@@ -287,6 +399,96 @@ class OpsDiagnosticsTest(unittest.TestCase):
             report = next(paths.log_dir.glob("debug_*.md"))
             self.assertIn("initial_service_state=unknown", report.read_text(encoding="utf-8"))
 
+    def test_debug_report_command_blocks_use_20_second_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = ManagedPaths(install_dir=root / "missing-install", log_dir=root / "logs")
+            config = ReadonlyConfig(
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=root / "persist" / "bluetooth",
+                persist_spec="",
+                persist_device="",
+            )
+            timeouts = []
+
+            def fake_run(command, *, check=True, capture=False, timeout=None, **kwargs):
+                del command, check, capture, kwargs
+                timeouts.append(timeout)
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+
+                return Completed()
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"HOSTNAME": "test-host"}))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.bluetooth_state_persistent", return_value=False))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth", return_value=""))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir", return_value=root / "boot")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+
+                self.assertEqual(debug_report(None), 0)
+
+        self.assertTrue(timeouts)
+        self.assertTrue(all(timeout == 20 for timeout in timeouts))
+
+    def test_debug_report_marks_timed_out_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            paths = ManagedPaths(install_dir=root / "missing-install", log_dir=root / "logs")
+
+            def fake_run(command, *, check=True, capture=False, timeout=None, **kwargs):
+                del check, capture, timeout, kwargs
+                if command == ["uname", "-a"]:
+                    raise OpsError("Command timed out after 20s: uname -a")
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+
+                return Completed()
+
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"HOSTNAME": "test-host"}))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.PATHS", paths))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.run", side_effect=fake_run))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.load_readonly_config", side_effect=OpsError("invalid readonly env"))
+                )
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.rfkill_list_bluetooth", return_value=""))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.detect_boot_dir", return_value=root / "boot")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+
+                self.assertEqual(debug_report(None), 0)
+
+            report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
+            self.assertIn("Command timed out after 20s: uname -a", report)
+            self.assertIn("[timed out after 20s]", report)
+
     def test_debug_report_keeps_writing_when_readonly_config_is_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -326,7 +528,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
             report = next(paths.log_dir.glob("debug_*.md")).read_text(encoding="utf-8")
             self.assertIn("bluetooth_state_persistent_mount=unknown", report)
-            self.assertIn("Read-only config parse error: invalid readonly env", report)
+            self.assertIn("Persistent Bluetooth state config parse error: invalid readonly env", report)
 
     def test_debug_report_records_os_errors_as_command_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -335,7 +537,6 @@ class OpsDiagnosticsTest(unittest.TestCase):
             paths.venv_python.parent.mkdir(parents=True)
             paths.venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
             config = ReadonlyConfig(
-                mode="disabled",
                 persist_mount=root / "persist",
                 persist_bluetooth_dir=root / "persist" / "bluetooth",
                 persist_spec="",
@@ -385,7 +586,6 @@ class OpsDiagnosticsTest(unittest.TestCase):
             (root / "venv/bin/python").touch()
             paths = ManagedPaths(install_dir=root, log_dir=root / "logs", readonly_env_file=root / "readonly-env")
             config = ReadonlyConfig(
-                mode="disabled",
                 persist_mount=root / "persist",
                 persist_bluetooth_dir=root / "persist" / "bluetooth",
                 persist_spec="",

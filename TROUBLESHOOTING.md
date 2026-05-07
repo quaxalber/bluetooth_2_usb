@@ -4,12 +4,34 @@
 > Most troubleshooting sessions should start with the two built-in diagnostics:
 
 ```bash
-sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb smoketest
 sudo bluetooth_2_usb debug --duration 10
 ```
 
-The `smoketest` is the quick health gate. `debug` gives you the fuller redacted
-snapshot when you need to understand what the runtime actually sees.
+## Diagnostics commands
+
+Use `smoketest` as the quick health gate:
+
+```bash
+sudo bluetooth_2_usb smoketest
+```
+
+Use verbose mode when you need the full probe transcript:
+
+```bash
+sudo bluetooth_2_usb smoketest --verbose
+```
+
+Use `debug` when you need a redacted report under
+`/var/log/bluetooth_2_usb/`:
+
+```bash
+sudo bluetooth_2_usb debug --duration 10
+```
+
+`debug` can also run a bounded foreground runtime session so the report
+includes what the service sees live. Reports are made copyable by the invoking
+sudo user when possible.
 
 If you want an end-to-end relay check without depending on a paired Bluetooth
 device, use the loopback inject/capture validation in

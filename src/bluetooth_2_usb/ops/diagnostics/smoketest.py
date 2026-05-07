@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+from contextlib import contextmanager
 from pathlib import Path
+
+from rich.console import Console
 
 from .. import boot_config
 from ..bluetooth import (
@@ -14,8 +18,16 @@ from ..bluetooth import (
 from ..commands import OpsError, bold, fail_final, info, ok, ok_final, run, warn
 from ..commands import warn_fail as red_warn
 from ..paths import PATHS
-from ..readonly import bluetooth_state_persistent, display_readonly_mode, overlay_status, readonly_mode
+from ..readonly import (
+    bluetooth_state_persistent,
+    bluetooth_state_storage,
+    display_readonly_mode,
+    overlay_status,
+    readonly_mode,
+)
 from .types import ProbeResult, ProbeStatus
+
+SMOKETEST_COMMAND_TIMEOUT_SECONDS = 20
 
 
 class SmokeTest:
@@ -27,6 +39,8 @@ class SmokeTest:
         self.summary: dict[str, str] = {}
         self.summary_groups: list[tuple[str, list[tuple[str, str]]]] = []
         self.results: list[ProbeResult] = []
+        self.current_section = ""
+        self.section_statuses: dict[str, ProbeStatus] = {}
 
     def run(self) -> int:
         config_txt = boot_config.boot_config_path()
@@ -45,6 +59,7 @@ class SmokeTest:
         if root_filesystem_type == "unknown":
             root_overlay_active = "unknown"
         bluetooth_persistent = bluetooth_state_persistent()
+        bluetooth_storage = bluetooth_state_storage()
         expected_initramfs_file = boot_config.expected_boot_initramfs_file()
         expected_initramfs_path = (
             str(boot_config.boot_initramfs_target_path(expected_initramfs_file)) if expected_initramfs_file else ""
@@ -66,7 +81,7 @@ class SmokeTest:
         if udc_states:
             configured_udcs = [name for name, state in udc_states.items() if state == "configured"]
             if configured_udcs:
-                ok("UDC state is configured (" + ", ".join(configured_udcs) + ")")
+                self.pass_probe("UDC state is configured (" + ", ".join(configured_udcs) + ")")
             else:
                 self.soft_warn(
                     "UDC is not configured; relay output is gated until the host attaches. "
@@ -87,15 +102,17 @@ class SmokeTest:
         venv_present = PATHS.venv_python.is_file()
         self._path_exists(PATHS.venv_python, "Virtualenv interpreter is present", "Virtualenv interpreter is missing")
         if venv_present:
-            validate_log = self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"])
+            validate_log = self._capture_with_status(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--validate-env"], "Validating CLI environment"
+            )
             self.record_bool(
                 validate_log[0] == 0,
                 "CLI environment validation passed",
                 "CLI environment validation failed",
                 validate_log[1],
             )
-            service_settings_log = self._capture(
-                [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"]
+            service_settings_log = self._capture_with_status(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], "Checking runtime settings"
             )
             self.record_bool(
                 service_settings_log[0] == 0,
@@ -113,14 +130,14 @@ class SmokeTest:
             "bluetooth.service is not active",
         )
         self._heading("Bluetooth")
-        bt_show = self._capture(["bluetoothctl", "show"])
+        bt_show = self._capture_with_status(["bluetoothctl", "show"], "Checking Bluetooth controller")
         self.record_bool(
             bt_show[0] == 0 and bluetooth_controller_powered_from_text(bt_show[1]),
             "Bluetooth controller is powered",
             "bluetoothctl show failed or controller is not powered",
             bt_show[1],
         )
-        btmgmt = self._capture(["btmgmt", "info"])
+        btmgmt = self._capture_with_status(["btmgmt", "info"], "Checking Bluetooth management state")
         self.record_bool(btmgmt[0] == 0, "btmgmt info succeeded", "btmgmt info failed", btmgmt[1])
         entries = bluetooth_rfkill_entries()
         if entries:
@@ -136,7 +153,9 @@ class SmokeTest:
             self.soft_warn("No bluetooth rfkill entries found")
         self._heading("Devices")
         inventory = (
-            self._capture([PATHS.venv_python, "-m", "bluetooth_2_usb", "--list", "--output", "json"])
+            self._capture_with_status(
+                [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list", "--output", "json"], "Checking input devices"
+            )
             if venv_present
             else (127, missing_venv)
         )
@@ -148,7 +167,10 @@ class SmokeTest:
         self._heading("Read-Only Mode")
         self._check_overlay_runtime(overlay, root_overlay_active, post_reboot)
         self._check_initramfs(overlay, root_overlay_active, readonly, expected_initramfs_path)
-        self._check_readonly(readonly, overlay, root_overlay_active, bluetooth_persistent, post_reboot)
+        self._check_readonly(
+            readonly, overlay, root_overlay_active, bluetooth_persistent, bluetooth_storage, post_reboot
+        )
+        self._print_readonly_summary(readonly, overlay, root_overlay_active, bluetooth_storage)
 
         self.summary_groups = [
             (
@@ -178,11 +200,20 @@ class SmokeTest:
             (
                 "Read-Only Mode",
                 [
-                    ("Read-only mode", display_readonly_mode(readonly)),
-                    ("OverlayFS configured", overlay),
+                    ("Read-only state", display_readonly_mode(readonly)),
+                    ("OverlayFS boot setting", overlay),
                     ("Root filesystem type", root_filesystem_type),
-                    ("Root overlay active", root_overlay_active),
-                    ("Bluetooth persistent mount", "mounted" if bluetooth_persistent else "not mounted"),
+                    (
+                        "Root source",
+                        self._capture(["findmnt", "-n", "-o", "SOURCE", "--target", "/"])[1].strip() or "<unknown>",
+                    ),
+                    ("Bluetooth state storage", bluetooth_storage),
+                    (
+                        "Bluetooth state source",
+                        self._capture(["findmnt", "-n", "-o", "SOURCE", "--target", "/var/lib/bluetooth"])[1].strip()
+                        or "<none>",
+                    ),
+                    ("Persistent storage mount", "mounted" if bluetooth_persistent else "not mounted"),
                 ],
             ),
             ("Result", [("Non-fatal warning count", str(self.soft_warnings))]),
@@ -218,7 +249,7 @@ class SmokeTest:
             config_txt.is_file()
             and expected_overlay in config_txt.read_text(encoding="utf-8", errors="replace").splitlines()
         ):
-            ok(f"config.txt contains expected overlay ({expected_overlay})")
+            self.pass_probe(f"config.txt contains expected overlay ({expected_overlay})")
         else:
             self.warn_fail(f"config.txt is missing expected overlay ({expected_overlay})")
 
@@ -230,36 +261,36 @@ class SmokeTest:
                 f"cmdline.txt is missing required modules ({','.join(required)}); current value: {token or '<missing>'}"
             )
         else:
-            ok(f"cmdline.txt contains required modules-load ({token or '<missing>'})")
+            self.pass_probe(f"cmdline.txt contains required modules-load ({token or '<missing>'})")
 
     def _check_overlay_runtime(self, overlay: str, root_overlay_active: str, post_reboot: bool) -> None:
         if overlay in {"enabled", "disabled"}:
-            ok(f"OverlayFS boot configuration is {overlay}")
+            self.pass_probe(f"OverlayFS boot setting is {overlay}")
         else:
             (
-                self.soft_warn("OverlayFS boot configuration status is unknown")
+                self.soft_warn("OverlayFS boot setting is unknown")
                 if self.allow_non_pi
-                else self.warn_fail("OverlayFS boot configuration status is unknown")
+                else self.warn_fail("OverlayFS boot setting is unknown")
             )
         if root_overlay_active == "yes":
-            ok("Root overlay is active")
+            self.pass_probe("Root filesystem is overlay-backed")
         elif root_overlay_active == "unknown":
             (
-                self.soft_warn("Could not determine whether the root overlay is active")
+                self.soft_warn("Could not determine root filesystem read-only state")
                 if self.allow_non_pi or (overlay == "enabled" and not post_reboot)
-                else self.warn_fail("Could not determine whether the root overlay is active")
+                else self.warn_fail("Could not determine root filesystem read-only state")
             )
             report = boot_config.root_overlay_report()
             if report:
                 print(report)
         elif overlay == "enabled":
             (
-                self.warn_fail("Root overlay is not active")
+                self.warn_fail("Root filesystem is not overlay-backed")
                 if post_reboot
-                else self.soft_warn("Root overlay is not active; reboot may still be pending")
+                else self.soft_warn("Read-only mode enablement is pending reboot")
             )
         else:
-            ok("Root overlay is inactive")
+            self.pass_probe("Root filesystem is writable")
 
     def _check_initramfs(self, overlay: str, root_overlay_active: str, readonly: str, expected_path: str) -> None:
         should_require = overlay == "enabled" or root_overlay_active == "yes" or readonly == "enabled"
@@ -270,27 +301,33 @@ class SmokeTest:
         path = Path(expected_path)
         present = path.is_file() and path.stat().st_size > 0
         if present:
-            ok(f"Boot initramfs is present ({path})")
+            self.pass_probe(f"Boot initramfs is present ({path})")
         elif should_require:
             self.warn_fail(f"Boot initramfs is missing or empty ({path})")
         else:
             info(f"Boot initramfs is not present yet ({path})")
 
     def _check_readonly(
-        self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_persistent: bool, post_reboot: bool
+        self,
+        readonly: str,
+        overlay: str,
+        root_overlay_active: str,
+        bluetooth_persistent: bool,
+        bluetooth_storage: str,
+        post_reboot: bool,
     ) -> None:
-        if bluetooth_persistent:
-            ok(
-                "Bluetooth persistent mount is mounted"
-                if readonly == "enabled"
-                else "Bluetooth persistent mount is active"
-            )
+        if bluetooth_storage == "persistent":
+            self.pass_probe("Bluetooth state is stored on persistent storage")
+        elif bluetooth_storage == "rootfs":
+            self.pass_probe("Bluetooth state is stored on rootfs")
         elif overlay == "enabled" or readonly == "enabled":
-            self.warn_fail("Bluetooth persistent mount is not mounted")
+            self.warn_fail("Bluetooth persistent state is required but not mounted")
+        elif bluetooth_storage == "missing":
+            self.warn_fail("Bluetooth state directory is missing")
         else:
-            ok("Bluetooth persistent mount is not configured")
+            self.soft_warn("Bluetooth state storage could not be determined")
         if readonly == "enabled":
-            ok("Read-only mode is enabled")
+            self.pass_probe("Read-only mode is active")
         elif readonly == "unknown":
             (
                 self.soft_warn("Read-only mode could not be determined")
@@ -298,15 +335,15 @@ class SmokeTest:
                 else self.warn_fail("Read-only mode could not be determined")
             )
         elif overlay == "disabled" and root_overlay_active == "no":
-            ok("Read-only mode is disabled")
+            self.pass_probe("Read-only mode is disabled")
         elif overlay == "enabled" and root_overlay_active == "no":
             (
-                self.warn_fail("Read-only mode is not enabled")
+                self.warn_fail("Read-only mode is not active")
                 if post_reboot
-                else self.soft_warn("Read-only mode is not enabled")
+                else self.soft_warn("Read-only mode enablement is pending reboot")
             )
         else:
-            self.warn_fail("Read-only mode is not enabled")
+            self.warn_fail("Read-only mode is not active")
 
     def _relayable_count(self, inventory: tuple[int, str]) -> int:
         if inventory[0] != 0:
@@ -319,7 +356,7 @@ class SmokeTest:
             self.warn_fail("Failed to parse relayable device inventory", inventory[1])
             return 0
         if count:
-            ok(f"Relayable input devices detected ({count})")
+            self.pass_probe(f"Relayable input devices detected ({count})", visible=True)
         else:
             self.soft_warn("No relayable input devices detected")
         return count
@@ -331,38 +368,44 @@ class SmokeTest:
             self.warn_fail("bluetoothctl failed while listing paired devices")
             return 0
         if count:
-            ok(f"Paired Bluetooth devices detected ({count})")
+            self.pass_probe(f"Paired Bluetooth devices detected ({count})", visible=True)
         else:
             self.soft_warn("No paired Bluetooth devices detected")
         return count
 
-    def _path_exists(self, path: Path, success: str, failure: str) -> None:
-        self.record_bool(path.exists(), success, failure)
+    def _path_exists(self, path: Path, success: str, failure: str, *, visible: bool = False) -> None:
+        self.record_bool(path.exists(), success, failure, visible=visible)
 
-    def _command_ok(self, command: list[str], success: str, failure: str) -> None:
+    def _command_ok(self, command: list[str], success: str, failure: str, *, visible: bool = False) -> None:
         try:
-            completed = run(command, check=False, capture=True)
+            completed = run(command, check=False, capture=True, timeout=SMOKETEST_COMMAND_TIMEOUT_SECONDS)
         except (FileNotFoundError, OpsError) as exc:
             self.warn_fail(failure, str(exc))
             return
-        self.record_bool(completed.returncode == 0, success, failure)
+        self.record_bool(completed.returncode == 0, success, failure, visible=visible)
 
-    def record_bool(self, condition: bool, success: str, failure: str, detail: str = "") -> None:
+    def record_bool(
+        self, condition: bool, success: str, failure: str, detail: str = "", *, visible: bool = False
+    ) -> None:
         if condition:
-            self.pass_probe(success, detail)
+            self.pass_probe(success, detail, visible=visible)
         else:
             self.warn_fail(failure, detail)
 
-    def pass_probe(self, message: str, detail: str = "") -> None:
-        ok(message)
+    def pass_probe(self, message: str, detail: str = "", *, visible: bool = False) -> None:
+        self._mark_section(ProbeStatus.PASS)
+        if self.verbose or visible:
+            ok(message)
         self.results.append(ProbeResult(ProbeStatus.PASS, message, detail))
 
     def soft_warn(self, message: str) -> None:
+        self._mark_section(ProbeStatus.WARN)
         warn(message)
         self.soft_warnings += 1
         self.results.append(ProbeResult(ProbeStatus.WARN, message))
 
     def warn_fail(self, message: str, detail: str = "") -> None:
+        self._mark_section(ProbeStatus.FAIL)
         red_warn(message)
         if detail:
             print("\n".join(detail.splitlines()[:20]))
@@ -371,14 +414,54 @@ class SmokeTest:
 
     def _capture(self, command: list[str | Path]) -> tuple[int, str]:
         try:
-            completed = run(command, check=False, capture=True)
+            completed = run(command, check=False, capture=True, timeout=SMOKETEST_COMMAND_TIMEOUT_SECONDS)
         except (FileNotFoundError, OpsError) as exc:
             return 127, str(exc)
         return completed.returncode, (completed.stdout + completed.stderr)
 
+    def _capture_with_status(self, command: list[str | Path], message: str) -> tuple[int, str]:
+        with self._status(message):
+            return self._capture(command)
+
+    @contextmanager
+    def _status(self, message: str):
+        if self.verbose:
+            yield
+            return
+        with Console(file=sys.stdout).status(message, spinner="dots"):
+            yield
+
     def _heading(self, title: str) -> None:
+        if self.current_section:
+            self._finish_section(self.current_section)
+        self.current_section = title
+        self.section_statuses.setdefault(title, ProbeStatus.PASS)
         print()
         print(bold(title))
+
+    def _finish_section(self, title: str) -> None:
+        if self.verbose or self.section_statuses.get(title) is not ProbeStatus.PASS:
+            return
+        if title in {"Boot and USB", "Service and Runtime", "Bluetooth"}:
+            ok("All checks passed")
+
+    def _mark_section(self, status: ProbeStatus) -> None:
+        if not self.current_section:
+            return
+        current = self.section_statuses.get(self.current_section, ProbeStatus.PASS)
+        if current is ProbeStatus.FAIL:
+            return
+        if status is ProbeStatus.FAIL or current is ProbeStatus.PASS:
+            self.section_statuses[self.current_section] = status
+
+    def _print_readonly_summary(
+        self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_storage: str
+    ) -> None:
+        if self.verbose or self.section_statuses.get("Read-Only Mode") is ProbeStatus.FAIL:
+            return
+        self.pass_probe(
+            _readonly_summary_message(readonly, overlay, root_overlay_active, bluetooth_storage), visible=True
+        )
 
     def _print_verbose(self, rfkill_entries, *logs: tuple[int, str]) -> None:
         print("\n## Details")
@@ -399,13 +482,28 @@ class SmokeTest:
         print("\n## rfkill bluetooth")
         print("\n".join(entry.line() for entry in rfkill_entries) or "<no output>")
         print("\n## Mount details")
-        print(self._capture(["findmnt", "-n", "-T", "/"])[1] or "<no output>")
-        print(self._capture(["findmnt", "-n", "-T", "/var/lib/bluetooth"])[1] or "<no output>")
+        print(
+            self._capture_with_status(["findmnt", "-n", "-T", "/"], "Collecting root mount details")[1] or "<no output>"
+        )
+        print(
+            self._capture_with_status(
+                ["findmnt", "-n", "-T", "/var/lib/bluetooth"], "Collecting Bluetooth mount details"
+            )[1]
+            or "<no output>"
+        )
         print("\n## Service status")
-        print(self._capture(["systemctl", "--no-pager", "--full", "status", PATHS.service_unit])[1] or "<no output>")
+        print(
+            self._capture_with_status(
+                ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], "Collecting service status"
+            )[1]
+            or "<no output>"
+        )
         print("\n## Journal")
         print(
-            self._capture(["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"])[1] or "<no output>"
+            self._capture_with_status(
+                ["journalctl", "-b", "-u", PATHS.service_unit, "-n", "100", "--no-pager"], "Collecting service journal"
+            )[1]
+            or "<no output>"
         )
 
 
@@ -444,6 +542,25 @@ def _usb_gadget_identity() -> str:
         if values:
             return f"{gadget_root.name}: " + ", ".join(values)
     return "<none>"
+
+
+def _readonly_summary_message(readonly: str, overlay: str, root_overlay_active: str, bluetooth_storage: str) -> str:
+    root_text = {"yes": "overlay root active", "no": "rootfs writable", "unknown": "root filesystem state unknown"}.get(
+        root_overlay_active, "root filesystem state unknown"
+    )
+    storage_text = {
+        "persistent": "Bluetooth state on persistent storage",
+        "rootfs": "Bluetooth state on rootfs",
+        "missing": "Bluetooth state missing",
+        "unknown": "Bluetooth state unknown",
+    }.get(bluetooth_storage, "Bluetooth state unknown")
+    if overlay == "enabled" and root_overlay_active == "no":
+        state = "pending reboot"
+    elif readonly in {"enabled", "disabled"}:
+        state = readonly
+    else:
+        state = "unknown"
+    return f"{state}: {root_text}, {storage_text}"
 
 
 def _try(func, default: str = "") -> str:
