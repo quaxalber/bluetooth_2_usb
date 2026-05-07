@@ -164,6 +164,36 @@ class BootConfigOpsTest(unittest.TestCase):
                 with self.assertRaises(OpsError):
                     boot_config.boot_initramfs_target_path(target)
 
+    def test_kernel_config_candidates_include_detected_firmware_boot_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            firmware = Path(tmpdir) / "firmware"
+
+            with patch("bluetooth_2_usb.ops.boot_config.detect_boot_dir", return_value=firmware):
+                candidates = boot_config.kernel_config_candidates("6.12.81-b2u-wake")
+
+        self.assertEqual(
+            candidates,
+            [Path("/boot/config-6.12.81-b2u-wake"), firmware / "config-6.12.81-b2u-wake", Path("/proc/config.gz")],
+        )
+
+    def test_kernel_config_snippet_reads_detected_firmware_boot_dir_config(self) -> None:
+        release = "99.99.99-b2u-test"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            firmware = Path(tmpdir) / "firmware"
+            firmware.mkdir()
+            (firmware / f"config-{release}").write_text(
+                "\n".join(["CONFIG_USB_DWC2=y", "CONFIG_USB_LIBCOMPOSITE=m", "CONFIG_UNRELATED=y"]) + "\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("bluetooth_2_usb.ops.boot_config.detect_boot_dir", return_value=firmware),
+                patch("bluetooth_2_usb.ops.boot_config.current_kernel_release", return_value=release),
+            ):
+                snippet = boot_config.kernel_config_snippet()
+
+        self.assertEqual(snippet, "CONFIG_USB_DWC2=y\nCONFIG_USB_LIBCOMPOSITE=m")
+
 
 class ReadonlyConfigTest(unittest.TestCase):
     def test_overlay_status_prefers_live_state(self) -> None:
