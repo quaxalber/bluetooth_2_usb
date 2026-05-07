@@ -1431,7 +1431,10 @@ class LoopbackInjectTest(unittest.TestCase):
         )
 
         with patch("bluetooth_2_usb.loopback.capture._load_hidapi", return_value=hid_module):
-            with patch("bluetooth_2_usb.loopback.capture.time.sleep"):
+            with (
+                patch("bluetooth_2_usb.loopback.capture.time.monotonic", side_effect=[0.0, 0.0, 0.0, 0.002]),
+                patch("bluetooth_2_usb.loopback.capture.time.sleep"),
+            ):
                 result = run_capture(SCENARIO_NODE_DISCOVERY, devices=USB_PRODUCT_NAME, timeout_sec=0.001)
 
         self.assertFalse(result.success)
