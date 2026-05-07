@@ -11,11 +11,12 @@ from ..boot_config import (
     configured_initramfs_file,
     configured_kernel_image,
     current_kernel_release,
+    current_root_filesystem_type,
     ensure_bootable_initramfs_for_current_kernel,
     expected_boot_initramfs_file,
     versioned_initrd_candidates,
 )
-from ..commands import backup_file, fail, info, ok, output, require_commands, run, warn
+from ..commands import OpsError, backup_file, fail, info, ok, output, require_commands, run, warn
 from .config import ReadonlyConfig, load_readonly_config, write_readonly_config
 from .service import _systemctl_active, restart_b2u_if_installed, stop_b2u_if_installed
 from .status import (
@@ -30,6 +31,9 @@ from .status import (
 from .units import (
     install_bluetooth_persist_dropin,
     persist_spec_from_device,
+    remove_bluetooth_bind_mount_unit,
+    remove_bluetooth_persist_dropin,
+    remove_persist_mount_unit,
     write_bluetooth_bind_mount_unit,
     write_persist_mount_unit,
 )
@@ -73,7 +77,6 @@ def setup_persistent_bluetooth_state(device: str) -> None:
     install_bluetooth_persist_dropin()
     write_readonly_config(
         ReadonlyConfig(
-            mode="disabled",
             persist_mount=persist_mount,
             persist_bluetooth_dir=persist_bluetooth_dir,
             persist_spec=persist_spec,
@@ -290,8 +293,6 @@ def enable_readonly() -> None:
                 )
             else:
                 fail("OverlayFS is still not configured after raspi-config completed.")
-        config.mode = "enabled"
-        write_readonly_config(config)
     except Exception:
         warn(
             "OverlayFS was requested but validation did not complete. "
@@ -309,9 +310,73 @@ def enable_readonly() -> None:
 
 def disable_readonly() -> None:
     require_commands(["raspi-config"])
-    config = load_readonly_config()
     run(["raspi-config", "nonint", "disable_overlayfs"])
-    config.mode = "disabled"
-    write_readonly_config(config)
     ok("OverlayFS has been disabled")
-    warn("Persistent Bluetooth state mount configuration was kept. Reboot to return to a writable root filesystem.")
+    warn("Persistent Bluetooth state mount configuration was kept.")
+    warn("Reboot to return to a writable root filesystem.")
+    warn(
+        "After reboot, run `sudo bluetooth_2_usb readonly migrate` if you want to move Bluetooth state back to rootfs."
+    )
+
+
+def migrate_bluetooth_state_to_rootfs() -> None:
+    require_commands(["findmnt", "mountpoint", "systemctl", "systemd-escape", "umount"])
+    config = load_readonly_config()
+    root_fstype = current_root_filesystem_type()
+    if root_fstype == "overlay":
+        fail(
+            "Refusing to migrate Bluetooth state while the root filesystem is overlay-backed. "
+            + "Reboot after disabling read-only mode first."
+        )
+    if not bluetooth_state_persistent(config):
+        fail("Persistent Bluetooth state is not mounted at /var/lib/bluetooth; nothing to migrate.")
+    if not config.persist_bluetooth_dir.is_dir():
+        fail(f"Persistent Bluetooth state directory is missing: {config.persist_bluetooth_dir}")
+
+    bluetooth_was_active = _systemctl_active("bluetooth.service")
+    b2u_was_active = stop_b2u_if_installed("before migrating Bluetooth state back to rootfs")
+    target = Path("/var/lib/bluetooth")
+    temp_dir = target.with_name(f"{target.name}.b2u-migrate-{uuid.uuid4().hex}")
+    backup_dir = target.with_name(f"{target.name}.b2u-backup-{uuid.uuid4().hex}")
+    try:
+        if bluetooth_was_active:
+            run(["systemctl", "stop", "bluetooth.service"])
+        shutil.copytree(config.persist_bluetooth_dir, temp_dir, symlinks=True)
+        run(["systemctl", "disable", "--now", "var-lib-bluetooth.mount"], check=False)
+        if run(["mountpoint", "-q", target], check=False).returncode == 0:
+            run(["umount", target])
+        if target.exists():
+            target.rename(backup_dir)
+        try:
+            temp_dir.rename(target)
+        except Exception:
+            if target.exists():
+                shutil.rmtree(target, ignore_errors=True)
+            if backup_dir.exists():
+                backup_dir.rename(target)
+            raise
+        else:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+        remove_bluetooth_persist_dropin()
+        remove_bluetooth_bind_mount_unit()
+        _disable_persistent_storage_mount(config)
+        run(["systemctl", "daemon-reload"])
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        if bluetooth_was_active and not _systemctl_active("bluetooth.service"):
+            run(["systemctl", "start", "bluetooth.service"], check=False)
+        restart_b2u_if_installed(b2u_was_active, "after migrating Bluetooth state back to rootfs")
+    ok("Bluetooth state has been migrated back to /var/lib/bluetooth on the root filesystem.")
+    ok("Persistent storage mount has been disabled and unmounted.")
+    warn("Data on the persistent device was left intact.")
+
+
+def _disable_persistent_storage_mount(config: ReadonlyConfig) -> None:
+    unit = output(["systemd-escape", "--path", "--suffix=mount", config.persist_mount])
+    run(["systemctl", "disable", "--now", unit], check=False)
+    if run(["findmnt", "-rn", config.persist_mount], check=False, capture=True).returncode == 0:
+        try:
+            run(["umount", config.persist_mount])
+        except OpsError:
+            fail(f"Persistent storage mount is no longer needed but could not be unmounted: {config.persist_mount}")
+    remove_persist_mount_unit(config.persist_mount)

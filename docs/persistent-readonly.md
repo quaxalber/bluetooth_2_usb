@@ -127,6 +127,7 @@ instead of leaving you with a half-configured read-only boot path.
 | `readonly status` | n/a | This command has no command-specific arguments. |
 | `readonly enable` | n/a | This command has no command-specific arguments. |
 | `readonly disable` | n/a | This command has no command-specific arguments. |
+| `readonly migrate` | n/a | This command has no command-specific arguments. |
 
 ## Disable read-only mode
 
@@ -135,6 +136,21 @@ bluetooth_2_usb readonly status
 sudo bluetooth_2_usb readonly disable
 sudo reboot
 ```
+
+`readonly disable` leaves Bluetooth state on the persistent storage mount. If
+you want to move Bluetooth state back to the root filesystem, reboot first so
+the root filesystem is writable, then run:
+
+```bash
+sudo bluetooth_2_usb readonly migrate
+```
+
+`readonly migrate` refuses to run while the root filesystem is still
+overlay-backed, because writes to rootfs would be discarded on the next reboot.
+When migration succeeds, the managed persistent-state mounts are disabled and
+unmounted. The old Bluetooth state on the persistent device is preserved; wipe
+or reformat that device manually only if you intentionally want to reuse it for
+something else.
 
 ## Validation
 

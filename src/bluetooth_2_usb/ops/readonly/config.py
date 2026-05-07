@@ -10,7 +10,6 @@ from ..paths import PATHS
 
 @dataclass(slots=True)
 class ReadonlyConfig:
-    mode: str = "disabled"
     persist_mount: Path = PATHS.persist_mount
     persist_bluetooth_dir: Path = PATHS.default_persist_bluetooth_dir
     persist_spec: str = ""
@@ -52,12 +51,7 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
         path,
     )
 
-    mode = _normalize_readonly_mode(values.get("B2U_READONLY_MODE", "disabled"))
-    if mode not in {"enabled", "disabled"}:
-        fail(f"Refusing to load invalid B2U_READONLY_MODE from {path}: {mode}")
-
     return ReadonlyConfig(
-        mode=mode,
         persist_mount=persist_mount,
         persist_bluetooth_dir=persist_bluetooth_dir,
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),
@@ -74,20 +68,10 @@ def _required_absolute_path(raw_value: str, key: str, config_path: Path) -> Path
     return value
 
 
-def _normalize_readonly_mode(mode: str) -> str:
-    if mode == "persistent":
-        return "enabled"
-    return mode
-
-
 def write_readonly_config(config: ReadonlyConfig, path: Path = PATHS.readonly_env_file) -> None:
-    mode = _normalize_readonly_mode(config.mode)
-    if mode not in {"enabled", "disabled"}:
-        fail(f"Refusing to write invalid B2U_READONLY_MODE to {path}: {config.mode}")
     path.write_text(
         "\n".join(
             [
-                f'B2U_READONLY_MODE="{mode}"',
                 f'B2U_PERSIST_MOUNT="{config.persist_mount}"',
                 f'B2U_PERSIST_BLUETOOTH_DIR="{config.persist_bluetooth_dir}"',
                 f'B2U_PERSIST_SPEC="{config.persist_spec}"',

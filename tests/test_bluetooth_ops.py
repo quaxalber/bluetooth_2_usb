@@ -16,6 +16,7 @@ from bluetooth_2_usb.ops.readonly import (
     disable_readonly,
     enable_readonly,
     load_readonly_config,
+    migrate_bluetooth_state_to_rootfs,
     overlay_configured_status,
     overlay_status,
     package_status,
@@ -265,7 +266,6 @@ class ReadonlyConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"
             config = ReadonlyConfig(
-                mode="enabled",
                 persist_mount=Path("/mnt/persist"),
                 persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
                 persist_spec="/dev/disk/by-uuid/abc",
@@ -276,7 +276,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             self.assertEqual(load_readonly_config(path), config)
 
-    def test_readonly_config_loads_persistent_mode_as_enabled(self) -> None:
+    def test_readonly_config_ignores_legacy_mode_key(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"
             path.write_text(
@@ -293,15 +293,16 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             config = load_readonly_config(path)
 
-        self.assertEqual(config.mode, "enabled")
+        self.assertEqual(config.persist_mount, Path("/mnt/persist"))
+        self.assertEqual(config.persist_bluetooth_dir, Path("/mnt/persist/bluetooth"))
 
-    def test_write_readonly_config_normalizes_persistent_mode_to_enabled(self) -> None:
+    def test_write_readonly_config_omits_legacy_mode_key(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"
 
-            write_readonly_config(ReadonlyConfig(mode="persistent"), path)
+            write_readonly_config(ReadonlyConfig(), path)
 
-            self.assertIn('B2U_READONLY_MODE="enabled"', path.read_text(encoding="utf-8"))
+            self.assertNotIn("B2U_READONLY_MODE", path.read_text(encoding="utf-8"))
 
     def test_readonly_config_rejects_unexpected_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -332,12 +333,10 @@ class ReadonlyConfigTest(unittest.TestCase):
             with patch(f"{READONLY_CONFIG}.PATHS", paths):
                 config = load_readonly_config(Path(tmpdir) / "missing")
 
-        self.assertEqual(config.mode, "disabled")
         self.assertEqual(config.persist_bluetooth_dir, Path("/tmp/persist/bt-state"))
 
     def test_bluetooth_state_persistent_rejects_bluetooth_dir_outside_persist_mount(self) -> None:
         config = ReadonlyConfig(
-            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/var/lib/bluetooth"),
             persist_spec="/dev/sda1",
@@ -357,7 +356,6 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_bluetooth_state_persistent_returns_false_when_findmnt_fails(self) -> None:
         config = ReadonlyConfig(
-            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/sda1",
@@ -373,7 +371,6 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_print_readonly_status_reports_configured_and_live_state(self) -> None:
         config = ReadonlyConfig(
-            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/disk/by-uuid/abc",
@@ -400,10 +397,10 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("read-only mode: enabled\n", output)
-        self.assertIn("configured read-only mode: enabled\n", output)
         self.assertIn("overlay_live: enabled\n", output)
-        self.assertIn("bluetooth persistent mount: mounted\n", output)
+        self.assertIn("bluetooth state storage: persistent\n", output)
         self.assertIn("persist_device: /dev/sda1\n", output)
+        self.assertNotIn("configured read-only mode:", output)
 
     def test_print_readonly_status_uses_safe_defaults_when_config_cannot_load(self) -> None:
         stdout = StringIO()
@@ -421,9 +418,9 @@ class ReadonlyConfigTest(unittest.TestCase):
             print_readonly_status()
 
         output = stdout.getvalue()
-        self.assertIn("configured read-only mode: disabled\n", output)
-        self.assertIn("bluetooth persistent mount: not mounted\n", output)
+        self.assertIn("bluetooth state storage:", output)
         self.assertIn("persist_device: <unset>\n", output)
+        self.assertNotIn("configured read-only mode:", output)
 
     def test_b2u_service_helpers_preserve_inactive_service_state(self) -> None:
         calls = []
@@ -474,7 +471,6 @@ class ReadonlyConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             config = ReadonlyConfig(
-                mode="disabled",
                 persist_mount=root / "persist",
                 persist_bluetooth_dir=root / "persist" / "bluetooth",
                 persist_spec="",
@@ -550,7 +546,6 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_setup_persistent_bluetooth_state_fails_before_mount_migration_when_packages_fail(self) -> None:
         config = ReadonlyConfig(
-            mode="disabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="",
@@ -642,14 +637,12 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_enable_readonly_does_not_rollback_overlayfs_when_validation_fails(self) -> None:
         config = ReadonlyConfig(
-            mode="disabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/sda1",
             persist_device="/dev/sda1",
         )
         commands = []
-        written = []
 
         def fake_run(command, *, check=True, capture=False):
             commands.append(command)
@@ -679,7 +672,6 @@ class ReadonlyConfigTest(unittest.TestCase):
                 )
             )
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
-            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
 
             with self.assertRaises(OpsError):
                 with redirect_stdout(StringIO()) as stdout:
@@ -687,15 +679,12 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         self.assertIn(["raspi-config", "nonint", "enable_overlayfs"], commands)
         self.assertNotIn(["raspi-config", "nonint", "disable_overlayfs"], commands)
-        self.assertEqual(config.mode, "disabled")
-        self.assertEqual(written, [])
         self.assertIn("readonly status", stdout.getvalue())
         self.assertNotIn("overlayfs-repair-guidance", stdout.getvalue())
         self.assertNotIn("for repair steps", stdout.getvalue())
 
     def test_enable_readonly_reports_status_guidance_when_overlayfs_enable_fails(self) -> None:
         config = ReadonlyConfig(
-            mode="disabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/sda1",
@@ -728,7 +717,6 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_enable_readonly_tells_user_to_rerun_setup_when_packages_are_incomplete(self) -> None:
         config = ReadonlyConfig(
-            mode="disabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/sda1",
@@ -754,15 +742,7 @@ class ReadonlyConfigTest(unittest.TestCase):
         self.assertIn("bad package", stdout.getvalue())
 
     def test_disable_readonly_disables_overlayfs_and_keeps_persistent_mount_config(self) -> None:
-        config = ReadonlyConfig(
-            mode="enabled",
-            persist_mount=Path("/mnt/persist"),
-            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
-            persist_spec="/dev/disk/by-uuid/abc",
-            persist_device="/dev/sda1",
-        )
         commands = []
-        written = []
 
         def fake_run(command, *, check=True, capture=False):
             commands.append(command)
@@ -775,15 +755,211 @@ class ReadonlyConfigTest(unittest.TestCase):
 
         with ExitStack() as stack:
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
-            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
             stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
-            stack.enter_context(patch(f"{READONLY_WORKFLOWS}.write_readonly_config", side_effect=written.append))
 
             with redirect_stdout(StringIO()) as stdout:
                 disable_readonly()
 
         self.assertEqual(commands, [["raspi-config", "nonint", "disable_overlayfs"]])
-        self.assertEqual(config.mode, "disabled")
-        self.assertEqual(written, [config])
-        self.assertEqual(config.persist_spec, "/dev/disk/by-uuid/abc")
         self.assertIn("Persistent Bluetooth state mount configuration was kept.", stdout.getvalue())
+        self.assertIn("readonly migrate", stdout.getvalue())
+
+    def test_migrate_bluetooth_state_refuses_overlay_root(self) -> None:
+        with (
+            patch(f"{READONLY_WORKFLOWS}.require_commands"),
+            patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=ReadonlyConfig()),
+            patch(f"{READONLY_WORKFLOWS}.current_root_filesystem_type", return_value="overlay"),
+        ):
+            with self.assertRaisesRegex(OpsError, "overlay-backed"):
+                migrate_bluetooth_state_to_rootfs()
+
+    def test_migrate_bluetooth_state_refuses_when_persistent_state_is_not_mounted(self) -> None:
+        config = ReadonlyConfig(
+            persist_mount=Path("/mnt/persist"),
+            persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
+            persist_spec="/dev/disk/by-uuid/abc",
+            persist_device="/dev/sda1",
+        )
+        with (
+            patch(f"{READONLY_WORKFLOWS}.require_commands"),
+            patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config),
+            patch(f"{READONLY_WORKFLOWS}.current_root_filesystem_type", return_value="ext4"),
+            patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=False),
+        ):
+            with self.assertRaisesRegex(OpsError, "not mounted"):
+                migrate_bluetooth_state_to_rootfs()
+
+    def test_migrate_bluetooth_state_copies_state_and_removes_bind_mount(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            persist_bluetooth = root / "persist/bluetooth"
+            persist_bluetooth.mkdir(parents=True)
+            (persist_bluetooth / "controller").mkdir()
+            (persist_bluetooth / "controller/settings").write_text("paired\n", encoding="utf-8")
+            root_bluetooth = root / "var/lib/bluetooth"
+            root_bluetooth.mkdir(parents=True)
+            (root_bluetooth / "old").write_text("old\n", encoding="utf-8")
+            config = ReadonlyConfig(
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=persist_bluetooth,
+                persist_spec="/dev/disk/by-uuid/abc",
+                persist_device="/dev/sda1",
+            )
+            commands = []
+
+            def fake_run(command, *, check=True, capture=False):
+                commands.append(command)
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+
+                if command[:2] == ["mountpoint", "-q"]:
+                    Completed.returncode = 1
+                return Completed()
+
+            def local_path(value: str) -> Path:
+                if value == "/var/lib/bluetooth":
+                    return root_bluetooth
+                return Path(value)
+
+            with ExitStack() as stack:
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.current_root_filesystem_type", return_value="ext4"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=True))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}._systemctl_active", side_effect=[True, False]))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.stop_b2u_if_installed", return_value=True))
+                restart_b2u = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.restart_b2u_if_installed"))
+                remove_dropin = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_bluetooth_persist_dropin"))
+                remove_bind = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_bluetooth_bind_mount_unit"))
+                remove_persist = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_persist_mount_unit"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.output", return_value="persist.mount"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.Path", side_effect=local_path))
+
+                with redirect_stdout(StringIO()) as stdout:
+                    migrate_bluetooth_state_to_rootfs()
+
+            self.assertEqual((root_bluetooth / "controller/settings").read_text(encoding="utf-8"), "paired\n")
+            self.assertFalse((root_bluetooth / "old").exists())
+            self.assertTrue((persist_bluetooth / "controller/settings").exists())
+            self.assertIn(["systemctl", "disable", "--now", "var-lib-bluetooth.mount"], commands)
+            self.assertIn(["systemctl", "disable", "--now", "persist.mount"], commands)
+            self.assertIn(["umount", config.persist_mount], commands)
+            self.assertIn(["systemctl", "start", "bluetooth.service"], commands)
+            self.assertIn("Data on the persistent device was left intact.", stdout.getvalue())
+            remove_dropin.assert_called_once_with()
+            remove_bind.assert_called_once_with()
+            remove_persist.assert_called_once_with(config.persist_mount)
+            restart_b2u.assert_called_once_with(True, "after migrating Bluetooth state back to rootfs")
+
+    def test_migrate_bluetooth_state_removes_persist_unit_when_persist_mount_already_unmounted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            persist_bluetooth = root / "persist/bluetooth"
+            persist_bluetooth.mkdir(parents=True)
+            (persist_bluetooth / "settings").write_text("paired\n", encoding="utf-8")
+            root_bluetooth = root / "var/lib/bluetooth"
+            root_bluetooth.mkdir(parents=True)
+            config = ReadonlyConfig(
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=persist_bluetooth,
+                persist_spec="/dev/disk/by-uuid/abc",
+                persist_device="/dev/sda1",
+            )
+            commands = []
+
+            def fake_run(command, *, check=True, capture=False):
+                commands.append(command)
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+
+                if command[:2] == ["mountpoint", "-q"] or command[:2] == ["findmnt", "-rn"]:
+                    Completed.returncode = 1
+                return Completed()
+
+            def local_path(value: str) -> Path:
+                if value == "/var/lib/bluetooth":
+                    return root_bluetooth
+                return Path(value)
+
+            with ExitStack() as stack:
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.current_root_filesystem_type", return_value="ext4"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=True))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}._systemctl_active", return_value=False))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.stop_b2u_if_installed", return_value=False))
+                restart_b2u = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.restart_b2u_if_installed"))
+                remove_persist = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_persist_mount_unit"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_bluetooth_persist_dropin"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_bluetooth_bind_mount_unit"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.output", return_value="persist.mount"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.Path", side_effect=local_path))
+
+                migrate_bluetooth_state_to_rootfs()
+
+            self.assertIn(["systemctl", "disable", "--now", "persist.mount"], commands)
+            self.assertNotIn(["umount", config.persist_mount], commands)
+            remove_persist.assert_called_once_with(config.persist_mount)
+            restart_b2u.assert_called_once_with(False, "after migrating Bluetooth state back to rootfs")
+
+    def test_migrate_bluetooth_state_restores_services_when_persist_unmount_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            persist_bluetooth = root / "persist/bluetooth"
+            persist_bluetooth.mkdir(parents=True)
+            (persist_bluetooth / "settings").write_text("paired\n", encoding="utf-8")
+            root_bluetooth = root / "var/lib/bluetooth"
+            root_bluetooth.mkdir(parents=True)
+            config = ReadonlyConfig(
+                persist_mount=root / "persist",
+                persist_bluetooth_dir=persist_bluetooth,
+                persist_spec="/dev/disk/by-uuid/abc",
+                persist_device="/dev/sda1",
+            )
+            commands = []
+
+            def fake_run(command, *, check=True, capture=False):
+                commands.append(command)
+                if command == ["umount", config.persist_mount]:
+                    raise OpsError("umount failed")
+
+                class Completed:
+                    returncode = 0
+                    stdout = ""
+
+                if command[:2] == ["mountpoint", "-q"]:
+                    Completed.returncode = 1
+                return Completed()
+
+            def local_path(value: str) -> Path:
+                if value == "/var/lib/bluetooth":
+                    return root_bluetooth
+                return Path(value)
+
+            with ExitStack() as stack:
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.require_commands"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.current_root_filesystem_type", return_value="ext4"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.bluetooth_state_persistent", return_value=True))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}._systemctl_active", side_effect=[True, False]))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.stop_b2u_if_installed", return_value=True))
+                restart_b2u = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.restart_b2u_if_installed"))
+                remove_persist = stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_persist_mount_unit"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_bluetooth_persist_dropin"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.remove_bluetooth_bind_mount_unit"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.output", return_value="persist.mount"))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{READONLY_WORKFLOWS}.Path", side_effect=local_path))
+
+                with self.assertRaisesRegex(OpsError, "could not be unmounted"):
+                    migrate_bluetooth_state_to_rootfs()
+
+            self.assertIn(["systemctl", "start", "bluetooth.service"], commands)
+            remove_persist.assert_not_called()
+            restart_b2u.assert_called_once_with(True, "after migrating Bluetooth state back to rootfs")

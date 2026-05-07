@@ -94,19 +94,15 @@ sudo bluetooth_2_usb uninstall
 
 ## Diagnostics
 
-For most issues, start with the two built-in diagnostics:
+Start with:
 
 ```bash
-sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb smoketest
 sudo bluetooth_2_usb debug --duration 10
 ```
 
-The `smoketest` is the quick health gate. `debug` collects a fuller
-redacted snapshot and can run a short bounded foreground debug session. Debug
-reports are written under `/var/log/bluetooth_2_usb/` and are made copyable by
-the invoking sudo user when possible. If you need the next steps after those
-checks, use
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+Use `smoketest --verbose` or [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+when you need detailed probe output and interpretation.
 
 ## Runtime behavior
 
@@ -218,23 +214,24 @@ sudo bluetooth_2_usb uninstall
 
 ### `smoketest`
 
-Fast health check for the supported managed deployment. Use this first when you
-want to confirm that the service, gadget path, and Bluetooth basics are
-healthy.
+Run the managed deployment health check.
 
 ```bash
-sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb smoketest
 ```
+
+Use `--verbose` for the full probe transcript.
 
 ### `debug`
 
-Collect a redacted diagnostics report and optionally run a bounded live
-foreground debug session. Use this when the `smoketest` is not enough or when
-you need a report to share.
+Write a redacted diagnostics report.
 
 ```bash
 sudo bluetooth_2_usb debug --duration DURATION_SEC
 ```
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for what to collect and how to
+interpret it.
 
 ### `loopback inject`
 
@@ -299,8 +296,8 @@ sudo bluetooth_2_usb readonly setup --device DEVICE
 
 ### `readonly status`
 
-Show the configured and live read-only state, including OverlayFS, root
-filesystem, and persistent Bluetooth-state mount status.
+Show live read-only state, OverlayFS boot configuration, root filesystem, and
+Bluetooth-state storage status.
 
 ```bash
 bluetooth_2_usb readonly status
@@ -324,6 +321,17 @@ Bluetooth-state storage configuration available.
 sudo bluetooth_2_usb readonly disable
 ```
 
+### `readonly migrate`
+
+After disabling read-only mode and rebooting back to a writable root filesystem,
+move Bluetooth state back from persistent storage to rootfs. This disables and
+unmounts the managed persistent-state mounts, but intentionally leaves the old
+data on the persistent device intact as a rollback copy.
+
+```bash
+sudo bluetooth_2_usb readonly migrate
+```
+
 ## Managed paths
 
 | Path | Purpose |
@@ -331,7 +339,7 @@ sudo bluetooth_2_usb readonly disable
 | `/opt/bluetooth_2_usb` | Managed installation root |
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
 | `/etc/default/bluetooth_2_usb` | Structured runtime settings |
-| `/etc/default/bluetooth_2_usb_readonly` | Read-only configuration |
+| `/etc/default/bluetooth_2_usb_readonly` | Persistent Bluetooth state configuration |
 | `/var/log/bluetooth_2_usb` | Operational command and runtime diagnostic output |
 | `/mnt/b2u-persist` | Default persistent mount target |
 | `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |

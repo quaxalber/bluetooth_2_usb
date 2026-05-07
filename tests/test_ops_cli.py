@@ -81,6 +81,7 @@ class OpsCliTest(unittest.TestCase):
             (["readonly", "status"], "print_readonly_status"),
             (["readonly", "enable"], "enable_readonly"),
             (["readonly", "disable"], "disable_readonly"),
+            (["readonly", "migrate"], "migrate_bluetooth_state_to_rootfs"),
             (["udev", "install"], "install_hid_udev_rule"),
         )
 
