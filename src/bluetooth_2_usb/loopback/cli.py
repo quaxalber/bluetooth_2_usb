@@ -181,6 +181,15 @@ def run(argv: list[str] | None = None) -> int:
             message=str(exc),
             details=details,
         )
+    except ValueError as exc:
+        result = LoopbackResult(
+            command=args.command,
+            scenario=args.scenario,
+            success=False,
+            exit_code=EXIT_USAGE,
+            message=str(exc),
+            details={},
+        )
     except KeyboardInterrupt:
         result = LoopbackResult(
             command=args.command,

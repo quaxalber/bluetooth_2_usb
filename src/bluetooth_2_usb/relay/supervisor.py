@@ -82,6 +82,11 @@ class RelaySupervisor:
         self._skip_name_prefixes = (
             tuple(skip_name_prefixes) if skip_name_prefixes is not None else DEFAULT_SKIP_NAME_PREFIXES
         )
+        if self._auto_relay and self._device_filters:
+            logger.warning(
+                "Both auto relay and explicit device filters are configured; "
+                "device filters are ignored while auto relay is active."
+            )
 
         self._grab = grab
 

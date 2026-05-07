@@ -141,6 +141,14 @@ def _active_gate() -> RelayGate:
     return gate
 
 
+class RelaySupervisorConfigTest(unittest.TestCase):
+    def test_auto_relay_warns_when_explicit_device_filters_are_configured(self) -> None:
+        with self.assertLogs("bluetooth_2_usb", level="WARNING") as logs:
+            _relay_supervisor(auto_relay=True, devices=["keyboard"])
+
+        self.assertTrue(any("device filters are ignored" in message for message in logs.output))
+
+
 class _FakeInputHandle:
     def __init__(self, path: str = "/dev/input/event7", name: str = "Fake Input") -> None:
         self.path = path

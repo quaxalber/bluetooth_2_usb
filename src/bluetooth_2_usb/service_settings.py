@@ -293,8 +293,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        normalize_service_settings_file()
-        settings = load_service_settings()
+        if args.canonicalize_bools:
+            normalize_service_settings_file(DEFAULT_ENV_FILE)
+            canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
+            return 0
+        settings = load_service_settings(DEFAULT_ENV_FILE)
     except ServiceSettingsError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -311,10 +314,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_summary_json:
         print(json.dumps(settings.to_dict(), sort_keys=True))
         return 0
-    if args.canonicalize_bools:
-        canonicalize_service_settings_bools()
-        return 0
-
     return 1
 
 

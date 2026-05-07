@@ -1,5 +1,5 @@
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from .inputs.filter import parse_devices
 
@@ -157,7 +157,7 @@ class Arguments:
     output: str
 
     def __str__(self) -> str:
-        return ", ".join(f"{field}={getattr(self, field)}" for field in self.__dataclass_fields__)
+        return ", ".join(f"{field.name}={getattr(self, field.name)}" for field in fields(self))
 
 
 def parse_args(argv: list[str] | None = None) -> Arguments:

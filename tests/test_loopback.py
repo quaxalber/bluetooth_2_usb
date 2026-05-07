@@ -1299,6 +1299,20 @@ class LoopbackInjectTest(unittest.TestCase):
         self.assertEqual(exit_code, EXIT_USAGE)
         self.assertIn("--devices must not be empty", stdout.getvalue())
 
+    def test_capture_cli_maps_device_parse_errors_to_usage_error(self) -> None:
+        stdout = io.StringIO()
+
+        with patch("bluetooth_2_usb.loopback.capture.run_capture", side_effect=ValueError("devices must not be empty")):
+            with redirect_stdout(stdout):
+                exit_code = run_loopback(["capture", "--devices", ",", "--scenario", SCENARIO_KEYBOARD])
+
+        self.assertEqual(exit_code, EXIT_USAGE)
+        self.assertIn("devices must not be empty", stdout.getvalue())
+
+    def test_discovery_rejects_malformed_device_filter_list_as_value_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "devices must not be empty"):
+            discover_gadget_node_candidates(devices=",", hid_module=_FakeHidModule([]))
+
     def test_capture_uses_scenario_default_timeout(self) -> None:
         hid_module = _FakeHidModule(
             [

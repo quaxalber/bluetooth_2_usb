@@ -1,7 +1,11 @@
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
+from bluetooth_2_usb import service_settings
 from bluetooth_2_usb.args import CustomArgumentParser
 from bluetooth_2_usb.service_settings import (
     ServiceSettings,
@@ -264,3 +268,54 @@ class ServiceSettingsTest(unittest.TestCase):
             changed = canonicalize_service_settings_bools(env_file)
 
         self.assertFalse(changed)
+
+    def test_check_does_not_normalize_service_settings_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            original_text = "B2U_AUTO=1\n"
+            env_file.write_text(original_text, encoding="utf-8")
+
+            with patch.object(service_settings, "DEFAULT_ENV_FILE", env_file):
+                self.assertEqual(service_settings.main(["--check"]), 0)
+
+            self.assertEqual(env_file.read_text(encoding="utf-8"), original_text)
+
+    def test_print_summary_json_does_not_normalize_service_settings_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            original_text = "B2U_AUTO=1\n"
+            env_file.write_text(original_text, encoding="utf-8")
+            stdout = io.StringIO()
+
+            with patch.object(service_settings, "DEFAULT_ENV_FILE", env_file), redirect_stdout(stdout):
+                self.assertEqual(service_settings.main(["--print-summary-json"]), 0)
+
+            self.assertEqual(env_file.read_text(encoding="utf-8"), original_text)
+
+    def test_print_shell_command_does_not_normalize_service_settings_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            original_text = "B2U_AUTO=1\n"
+            env_file.write_text(original_text, encoding="utf-8")
+            stdout = io.StringIO()
+
+            with patch.object(service_settings, "DEFAULT_ENV_FILE", env_file), redirect_stdout(stdout):
+                self.assertEqual(service_settings.main(["--print-shell-command"]), 0)
+
+            self.assertEqual(env_file.read_text(encoding="utf-8"), original_text)
+
+    def test_canonicalize_bools_normalizes_service_settings_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("B2U_AUTO_DISCOVER=1\n", encoding="utf-8")
+
+            with patch.object(service_settings, "DEFAULT_ENV_FILE", env_file):
+                self.assertEqual(service_settings.main(["--canonicalize-bools"]), 0)
+
+            self.assertEqual(
+                env_file.read_text(encoding="utf-8"),
+                "\n".join(
+                    ["B2U_AUTO=true", "B2U_DEVICES=", "B2U_GRAB=true", "B2U_SHORTCUT=CTRL+SHIFT+F12", "B2U_DEBUG=false"]
+                )
+                + "\n",
+            )

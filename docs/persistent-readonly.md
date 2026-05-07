@@ -123,7 +123,7 @@ instead of leaving you with a half-configured read-only boot path.
 
 | Command | Argument | Meaning |
 | --- | --- | --- |
-| `readonly setup` | `--device DEVICE` | Persistent storage block device to format and mount. Required. |
+| `readonly setup` | `--device DEVICE` | Persistent ext4 storage block device to mount for Bluetooth state. Required. |
 | `readonly status` | n/a | This command has no command-specific arguments. |
 | `readonly enable` | n/a | This command has no command-specific arguments. |
 | `readonly disable` | n/a | This command has no command-specific arguments. |
