@@ -43,6 +43,9 @@ When `--output` is omitted, captures are written under the current directory:
 ./device_capture/<matched-device-name>[_raw]_<timestamp>.jsonl
 ```
 
+If the matched devices do not expose a usable name, the generated file name uses
+`device` rather than the filter text.
+
 The command prints the final file name and a short summary when it finishes.
 When run with `sudo`, the artifact is handed back to the invoking sudo user
 when possible so it can be copied without requiring sudo.

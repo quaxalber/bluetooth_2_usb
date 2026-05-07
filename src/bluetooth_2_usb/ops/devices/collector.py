@@ -678,7 +678,7 @@ def _event_code_name(event_type: int | None, code: int | None) -> str | None:
 
 
 def _default_output_path(devices_filter: str, devices: list[InputDevice], live_mode: LiveMode) -> Path:
-    source = _device_name_source(devices) or devices_filter
+    source = _device_name_source(devices) or "device"
     slug = _slug(source) or "device"
     mode_suffix = "_raw" if live_mode == "raw" else ""
     return Path.cwd() / "device_capture" / f"{slug}{mode_suffix}_{timestamp()}.jsonl"

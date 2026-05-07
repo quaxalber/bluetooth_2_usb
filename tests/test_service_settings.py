@@ -70,6 +70,14 @@ class ServiceSettingsTest(unittest.TestCase):
             with self.assertRaises(ServiceSettingsError):
                 load_service_settings(env_file)
 
+    def test_malformed_devices_value_is_rejected_as_service_settings_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "bluetooth_2_usb"
+            env_file.write_text("B2U_DEVICES=', ,'\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ServiceSettingsError, "Invalid device filter list"):
+                load_service_settings(env_file)
+
     def test_normalize_service_settings_renames_legacy_device_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             env_file = Path(tmpdir) / "bluetooth_2_usb"

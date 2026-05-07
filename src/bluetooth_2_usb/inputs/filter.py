@@ -25,29 +25,32 @@ class DeviceFilter:
         self._value = device_filter.strip()
         if not self._value:
             raise ValueError("device_filter must not be blank")
-        self._kind = self._determine_filter_kind()
-        self._normalized_value = self._normalize_filter()
+        self._type = self._determine_filter_type()
 
     def __str__(self) -> str:
-        return f'{self.type.value} "{self._value}"'
+        return f'{self.type.value} "{self.value}"'
 
     @property
     def type(self) -> DeviceFilterType:
-        return self._kind
+        return self._type
 
-    def _determine_filter_kind(self) -> DeviceFilterType:
-        if self._value.startswith("/"):
+    @property
+    def value(self) -> str:
+        return self._value
+
+    def _determine_filter_type(self) -> DeviceFilterType:
+        if self.value.startswith("/"):
             return DeviceFilterType.PATH
-        if re.match(r"^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})$", self._value):
+        if re.match(r"^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})$", self.value):
             return DeviceFilterType.MAC
         return DeviceFilterType.TEXT
 
-    def _normalize_filter(self) -> str:
+    def _normalized_value(self) -> str:
         if self.type is DeviceFilterType.PATH:
-            return self._value
+            return self.value
         if self.type is DeviceFilterType.MAC:
-            return self._value.lower().replace("-", ":")
-        return self._value.lower()
+            return _normalize_mac(self.value)
+        return _normalize_text(self.value)
 
     def matches(self, device: InputDevice | Any) -> bool:
         """
@@ -63,14 +66,20 @@ class DeviceFilter:
         name = getattr(device, "name", "") or ""
 
         if self.type is DeviceFilterType.PATH:
-            return self._value == path
+            return self.value == path
         if self.type is DeviceFilterType.MAC:
-            device_uniq = uniq.lower().replace("-", ":")
-            device_phys = phys.lower().replace("-", ":").split("/", 1)[0]
-            return self._normalized_value in {device_uniq, device_phys}
-        return (
-            self._value == path or self._value == uniq or self._value == phys or self._normalized_value in name.lower()
-        )
+            device_uniq = _normalize_mac(uniq)
+            device_phys = _normalize_mac(phys).split("/", 1)[0]
+            return self._normalized_value() in {device_uniq, device_phys}
+        return self.value in {path, uniq, phys} or self._normalized_value() in _normalize_text(name)
+
+
+def _normalize_mac(value: str) -> str:
+    return value.lower().replace("-", ":")
+
+
+def _normalize_text(value: str) -> str:
+    return value.lower()
 
 
 def parse_devices(raw_value: str) -> list[str]:

@@ -12,6 +12,11 @@ class DeviceFilterTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must not be blank"):
             DeviceFilter(" \t ")
 
+    def test_filter_value_is_stripped_raw_value(self) -> None:
+        device_filter = DeviceFilter(" keyboard ")
+
+        self.assertEqual(device_filter.value, "keyboard")
+
     def test_mac_filter_matches_hyphenated_device_uniq(self) -> None:
         device_filter = DeviceFilter("aa:bb:cc:dd:ee:ff")
         device = SimpleNamespace(path="/dev/input/event7", uniq="AA-BB-CC-DD-EE-FF", name="keyboard")

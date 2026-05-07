@@ -540,6 +540,62 @@ class DeviceCaptureTest(unittest.TestCase):
 
             self.assertEqual(output.name, "sony_interactive_entertainment_wireless_controller_20260506_010203.jsonl")
 
+    def test_capture_default_output_path_does_not_fall_back_to_mac_filter(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_cwd = Path.cwd()
+            with (
+                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
+                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                try:
+                    os.chdir(tmpdir)
+                    output = asyncio.run(
+                        collector.capture_device(
+                            devices="AA:BB:CC:DD:EE:FF",
+                            duration_sec=0,
+                            output_path=None,
+                            grab=False,
+                            include_hidraw=False,
+                            max_report_bytes=8,
+                            max_sysfs_file_bytes=8,
+                        )
+                    )
+                finally:
+                    os.chdir(previous_cwd)
+
+        self.assertEqual(output.name, "device_20260506_010203.jsonl")
+        self.assertNotIn("aa", output.name.lower())
+
+    def test_capture_default_output_path_does_not_fall_back_to_path_filter(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_cwd = Path.cwd()
+            with (
+                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
+                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+            ):
+                try:
+                    os.chdir(tmpdir)
+                    output = asyncio.run(
+                        collector.capture_device(
+                            devices="/dev/input/event1",
+                            duration_sec=0,
+                            output_path=None,
+                            grab=False,
+                            include_hidraw=False,
+                            max_report_bytes=8,
+                            max_sysfs_file_bytes=8,
+                        )
+                    )
+                finally:
+                    os.chdir(previous_cwd)
+
+        self.assertEqual(output.name, "device_20260506_010203.jsonl")
+        self.assertNotIn("event1", output.name)
+
     def test_raw_capture_default_output_path_includes_raw_suffix(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Keyboard")
         with tempfile.TemporaryDirectory() as tmpdir:

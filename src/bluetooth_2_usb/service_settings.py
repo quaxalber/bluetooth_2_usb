@@ -56,7 +56,12 @@ def _parse_value(raw_value: str) -> str:
 
 
 def _parse_devices(raw_value: str) -> list[str]:
-    return parse_devices(raw_value) if raw_value.strip() else []
+    if not raw_value.strip():
+        return []
+    try:
+        return parse_devices(raw_value)
+    except ValueError as exc:
+        raise ServiceSettingsError(f"Invalid device filter list: {raw_value!r}") from exc
 
 
 def _canonical_bool(value: bool) -> str:
