@@ -13,11 +13,12 @@ JSONL before sharing it publicly.
 ## Basic Capture
 
 ```bash
-sudo bluetooth_2_usb device capture --device /dev/input/event4 --duration 30 --grab
+sudo bluetooth_2_usb device capture --devices /dev/input/event4 --duration 30 --grab
 ```
 
-`--device` accepts an input event path, Bluetooth MAC address, or
-case-insensitive name fragment. If the filter matches multiple input event
+`--devices` accepts a comma-separated list of input device filters. Each filter
+may match an input event path, `uniq`, `phys`, Bluetooth MAC address, or
+case-insensitive name fragment. If the filters match multiple input event
 devices, all matches are captured into the same JSONL artifact.
 
 `--grab` exclusively grabs the matched input event devices while capture runs.
@@ -25,10 +26,23 @@ Use it when collecting support data so the Pi desktop/session does not also
 consume the same input. While grabbed, those inputs may not control the Pi
 locally.
 
+## Arguments
+
+| Argument | Meaning |
+| --- | --- |
+| `--devices DEVICES` | Comma-separated source input-device filters. Required. |
+| `--duration DURATION_SEC` | Capture duration in seconds. Default: `30`. |
+| `--output PATH` | JSONL output path. Default: generated under `./device_capture/`. |
+| `--grab` | Exclusively grab matched input event devices during capture. |
+| `--include-hidraw`, `--no-include-hidraw` | Include matching hidraw reports when available. Default: enabled. |
+| `--live-mode {summarized,raw}` | Choose compact summaries or raw event/report records. Default: `summarized`. |
+| `--max-report-bytes BYTES` | Maximum bytes retained from one hidraw report. Default: `4096`. |
+| `--max-file-bytes BYTES` | Maximum bytes retained from one metadata file. Default: `65536`. |
+
 ## Name Or MAC Filter
 
 ```bash
-sudo bluetooth_2_usb device capture --device "Magic Trackpad" --duration 30 --grab
+sudo bluetooth_2_usb device capture --devices "Magic Trackpad" --duration 30 --grab
 ```
 
 Name fragments are matched case-insensitively. Bluetooth MAC filters are useful
@@ -39,17 +53,20 @@ when one physical device exposes several event nodes with related names.
 When `--output` is omitted, captures are written under the current directory:
 
 ```text
-./device_capture/device_capture_<matched-device-name>_<timestamp>.jsonl
+./device_capture/<matched-device-name>[_raw]_<timestamp>.jsonl
 ```
 
-The command prints the final file name when it finishes. When run with `sudo`,
-the artifact is handed back to the invoking sudo user when possible so it can
-be copied without requiring sudo.
+If the matched devices do not expose a usable name, the generated file name uses
+`device` rather than the filter text.
+
+The command prints the final file name and a short summary when it finishes.
+When run with `sudo`, the artifact is handed back to the invoking sudo user
+when possible so it can be copied without requiring sudo.
 
 Use `--output` to choose an explicit path:
 
 ```bash
-sudo bluetooth_2_usb device capture --device /dev/input/event4 --duration 30 --grab --output ./device_capture/my_device.jsonl
+sudo bluetooth_2_usb device capture --devices /dev/input/event4 --duration 30 --grab --output ./device_capture/my_device.jsonl
 ```
 
 ## Summarized And Raw Modes
@@ -61,11 +78,11 @@ events do not create unnecessary data volume.
 Use raw mode only when a maintainer asks for every event and report:
 
 ```bash
-sudo bluetooth_2_usb device capture --device /dev/input/event4 --duration 30 --grab --live-mode raw
+sudo bluetooth_2_usb device capture --devices /dev/input/event4 --duration 30 --grab --live-mode raw
 ```
 
 Raw mode can include every live evdev event and hidraw report observed during
-the capture window.
+the capture window. Raw default filenames include `_raw` before the timestamp.
 
 ## Interrupting Capture
 

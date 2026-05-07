@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 from dataclasses import dataclass
 from logging import DEBUG
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .logging import add_file_handler, get_logger
+from .logging import get_logger
 from .version import get_versioned_name
 
 if TYPE_CHECKING:
@@ -43,11 +42,6 @@ class EnvironmentStatus:
 
 
 def get_udc_path() -> Path | None:
-    override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
-    if override_path:
-        candidate = Path(override_path)
-        return candidate if candidate.is_file() else None
-
     udc_root = Path("/sys/class/udc")
     if not udc_root.is_dir():
         return None
@@ -109,9 +103,6 @@ def configure_logging(args: Arguments) -> None:
     if args.debug:
         get_logger().setLevel(DEBUG)
 
-    if args.log_to_file:
-        add_file_handler(args.log_path)
-
     logger.debug("CLI args: %s", args)
 
 
@@ -119,7 +110,7 @@ async def async_run(args: Arguments) -> int:
     if args.version:
         return print_version()
 
-    if args.list_devices:
+    if args.list:
         from .inputs.inventory import DeviceEnumerationError, describe_input_devices, inventory_to_text
 
         try:
@@ -156,7 +147,7 @@ async def async_run(args: Arguments) -> int:
     from .runtime.app import Runtime
     from .runtime.config import runtime_config_from_args
 
-    runtime = Runtime(runtime_config_from_args(args, udc_path=env_status.udc_path))
+    runtime = Runtime(runtime_config_from_args(args))
     await runtime.run()
 
     return EXIT_OK

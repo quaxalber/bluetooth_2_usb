@@ -44,15 +44,13 @@ class Runtime:
 
     async def run(self) -> None:
         relay_gate = RelayGate()
-        identity = load_or_create_usb_identity(
-            serial_override=self._config.usb_serial, product_suffix=self._config.usb_product_suffix
-        )
+        identity = load_or_create_usb_identity()
         logger.info("Using USB gadget identity: product=%r serial=%r", identity.product_name, identity.serial_number)
         hid_gadgets = HidGadgets(identity)
         await hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(relay_gate)
-        self._event_source = RuntimeEventSource(self._events, udc_path=self._config.udc_path)
+        self._event_source = RuntimeEventSource(self._events)
 
         handlers = self._install_signal_handlers()
         try:
@@ -71,17 +69,17 @@ class Runtime:
             hid_gadgets=hid_gadgets,
             relay_gate=relay_gate,
             task_group=task_group,
-            device_identifiers=list(self._config.device_ids),
-            auto_discover=self._config.auto_discover,
-            grab_devices=self._config.grab_devices,
+            devices=list(self._config.devices),
+            auto_relay=self._config.auto,
+            grab=self._config.grab,
             shortcut_toggler=shortcut_toggler,
         )
 
     def _build_shortcut_toggler(self, relay_gate: RelayGate) -> ShortcutToggler | None:
-        if not self._config.interrupt_shortcut:
+        if not self._config.shortcut:
             return None
 
-        shortcut_keys = set(self._config.interrupt_shortcut)
+        shortcut_keys = set(self._config.shortcut)
         logger.debug("Configuring global interrupt shortcut: %s", shortcut_keys)
         return ShortcutToggler(shortcut_keys=shortcut_keys, relay_gate=relay_gate)
 

@@ -130,12 +130,7 @@ class _FakeTaskGroup:
 
 
 def _relay_supervisor(**overrides):
-    args = {
-        "hid_gadgets": _FakeHidGadgets(),
-        "relay_gate": RelayGate(),
-        "task_group": _FakeTaskGroup(),
-        "device_identifiers": [],
-    }
+    args = {"hid_gadgets": _FakeHidGadgets(), "relay_gate": RelayGate(), "task_group": _FakeTaskGroup(), "devices": []}
     args.update(overrides)
     return RelaySupervisor(**args)
 
@@ -144,6 +139,14 @@ def _active_gate() -> RelayGate:
     gate = RelayGate()
     gate.set_host_configured(True)
     return gate
+
+
+class RelaySupervisorConfigTest(unittest.TestCase):
+    def test_auto_relay_warns_when_explicit_device_filters_are_configured(self) -> None:
+        with self.assertLogs("bluetooth_2_usb", level="WARNING") as logs:
+            _relay_supervisor(auto_relay=True, devices=["keyboard"])
+
+        self.assertTrue(any("device filters are ignored" in message for message in logs.output))
 
 
 class _FakeInputHandle:
@@ -341,7 +344,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_aexit_ignores_ebadf_from_ungrab_on_disappeared_device(self) -> None:
         gate = _active_gate()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EBADF)
-        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab=True, relay_gate=gate)
 
         async with relay:
             self.assertEqual(input_device.grab_calls, 1)
@@ -353,7 +356,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_aenter_defers_grab_while_relaying_is_paused(self) -> None:
         gate = RelayGate()
         input_device = _FakeGrabInputDevice()
-        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab=True, relay_gate=gate)
 
         async with relay:
             self.assertEqual(input_device.grab_calls, 0)
@@ -365,7 +368,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
     async def test_unexpected_ungrab_error_preserves_grab_tracking_for_retry(self) -> None:
         gate = _active_gate()
         input_device = _FakeGrabInputDevice(ungrab_errno=errno.EIO)
-        relay = InputRelay(input_device, _FakeHidGadgets(), grab_device=True, relay_gate=gate)
+        relay = InputRelay(input_device, _FakeHidGadgets(), grab=True, relay_gate=gate)
 
         async with relay:
             with self.assertLogs("bluetooth_2_usb", level="WARNING"):
@@ -405,7 +408,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         input_device = _FakeGrabInputDevice(
             [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down), _TestSynEvent()]
         )
-        relay = InputRelay(input_device, hid_gadgets, grab_device=True, relay_gate=gate, shortcut_toggler=toggler)
+        relay = InputRelay(input_device, hid_gadgets, grab=True, relay_gate=gate, shortcut_toggler=toggler)
 
         async with relay:
             await relay.async_relay_events_loop()
@@ -726,7 +729,7 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device):
                 with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
                     async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, device_identifiers=["target"])
+                        supervisor = _relay_supervisor(task_group=task_group, devices=["target"])
                         run_task = task_group.create_task(supervisor.run(events))
                         events.put_nowait(DeviceAdded("/dev/input/event7"))
                         await asyncio.wait_for(relay_started.wait(), timeout=1)
@@ -764,7 +767,7 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
                 async with asyncio.TaskGroup() as task_group:
                     supervisor = _relay_supervisor(
-                        hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_discover=True
+                        hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_relay=True
                     )
                     run_task = task_group.create_task(supervisor.run(events))
                     await asyncio.wait_for(relay_started.wait(), timeout=1)
@@ -838,7 +841,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
                     events: asyncio.Queue = asyncio.Queue()
                     async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                        supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                         relay_task = task_group.create_task(supervisor.run(events))
                         await asyncio.wait_for(relay_ready.wait(), timeout=1)
                         events.put_nowait(ShutdownRequested("test"))
@@ -849,7 +852,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
     async def test_run_cannot_restart_after_stop(self) -> None:
         with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]):
             async with asyncio.TaskGroup() as task_group:
-                supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                 events: asyncio.Queue = asyncio.Queue()
                 events.put_nowait(ShutdownRequested("test"))
                 await supervisor.run(events)
@@ -876,7 +879,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
                 with self.assertRaises(ExceptionGroup) as raised:
                     async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                        supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                         await supervisor.run(asyncio.Queue())
 
         error = raised.exception.exceptions[0]
@@ -906,7 +909,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
             with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
                 async with asyncio.TaskGroup() as task_group:
-                    supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                    supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                     run_task = task_group.create_task(supervisor.run(events))
                     await asyncio.wait_for(relay_stopped.wait(), timeout=1)
                     events.put_nowait(ShutdownRequested("test"))
@@ -933,7 +936,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
             with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
                 with self.assertRaises(ExceptionGroup) as raised:
                     async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, auto_discover=True)
+                        supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                         await supervisor.run(asyncio.Queue())
 
         self.assertIsInstance(raised.exception.exceptions[0], RuntimeError)
@@ -965,7 +968,7 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ExceptionGroup) as raised:
                     async with asyncio.TaskGroup() as task_group:
                         supervisor = _relay_supervisor(
-                            hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_discover=True
+                            hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_relay=True
                         )
                         await supervisor.run(asyncio.Queue())
 

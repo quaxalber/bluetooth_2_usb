@@ -7,31 +7,12 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .gadgets.identity import validate_usb_product_suffix, validate_usb_serial
+from .inputs.filter import parse_devices
 
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
-DEFAULT_LOG_PATH = "/var/log/bluetooth_2_usb/bluetooth_2_usb.log"
-BOOL_KEYS = {"B2U_AUTO_DISCOVER", "B2U_GRAB_DEVICES", "B2U_LOG_TO_FILE", "B2U_DEBUG"}
-RUNTIME_ENV_KEY_ORDER = (
-    "B2U_AUTO_DISCOVER",
-    "B2U_DEVICE_IDS",
-    "B2U_GRAB_DEVICES",
-    "B2U_INTERRUPT_SHORTCUT",
-    "B2U_LOG_TO_FILE",
-    "B2U_LOG_PATH",
-    "B2U_DEBUG",
-    "B2U_USB_SERIAL",
-    "B2U_USB_PRODUCT_SUFFIX",
-    "B2U_UDC_PATH",
-)
-ALLOWED_KEYS = BOOL_KEYS | {
-    "B2U_INTERRUPT_SHORTCUT",
-    "B2U_LOG_PATH",
-    "B2U_DEVICE_IDS",
-    "B2U_USB_SERIAL",
-    "B2U_USB_PRODUCT_SUFFIX",
-    "B2U_UDC_PATH",
-}
+BOOL_KEYS = {"B2U_AUTO", "B2U_GRAB", "B2U_DEBUG"}
+RUNTIME_ENV_KEY_ORDER = ("B2U_AUTO", "B2U_DEVICES", "B2U_GRAB", "B2U_SHORTCUT", "B2U_DEBUG")
+ALLOWED_KEYS = BOOL_KEYS | {"B2U_SHORTCUT", "B2U_DEVICES"}
 
 
 class ServiceSettingsError(ValueError):
@@ -40,16 +21,11 @@ class ServiceSettingsError(ValueError):
 
 @dataclass(slots=True)
 class ServiceSettings:
-    auto_discover: bool = True
-    device_ids: list[str] = field(default_factory=list)
-    grab_devices: bool = True
-    interrupt_shortcut: str = "CTRL+SHIFT+F12"
-    log_to_file: bool = False
-    log_path: str = DEFAULT_LOG_PATH
+    auto: bool = True
+    devices: list[str] = field(default_factory=list)
+    grab: bool = True
+    shortcut: str = "CTRL+SHIFT+F12"
     debug: bool = False
-    usb_serial: str = ""
-    usb_product_suffix: str = ""
-    udc_path: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -79,8 +55,13 @@ def _parse_value(raw_value: str) -> str:
     return parts[0]
 
 
-def _parse_device_ids(raw_value: str) -> list[str]:
-    return [device_id.strip() for device_id in raw_value.split(",") if device_id.strip()]
+def _parse_devices(raw_value: str) -> list[str]:
+    if not raw_value.strip():
+        return []
+    try:
+        return parse_devices(raw_value)
+    except ValueError as exc:
+        raise ServiceSettingsError(f"Invalid device filter list: {raw_value!r}") from exc
 
 
 def _canonical_bool(value: bool) -> str:
@@ -92,26 +73,16 @@ def _quote_if_needed(value: str) -> str:
 
 
 def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
-    if key == "B2U_AUTO_DISCOVER":
-        return _canonical_bool(settings.auto_discover)
-    if key == "B2U_DEVICE_IDS":
-        return _quote_if_needed(", ".join(settings.device_ids))
-    if key == "B2U_GRAB_DEVICES":
-        return _canonical_bool(settings.grab_devices)
-    if key == "B2U_INTERRUPT_SHORTCUT":
-        return _quote_if_needed(settings.interrupt_shortcut)
-    if key == "B2U_LOG_TO_FILE":
-        return _canonical_bool(settings.log_to_file)
-    if key == "B2U_LOG_PATH":
-        return _quote_if_needed(settings.log_path)
+    if key == "B2U_AUTO":
+        return _canonical_bool(settings.auto)
+    if key == "B2U_DEVICES":
+        return _quote_if_needed(", ".join(settings.devices))
+    if key == "B2U_GRAB":
+        return _canonical_bool(settings.grab)
+    if key == "B2U_SHORTCUT":
+        return _quote_if_needed(settings.shortcut)
     if key == "B2U_DEBUG":
         return _canonical_bool(settings.debug)
-    if key == "B2U_USB_SERIAL":
-        return _quote_if_needed(settings.usb_serial)
-    if key == "B2U_USB_PRODUCT_SUFFIX":
-        return _quote_if_needed(settings.usb_product_suffix)
-    if key == "B2U_UDC_PATH":
-        return _quote_if_needed(settings.udc_path)
     raise ServiceSettingsError(f"Unexpected runtime settings key: {key!r}")
 
 
@@ -134,32 +105,16 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
             raise ServiceSettingsError(f"{env_file}:{line_number}: unexpected key {key!r} in runtime settings")
 
         value = _parse_value(raw_value)
-        if key == "B2U_AUTO_DISCOVER":
-            settings.auto_discover = _parse_bool(value, key)
-        elif key == "B2U_GRAB_DEVICES":
-            settings.grab_devices = _parse_bool(value, key)
-        elif key == "B2U_INTERRUPT_SHORTCUT":
-            settings.interrupt_shortcut = value
-        elif key == "B2U_LOG_TO_FILE":
-            settings.log_to_file = _parse_bool(value, key)
-        elif key == "B2U_LOG_PATH":
-            settings.log_path = value
+        if key == "B2U_AUTO":
+            settings.auto = _parse_bool(value, key)
+        elif key == "B2U_GRAB":
+            settings.grab = _parse_bool(value, key)
+        elif key == "B2U_SHORTCUT":
+            settings.shortcut = value
         elif key == "B2U_DEBUG":
             settings.debug = _parse_bool(value, key)
-        elif key == "B2U_USB_SERIAL":
-            try:
-                settings.usb_serial = validate_usb_serial(value) if value else ""
-            except ValueError as exc:
-                raise ServiceSettingsError(f"{env_file}:{line_number}: invalid B2U_USB_SERIAL: {exc}") from exc
-        elif key == "B2U_USB_PRODUCT_SUFFIX":
-            try:
-                settings.usb_product_suffix = validate_usb_product_suffix(value)
-            except ValueError as exc:
-                raise ServiceSettingsError(f"{env_file}:{line_number}: invalid B2U_USB_PRODUCT_SUFFIX: {exc}") from exc
-        elif key == "B2U_DEVICE_IDS":
-            settings.device_ids = _parse_device_ids(value)
-        elif key == "B2U_UDC_PATH":
-            settings.udc_path = value
+        elif key == "B2U_DEVICES":
+            settings.devices = _parse_devices(value)
 
     return settings
 
@@ -213,26 +168,94 @@ def canonicalize_service_settings_bools(env_file: Path = DEFAULT_ENV_FILE) -> bo
     return True
 
 
+def normalize_service_settings_file(env_file: Path = DEFAULT_ENV_FILE) -> bool:
+    if not env_file.exists():
+        return False
+
+    original_text = env_file.read_text(encoding="utf-8")
+    original_lines = original_text.splitlines()
+    key_migrations = {
+        "B2U_AUTO_DISCOVER": "B2U_AUTO",
+        "B2U_DEVICE_IDS": "B2U_DEVICES",
+        "B2U_GRAB_DEVICES": "B2U_GRAB",
+        "B2U_INTERRUPT_SHORTCUT": "B2U_SHORTCUT",
+    }
+    removed_keys = {"B2U_LOG_PATH", "B2U_LOG_TO_FILE", "B2U_UDC_PATH", "B2U_USB_SERIAL", "B2U_USB_PRODUCT_SUFFIX"}
+    target_keys = set(key_migrations.values())
+    non_empty_targets = {
+        key
+        for key in target_keys
+        if any(_line_key(line) == key and not _line_value_is_blank(line) for line in original_lines)
+    }
+    updated_lines: list[str] = []
+    changed = False
+
+    for line in original_lines:
+        key = _line_key(line)
+        if key in removed_keys:
+            changed = True
+            continue
+
+        if key in target_keys:
+            has_non_empty_legacy = any(
+                current_target == key and _line_key(candidate) == legacy and not _line_value_is_blank(candidate)
+                for legacy, current_target in key_migrations.items()
+                for candidate in original_lines
+            )
+            if key not in non_empty_targets and has_non_empty_legacy:
+                changed = True
+                continue
+            updated_lines.append(line)
+            continue
+
+        if key not in key_migrations:
+            updated_lines.append(line)
+            continue
+
+        changed = True
+        target_key = key_migrations[key]
+        if target_key not in non_empty_targets:
+            updated_lines.append(line.replace(key, target_key, 1))
+            non_empty_targets.add(target_key)
+
+    if not changed:
+        return False
+
+    updated_text = "\n".join(updated_lines)
+    if original_text.endswith("\n"):
+        updated_text += "\n"
+    env_file.write_text(updated_text, encoding="utf-8")
+    return True
+
+
+def _line_key(raw_line: str) -> str | None:
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in raw_line:
+        return None
+    key, _raw_value = raw_line.split("=", 1)
+    return key.strip()
+
+
+def _line_value_is_blank(raw_line: str) -> bool:
+    _key, raw_value = raw_line.split("=", 1)
+    try:
+        return _parse_value(raw_value) == ""
+    except ServiceSettingsError:
+        return False
+
+
 def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False) -> list[str]:
     argv: list[str] = []
-    if settings.auto_discover:
-        argv.append("--auto_discover")
-    if settings.device_ids:
-        argv.extend(["--device_ids", ",".join(settings.device_ids)])
-    if settings.grab_devices:
-        argv.append("--grab_devices")
-    if settings.interrupt_shortcut:
-        argv.extend(["--interrupt_shortcut", settings.interrupt_shortcut])
-    if settings.log_to_file:
-        argv.append("--log_to_file")
-    if settings.log_path:
-        argv.extend(["--log_path", settings.log_path])
+    if settings.auto:
+        argv.append("--auto")
+    if settings.devices:
+        argv.extend(["--devices", ",".join(settings.devices)])
+    if settings.grab:
+        argv.append("--grab")
+    if settings.shortcut:
+        argv.extend(["--shortcut", settings.shortcut])
     if settings.debug or append_debug:
         argv.append("--debug")
-    if settings.usb_serial:
-        argv.extend(["--usb_serial", settings.usb_serial])
-    if settings.usb_product_suffix:
-        argv.extend(["--usb_product_suffix", settings.usb_product_suffix])
     return argv
 
 
@@ -245,8 +268,6 @@ def build_runtime_shell_command(
 ) -> str:
     resolved_settings = load_service_settings(env_file) if settings is None else settings
     command = shlex.split(executable) + build_runtime_argv(resolved_settings, append_debug=append_debug)
-    if resolved_settings.udc_path:
-        command = [f"BLUETOOTH_2_USB_UDC_PATH={resolved_settings.udc_path}", *command]
     return shlex.join(command)
 
 
@@ -272,7 +293,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        settings = load_service_settings()
+        if args.canonicalize_bools:
+            normalize_service_settings_file(DEFAULT_ENV_FILE)
+            canonicalize_service_settings_bools(DEFAULT_ENV_FILE)
+            return 0
+        settings = load_service_settings(DEFAULT_ENV_FILE)
     except ServiceSettingsError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -289,10 +314,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_summary_json:
         print(json.dumps(settings.to_dict(), sort_keys=True))
         return 0
-    if args.canonicalize_bools:
-        canonicalize_service_settings_bools()
-        return 0
-
     return 1
 
 

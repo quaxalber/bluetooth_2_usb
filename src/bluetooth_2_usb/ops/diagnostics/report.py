@@ -139,9 +139,7 @@ def debug_report(duration: int | None) -> int:
             5,
         )
         command_block(
-            "Device inventory (json)",
-            [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list_devices", "--output", "json"],
-            8,
+            "Device inventory (json)", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list", "--output", "json"], 8
         )
         try:
             debug_command = run(

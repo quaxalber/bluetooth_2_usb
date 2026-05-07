@@ -114,13 +114,11 @@ def readonly_mode() -> str:
     except Exception:
         return "unknown"
     if root_fstype == "overlay" and bluetooth_state_persistent():
-        return "persistent"
+        return "enabled"
     return "disabled"
 
 
 def display_readonly_mode(mode: str) -> str:
-    if mode == "persistent":
-        return "enabled"
     return mode
 
 

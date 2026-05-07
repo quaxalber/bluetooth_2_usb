@@ -57,7 +57,6 @@ operational commands:
 ./venv/bin/bluetooth_2_usb readonly enable --help
 ./venv/bin/bluetooth_2_usb readonly disable --help
 ./venv/bin/bluetooth_2_usb udev install --help
-./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD" --help
 ./venv/bin/bluetooth_2_usb device --help
 ./venv/bin/bluetooth_2_usb device capture --help
 

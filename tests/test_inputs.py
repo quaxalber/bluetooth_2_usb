@@ -3,35 +3,70 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from bluetooth_2_usb.evdev import ecodes
-from bluetooth_2_usb.inputs.identifier import DeviceIdentifier, DeviceIdentifierType
-from bluetooth_2_usb.inputs.inventory import auto_discover_exclusion_reason, describe_input_devices, inventory_to_text
+from bluetooth_2_usb.inputs.filter import DeviceFilter, DeviceFilterType
+from bluetooth_2_usb.inputs.inventory import auto_relay_exclusion_reason, describe_input_devices, inventory_to_text
 
 
-class DeviceIdentifierTest(unittest.TestCase):
-    def test_blank_identifier_is_rejected(self) -> None:
+class DeviceFilterTest(unittest.TestCase):
+    def test_blank_filter_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "must not be blank"):
-            DeviceIdentifier(" \t ")
+            DeviceFilter(" \t ")
 
-    def test_mac_identifier_matches_hyphenated_device_uniq(self) -> None:
-        identifier = DeviceIdentifier("aa:bb:cc:dd:ee:ff")
+    def test_filter_value_is_stripped_raw_value(self) -> None:
+        device_filter = DeviceFilter(" keyboard ")
+
+        self.assertEqual(device_filter.value, "keyboard")
+
+    def test_mac_filter_matches_hyphenated_device_uniq(self) -> None:
+        device_filter = DeviceFilter("aa:bb:cc:dd:ee:ff")
         device = SimpleNamespace(path="/dev/input/event7", uniq="AA-BB-CC-DD-EE-FF", name="keyboard")
 
-        self.assertIs(identifier.type, DeviceIdentifierType.MAC)
-        self.assertTrue(identifier.matches(device))
+        self.assertIs(device_filter.type, DeviceFilterType.MAC)
+        self.assertTrue(device_filter.matches(device))
 
-    def test_event_like_name_without_numeric_suffix_matches_by_name(self) -> None:
-        identifier = DeviceIdentifier("/dev/input/eventual")
-        device = SimpleNamespace(path="/dev/input/event7", uniq="", name="prefix /dev/input/eventual suffix")
+    def test_mac_filter_matches_hyphenated_device_phys(self) -> None:
+        device_filter = DeviceFilter("aa:bb:cc:dd:ee:ff")
+        device = SimpleNamespace(path="/dev/input/event7", phys="AA-BB-CC-DD-EE-FF", uniq="", name="keyboard")
 
-        self.assertIs(identifier.type, DeviceIdentifierType.NAME)
-        self.assertTrue(identifier.matches(device))
+        self.assertIs(device_filter.type, DeviceFilterType.MAC)
+        self.assertTrue(device_filter.matches(device))
 
-    def test_event_path_identifier_matches_by_path(self) -> None:
-        identifier = DeviceIdentifier("/dev/input/event7")
+    def test_mac_filter_matches_device_phys_with_input_suffix(self) -> None:
+        device_filter = DeviceFilter("aa:bb:cc:dd:ee:ff")
+        device = SimpleNamespace(path="/dev/input/event7", phys="AA-BB-CC-DD-EE-FF/input0", uniq="", name="keyboard")
+
+        self.assertIs(device_filter.type, DeviceFilterType.MAC)
+        self.assertTrue(device_filter.matches(device))
+
+    def test_text_filter_matches_by_uniq(self) -> None:
+        device_filter = DeviceFilter("b2u28bc43209b9e4a56")
+        device = SimpleNamespace(
+            path="/dev/input/event7", phys="usb-1/input0", uniq="b2u28bc43209b9e4a56", name="keyboard"
+        )
+
+        self.assertIs(device_filter.type, DeviceFilterType.TEXT)
+        self.assertTrue(device_filter.matches(device))
+
+    def test_text_filter_matches_by_phys(self) -> None:
+        device_filter = DeviceFilter("usb-1/input0")
+        device = SimpleNamespace(path="/dev/input/event7", phys="usb-1/input0", uniq="", name="keyboard")
+
+        self.assertIs(device_filter.type, DeviceFilterType.TEXT)
+        self.assertTrue(device_filter.matches(device))
+
+    def test_text_filter_matches_by_name(self) -> None:
+        device_filter = DeviceFilter("keyboard")
+        device = SimpleNamespace(path="/dev/input/event7", phys="", uniq="", name="Fake Keyboard")
+
+        self.assertIs(device_filter.type, DeviceFilterType.TEXT)
+        self.assertTrue(device_filter.matches(device))
+
+    def test_event_path_filter_matches_by_path(self) -> None:
+        device_filter = DeviceFilter("/dev/input/event7")
         device = SimpleNamespace(path="/dev/input/event7", uniq="", name="keyboard")
 
-        self.assertIs(identifier.type, DeviceIdentifierType.PATH)
-        self.assertTrue(identifier.matches(device))
+        self.assertIs(device_filter.type, DeviceFilterType.PATH)
+        self.assertTrue(device_filter.matches(device))
 
 
 class _FakeInputDevice:
@@ -60,15 +95,15 @@ class _FakeInputDevice:
 
 
 class InputInventoryTest(unittest.TestCase):
-    def test_auto_discover_excludes_default_noise_prefixes_case_insensitively(self) -> None:
+    def test_auto_relay_excludes_default_noise_prefixes_case_insensitively(self) -> None:
         device = _FakeInputDevice(path="/dev/input/event0", name="GPIO Keys", capabilities={ecodes.EV_KEY: []})
 
-        self.assertEqual(auto_discover_exclusion_reason(device), "name prefix gpio")
+        self.assertEqual(auto_relay_exclusion_reason(device), "name prefix gpio")
 
-    def test_auto_discover_exclusion_reason_uses_general_supported_capabilities_wording(self) -> None:
+    def test_auto_relay_exclusion_reason_uses_general_supported_capabilities_wording(self) -> None:
         device = _FakeInputDevice(path="/dev/input/event0", name="Sensor", capabilities={})
 
-        self.assertEqual(auto_discover_exclusion_reason(device), "missing supported relay capabilities")
+        self.assertEqual(auto_relay_exclusion_reason(device), "missing supported relay capabilities")
 
     def test_describe_input_devices_reports_mixed_candidates_and_closes_devices(self) -> None:
         keyboard = _FakeInputDevice(

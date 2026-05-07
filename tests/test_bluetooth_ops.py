@@ -265,7 +265,7 @@ class ReadonlyConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "readonly.env"
             config = ReadonlyConfig(
-                mode="persistent",
+                mode="enabled",
                 persist_mount=Path("/mnt/persist"),
                 persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
                 persist_spec="/dev/disk/by-uuid/abc",
@@ -275,6 +275,33 @@ class ReadonlyConfigTest(unittest.TestCase):
             write_readonly_config(config, path)
 
             self.assertEqual(load_readonly_config(path), config)
+
+    def test_readonly_config_loads_persistent_mode_as_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "readonly.env"
+            path.write_text(
+                "\n".join(
+                    [
+                        'B2U_READONLY_MODE="persistent"',
+                        'B2U_PERSIST_MOUNT="/mnt/persist"',
+                        'B2U_PERSIST_BLUETOOTH_DIR="/mnt/persist/bluetooth"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            config = load_readonly_config(path)
+
+        self.assertEqual(config.mode, "enabled")
+
+    def test_write_readonly_config_normalizes_persistent_mode_to_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "readonly.env"
+
+            write_readonly_config(ReadonlyConfig(mode="persistent"), path)
+
+            self.assertIn('B2U_READONLY_MODE="enabled"', path.read_text(encoding="utf-8"))
 
     def test_readonly_config_rejects_unexpected_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -310,7 +337,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_bluetooth_state_persistent_rejects_bluetooth_dir_outside_persist_mount(self) -> None:
         config = ReadonlyConfig(
-            mode="persistent",
+            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/var/lib/bluetooth"),
             persist_spec="/dev/sda1",
@@ -330,7 +357,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_bluetooth_state_persistent_returns_false_when_findmnt_fails(self) -> None:
         config = ReadonlyConfig(
-            mode="persistent",
+            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/sda1",
@@ -346,7 +373,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_print_readonly_status_reports_configured_and_live_state(self) -> None:
         config = ReadonlyConfig(
-            mode="persistent",
+            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/disk/by-uuid/abc",
@@ -360,7 +387,7 @@ class ReadonlyConfigTest(unittest.TestCase):
         stdout = StringIO()
         with (
             patch(f"{READONLY_STATUS}.load_readonly_config", return_value=config),
-            patch(f"{READONLY_STATUS}.readonly_mode", return_value="persistent"),
+            patch(f"{READONLY_STATUS}.readonly_mode", return_value="enabled"),
             patch(f"{READONLY_STATUS}.overlay_status", return_value="enabled"),
             patch(f"{READONLY_STATUS}.overlay_configured_status", return_value="enabled"),
             patch(f"{READONLY_STATUS}._root_filesystem_type", return_value="overlay"),
@@ -728,7 +755,7 @@ class ReadonlyConfigTest(unittest.TestCase):
 
     def test_disable_readonly_disables_overlayfs_and_keeps_persistent_mount_config(self) -> None:
         config = ReadonlyConfig(
-            mode="persistent",
+            mode="enabled",
             persist_mount=Path("/mnt/persist"),
             persist_bluetooth_dir=Path("/mnt/persist/bluetooth"),
             persist_spec="/dev/disk/by-uuid/abc",

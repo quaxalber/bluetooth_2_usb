@@ -137,7 +137,7 @@ class RuntimeRelayIntegrationTest(unittest.IsolatedAsyncioTestCase):
         ):
             async with asyncio.TaskGroup() as task_group:
                 supervisor = RelaySupervisor(
-                    hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_discover=True
+                    hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_relay=True
                 )
                 run_task = task_group.create_task(supervisor.run(runtime_events))
 

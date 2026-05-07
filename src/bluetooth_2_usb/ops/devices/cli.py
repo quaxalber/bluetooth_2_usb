@@ -8,10 +8,14 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from rich.console import Console
+from rich.live import Live
+
 from ...evdev import ecodes
-from ..commands import info, ok
+from ..commands import info, ok, warn
 from .collector import capture_device
 from .linux import DeviceCaptureError
+from .validate import validate_capture
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -34,18 +38,20 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     capture.add_argument(
-        "--device",
+        "--devices",
         required=True,
-        help="Input device path, Bluetooth MAC, or name fragment. Multiple matches are captured together.",
+        help=(
+            "Comma-separated input device filters. Each filter may match path, uniq, phys, "
+            "Bluetooth MAC, or name fragment. Multiple matches are captured together."
+        ),
     )
     capture.add_argument("--duration", type=_positive_int, default=30, help="Capture duration in seconds. Default: 30")
     capture.add_argument(
         "--output",
         type=Path,
         default=None,
-        help=("JSONL output path. Default: " "./device_capture/device_capture_<matched-device-name>_<timestamp>.jsonl"),
+        help=("JSONL output path. Default: " "./device_capture/<matched-device-name>[_raw]_<timestamp>.jsonl"),
     )
-    capture.add_argument("--format", choices=["jsonl"], default="jsonl", help="Output format. Default: jsonl")
     capture.add_argument(
         "--grab", action="store_true", help="Exclusively grab all matched input event devices during capture."
     )
@@ -68,7 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum bytes retained from one hidraw report. Default: 4096",
     )
     capture.add_argument(
-        "--max-sysfs-file-bytes",
+        "--max-file-bytes",
         type=_positive_int,
         default=65536,
         help="Maximum bytes retained from one sysfs metadata file. Default: 65536",
@@ -86,13 +92,13 @@ def run(argv: list[str] | None = None) -> int:
     try:
         path = asyncio.run(
             capture_device(
-                selector=args.device,
+                devices=args.devices,
                 duration_sec=args.duration,
                 output_path=args.output,
                 grab=args.grab,
                 include_hidraw=args.include_hidraw,
                 max_report_bytes=args.max_report_bytes,
-                max_sysfs_file_bytes=args.max_sysfs_file_bytes,
+                max_sysfs_file_bytes=args.max_file_bytes,
                 live_mode=args.live_mode,
                 progress=progress,
             )
@@ -114,7 +120,38 @@ def run(argv: list[str] | None = None) -> int:
         return EXIT_ENVIRONMENT
     progress.finish_line()
     ok(f"Wrote: {path}")
+    _print_capture_summary(path, generated_output=args.output is None)
     return EXIT_OK
+
+
+def _print_capture_summary(path: Path, *, generated_output: bool) -> None:
+    report = validate_capture(path, generated_output=generated_output)
+    metrics = report.metrics
+    live = "yes" if any(report.captured.get(key, False) for key in _LIVE_CAPTURE_FLAGS) else "no"
+    info(
+        "Capture summary: mode={mode} matched={matched} live={live} warnings={warnings}".format(
+            mode=report.live_mode or "unknown",
+            matched=metrics.get("matched_device_count", 0),
+            live=live,
+            warnings=len(report.warnings),
+        )
+    )
+    if not report.valid:
+        warn("Capture summary found structural issues; review the JSONL before sharing.")
+    for warning in report.warnings:
+        warn(f"Capture warning: {warning}")
+    for error in report.errors:
+        warn(f"Capture error: {error}")
+
+
+_LIVE_CAPTURE_FLAGS = (
+    "hidraw_report_raw",
+    "hidraw_report_summary",
+    "evdev_event_raw",
+    "evdev_key_snapshot",
+    "evdev_axis_snapshot",
+    "evdev_sync_summary",
+)
 
 
 def _positive_int(raw: str) -> int:
@@ -137,14 +174,17 @@ class _CliProgress:
     abs_codes: set[str] = field(default_factory=set)
     hidraw_paths: set[str] = field(default_factory=set)
     _last_render_monotonic: float = 0.0
-    _line_active: bool = False
+    _live: Live | None = None
+    _console: Console | None = None
 
     def capture_started(self, devices, output_path: Path) -> None:
         self.output_path = output_path
         summaries = ", ".join(f"{getattr(device, 'path', '')} ({getattr(device, 'name', '')})" for device in devices)
         info(f"Capturing these matching devices: {summaries}")
         info("Waiting for input; stop capturing with Ctrl-C.")
-        self._render(force=True)
+        self._console = Console(stderr=True)
+        self._live = Live(self._render_text(), console=self._console, refresh_per_second=4, transient=False)
+        self._live.start()
 
     def evdev_event(self, device, event: object) -> None:
         self.evdev_events += 1
@@ -168,22 +208,27 @@ class _CliProgress:
         self._render(force=True)
 
     def finish_line(self) -> None:
-        if self._line_active:
-            print(file=sys.stderr)
-            self._line_active = False
+        if self._live is not None:
+            self._live.stop()
+            self._live = None
 
     def _render(self, *, force: bool = False) -> None:
         now = time.monotonic()
         if not force and now - self._last_render_monotonic < 0.25:
             return
         self._last_render_monotonic = now
-        message = (
-            f"events={self.evdev_events} keys/buttons={len(self.key_codes)} "
-            f"rel={len(self.rel_codes)} abs={len(self.abs_codes)} "
-            f"hidraw_reports={self.hidraw_reports} hidraw_groups={len(self.hidraw_paths)}"
+        if self._live is not None:
+            self._live.update(self._render_text())
+
+    def _render_text(self) -> str:
+        axes = len(self.rel_codes) + len(self.abs_codes)
+        size = ""
+        if self.output_path is not None and self.output_path.exists():
+            size = f" size={_format_bytes(self.output_path.stat().st_size)}"
+        return (
+            f"events={self.evdev_events} keys={len(self.key_codes)} axes={axes} "
+            f"hidraw={self.hidraw_reports} groups={len(self.hidraw_paths)}{size}"
         )
-        print(f"\r{message}", end="", file=sys.stderr, flush=True)
-        self._line_active = True
 
 
 def _event_code_label(event: object) -> str:
@@ -192,6 +237,17 @@ def _event_code_label(event: object) -> str:
     if isinstance(event_type, int) and isinstance(code, int):
         return _event_code_name(event_type, code)
     return str(code)
+
+
+def _format_bytes(size: int) -> str:
+    if size < 1024:
+        return f"{size}B"
+    value = float(size)
+    for unit in ("K", "M", "G"):
+        value /= 1024
+        if value < 1024 or unit == "G":
+            return f"{value:.1f}{unit}"
+    return f"{size}B"
 
 
 @lru_cache(maxsize=512)

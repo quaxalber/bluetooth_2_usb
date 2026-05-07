@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ...evdev.types import InputDevice
-from ...inputs.identifier import DeviceIdentifier
+from ...inputs.filter import DeviceFilter, parse_devices
 from ...inputs.inventory import DeviceEnumerationError, list_input_devices
 
 try:
@@ -36,17 +36,20 @@ class BoundedRead:
         return {"path": self.path, "text": self.text, "hex": self.hex, "truncated": self.truncated, "error": self.error}
 
 
-def select_input_devices(selector: str) -> list[InputDevice]:
-    identifier = DeviceIdentifier(selector)
+def select_input_devices(devices: str) -> list[InputDevice]:
     try:
-        devices = list_input_devices()
+        device_filters = [DeviceFilter(device) for device in parse_devices(devices)]
+    except ValueError as exc:
+        raise DeviceSelectionError("DEVICES must not be empty") from exc
+    try:
+        input_devices = list_input_devices()
     except DeviceEnumerationError as exc:
         raise DeviceCaptureError(str(exc)) from exc
 
     matches: list[InputDevice] = []
     nonmatches: list[InputDevice] = []
-    for device in devices:
-        if identifier.matches(device):
+    for device in input_devices:
+        if any(device_filter.matches(device) for device_filter in device_filters):
             matches.append(device)
         else:
             nonmatches.append(device)
@@ -55,21 +58,21 @@ def select_input_devices(selector: str) -> list[InputDevice]:
         for device in nonmatches:
             device.close()
         candidates = ", ".join(_device_summary(device) for device in nonmatches) or "<none>"
-        raise DeviceSelectionError(f"No input device matched {selector!r}. Candidates: {candidates}")
+        raise DeviceSelectionError(f"No input device matched {devices!r}. Candidates: {candidates}")
 
     for device in nonmatches:
         device.close()
     return matches
 
 
-def select_input_device(selector: str) -> InputDevice:
-    devices = select_input_devices(selector)
-    if len(devices) == 1:
-        return devices[0]
-    for device in devices:
+def select_input_device(devices: str) -> InputDevice:
+    input_devices = select_input_devices(devices)
+    if len(input_devices) == 1:
+        return input_devices[0]
+    for device in input_devices:
         device.close()
-    candidates = ", ".join(_device_summary(device) for device in devices)
-    raise DeviceSelectionError(f"Multiple input devices matched {selector!r}. Candidates: {candidates}")
+    candidates = ", ".join(_device_summary(device) for device in input_devices)
+    raise DeviceSelectionError(f"Multiple input devices matched {devices!r}. Candidates: {candidates}")
 
 
 def input_device_record(device: InputDevice) -> dict[str, object]:

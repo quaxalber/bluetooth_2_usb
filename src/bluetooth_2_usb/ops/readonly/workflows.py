@@ -290,7 +290,7 @@ def enable_readonly() -> None:
                 )
             else:
                 fail("OverlayFS is still not configured after raspi-config completed.")
-        config.mode = "persistent"
+        config.mode = "enabled"
         write_readonly_config(config)
     except Exception:
         warn(

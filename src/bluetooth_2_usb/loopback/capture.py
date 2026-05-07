@@ -18,7 +18,8 @@ from ..hid.constants import (
     HID_USAGE_KEYBOARD,
     HID_USAGE_MOUSE,
 )
-from .constants import DEFAULT_DEVICE_SUBSTRING, EXIT_ACCESS, EXIT_MISMATCH, EXIT_OK, EXIT_PREREQUISITE, EXIT_TIMEOUT
+from ..inputs.filter import DeviceFilter, parse_devices
+from .constants import EXIT_ACCESS, EXIT_MISMATCH, EXIT_OK, EXIT_PREREQUISITE, EXIT_TIMEOUT
 from .result import GadgetNodes, LoopbackResult
 from .scenarios import EV_REL, EVENT_CODE_NAMES, REL_HWHEEL, REL_WHEEL, REL_X, REL_Y, get_scenario
 
@@ -54,6 +55,18 @@ class HidDeviceInfo:
     interface_number: int
     usage_page: int
     usage: int
+
+    @property
+    def path(self) -> str:
+        return self.node
+
+    @property
+    def phys(self) -> str:
+        return ""
+
+    @property
+    def uniq(self) -> str:
+        return self.serial
 
 
 def _rel_name(code: int) -> str:
@@ -513,12 +526,6 @@ def _is_ignorable_empty_report(report: bytes) -> bool:
     return len(report) == 1 and report[0] == 0
 
 
-def _matches_device_substring(device_name: str, substring: str) -> bool:
-    candidates = {substring.lower(), substring.replace("_", " ").lower(), substring.replace("_", "-").lower()}
-    haystack = device_name.lower()
-    return any(candidate and candidate in haystack for candidate in candidates)
-
-
 def _load_hidapi() -> Any:
     try:
         import hid  # type: ignore[import-not-found]
@@ -576,30 +583,12 @@ def _iter_hid_infos(hid_module: Any) -> list[HidDeviceInfo]:
     return infos
 
 
-def _filter_explicit_override(
-    infos: list[HidDeviceInfo], override: str | None, label: str, expected_role: str
-) -> list[HidDeviceInfo]:
-    if override is None:
-        return infos
-    matched = [info for info in infos if info.node == override]
-    if not matched:
-        raise MissingNodeError(f"{label} HID device was not found: {override}")
-    role = _role_for_device(matched[0])
-    if role != expected_role:
-        raise MissingNodeError(f"{label} HID device has role {role or 'unknown'}: {override}")
-    return matched
-
-
-def discover_gadget_node_candidates(
-    device_substring: str = DEFAULT_DEVICE_SUBSTRING,
-    device_serial: str | None = None,
-    keyboard_node: str | None = None,
-    mouse_node: str | None = None,
-    consumer_node: str | None = None,
-    hid_module: Any | None = None,
-) -> GadgetNodeCandidates:
+def discover_gadget_node_candidates(devices: str, hid_module: Any | None = None) -> GadgetNodeCandidates:
     hid_module = _load_hidapi() if hid_module is None else hid_module
     infos = _iter_hid_infos(hid_module)
+    if not devices.strip():
+        raise ValueError("devices must not be empty")
+    device_filters = [DeviceFilter(device) for device in parse_devices(devices)]
 
     keyboard_nodes: list[HidDeviceInfo] = []
     mouse_nodes: list[HidDeviceInfo] = []
@@ -609,11 +598,7 @@ def discover_gadget_node_candidates(
         role = _role_for_device(info)
         if role is None:
             continue
-        if not _matches_device_substring(info.name, device_substring) and not (
-            info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO
-        ):
-            continue
-        if device_serial is not None and info.serial != device_serial:
+        if not any(device_filter.matches(info) for device_filter in device_filters):
             continue
         if role == "keyboard":
             keyboard_nodes.append(info)
@@ -622,19 +607,8 @@ def discover_gadget_node_candidates(
         elif role == "consumer":
             consumer_nodes.append(info)
 
-    if keyboard_node is not None:
-        keyboard_nodes = _filter_explicit_override(infos, keyboard_node, "Keyboard", "keyboard")
-    if mouse_node is not None:
-        mouse_nodes = _filter_explicit_override(infos, mouse_node, "Mouse", "mouse")
-    if consumer_node is not None:
-        consumer_nodes = _filter_explicit_override(infos, consumer_node, "Consumer-control", "consumer")
-
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
-        if device_serial is not None:
-            raise MissingNodeError(
-                f"No HID devices matched {device_substring!r} with serial {device_serial!r} through hidapi enumeration"
-            )
-        raise MissingNodeError(f"No HID devices matched {device_substring!r} through hidapi enumeration")
+        raise MissingNodeError(f"No HID devices matched {devices!r} through hidapi enumeration")
 
     return GadgetNodeCandidates(
         keyboard_nodes=tuple(sorted(keyboard_nodes, key=lambda info: info.node)),
@@ -643,22 +617,8 @@ def discover_gadget_node_candidates(
     )
 
 
-def discover_gadget_nodes(
-    device_substring: str = DEFAULT_DEVICE_SUBSTRING,
-    device_serial: str | None = None,
-    keyboard_node: str | None = None,
-    mouse_node: str | None = None,
-    consumer_node: str | None = None,
-    hid_module: Any | None = None,
-) -> GadgetNodes:
-    candidates = discover_gadget_node_candidates(
-        device_substring=device_substring,
-        device_serial=device_serial,
-        keyboard_node=keyboard_node,
-        mouse_node=mouse_node,
-        consumer_node=consumer_node,
-        hid_module=hid_module,
-    )
+def discover_gadget_nodes(devices: str, hid_module: Any | None = None) -> GadgetNodes:
+    candidates = discover_gadget_node_candidates(devices=devices, hid_module=hid_module)
     if len(candidates.keyboard_nodes) > 1:
         raise MissingNodeError(
             "Multiple keyboard HID devices matched: " + ", ".join(info.node for info in candidates.keyboard_nodes)
@@ -690,10 +650,10 @@ def _open_hid_device(hid_module: Any, info: HidDeviceInfo) -> Any:
         if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
             raise CaptureError(
                 f"Failed opening HID device {info.node}: {exc}. "
-                + "On Linux, from the repository root run `sudo ./venv/bin/bluetooth_2_usb "
-                + 'udev install --repo-root "$PWD"`, or for a managed install run '
-                + "`sudo bluetooth_2_usb udev install`. Reconnect the Pi, and ensure the user is "
-                + "in the input group with `sudo usermod -aG input $USER` before starting a new login session."
+                + 'On Linux, run `sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"` '
+                + "from the repository root, or for a managed install run `sudo bluetooth_2_usb udev install`. "
+                + "Reconnect the Pi, and ensure the user is in the input group with "
+                + "`sudo usermod -aG input $USER` before starting a new login session."
             ) from exc
         raise CaptureError(f"Failed opening HID device {info.node}: {exc}") from exc
     except Exception as exc:
@@ -851,32 +811,13 @@ def _capture_once(
     )
 
 
-def run_capture(
-    scenario_name: str,
-    timeout_sec: float | None = None,
-    device_substring: str = DEFAULT_DEVICE_SUBSTRING,
-    device_serial: str | None = None,
-    keyboard_node: str | None = None,
-    mouse_node: str | None = None,
-    consumer_node: str | None = None,
-    grab_devices: bool = True,
-) -> LoopbackResult:
-    # hidapi capture does not offer exclusive-grab semantics; keep the parameter
-    # for CLI parity with other backends.
-    _ = grab_devices
+def run_capture(scenario_name: str, devices: str, timeout_sec: float | None = None) -> LoopbackResult:
     scenario = get_scenario(scenario_name)
     resolved_timeout_sec = scenario.default_capture_timeout_sec if timeout_sec is None else timeout_sec
 
     try:
         hid_module = _load_hidapi()
-        candidate_nodes = discover_gadget_node_candidates(
-            device_substring=device_substring,
-            device_serial=device_serial,
-            keyboard_node=keyboard_node,
-            mouse_node=mouse_node,
-            consumer_node=consumer_node,
-            hid_module=hid_module,
-        )
+        candidate_nodes = discover_gadget_node_candidates(devices=devices, hid_module=hid_module)
     except CaptureError as exc:
         return LoopbackResult(
             command="capture",

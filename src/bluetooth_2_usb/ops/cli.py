@@ -55,7 +55,6 @@ def _main(argv: list[str], *, prog: str) -> int:
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
-    smoketest_parser.add_argument("--allow-non-pi", action="store_true")
     smoketest_parser.add_argument("--output", choices=["text", "json"], default="text", help="Default: text")
     debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
@@ -69,19 +68,16 @@ def _main(argv: list[str], *, prog: str) -> int:
 
     udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
     udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
-    _command_parser(
-        udev_subparsers,
-        "install",
-        "Install the host-side hidapi udev rule.",
-        repo_root_help=(
-            f"Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. Default: {PATHS.install_dir}"
-        ),
+    udev_install_parser = _command_parser(udev_subparsers, "install", "Install the host-side hidapi udev rule.")
+    udev_install_parser.add_argument(
+        "--repo-root",
+        default=None,
+        help=("Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. " + f"Default: {PATHS.install_dir}"),
     )
 
     namespace, remainder = parser.parse_known_args(argv)
     if remainder:
         parser.error(f"unrecognized arguments: {' '.join(remainder)}")
-    repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else PATHS.install_dir
 
     command_path = _command_path(namespace)
 
@@ -102,13 +98,13 @@ def _main(argv: list[str], *, prog: str) -> int:
         prepare_log(log_name)
 
     if command_path == ("install",):
-        install(repo_root, recreate_venv=namespace.recreate_venv)
+        install(recreate_venv=namespace.recreate_venv)
     elif command_path == ("update",):
-        update(repo_root, recreate_venv=namespace.recreate_venv)
+        update(recreate_venv=namespace.recreate_venv)
     elif command_path == ("uninstall",):
         uninstall()
     elif command_path == ("smoketest",):
-        smoke_test = SmokeTest(verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi)
+        smoke_test = SmokeTest(verbose=namespace.verbose)
         if namespace.output == "json":
             with redirect_stdout(sys.stderr):
                 exit_code = smoke_test.run()
@@ -128,6 +124,7 @@ def _main(argv: list[str], *, prog: str) -> int:
         disable_readonly()
     elif command_path == ("udev", "install"):
         ensure_root()
+        repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else None
         install_hid_udev_rule(repo_root)
     else:
         fail(f"Unhandled operational command: {' '.join(command_path)}")
@@ -143,16 +140,9 @@ def _command_path(namespace: argparse.Namespace) -> tuple[str, ...]:
 
 
 def _command_parser(
-    subparsers: argparse._SubParsersAction,
-    name: str,
-    help_text: str,
-    *,
-    add_help: bool = True,
-    repo_root_help: str = argparse.SUPPRESS,
+    subparsers: argparse._SubParsersAction, name: str, help_text: str, *, add_help: bool = True
 ) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser(name, help=help_text, add_help=add_help)
-    parser.add_argument("--repo-root", default=None, help=repo_root_help)
-    return parser
+    return subparsers.add_parser(name, help=help_text, add_help=add_help)
 
 
 def _positive_int(raw: str) -> int:
