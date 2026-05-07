@@ -181,7 +181,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
         smoke = SmokeTest(verbose=False, allow_non_pi=False)
 
         stdout = StringIO()
-        with redirect_stdout(stdout):
+        with redirect_stdout(stdout), patch(f"{DIAGNOSTICS_SMOKETEST}.Path.is_file", return_value=False):
             smoke._check_initramfs("disabled", "no", "disabled", "/boot/firmware/initramfs-b2u-wake")
 
         self.assertIn("[i] Boot initramfs is not present yet (/boot/firmware/initramfs-b2u-wake)", stdout.getvalue())
@@ -193,7 +193,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
         smoke = SmokeTest(verbose=False, allow_non_pi=False)
 
         stdout = StringIO()
-        with redirect_stdout(stdout):
+        with redirect_stdout(stdout), patch(f"{DIAGNOSTICS_SMOKETEST}.Path.is_file", return_value=False):
             smoke._check_initramfs("enabled", "no", "disabled", "/boot/firmware/initramfs-b2u-wake")
 
         self.assertIn("[!] Boot initramfs is missing or empty (/boot/firmware/initramfs-b2u-wake)", stdout.getvalue())
