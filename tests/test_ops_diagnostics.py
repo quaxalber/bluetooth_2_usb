@@ -177,6 +177,30 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertTrue(any("UDC is not configured" in result.message for result in warnings))
         self.assertEqual(smoke.summary["UDC state"], "dummy.udc=not attached")
 
+    def test_smoketest_treats_missing_initramfs_as_info_when_not_required(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=False)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            smoke._check_initramfs("disabled", "no", "disabled", "/boot/firmware/initramfs-b2u-wake")
+
+        self.assertIn("[i] Boot initramfs is not present yet (/boot/firmware/initramfs-b2u-wake)", stdout.getvalue())
+        self.assertEqual(smoke.soft_warnings, 0)
+        self.assertEqual(smoke.exit_code, 0)
+        self.assertEqual(smoke.results, [])
+
+    def test_smoketest_fails_missing_initramfs_when_required(self) -> None:
+        smoke = SmokeTest(verbose=False, allow_non_pi=False)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            smoke._check_initramfs("enabled", "no", "disabled", "/boot/firmware/initramfs-b2u-wake")
+
+        self.assertIn("[!] Boot initramfs is missing or empty (/boot/firmware/initramfs-b2u-wake)", stdout.getvalue())
+        self.assertEqual(smoke.soft_warnings, 0)
+        self.assertEqual(smoke.exit_code, 1)
+        self.assertEqual(smoke.results[0].status, ProbeStatus.FAIL)
+
     def test_smoketest_records_healthy_rfkill_probe(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
 
