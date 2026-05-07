@@ -11,7 +11,7 @@ from ..bluetooth import (
     bluetooth_rfkill_blocked,
     bluetooth_rfkill_entries,
 )
-from ..commands import OpsError, bold, fail_final, ok, ok_final, run, warn
+from ..commands import OpsError, bold, fail_final, info, ok, ok_final, run, warn
 from ..commands import warn_fail as red_warn
 from ..paths import PATHS
 from ..readonly import bluetooth_state_persistent, display_readonly_mode, overlay_status, readonly_mode
@@ -274,7 +274,7 @@ class SmokeTest:
         elif should_require:
             self.warn_fail(f"Boot initramfs is missing or empty ({path})")
         else:
-            self.soft_warn(f"Boot initramfs is not present yet ({path})")
+            info(f"Boot initramfs is not present yet ({path})")
 
     def _check_readonly(
         self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_persistent: bool, post_reboot: bool
