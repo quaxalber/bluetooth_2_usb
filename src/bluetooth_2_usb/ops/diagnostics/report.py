@@ -7,7 +7,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
+
+from rich.console import Console
 
 from .. import boot_config
 from ..artifacts import make_user_copyable
@@ -24,6 +27,12 @@ from ..readonly import (
 from .redaction import redact
 
 DEBUG_COMMAND_TIMEOUT_SECONDS = 20
+
+
+@contextmanager
+def _status(message: str):
+    with Console(file=sys.stdout).status(message, spinner="dots"):
+        yield
 
 
 def debug_report(duration: int | None) -> int:
@@ -47,32 +56,34 @@ def debug_report(duration: int | None) -> int:
 
     def command_block(title: str, command: list[str | Path]) -> None:
         heading(title)
-        try:
-            completed = run(command, check=False, capture=True, timeout=DEBUG_COMMAND_TIMEOUT_SECONDS)
-            text = completed.stdout + completed.stderr
-            suffix = "" if completed.returncode == 0 else f"\n[command exited with status {completed.returncode}]"
-        except (OSError, OpsError) as exc:
-            text = str(exc)
-            suffix = (
-                f"\n[timed out after {DEBUG_COMMAND_TIMEOUT_SECONDS}s]"
-                if "timed out after" in text
-                else "\n[command failed]"
-            )
-        except subprocess.TimeoutExpired as exc:
-            text = ((exc.stdout or "") + (exc.stderr or "")) if isinstance(exc.stdout, str) else ""
-            suffix = f"\n[timed out after {DEBUG_COMMAND_TIMEOUT_SECONDS}s]"
+        with _status(f"Collecting {title}"):
+            try:
+                completed = run(command, check=False, capture=True, timeout=DEBUG_COMMAND_TIMEOUT_SECONDS)
+                text = completed.stdout + completed.stderr
+                suffix = "" if completed.returncode == 0 else f"\n[command exited with status {completed.returncode}]"
+            except (OSError, OpsError) as exc:
+                text = str(exc)
+                suffix = (
+                    f"\n[timed out after {DEBUG_COMMAND_TIMEOUT_SECONDS}s]"
+                    if "timed out after" in text
+                    else "\n[command failed]"
+                )
+            except subprocess.TimeoutExpired as exc:
+                text = ((exc.stdout or "") + (exc.stderr or "")) if isinstance(exc.stdout, str) else ""
+                suffix = f"\n[timed out after {DEBUG_COMMAND_TIMEOUT_SECONDS}s]"
         body.append("```console\n" + redact((text or "<no output>") + suffix, hostname) + "\n```\n")
 
     try:
-        initial_service_state = (
-            run(
-                ["systemctl", "is-active", PATHS.service_unit],
-                check=False,
-                capture=True,
-                timeout=DEBUG_COMMAND_TIMEOUT_SECONDS,
-            ).stdout.strip()
-            or "unknown"
-        )
+        with _status("Checking service state"):
+            initial_service_state = (
+                run(
+                    ["systemctl", "is-active", PATHS.service_unit],
+                    check=False,
+                    capture=True,
+                    timeout=DEBUG_COMMAND_TIMEOUT_SECONDS,
+                ).stdout.strip()
+                or "unknown"
+            )
     except (OpsError, OSError):
         initial_service_state = "unknown"
 
@@ -149,21 +160,22 @@ def debug_report(duration: int | None) -> int:
         command_block(
             "Device inventory (json)", [PATHS.venv_python, "-m", "bluetooth_2_usb", "--list", "--output", "json"]
         )
-        try:
-            debug_command = run(
-                [
-                    PATHS.venv_python,
-                    "-m",
-                    "bluetooth_2_usb.service_settings",
-                    "--print-shell-command",
-                    "--append-debug",
-                ],
-                check=False,
-                capture=True,
-                timeout=DEBUG_COMMAND_TIMEOUT_SECONDS,
-            ).stdout.strip()
-        except (OSError, OpsError, subprocess.TimeoutExpired):
-            debug_command = ""
+        with _status("Preparing live debug command"):
+            try:
+                debug_command = run(
+                    [
+                        PATHS.venv_python,
+                        "-m",
+                        "bluetooth_2_usb.service_settings",
+                        "--print-shell-command",
+                        "--append-debug",
+                    ],
+                    check=False,
+                    capture=True,
+                    timeout=DEBUG_COMMAND_TIMEOUT_SECONDS,
+                ).stdout.strip()
+            except (OSError, OpsError, subprocess.TimeoutExpired):
+                debug_command = ""
         text_block(
             "Live debug setup",
             f"live_debug_duration={duration if duration else 'until interrupted'}\n"
