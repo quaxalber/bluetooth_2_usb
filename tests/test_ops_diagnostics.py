@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from bluetooth_2_usb.ops.commands import OpsError
 from bluetooth_2_usb.ops.diagnostics import ProbeStatus, SmokeTest, debug_report
+from bluetooth_2_usb.ops.diagnostics import report as diagnostics_report
 from bluetooth_2_usb.ops.diagnostics.redaction import redact
 from bluetooth_2_usb.ops.paths import ManagedPaths
 from bluetooth_2_usb.ops.readonly import ReadonlyConfig
@@ -614,8 +615,6 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 def wait(self, timeout=None):
                     self.wait_calls += 1
                     if self.wait_calls == 1:
-                        raise KeyboardInterrupt
-                    if self.wait_calls == 2:
                         raise subprocess.TimeoutExpired("debug", timeout)
                     return 0
 
@@ -654,6 +653,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
                     patch(f"{DIAGNOSTICS_REPORT}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
                 )
                 stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.subprocess.Popen", return_value=process))
+                stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}._tee_process_output", side_effect=KeyboardInterrupt))
                 killpg = stack.enter_context(patch(f"{DIAGNOSTICS_REPORT}.os.killpg"))
 
                 self.assertEqual(debug_report(None), 0)
@@ -664,3 +664,19 @@ class OpsDiagnosticsTest(unittest.TestCase):
             [call.args for call in killpg.call_args_list],
             [(process.pid, signal.SIGTERM), (process.pid, signal.SIGKILL)],
         )
+
+    def test_live_debug_output_is_teed_to_stdout_and_report_capture(self) -> None:
+        process = subprocess.Popen(
+            ["bash", "--noprofile", "--norc", "-c", "printf 'hello test-host\\n'"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        stdout = StringIO()
+        with tempfile.TemporaryFile("w+b") as output_file, redirect_stdout(stdout):
+            diagnostics_report._tee_process_output(process, output_file, 2, "test-host")
+            output_file.seek(0)
+            captured = output_file.read().decode("utf-8", errors="replace")
+
+        self.assertEqual(process.returncode, 0)
+        self.assertIn("hello test-host", captured)
+        self.assertIn("hello <<REDACTED_HOSTNAME>>", stdout.getvalue())

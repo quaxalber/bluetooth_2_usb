@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import select
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -204,19 +206,18 @@ def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
     debug_output = ""
     try:
         timeout = duration
-        with tempfile.TemporaryFile("w+t", encoding="utf-8") as output_file:
+        with tempfile.TemporaryFile("w+b") as output_file:
             process = subprocess.Popen(
                 ["setsid", "bash", "--noprofile", "--norc", "-c", command],
-                stdout=output_file,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
             )
             try:
-                process.wait(timeout=timeout)
+                _tee_process_output(process, output_file, timeout, hostname)
             except (subprocess.TimeoutExpired, KeyboardInterrupt):
                 _terminate_process_group(process)
             output_file.seek(0)
-            debug_output = output_file.read()
+            debug_output = output_file.read().decode("utf-8", errors="replace")
     finally:
         if stopped_service:
             start = run(
@@ -232,6 +233,51 @@ def _run_live_debug(command: str, duration: int | None, hostname: str) -> str:
                     + "]"
                 )
     return redact(debug_output, hostname) or "<no output>"
+
+
+def _tee_process_output(process: subprocess.Popen[bytes], output_file, timeout: int | None, hostname: str) -> None:
+    if process.stdout is None:
+        process.wait(timeout=timeout)
+        return
+    deadline = time.monotonic() + timeout if timeout is not None else None
+    try:
+        while True:
+            if deadline is None:
+                select_timeout = 0.2
+            else:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(process.args, timeout)
+                select_timeout = min(0.2, remaining)
+            readable, _, _ = select.select([process.stdout], [], [], select_timeout)
+            if readable:
+                chunk = os.read(process.stdout.fileno(), 4096)
+                if chunk:
+                    output_file.write(chunk)
+                    output_file.flush()
+                    sys.stdout.write(redact(chunk.decode("utf-8", errors="replace"), hostname))
+                    sys.stdout.flush()
+            if process.poll() is not None:
+                _drain_process_output(process, output_file, hostname)
+                return
+    finally:
+        process.stdout.close()
+
+
+def _drain_process_output(process: subprocess.Popen[bytes], output_file, hostname: str) -> None:
+    if process.stdout is None:
+        return
+    while True:
+        readable, _, _ = select.select([process.stdout], [], [], 0)
+        if not readable:
+            return
+        chunk = os.read(process.stdout.fileno(), 4096)
+        if not chunk:
+            return
+        output_file.write(chunk)
+        output_file.flush()
+        sys.stdout.write(redact(chunk.decode("utf-8", errors="replace"), hostname))
+        sys.stdout.flush()
 
 
 def _terminate_process_group(process: subprocess.Popen) -> None:

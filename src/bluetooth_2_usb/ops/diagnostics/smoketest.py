@@ -425,9 +425,6 @@ class SmokeTest:
 
     @contextmanager
     def _status(self, message: str):
-        if self.verbose:
-            yield
-            return
         with Console(file=sys.stdout).status(message, spinner="dots"):
             yield
 
