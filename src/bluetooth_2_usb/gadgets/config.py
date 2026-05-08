@@ -16,6 +16,7 @@ References:
 
 from __future__ import annotations
 
+import errno
 from pathlib import Path
 
 import usb_hid
@@ -47,12 +48,22 @@ USB_DEV_PROTOCOL_NONE = "0x00"
 USB_DEV_SUBCLASS_NONE = "0x00"
 """USB device subclass 0: no device-level subclass."""
 
+CONFIGFS_TEARDOWN_IGNORED_ERRNOS = {errno.EACCES, errno.EBUSY, errno.ENOTEMPTY, errno.EPERM}
+"""Errors that can occur when configfs exposes kernel-managed attribute nodes."""
+
+
+def _ignore_configfs_teardown_error(exc: OSError) -> None:
+    if exc.errno not in CONFIGFS_TEARDOWN_IGNORED_ERRNOS:
+        raise exc
+
 
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
     except FileNotFoundError:
         pass
+    except OSError as exc:
+        _ignore_configfs_teardown_error(exc)
 
 
 def _safe_rmdir(path: Path) -> None:
@@ -60,6 +71,8 @@ def _safe_rmdir(path: Path) -> None:
         path.rmdir()
     except FileNotFoundError:
         pass
+    except OSError as exc:
+        _ignore_configfs_teardown_error(exc)
 
 
 def _safe_write_text(path: Path, value: str) -> None:

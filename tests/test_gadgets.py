@@ -420,6 +420,30 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(gadget_root.exists())
             self.assertFalse(project_root.exists())
 
+    async def test_remove_owned_gadgets_tolerates_kernel_managed_configfs_attrs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            configfs_root = Path(tmpdir) / "usb_gadget"
+            gadget_root = configfs_root / "adafruit-blinka"
+            (gadget_root / "webusb").mkdir(parents=True)
+            webusb_use = gadget_root / "webusb" / "use"
+            webusb_use.write_text("0\n", encoding="utf-8")
+            (gadget_root / "UDC").write_text("dummy.udc\n", encoding="utf-8")
+
+            original_unlink = Path.unlink
+
+            def fake_unlink(path: Path, *args, **kwargs):
+                if path == webusb_use:
+                    raise OSError(errno.EPERM, "Operation not permitted", str(path))
+                return original_unlink(path, *args, **kwargs)
+
+            with (
+                patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root),
+                patch.object(Path, "unlink", fake_unlink),
+            ):
+                remove_owned_gadgets()
+
+            self.assertTrue(webusb_use.exists())
+
     async def test_from_existing_preserves_wakeup_on_write_by_default(self) -> None:
         base_device = GadgetHidDevice.from_existing(
             usb_hid.Device.BOOT_KEYBOARD,
