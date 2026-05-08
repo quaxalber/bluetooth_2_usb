@@ -965,8 +965,7 @@ class ReadonlyConfigTest(unittest.TestCase):
             self.assertIn(["systemctl", "start", "bluetooth.service"], commands)
             self.assertIn(["systemctl", "daemon-reload"], commands)
             self.assertIn(
-                "Bluetooth state has been migrated back to /var/lib/bluetooth on the root filesystem.",
-                output,
+                "Bluetooth state has been migrated back to /var/lib/bluetooth on the root filesystem.", output
             )
             self.assertIn("Persistent storage mount cleanup failed", output)
             self.assertIn(str(config.persist_mount), output)
