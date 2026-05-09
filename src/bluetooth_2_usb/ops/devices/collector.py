@@ -64,7 +64,7 @@ class JsonlWriter:
 
 
 class CaptureProgress(Protocol):
-    def capture_started(self, devices: list[InputDevice], output_path: Path) -> None: ...
+    def capture_started(self, devices: list[InputDevice], output_path: Path, *, duration_sec: int) -> None: ...
 
     def evdev_event(self, device: InputDevice, event: object) -> None: ...
 
@@ -105,7 +105,7 @@ async def capture_device(
             writer = JsonlWriter(output_file, hostname=hostname)
             writer_lock = asyncio.Lock()
             if progress is not None:
-                progress.capture_started(input_devices, output_path)
+                progress.capture_started(input_devices, output_path, duration_sec=duration_sec)
             _write_capture_start(
                 writer, duration_sec=duration_sec, live_mode=live_mode, devices_filter=devices, handles=handles
             )

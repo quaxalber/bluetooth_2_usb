@@ -278,8 +278,10 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("Capture summary: mode=summarized matched=1 live=yes warnings=0", stdout.getvalue())
 
-    def test_capture_progress_status_line_stays_compact(self) -> None:
+    def test_capture_progress_status_line_includes_spinner_countdown_and_spaced_metrics(self) -> None:
         progress = _CliProgress()
+        progress._started_monotonic = 100.0
+        progress._duration_sec = 30
         progress.evdev_events = 12
         progress.hidraw_reports = 3
         progress.key_codes.update({"KEY_A", "BTN_LEFT"})
@@ -287,9 +289,29 @@ class DeviceCaptureTest(unittest.TestCase):
         progress.abs_codes.add("ABS_X")
         progress.hidraw_paths.add("hidraw0:8B")
 
-        line = progress._render_text()
+        line = progress._render_status(now=112.0).plain
 
-        self.assertEqual(line, "events=12 keys=2 axes=2 hidraw=3 groups=1")
+        self.assertIn("Waiting for input...", line)
+        self.assertIn("[###-----] 18s", line)
+        self.assertIn("events=12   keys=2   axes=2   hidraw=3   groups=1", line)
+
+    def test_capture_progress_status_colors_decimal_size_as_one_value(self) -> None:
+        progress = _CliProgress()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            output.write_bytes(b"x" * 14848)
+            progress.output_path = output
+
+            status = progress._render_status(now=0.0)
+
+        value_start = status.plain.index("14.5K")
+        value_end = value_start + len("14.5K")
+        self.assertTrue(
+            any(
+                span.start <= value_start and span.end >= value_end and str(span.style) == "cyan"
+                for span in status.spans
+            )
+        )
 
     def test_select_input_device_accepts_exact_path_and_closes_nonmatches(self) -> None:
         selected = _FakeInputDevice("/dev/input/event1", "Keyboard")
@@ -314,14 +336,31 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(exit_code, 3)
         self.assertIn("Device capture failed: denied", stderr.getvalue())
 
-    def test_capture_reports_interrupted_partial_output_path(self) -> None:
+    def test_capture_reports_interrupted_then_regular_write_success(self) -> None:
+        stdout = io.StringIO()
         stderr = io.StringIO()
 
-        with patch(f"{DEVICE_CLI}.capture_device", side_effect=KeyboardInterrupt), patch(f"{SYS}.stderr", stderr):
+        def interrupting_capture(*args, **kwargs):
+            progress = kwargs["progress"]
+            progress.output_path = Path("/tmp/capture.jsonl")
+            raise KeyboardInterrupt
+
+        with (
+            patch(f"{DEVICE_CLI}.capture_device", side_effect=interrupting_capture),
+            patch(f"{DEVICE_CLI}._print_capture_summary") as summary,
+            patch(f"{SYS}.stdout", stdout),
+            patch(f"{SYS}.stderr", stderr),
+        ):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 130)
-        self.assertIn("Device capture interrupted", stderr.getvalue())
+        output_lines = stdout.getvalue().splitlines()
+        self.assertEqual(
+            output_lines[:2],
+            ["[!] Received keyboard interrupt; finalizing partial capture.", "[+] Wrote: /tmp/capture.jsonl"],
+        )
+        summary.assert_called_once_with(Path("/tmp/capture.jsonl"), generated_output=True)
+        self.assertEqual(stderr.getvalue(), "")
 
     def test_select_input_devices_returns_all_name_matches(self) -> None:
         devices = [_FakeInputDevice("/dev/input/event1", "Keyboard"), _FakeInputDevice("/dev/input/event2", "Keyboard")]
@@ -478,7 +517,7 @@ class DeviceCaptureTest(unittest.TestCase):
         started_devices = []
 
         class Progress:
-            def capture_started(self, devices, output_path: Path) -> None:
+            def capture_started(self, devices, output_path: Path, *, duration_sec: int) -> None:
                 started_devices.extend(devices)
 
             def evdev_event(self, device, event) -> None:
