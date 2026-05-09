@@ -21,6 +21,7 @@ from pathlib import Path
 
 import usb_hid
 
+from ..udc import resolve_single_udc_name
 from .identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, USB_MANUFACTURER, usb_configfs_hex_u16
 from .layout import GadgetHidDevice, GadgetLayout
 
@@ -137,18 +138,6 @@ def _maybe_write_wakeup_on_write(device_root: Path, enabled: bool) -> None:
     _write_text(wakeup_path, "1" if enabled else "0")
 
 
-def _resolve_udc_name(udc_root: Path = Path("/sys/class/udc")) -> str:
-    try:
-        controllers = sorted(entry.name for entry in udc_root.iterdir() if entry.is_dir())
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(f"No UDC controller was found in {udc_root}") from exc
-    if not controllers:
-        raise FileNotFoundError(f"No UDC controller was found in {udc_root}")
-    if len(controllers) > 1:
-        raise RuntimeError(f"Multiple UDC controllers were found in {udc_root}: {', '.join(controllers)}")
-    return controllers[0]
-
-
 def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
     _teardown_existing_gadget()
 
@@ -190,7 +179,7 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
         _maybe_write_wakeup_on_write(device_root, device.wakeup_on_write)
         (config_root / f"hid.usb{device.function_index}").symlink_to(device_root)
 
-    _write_text(USB_GADGET_ROOT / "UDC", _resolve_udc_name())
+    _write_text(USB_GADGET_ROOT / "UDC", resolve_single_udc_name())
 
     usb_hid.devices = list(layout.devices)
     for device in layout.devices:

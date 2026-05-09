@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .logging import get_logger
+from .udc import resolve_single_udc_state_path
 from .version import get_versioned_name
 
 if TYPE_CHECKING:
@@ -42,36 +43,10 @@ class EnvironmentStatus:
 
 
 def get_udc_path() -> Path | None:
-    udc_root = Path("/sys/class/udc")
-    if not udc_root.is_dir():
+    try:
+        return resolve_single_udc_state_path()
+    except (FileNotFoundError, RuntimeError, OSError):
         return None
-
-    controllers = sorted(entry for entry in udc_root.iterdir() if entry.is_dir())
-    if not controllers:
-        return None
-
-    def state_path(controller: Path) -> Path:
-        return controller / "state"
-
-    scored_controllers: list[tuple[int, str, Path]] = []
-    for controller in controllers:
-        candidate = state_path(controller)
-        if not candidate.is_file():
-            continue
-
-        name = controller.name.lower()
-        score = 0
-        if any(token in name for token in ("otg", "gadget", "dwc2")):
-            score += 100
-        if name.startswith("2098") or name.startswith("fe98"):
-            score += 25
-        scored_controllers.append((score, controller.name, candidate))
-
-    if scored_controllers:
-        scored_controllers.sort(key=lambda item: (-item[0], item[1]))
-        return scored_controllers[0][2]
-
-    return None
 
 
 def validate_environment() -> EnvironmentStatus:

@@ -2,6 +2,7 @@ import io
 import json
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -58,6 +59,19 @@ class CliTest(unittest.TestCase):
         self.assertEqual(
             json.loads(stdout.getvalue()), {"configfs": True, "ok": True, "udc_path": None, "udc_present": True}
         )
+
+    def test_get_udc_path_uses_shared_single_controller_discovery(self) -> None:
+        state_path = Path("/tmp/udc-state")
+        with patch("bluetooth_2_usb.cli.resolve_single_udc_state_path", return_value=state_path) as resolve:
+            self.assertEqual(cli.get_udc_path(), state_path)
+
+        resolve.assert_called_once_with()
+
+    def test_get_udc_path_treats_missing_or_ambiguous_udc_as_unavailable(self) -> None:
+        for error in (FileNotFoundError("missing"), RuntimeError("multiple"), OSError("denied")):
+            with self.subTest(error=type(error).__name__):
+                with patch("bluetooth_2_usb.cli.resolve_single_udc_state_path", side_effect=error):
+                    self.assertIsNone(cli.get_udc_path())
 
     def test_list_json_output(self) -> None:
         stdout = io.StringIO()

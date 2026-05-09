@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bluetooth_2_usb.runtime.event_source import RuntimeEventSource, _discover_udc_state_path
+from bluetooth_2_usb.runtime.event_source import RuntimeEventSource
 from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, UdcState, UdcStateChanged
 
 
@@ -46,9 +46,11 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         udc_path: Path | None = Path("/missing/udc-state"),
         poll_interval: float = 0.01,
     ) -> RuntimeEventSource:
-        with patch("bluetooth_2_usb.runtime.event_source.pyudev.Context", return_value=object()):
-            with patch("bluetooth_2_usb.runtime.event_source.pyudev.Monitor.from_netlink", return_value=monitor):
-                return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
+        with (
+            patch("bluetooth_2_usb.runtime.event_source.pyudev.Context", return_value=object()),
+            patch("bluetooth_2_usb.runtime.event_source.pyudev.Monitor.from_netlink", return_value=monitor),
+        ):
+            return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
 
     async def test_runtime_event_source_rejects_non_positive_poll_interval(self) -> None:
         queue = asyncio.Queue()
@@ -115,11 +117,10 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event, UdcStateChanged(UdcState.NOT_ATTACHED))
         monitor.close()
 
-    async def test_runtime_event_source_treats_missing_udc_path_as_not_attached(self) -> None:
+    async def test_runtime_event_source_treats_injected_missing_udc_path_as_not_attached(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
-        with patch("bluetooth_2_usb.runtime.event_source._discover_udc_state_path", return_value=None):
-            source = self._build_source(queue, monitor=monitor, udc_path=None)
+        source = self._build_source(queue, monitor=monitor, udc_path=Path("/missing/udc-state"))
 
         task = asyncio.create_task(source.run())
         self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached"))
@@ -128,40 +129,43 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(task, timeout=1)
         monitor.close()
 
-    async def test_runtime_event_source_discovers_udc_state_path_when_not_injected(self) -> None:
+    async def test_runtime_event_source_uses_shared_udc_discovery_when_not_injected(self) -> None:
+        queue = asyncio.Queue()
         monitor = _FakeMonitor()
         with tempfile.TemporaryDirectory() as tmpdir:
-            udc_root = Path(tmpdir)
-            controller = udc_root / "20980000.usb"
-            controller.mkdir()
-            state = controller / "state"
+            state = Path(tmpdir) / "state"
             state.write_text("configured\n", encoding="utf-8")
 
-            with patch("bluetooth_2_usb.runtime.event_source.Path", return_value=udc_root):
-                self.assertEqual(_discover_udc_state_path(), state)
+            with patch("bluetooth_2_usb.runtime.event_source.resolve_single_udc_state_path", return_value=state):
+                source = self._build_source(queue, monitor=monitor, udc_path=None)
+
+            self.assertEqual(source.read_udc_state(), UdcState.CONFIGURED)
 
         monitor.close()
 
-    async def test_runtime_event_source_ignores_udc_enumeration_errors(self) -> None:
-        class UnreadableUdcRoot:
-            def is_dir(self) -> bool:
-                return True
+    async def test_runtime_event_source_fails_when_shared_udc_discovery_fails(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
 
-            def iterdir(self):
-                raise PermissionError("denied")
-
-        with patch("bluetooth_2_usb.runtime.event_source.Path", return_value=UnreadableUdcRoot()):
-            self.assertIsNone(_discover_udc_state_path())
+        with patch(
+            "bluetooth_2_usb.runtime.event_source.resolve_single_udc_state_path",
+            side_effect=RuntimeError("Multiple UDC controllers"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Multiple UDC controllers"):
+                self._build_source(queue, monitor=monitor, udc_path=None)
+        monitor.close()
 
     async def test_runtime_event_source_stops_when_start_monitoring_fails(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
         source = self._build_source(queue, monitor=monitor)
 
-        with patch.object(source, "_start_monitoring", side_effect=OSError("monitor unavailable")):
-            with patch.object(source, "_stop_monitoring") as stop_monitoring:
-                with self.assertRaisesRegex(OSError, "monitor unavailable"):
-                    await source.run()
+        with (
+            patch.object(source, "_start_monitoring", side_effect=OSError("monitor unavailable")),
+            patch.object(source, "_stop_monitoring") as stop_monitoring,
+        ):
+            with self.assertRaisesRegex(OSError, "monitor unavailable"):
+                await source.run()
 
         stop_monitoring.assert_called_once_with()
         monitor.close()

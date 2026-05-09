@@ -97,83 +97,27 @@ async def capture_device(
     interrupted = False
     input_devices = linux.select_input_devices(devices)
     handles = [_CaptureHandle(device=device, hidraw_nodes=[], opened_hidraw=[]) for device in input_devices]
-    created_parent: Path | None = None
 
     try:
-        output_path = output_path or _default_output_path(devices, input_devices, live_mode)
-        created_parent = output_path.parent if not output_path.parent.exists() else None
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path, created_parent = _prepare_capture_output(devices, input_devices, output_path, live_mode)
         hostname = socket.gethostname()
         with output_path.open("w", encoding="utf-8") as output_file:
             writer = JsonlWriter(output_file, hostname=hostname)
             writer_lock = asyncio.Lock()
             if progress is not None:
                 progress.capture_started(input_devices, output_path)
-            writer.write(
-                {
-                    "record_type": "capture_start",
-                    "schema_version": SCHEMA_VERSION,
-                    "tool": "bluetooth_2_usb device capture",
-                    "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "duration_sec": duration_sec,
-                    "live_mode": live_mode,
-                    "devices": devices,
-                    "matched_devices": [
-                        {"path": getattr(handle.device, "path", ""), "name": getattr(handle.device, "name", "")}
-                        for handle in handles
-                    ],
-                },
-                flush=True,
+            _write_capture_start(
+                writer, duration_sec=duration_sec, live_mode=live_mode, devices_filter=devices, handles=handles
             )
 
-            opened_hidraw_paths: set[Path] = set()
-            recorded_hidraw_paths: set[Path] = set()
-            hidraw_report_id_paths: set[Path] = set()
             try:
-                for handle in handles:
-                    _write_static_records(writer, handle.device, max_sysfs_file_bytes)
-
-                    if grab:
-                        handle.device.grab()
-                        handle.grabbed = True
-                        writer.write(
-                            {
-                                "record_type": "capture_note",
-                                "path": getattr(handle.device, "path", ""),
-                                "message": "grabbed input device",
-                            },
-                            flush=True,
-                        )
-
-                    if include_hidraw:
-                        handle.hidraw_nodes = linux.discover_hidraw_nodes(handle.device)
-                        nodes_to_record = [node for node in handle.hidraw_nodes if node not in recorded_hidraw_paths]
-                        if nodes_to_record:
-                            for record in linux.hidraw_node_records(nodes_to_record, max_sysfs_file_bytes):
-                                if _hidraw_node_uses_report_ids(record):
-                                    hidraw_report_id_paths.add(Path(str(record.get("path", ""))))
-                                writer.write(record, flush=True)
-                        recorded_hidraw_paths.update(nodes_to_record)
-
-                        nodes_to_open = [node for node in handle.hidraw_nodes if node not in opened_hidraw_paths]
-                        if nodes_to_open:
-                            handle.opened_hidraw, warnings = linux.open_hidraw_nodes(nodes_to_open)
-                            opened_hidraw_paths.update(nodes_to_open)
-                        else:
-                            warnings = []
-                        for warning in warnings:
-                            writer.write(warning, flush=True)
-                        if not handle.hidraw_nodes:
-                            writer.write(
-                                {
-                                    "record_type": "capture_warning",
-                                    "source": "hidraw",
-                                    "path": getattr(handle.device, "path", ""),
-                                    "message": "no matching hidraw node discovered",
-                                },
-                                flush=True,
-                            )
-
+                hidraw_report_id_paths = _prepare_capture_handles(
+                    writer,
+                    handles=handles,
+                    grab=grab,
+                    include_hidraw=include_hidraw,
+                    max_sysfs_file_bytes=max_sysfs_file_bytes,
+                )
                 await asyncio.gather(
                     *(
                         _capture_live_records(
@@ -194,27 +138,136 @@ async def capture_device(
                 interrupted = True
                 raise
             finally:
-                writer.write(
-                    {
-                        "record_type": "capture_end",
-                        "elapsed_sec": round(time.monotonic() - started_monotonic, 6),
-                        "interrupted": interrupted,
-                        "counts": dict(writer.counts),
-                    },
-                    flush=True,
-                )
+                _write_capture_end(writer, started_monotonic=started_monotonic, interrupted=interrupted)
                 if progress is not None:
                     progress.capture_finished(output_path, interrupted=interrupted)
                 make_user_copyable(output_path, created_parent=created_parent)
     finally:
-        for handle in handles:
-            if handle.grabbed:
-                with suppress(Exception):
-                    handle.device.ungrab()
-            linux.close_hidraw_nodes(handle.opened_hidraw)
-            handle.device.close()
+        _close_capture_handles(handles)
 
     return output_path
+
+
+def _prepare_capture_output(
+    devices_filter: str, input_devices: list[InputDevice], output_path: Path | None, live_mode: LiveMode
+) -> tuple[Path, Path | None]:
+    output_path = output_path or _default_output_path(devices_filter, input_devices, live_mode)
+    created_parent = output_path.parent if not output_path.parent.exists() else None
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    return output_path, created_parent
+
+
+def _write_capture_start(
+    writer: JsonlWriter, *, duration_sec: int, live_mode: LiveMode, devices_filter: str, handles: list[_CaptureHandle]
+) -> None:
+    writer.write(
+        {
+            "record_type": "capture_start",
+            "schema_version": SCHEMA_VERSION,
+            "tool": "bluetooth_2_usb device capture",
+            "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "duration_sec": duration_sec,
+            "live_mode": live_mode,
+            "devices": devices_filter,
+            "matched_devices": [
+                {"path": getattr(handle.device, "path", ""), "name": getattr(handle.device, "name", "")}
+                for handle in handles
+            ],
+        },
+        flush=True,
+    )
+
+
+def _write_capture_end(writer: JsonlWriter, *, started_monotonic: float, interrupted: bool) -> None:
+    writer.write(
+        {
+            "record_type": "capture_end",
+            "elapsed_sec": round(time.monotonic() - started_monotonic, 6),
+            "interrupted": interrupted,
+            "counts": dict(writer.counts),
+        },
+        flush=True,
+    )
+
+
+def _prepare_capture_handles(
+    writer: JsonlWriter, *, handles: list[_CaptureHandle], grab: bool, include_hidraw: bool, max_sysfs_file_bytes: int
+) -> set[Path]:
+    opened_hidraw_paths: set[Path] = set()
+    recorded_hidraw_paths: set[Path] = set()
+    hidraw_report_id_paths: set[Path] = set()
+
+    for handle in handles:
+        _write_static_records(writer, handle.device, max_sysfs_file_bytes)
+        if grab:
+            _grab_capture_handle(writer, handle)
+        if include_hidraw:
+            _prepare_hidraw_nodes(
+                writer,
+                handle,
+                recorded_hidraw_paths=recorded_hidraw_paths,
+                opened_hidraw_paths=opened_hidraw_paths,
+                hidraw_report_id_paths=hidraw_report_id_paths,
+                max_sysfs_file_bytes=max_sysfs_file_bytes,
+            )
+
+    return hidraw_report_id_paths
+
+
+def _grab_capture_handle(writer: JsonlWriter, handle: _CaptureHandle) -> None:
+    handle.device.grab()
+    handle.grabbed = True
+    writer.write(
+        {"record_type": "capture_note", "path": getattr(handle.device, "path", ""), "message": "grabbed input device"},
+        flush=True,
+    )
+
+
+def _prepare_hidraw_nodes(
+    writer: JsonlWriter,
+    handle: _CaptureHandle,
+    *,
+    recorded_hidraw_paths: set[Path],
+    opened_hidraw_paths: set[Path],
+    hidraw_report_id_paths: set[Path],
+    max_sysfs_file_bytes: int,
+) -> None:
+    handle.hidraw_nodes = linux.discover_hidraw_nodes(handle.device)
+    nodes_to_record = [node for node in handle.hidraw_nodes if node not in recorded_hidraw_paths]
+    if nodes_to_record:
+        for record in linux.hidraw_node_records(nodes_to_record, max_sysfs_file_bytes):
+            if _hidraw_node_uses_report_ids(record):
+                hidraw_report_id_paths.add(Path(str(record.get("path", ""))))
+            writer.write(record, flush=True)
+        recorded_hidraw_paths.update(nodes_to_record)
+
+    nodes_to_open = [node for node in handle.hidraw_nodes if node not in opened_hidraw_paths]
+    if nodes_to_open:
+        handle.opened_hidraw, warnings = linux.open_hidraw_nodes(nodes_to_open)
+        opened_hidraw_paths.update(nodes_to_open)
+    else:
+        warnings = []
+    for warning in warnings:
+        writer.write(warning, flush=True)
+    if not handle.hidraw_nodes:
+        writer.write(
+            {
+                "record_type": "capture_warning",
+                "source": "hidraw",
+                "path": getattr(handle.device, "path", ""),
+                "message": "no matching hidraw node discovered",
+            },
+            flush=True,
+        )
+
+
+def _close_capture_handles(handles: list[_CaptureHandle]) -> None:
+    for handle in handles:
+        if handle.grabbed:
+            with suppress(Exception):
+                handle.device.ungrab()
+        linux.close_hidraw_nodes(handle.opened_hidraw)
+        handle.device.close()
 
 
 def _write_static_records(writer: JsonlWriter, device: InputDevice, max_sysfs_file_bytes: int) -> None:

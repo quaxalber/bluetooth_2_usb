@@ -23,6 +23,10 @@ from bluetooth_2_usb.ops.devices.linux import (
 from bluetooth_2_usb.ops.devices.result import json_line, normalize
 from bluetooth_2_usb.ops.devices.validate import validate_capture
 
+DEVICE_CLI = "bluetooth_2_usb.ops.devices.cli"
+DEVICE_COLLECTOR = "bluetooth_2_usb.ops.devices.collector"
+DEVICE_LINUX = "bluetooth_2_usb.ops.devices.linux"
+
 
 class _FakeInputDevice:
     def __init__(self, path: str, name: str, *, uniq: str = "", events: list[object] | None = None) -> None:
@@ -224,8 +228,8 @@ class DeviceCaptureTest(unittest.TestCase):
 
     def test_device_capture_defaults_to_summarized_live_mode(self) -> None:
         with (
-            patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
-            patch("bluetooth_2_usb.ops.devices.cli._print_capture_summary"),
+            patch(f"{DEVICE_CLI}.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
+            patch(f"{DEVICE_CLI}._print_capture_summary"),
         ):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
@@ -234,8 +238,8 @@ class DeviceCaptureTest(unittest.TestCase):
 
     def test_device_capture_passes_max_file_bytes_to_collector(self) -> None:
         with (
-            patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
-            patch("bluetooth_2_usb.ops.devices.cli._print_capture_summary"),
+            patch(f"{DEVICE_CLI}.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
+            patch(f"{DEVICE_CLI}._print_capture_summary"),
         ):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1", "--max-file-bytes", "123"])
 
@@ -244,8 +248,8 @@ class DeviceCaptureTest(unittest.TestCase):
 
     def test_device_capture_accepts_raw_live_mode(self) -> None:
         with (
-            patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
-            patch("bluetooth_2_usb.ops.devices.cli._print_capture_summary"),
+            patch(f"{DEVICE_CLI}.capture_device", return_value=Path("/tmp/capture.jsonl")) as capture,
+            patch(f"{DEVICE_CLI}._print_capture_summary"),
         ):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1", "--live-mode", "raw"])
 
@@ -265,10 +269,7 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             _write_jsonl(output, _minimal_capture_records())
-            with (
-                patch("bluetooth_2_usb.ops.devices.cli.capture_device", return_value=output),
-                patch("sys.stdout", stdout),
-            ):
+            with patch(f"{DEVICE_CLI}.capture_device", return_value=output), patch("sys.stdout", stdout):
                 exit_code = run_device(["capture", "--devices", "/dev/input/event1", "--output", str(output)])
 
         self.assertEqual(exit_code, 0)
@@ -291,7 +292,7 @@ class DeviceCaptureTest(unittest.TestCase):
         selected = _FakeInputDevice("/dev/input/event1", "Keyboard")
         other = _FakeInputDevice("/dev/input/event2", "Mouse")
 
-        with patch("bluetooth_2_usb.ops.devices.linux.list_input_devices", return_value=[selected, other]):
+        with patch(f"{DEVICE_LINUX}.list_input_devices", return_value=[selected, other]):
             result = select_input_device("/dev/input/event1")
 
         self.assertIs(result, selected)
@@ -301,10 +302,7 @@ class DeviceCaptureTest(unittest.TestCase):
     def test_capture_reports_output_open_failure_cleanly(self) -> None:
         stderr = io.StringIO()
 
-        with (
-            patch("bluetooth_2_usb.ops.devices.cli.capture_device", side_effect=PermissionError("denied")),
-            patch("sys.stderr", stderr),
-        ):
+        with patch(f"{DEVICE_CLI}.capture_device", side_effect=PermissionError("denied")), patch("sys.stderr", stderr):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 3)
@@ -313,10 +311,7 @@ class DeviceCaptureTest(unittest.TestCase):
     def test_capture_reports_interrupted_partial_output_path(self) -> None:
         stderr = io.StringIO()
 
-        with (
-            patch("bluetooth_2_usb.ops.devices.cli.capture_device", side_effect=KeyboardInterrupt),
-            patch("sys.stderr", stderr),
-        ):
+        with patch(f"{DEVICE_CLI}.capture_device", side_effect=KeyboardInterrupt), patch("sys.stderr", stderr):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 130)
@@ -325,7 +320,7 @@ class DeviceCaptureTest(unittest.TestCase):
     def test_select_input_devices_returns_all_name_matches(self) -> None:
         devices = [_FakeInputDevice("/dev/input/event1", "Keyboard"), _FakeInputDevice("/dev/input/event2", "Keyboard")]
 
-        with patch("bluetooth_2_usb.ops.devices.linux.list_input_devices", return_value=devices):
+        with patch(f"{DEVICE_LINUX}.list_input_devices", return_value=devices):
             matches = select_input_devices("key")
 
         self.assertEqual(matches, devices)
@@ -334,7 +329,7 @@ class DeviceCaptureTest(unittest.TestCase):
     def test_select_input_device_keeps_single_device_ambiguity_error_for_callers_that_need_one(self) -> None:
         devices = [_FakeInputDevice("/dev/input/event1", "Keyboard"), _FakeInputDevice("/dev/input/event2", "Keyboard")]
 
-        with patch("bluetooth_2_usb.ops.devices.linux.list_input_devices", return_value=devices):
+        with patch(f"{DEVICE_LINUX}.list_input_devices", return_value=devices):
             with self.assertRaisesRegex(DeviceSelectionError, "Multiple input devices matched"):
                 select_input_device("key")
 
@@ -343,7 +338,7 @@ class DeviceCaptureTest(unittest.TestCase):
     def test_select_input_device_reports_missing_match(self) -> None:
         devices = [_FakeInputDevice("/dev/input/event1", "Keyboard")]
 
-        with patch("bluetooth_2_usb.ops.devices.linux.list_input_devices", return_value=devices):
+        with patch(f"{DEVICE_LINUX}.list_input_devices", return_value=devices):
             with self.assertRaisesRegex(DeviceSelectionError, "No input device matched"):
                 select_input_device("mouse")
 
@@ -416,8 +411,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -446,8 +441,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 with self.assertRaisesRegex(OSError, "grab failed"):
                     asyncio.run(
@@ -488,8 +483,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -511,9 +506,9 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             previous_cwd = Path.cwd()
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -542,11 +537,9 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             previous_cwd = Path.cwd()
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch(
-                    "bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[keyboard, mouse, consumer]
-                ),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[keyboard, mouse, consumer]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -575,12 +568,9 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             previous_cwd = Path.cwd()
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch(
-                    "bluetooth_2_usb.ops.devices.linux.select_input_devices",
-                    return_value=[touchpad, motion, controller],
-                ),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[touchpad, motion, controller]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -605,9 +595,9 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             previous_cwd = Path.cwd()
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -633,9 +623,9 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             previous_cwd = Path.cwd()
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -661,9 +651,9 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             previous_cwd = Path.cwd()
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -690,8 +680,8 @@ class DeviceCaptureTest(unittest.TestCase):
             previous_cwd = Path.cwd()
             (Path(tmpdir) / "device_capture").write_text("not a directory", encoding="utf-8")
             with (
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -717,8 +707,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "custom.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 result = asyncio.run(
                     collector.capture_device(
@@ -742,9 +732,9 @@ class DeviceCaptureTest(unittest.TestCase):
             with (
                 patch.dict(os.environ, {"SUDO_UID": "123", "SUDO_GID": "456"}),
                 patch("bluetooth_2_usb.ops.artifacts.os.chown") as chown,
-                patch("bluetooth_2_usb.ops.devices.collector.timestamp", return_value="20260506_010203"),
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_COLLECTOR}.timestamp", return_value="20260506_010203"),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 try:
                     os.chdir(tmpdir)
@@ -776,8 +766,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -806,8 +796,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[keyboard, consumer]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[keyboard, consumer]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -847,8 +837,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[keyboard, consumer]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[keyboard, consumer]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -874,8 +864,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[keyboard, consumer]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[keyboard, consumer]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -901,13 +891,13 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[keyboard, consumer]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[hidraw]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[keyboard, consumer]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[hidraw]),
                 patch(
-                    "bluetooth_2_usb.ops.devices.linux.hidraw_node_records",
+                    f"{DEVICE_LINUX}.hidraw_node_records",
                     return_value=[{"record_type": "hidraw_node", "path": str(hidraw)}],
                 ) as records,
-                patch("bluetooth_2_usb.ops.devices.linux.open_hidraw_nodes", return_value=([], [])) as open_nodes,
+                patch(f"{DEVICE_LINUX}.open_hidraw_nodes", return_value=([], [])) as open_nodes,
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -932,8 +922,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -967,8 +957,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -1012,8 +1002,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -1046,12 +1036,12 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[hidraw]),
-                patch("bluetooth_2_usb.ops.devices.linux.hidraw_node_records", return_value=[]),
-                patch("bluetooth_2_usb.ops.devices.linux.open_hidraw_nodes", return_value=([(hidraw, 5)], [])),
-                patch("bluetooth_2_usb.ops.devices.linux.close_hidraw_nodes"),
-                patch("bluetooth_2_usb.ops.devices.linux.read_hidraw", side_effect=read_hidraw),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[hidraw]),
+                patch(f"{DEVICE_LINUX}.hidraw_node_records", return_value=[]),
+                patch(f"{DEVICE_LINUX}.open_hidraw_nodes", return_value=([(hidraw, 5)], [])),
+                patch(f"{DEVICE_LINUX}.close_hidraw_nodes"),
+                patch(f"{DEVICE_LINUX}.read_hidraw", side_effect=read_hidraw),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -1089,10 +1079,10 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[hidraw]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[hidraw]),
                 patch(
-                    "bluetooth_2_usb.ops.devices.linux.hidraw_node_records",
+                    f"{DEVICE_LINUX}.hidraw_node_records",
                     return_value=[
                         {
                             "record_type": "hidraw_node",
@@ -1103,9 +1093,9 @@ class DeviceCaptureTest(unittest.TestCase):
                         }
                     ],
                 ),
-                patch("bluetooth_2_usb.ops.devices.linux.open_hidraw_nodes", return_value=([(hidraw, 5)], [])),
-                patch("bluetooth_2_usb.ops.devices.linux.close_hidraw_nodes"),
-                patch("bluetooth_2_usb.ops.devices.linux.read_hidraw", side_effect=read_hidraw),
+                patch(f"{DEVICE_LINUX}.open_hidraw_nodes", return_value=([(hidraw, 5)], [])),
+                patch(f"{DEVICE_LINUX}.close_hidraw_nodes"),
+                patch(f"{DEVICE_LINUX}.read_hidraw", side_effect=read_hidraw),
             ):
                 asyncio.run(
                     collector.capture_device(
@@ -1129,8 +1119,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 with self.assertRaises(asyncio.CancelledError):
                     asyncio.run(
@@ -1157,8 +1147,8 @@ class DeviceCaptureTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "capture.jsonl"
             with (
-                patch("bluetooth_2_usb.ops.devices.linux.select_input_devices", return_value=[device]),
-                patch("bluetooth_2_usb.ops.devices.linux.discover_hidraw_nodes", return_value=[]),
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
             ):
                 asyncio.run(
                     collector.capture_device(

@@ -38,8 +38,8 @@ connected to the target host through the OTG-capable data port.
 
 For new-device support requests, also include a local capture from the real
 device when possible. See [docs/device-capture.md](docs/device-capture.md).
-Review captures before sharing them publicly because they may contain typed keys,
-button presses, raw report bytes, MAC addresses, and unique device IDs.
+Review captures before sharing them publicly because they may contain typed keys
+or unique device identifiers.
 
 ## Pull Requests
 
@@ -188,6 +188,7 @@ Use these repo-owned guides when they match the task:
 - [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md)
 - [docs/runtime-architecture.md](docs/runtime-architecture.md)
+- [docs/testing-strategy.md](docs/testing-strategy.md)
 
 Minimum Pi-side validation after runtime-affecting changes:
 

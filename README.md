@@ -175,16 +175,16 @@ pointed at the checkout. After installation, use the managed `bluetooth_2_usb`
 console command. Use built-in `--help` for the complete command-specific
 interface.
 
+```bash
+sudo bluetooth_2_usb COMMAND [ARGS...]
+```
+
 ### `install`
 
 Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
 Use this after cloning into the supported install path. The managed virtual
 environment is reused when it is valid; pass `--recreate-venv` to delete and
 recreate it before installing.
-
-```bash
-sudo bluetooth_2_usb install
-```
 
 ### `update`
 
@@ -193,84 +193,40 @@ update path for an installed system. The managed virtual environment is reused
 when it is valid; pass `--recreate-venv` after dependency removals, suspected
 venv corruption, or clean-install release validation.
 
-```bash
-sudo bluetooth_2_usb update
-```
-
 ### `uninstall`
 
 Remove the managed system integration while leaving the checkout in place. Use
 this when you want to remove the service and CLI links without deleting the
 clone.
 
-```bash
-sudo bluetooth_2_usb uninstall
-```
-
 ### `smoketest`
 
-Run the managed deployment health check.
-
-```bash
-sudo bluetooth_2_usb smoketest
-```
-
-Use `--verbose` for the full probe transcript.
+Run the managed deployment health check. Use `--verbose` for the full probe
+transcript.
 
 ### `debug`
 
-Write a redacted diagnostics report.
+Write a redacted diagnostics report. See
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) for what to collect and how to
+interpret the report.
 
-```bash
-sudo bluetooth_2_usb debug --duration DURATION_SEC
-```
-
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for what to collect and how to
-interpret it.
-
-### `loopback inject`
+### `loopback inject|capture`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
-test sequence into the running relay service. This is the Pi-side half of the
-loopback inject/capture validation. For scenario and option details, use
-[docs/host-relay-loopback.md](docs/host-relay-loopback.md).
-
-```bash
-bluetooth_2_usb loopback inject --scenario SCENARIO
-```
-
-### `loopback capture`
-
-Capture host-side gadget HID reports and verify that the relay emitted the
-expected sequence. This is the host-side half of the loopback inject/capture
-validation. Pass `--devices` with a gadget path, `uniq`, `phys`, Bluetooth
-MAC-shaped `uniq`, or product-name fragment. On Windows, use the same Python
-CLI from an environment that can import `hid`; strict Windows event capture
-uses the Python Raw Input backend.
-
-```bash
-bluetooth_2_usb loopback capture --scenario SCENARIO --devices DEVICE_FILTER
-```
+test sequence, then capture host-side gadget HID reports and verify the
+expected sequence. Use [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
+for scenarios, host prerequisites, and capture filters.
 
 ### `device capture`
 
-Capture source-device metadata and live evidence for adding support for a new
-keyboard, mouse, gamepad, touchpad, remote, or other Linux input/HID-like
-device. For full guidance and sharing cautions, use
+Capture source-device metadata and live evidence for new device support. For
+full guidance and sharing cautions, use
 [docs/device-capture.md](docs/device-capture.md).
-
-```bash
-sudo bluetooth_2_usb device capture --devices DEVICE_FILTER --duration DURATION_SEC --grab
-```
 
 ### `udev install`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
 gadget device nodes.
-
-```bash
-sudo bluetooth_2_usb udev install
-```
 
 From a host checkout or development virtual environment, point the command at
 the checkout that contains the rule source:
@@ -279,53 +235,12 @@ the checkout that contains the rule source:
 sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
-### `readonly setup`
+### `readonly setup|status|enable|disable|migrate`
 
-Prepare persistent ext4-backed storage for `/var/lib/bluetooth` before enabling
-read-only mode. For setup, enable/disable, and validation details, use
+Prepare persistent ext4-backed Bluetooth state, inspect read-only state, switch
+read-only mode on or off, or migrate Bluetooth state back to rootfs. For setup,
+enable/disable, migration, and validation details, use
 [docs/persistent-readonly.md](docs/persistent-readonly.md).
-
-```bash
-sudo bluetooth_2_usb readonly setup --device DEVICE
-```
-
-### `readonly status`
-
-Show live read-only state, OverlayFS boot configuration, root filesystem, and
-Bluetooth-state storage status.
-
-```bash
-bluetooth_2_usb readonly status
-```
-
-### `readonly enable`
-
-Switch Raspberry Pi OS into the supported read-only mode while keeping
-Bluetooth state on separate persistent storage.
-
-```bash
-sudo bluetooth_2_usb readonly enable
-```
-
-### `readonly disable`
-
-Return the system to normal writable mode while keeping the persistent
-Bluetooth-state storage configuration available.
-
-```bash
-sudo bluetooth_2_usb readonly disable
-```
-
-### `readonly migrate`
-
-After disabling read-only mode and rebooting back to a writable root filesystem,
-move Bluetooth state back from persistent storage to rootfs. This disables and
-unmounts the managed persistent-state mounts, but intentionally leaves the old
-data on the persistent device intact as a rollback copy.
-
-```bash
-sudo bluetooth_2_usb readonly migrate
-```
 
 ## Managed paths
 

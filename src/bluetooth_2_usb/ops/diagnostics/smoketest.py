@@ -8,6 +8,7 @@ from pathlib import Path
 
 from rich.console import Console
 
+from ...udc import udc_states as read_udc_states
 from .. import boot_config
 from ..bluetooth import (
     bluetooth_controller_powered_from_text,
@@ -545,14 +546,10 @@ def _first_modules_load(cmdline_txt: Path) -> str:
 
 
 def _udc_states() -> dict[str, str]:
-    states: dict[str, str] = {}
-    for path in sorted(Path("/sys/class/udc").glob("*")):
-        try:
-            state = (path / "state").read_text(encoding="utf-8", errors="replace").strip()
-        except OSError:
-            state = "unknown"
-        states[path.name] = state or "unknown"
-    return states
+    try:
+        return read_udc_states()
+    except (FileNotFoundError, RuntimeError, OSError):
+        return {}
 
 
 def _usb_gadget_identity() -> str:

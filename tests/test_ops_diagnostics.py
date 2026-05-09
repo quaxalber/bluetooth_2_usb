@@ -157,6 +157,11 @@ class OpsDiagnosticsTest(unittest.TestCase):
         self.assertIn("/dev/disk/by-partuuid/<<REDACTED_PARTUUID>>", redacted)
         self.assertIn("/dev/disk/by-uuid/<<REDACTED_UUID>>", redacted)
 
+    def test_redaction_preserves_quoted_uuid_path_boundaries(self) -> None:
+        redacted = redact('B2U_PERSIST_SPEC="/dev/disk/by-uuid/032da7e5-25df-42b9-ba60-f9d90ac44c56"', hostname="")
+
+        self.assertEqual(redacted, 'B2U_PERSIST_SPEC="/dev/disk/by-uuid/<<REDACTED_UUID>>"')
+
     def test_redaction_hides_hostname_case_insensitively(self) -> None:
         redacted = redact("Test-Host test-host TEST-HOST", hostname="test-host")
 
@@ -501,27 +506,25 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
                 return Completed()
 
-            with patch.dict(os.environ, {"HOSTNAME": "test-host"}):
-                with patch(f"{DIAGNOSTICS_DEBUG}.PATHS", paths):
-                    with patch(f"{DIAGNOSTICS_DEBUG}.run", side_effect=fake_run):
-                        with patch(f"{DIAGNOSTICS_DEBUG}.load_readonly_config", return_value=config):
-                            with patch(f"{DIAGNOSTICS_DEBUG}.overlay_status", return_value="disabled"):
-                                with patch(f"{DIAGNOSTICS_DEBUG}.readonly_mode", return_value="disabled"):
-                                    with patch(f"{DIAGNOSTICS_DEBUG}.bluetooth_state_persistent", return_value=False):
-                                        with patch(f"{DIAGNOSTICS_DEBUG}.rfkill_list_bluetooth", return_value=""):
-                                            with patch(
-                                                f"{DIAGNOSTICS_DEBUG}.boot_config.detect_boot_dir",
-                                                return_value=root / "boot",
-                                            ):
-                                                with patch(
-                                                    f"{DIAGNOSTICS_DEBUG}.boot_config.boot_config_path",
-                                                    return_value=root / "config.txt",
-                                                ):
-                                                    with patch(
-                                                        f"{DIAGNOSTICS_DEBUG}.boot_config.boot_cmdline_path",
-                                                        return_value=root / "cmdline.txt",
-                                                    ):
-                                                        self.assertEqual(debug_report(None), 0)
+            with ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, {"HOSTNAME": "test-host"}))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.PATHS", paths))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.run", side_effect=fake_run))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.load_readonly_config", return_value=config))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.overlay_status", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.readonly_mode", return_value="disabled"))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.bluetooth_state_persistent", return_value=False))
+                stack.enter_context(patch(f"{DIAGNOSTICS_DEBUG}.rfkill_list_bluetooth", return_value=""))
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_DEBUG}.boot_config.detect_boot_dir", return_value=root / "boot")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_DEBUG}.boot_config.boot_config_path", return_value=root / "config.txt")
+                )
+                stack.enter_context(
+                    patch(f"{DIAGNOSTICS_DEBUG}.boot_config.boot_cmdline_path", return_value=root / "cmdline.txt")
+                )
+                self.assertEqual(debug_report(None), 0)
 
             report = next(paths.log_dir.glob("debug_*.md"))
             self.assertIn("initial_service_state=unknown", report.read_text(encoding="utf-8"))

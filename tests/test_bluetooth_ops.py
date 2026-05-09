@@ -77,9 +77,11 @@ class BluetoothRfkillOpsTest(unittest.TestCase):
             rfkill_root = Path(tmpdir)
             _write_rfkill_entry(rfkill_root, 0, soft="1", hard="0", state="0")
 
-            with patch("bluetooth_2_usb.ops.bluetooth.rfkill_root", return_value=rfkill_root):
-                with patch("bluetooth_2_usb.ops.bluetooth.run", side_effect=OpsError("missing rfkill")):
-                    output = rfkill_list_bluetooth()
+            with (
+                patch("bluetooth_2_usb.ops.bluetooth.rfkill_root", return_value=rfkill_root),
+                patch("bluetooth_2_usb.ops.bluetooth.run", side_effect=OpsError("missing rfkill")),
+            ):
+                output = rfkill_list_bluetooth()
 
         self.assertIn("missing rfkill", output)
         self.assertIn("rfkill0 type=bluetooth soft=1 hard=0 state=0", output)
@@ -209,21 +211,27 @@ class ReadonlyConfigTest(unittest.TestCase):
 
             return Completed()
 
-        with patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"):
-            with patch(f"{READONLY_STATUS}.run", side_effect=fake_run):
-                self.assertEqual(overlay_status(), "enabled")
+        with (
+            patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"),
+            patch(f"{READONLY_STATUS}.run", side_effect=fake_run),
+        ):
+            self.assertEqual(overlay_status(), "enabled")
 
         self.assertEqual(calls[0], ["raspi-config", "nonint", "get_overlay_now"])
 
     def test_overlay_status_returns_unknown_when_raspi_config_probe_fails(self) -> None:
-        with patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"):
-            with patch(f"{READONLY_STATUS}.run", side_effect=OpsError("raspi-config failed")):
-                self.assertEqual(overlay_status(), "unknown")
+        with (
+            patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"),
+            patch(f"{READONLY_STATUS}.run", side_effect=OpsError("raspi-config failed")),
+        ):
+            self.assertEqual(overlay_status(), "unknown")
 
     def test_overlay_configured_status_returns_unknown_when_probe_fails(self) -> None:
-        with patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"):
-            with patch(f"{READONLY_STATUS}.run", side_effect=OSError("raspi-config unavailable")):
-                self.assertEqual(overlay_configured_status(), "unknown")
+        with (
+            patch(f"{READONLY_STATUS}.shutil.which", return_value="/usr/bin/raspi-config"),
+            patch(f"{READONLY_STATUS}.run", side_effect=OSError("raspi-config unavailable")),
+        ):
+            self.assertEqual(overlay_configured_status(), "unknown")
 
     def test_package_status_returns_empty_when_dpkg_probe_fails(self) -> None:
         with patch(f"{READONLY_STATUS}.run", side_effect=OpsError("dpkg unavailable")):

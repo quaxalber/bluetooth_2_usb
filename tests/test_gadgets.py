@@ -13,7 +13,6 @@ import usb_hid
 from bluetooth_2_usb.gadgets.config import (
     USB_CFG_DIR_NAME,
     USB_LANGID_EN_US,
-    _resolve_udc_name,
     _safe_unlink,
     rebuild_gadget,
     remove_owned_gadgets,
@@ -324,7 +323,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             gadget_root = Path(tmpdir) / "usb_gadget" / "adafruit-blinka"
             with (
                 patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root),
-                patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"),
+                patch("bluetooth_2_usb.gadgets.config.resolve_single_udc_name", return_value="dummy.udc"),
                 patch.object(usb_hid, "gadget_root", str(gadget_root)),
             ):
                 rebuild_gadget(layout)
@@ -396,7 +395,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
             with (
                 patch("bluetooth_2_usb.gadgets.config.USB_GADGET_ROOT", gadget_root),
-                patch("bluetooth_2_usb.gadgets.config._resolve_udc_name", return_value="dummy.udc"),
+                patch("bluetooth_2_usb.gadgets.config.resolve_single_udc_name", return_value="dummy.udc"),
                 patch.object(usb_hid, "gadget_root", str(gadget_root)),
                 patch.object(type(keyboard_wakeup), "exists", fake_exists),
             ):
@@ -405,32 +404,6 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(keyboard_wakeup.read_text(encoding="utf-8").strip(), "1")
             self.assertEqual(mouse_wakeup.read_text(encoding="utf-8").strip(), "0")
             self.assertFalse((gadget_root / _hid_function_path(HID_FUNC_INDEX_CONSUMER) / "wakeup_on_write").exists())
-
-    async def test_resolve_udc_name_returns_the_only_controller(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            udc_root = Path(tmpdir)
-            (udc_root / "fe980000.usb").mkdir()
-
-            self.assertEqual(_resolve_udc_name(udc_root), "fe980000.usb")
-
-    async def test_resolve_udc_name_fails_when_no_controller_exists(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with self.assertRaisesRegex(FileNotFoundError, "No UDC controller was found"):
-                _resolve_udc_name(Path(tmpdir))
-
-    async def test_resolve_udc_name_fails_when_multiple_controllers_exist(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            udc_root = Path(tmpdir)
-            (udc_root / "aaa-host").mkdir()
-            (udc_root / "fe980000.usb").mkdir()
-
-            with self.assertRaisesRegex(RuntimeError, "Multiple UDC controllers"):
-                _resolve_udc_name(udc_root)
-
-    async def test_resolve_udc_name_preserves_permission_errors(self) -> None:
-        with patch.object(Path, "iterdir", side_effect=PermissionError(errno.EACCES, "permission denied")):
-            with self.assertRaises(PermissionError):
-                _resolve_udc_name(Path("/sys/class/udc"))
 
     async def test_configfs_unlink_does_not_suppress_not_empty_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

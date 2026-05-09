@@ -14,6 +14,7 @@ from bluetooth_2_usb.relay.supervisor import RelaySupervisor
 from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, ShutdownRequested, UdcState, UdcStateChanged
 
 UNKNOWN_KEY_CODE = 88
+RELAY_SUPERVISOR = "bluetooth_2_usb.relay.supervisor"
 
 
 class _FakeKeyboard:
@@ -725,18 +726,20 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
                 relay_started.set()
                 await asyncio.Event().wait()
 
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]):
-            with patch("bluetooth_2_usb.relay.supervisor.InputDevice", return_value=device):
-                with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
-                    async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, devices=["target"])
-                        run_task = task_group.create_task(supervisor.run(events))
-                        events.put_nowait(DeviceAdded("/dev/input/event7"))
-                        await asyncio.wait_for(relay_started.wait(), timeout=1)
-                        events.put_nowait(DeviceRemoved("/dev/input/event7"))
-                        await asyncio.wait_for(relay_exited.wait(), timeout=1)
-                        events.put_nowait(ShutdownRequested("test"))
-                        await asyncio.wait_for(run_task, timeout=1)
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", return_value=device),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+        ):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(task_group=task_group, devices=["target"])
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceAdded("/dev/input/event7"))
+                await asyncio.wait_for(relay_started.wait(), timeout=1)
+                events.put_nowait(DeviceRemoved("/dev/input/event7"))
+                await asyncio.wait_for(relay_exited.wait(), timeout=1)
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
 
         self.assertEqual(device.close_calls, 1)
 
@@ -763,8 +766,8 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
                 relay_started.set()
                 await asyncio.Event().wait()
 
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
-            with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]):
+            with patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay):
                 async with asyncio.TaskGroup() as task_group:
                     supervisor = _relay_supervisor(
                         hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_relay=True
@@ -787,7 +790,7 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
         gate = RelayGate()
         hid_gadgets = _FakeHidGadgets()
 
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]):
             async with asyncio.TaskGroup() as task_group:
                 supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group)
                 run_task = task_group.create_task(supervisor.run(events))
@@ -833,24 +836,23 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
         device = _FakeInputHandle()
 
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
-            with patch(
-                "bluetooth_2_usb.relay.supervisor.InputDevice",
-                side_effect=AssertionError("startup device was reopened"),
-            ):
-                with patch("bluetooth_2_usb.relay.supervisor.InputRelay", WaitingInputRelay):
-                    events: asyncio.Queue = asyncio.Queue()
-                    async with asyncio.TaskGroup() as task_group:
-                        supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
-                        relay_task = task_group.create_task(supervisor.run(events))
-                        await asyncio.wait_for(relay_ready.wait(), timeout=1)
-                        events.put_nowait(ShutdownRequested("test"))
-                        await asyncio.wait_for(relay_task, timeout=1)
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", side_effect=AssertionError("startup device was reopened")),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+        ):
+            events: asyncio.Queue = asyncio.Queue()
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
+                relay_task = task_group.create_task(supervisor.run(events))
+                await asyncio.wait_for(relay_ready.wait(), timeout=1)
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(relay_task, timeout=1)
 
         self.assertEqual(device.close_calls, 1)
 
     async def test_run_cannot_restart_after_stop(self) -> None:
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[]):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]):
             async with asyncio.TaskGroup() as task_group:
                 supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                 events: asyncio.Queue = asyncio.Queue()
@@ -875,8 +877,8 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 raise OSError(errno.EIO, "I/O error")
 
         device = _FakeInputHandle(name="failure device")
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
-            with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]):
+            with patch(f"{RELAY_SUPERVISOR}.InputRelay", FailingInputRelay):
                 with self.assertRaises(ExceptionGroup) as raised:
                     async with asyncio.TaskGroup() as task_group:
                         supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
@@ -906,8 +908,8 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
 
         device = _FakeInputHandle(name="removed device")
         events: asyncio.Queue = asyncio.Queue()
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
-            with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]):
+            with patch(f"{RELAY_SUPERVISOR}.InputRelay", FailingInputRelay):
                 async with asyncio.TaskGroup() as task_group:
                     supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
                     run_task = task_group.create_task(supervisor.run(events))
@@ -932,8 +934,8 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 raise RuntimeError("boom")
 
         device = _FakeInputHandle(name="failure device")
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
-            with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]):
+            with patch(f"{RELAY_SUPERVISOR}.InputRelay", FailingInputRelay):
                 with self.assertRaises(ExceptionGroup) as raised:
                     async with asyncio.TaskGroup() as task_group:
                         supervisor = _relay_supervisor(task_group=task_group, auto_relay=True)
@@ -961,8 +963,8 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
                 raise RuntimeError("boom")
 
         device = _FakeInputHandle()
-        with patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]):
-            with patch("bluetooth_2_usb.relay.supervisor.InputRelay", FailingInputRelay):
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]):
+            with patch(f"{RELAY_SUPERVISOR}.InputRelay", FailingInputRelay):
                 events: asyncio.Queue = asyncio.Queue()
                 del events
                 with self.assertRaises(ExceptionGroup) as raised:
