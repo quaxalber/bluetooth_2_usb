@@ -2,8 +2,8 @@
 
 Use device capture when requesting or adding support for a new keyboard, mouse,
 gamepad, touchpad, remote, or other Linux input/HID-like device. It collects
-source-device metadata, evdev capabilities, compact live input snapshots, and
-best-effort hidraw report summaries from the real device.
+source-device metadata, evdev capabilities and input properties, compact live
+input snapshots, and best-effort hidraw report summaries from the real device.
 
 Capture output is redacted with the same pipeline used by diagnostics reports,
 but captures are still local artifacts that can include typed keys, button
@@ -25,6 +25,12 @@ devices, all matches are captured into the same JSONL artifact.
 Use it when collecting support data so the Pi desktop/session does not also
 consume the same input. While grabbed, those inputs may not control the Pi
 locally.
+
+During the countdown, exercise the controls that should be supported. Press the
+keys, buttons, axes, wheels, pads, or remote controls that matter for the
+support request. If no controls are used, the artifact can still include useful
+static metadata, but the live section will only prove that no input evidence was
+observed.
 
 ## Arguments
 
@@ -72,8 +78,11 @@ sudo bluetooth_2_usb device capture --devices /dev/input/event4 --duration 30 --
 ## Summarized And Raw Modes
 
 The default `--live-mode summarized` is preferred for support requests. It
-keeps compact per-key, per-axis, sync, and hidraw report summaries so repeated
-events do not create unnecessary data volume.
+keeps compact per-key, per-axis, per-`EV_MSC`, sync, event-type coverage, and
+hidraw report summaries so repeated events do not create unnecessary data
+volume. Summarized captures also include a short ordered sample of the first
+live evdev events, which helps maintainers see relationships such as
+`MSC_SCAN -> KEY_* -> SYN_REPORT` without needing raw mode.
 
 Use raw mode only when a maintainer asks for every event and report:
 
