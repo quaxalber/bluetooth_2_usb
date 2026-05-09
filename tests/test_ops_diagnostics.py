@@ -239,7 +239,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("Boot and USB\n[+] All checks passed", output)
-        self.assertIn("Service and Runtime\n[+] All checks passed", output)
+        self.assertIn("B2U Runtime\n[+] All checks passed", output)
         self.assertIn("Bluetooth\n[+] All checks passed", output)
 
     def test_smoketest_non_verbose_suppresses_routine_pass_lines_but_records_probes(self) -> None:
@@ -272,7 +272,7 @@ class OpsDiagnosticsTest(unittest.TestCase):
                 )
 
         output = stdout.getvalue()
-        boot_section = output[output.index("Boot and USB") : output.index("Service and Runtime")]
+        boot_section = output[output.index("Boot and USB") : output.index("B2U Runtime")]
         self.assertIn("UDC is not configured", boot_section)
         self.assertNotIn("[+] All checks passed", boot_section)
 
@@ -361,23 +361,22 @@ class OpsDiagnosticsTest(unittest.TestCase):
         output = stdout.getvalue()
         self.assert_ordered_substrings(
             output,
-            [
-                "### Boot and USB",
-                "### Service and Runtime",
-                "### Bluetooth",
-                "### Devices",
-                "### Read-Only Mode",
-                "### Result",
-            ],
+            ["### Boot and USB", "### B2U Runtime", "### Bluetooth", "### Devices", "### Read-Only Mode", "### Result"],
         )
 
         bluetooth_group = output[output.index("### Bluetooth") : output.index("### Devices")]
+        runtime_group = output[output.index("### B2U Runtime") : output.index("### Bluetooth")]
         devices_group = output[output.index("### Devices") : output.index("### Read-Only Mode")]
+        self.assertNotIn("bluetooth.service:", runtime_group)
+        self.assertIn("bluetooth.service:", bluetooth_group)
         self.assertNotIn("Relayable device count:", bluetooth_group)
         self.assertNotIn("Paired Bluetooth device count:", bluetooth_group)
         self.assertIn("Relayable device count:", devices_group)
         self.assertIn("Paired Bluetooth device count:", devices_group)
         self.assertNotIn("## Journal", output)
+        self.assertIn("## Bluetooth diagnostics", output)
+        self.assertIn("### rfkill bluetooth", output)
+        self.assertNotIn("\n## rfkill bluetooth\n", output)
 
         readonly_group = output[output.index("### Read-Only Mode") : output.index("### Result")]
         self.assertLess(readonly_group.index("Read-only state:"), readonly_group.index("OverlayFS boot setting:"))
@@ -388,6 +387,20 @@ class OpsDiagnosticsTest(unittest.TestCase):
             readonly_group.index("Bluetooth state storage:"), readonly_group.index("Bluetooth state source:")
         )
         self.assertEqual(smoke.result_dict()["summary"]["Bluetooth state storage"], "rootfs")
+
+    def test_smoketest_verbose_mount_details_deduplicates_root_mount(self) -> None:
+        smoke = SmokeTest(verbose=True, allow_non_pi=True)
+        root_mount = "/ /dev/mmcblk0p2 ext4 rw,noatime\n"
+
+        with patch.object(smoke, "_capture_with_status", return_value=(0, root_mount)):
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                smoke._print_mount_details()
+
+        output = stdout.getvalue()
+        self.assertIn("Root mount:\n/ /dev/mmcblk0p2 ext4 rw,noatime", output)
+        self.assertIn("Bluetooth state mount:\nsame as root mount", output)
+        self.assertEqual(output.count("/ /dev/mmcblk0p2 ext4 rw,noatime"), 1)
 
     def test_debug_report_orders_sections_for_support_collection(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

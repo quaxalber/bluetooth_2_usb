@@ -88,7 +88,7 @@ class SmokeTest:
                     + "Current state: "
                     + ", ".join(f"{name}={state}" for name, state in udc_states.items())
                 )
-        self._heading("Service and Runtime")
+        self._heading("B2U Runtime")
         self._command_ok(
             ["systemctl", "is-enabled", PATHS.service_unit],
             f"{PATHS.service_unit} is enabled",
@@ -124,12 +124,16 @@ class SmokeTest:
             missing_venv = f"Virtualenv interpreter is missing: {PATHS.venv_python}"
             validate_log = (127, missing_venv)
             service_settings_log = (127, missing_venv)
-        self._command_ok(
-            ["systemctl", "is-active", "bluetooth.service"],
+        self._heading("Bluetooth")
+        bluetooth_service_log = self._capture_with_status(
+            ["systemctl", "is-active", "bluetooth.service"], "Checking Bluetooth service"
+        )
+        self.record_bool(
+            bluetooth_service_log[0] == 0,
             "bluetooth.service is active",
             "bluetooth.service is not active",
+            bluetooth_service_log[1],
         )
-        self._heading("Bluetooth")
         bt_show = self._capture_with_status(["bluetoothctl", "show"], "Checking Bluetooth controller")
         self.record_bool(
             bt_show[0] == 0 and bluetooth_controller_powered_from_text(bt_show[1]),
@@ -191,7 +195,7 @@ class SmokeTest:
                 ],
             ),
             (
-                "Service and Runtime",
+                "B2U Runtime",
                 [
                     (
                         "Virtualenv interpreter",
@@ -204,6 +208,7 @@ class SmokeTest:
             (
                 "Bluetooth",
                 [
+                    ("bluetooth.service", "active" if bluetooth_service_log[0] == 0 else "inactive"),
                     ("Bluetooth controller", "powered" if bt_show[0] == 0 else "unknown"),
                     ("btmgmt info", "succeeded" if btmgmt[0] == 0 else "failed"),
                     (
@@ -465,7 +470,7 @@ class SmokeTest:
     def _finish_section(self, title: str) -> None:
         if self.verbose or self.section_statuses.get(title) is not ProbeStatus.PASS:
             return
-        if title in {"Boot and USB", "Service and Runtime", "Bluetooth"}:
+        if title in {"Boot and USB", "B2U Runtime", "Bluetooth"}:
             ok("All checks passed")
 
     def _mark_section(self, status: ProbeStatus) -> None:
@@ -482,9 +487,9 @@ class SmokeTest:
     ) -> None:
         if self.verbose or self.section_statuses.get("Read-Only Mode") is ProbeStatus.FAIL:
             return
-        self.pass_probe(
-            _readonly_summary_message(readonly, overlay, root_overlay_active, bluetooth_storage), visible=True
-        )
+        message = _readonly_summary_message(readonly, overlay, root_overlay_active, bluetooth_storage)
+        ok_final(message)
+        self.results.append(ProbeResult(ProbeStatus.PASS, message, ""))
 
     def _print_verbose(self, rfkill_entries, *logs: tuple[int, str]) -> None:
         print("\n## Details")
@@ -492,36 +497,41 @@ class SmokeTest:
             print(f"\n### {group}")
             for key, value in items:
                 print(f"{key}: {value}")
-        titles = [
-            "CLI validate-env output",
-            "Service settings check",
-            "bluetoothctl show",
-            "btmgmt info",
-            "Device inventory",
-        ]
-        for title, (_, text) in zip(titles[:4], logs[:4], strict=True):
+        titles = ["CLI validate-env output", "Service settings check", "Device inventory"]
+        for title, (_, text) in zip(titles[:2], logs[:2], strict=True):
             print(f"\n## {title}")
             print(text or "<no output>")
-        print("\n## rfkill bluetooth")
+        print("\n## Bluetooth diagnostics")
+        print("\n### bluetoothctl show")
+        print(logs[2][1] or "<no output>")
+        print("\n### btmgmt info")
+        print(logs[3][1] or "<no output>")
+        print("\n### rfkill bluetooth")
         print("\n".join(entry.line() for entry in rfkill_entries) or "<no output>")
-        print(f"\n## {titles[4]}")
+        print(f"\n## {titles[2]}")
         print(logs[4][1] or "<no output>")
         print("\n## Mount details")
-        print(
-            self._capture_with_status(["findmnt", "-n", "-T", "/"], "Collecting root mount details")[1] or "<no output>"
-        )
-        print(
-            self._capture_with_status(
-                ["findmnt", "-n", "-T", "/var/lib/bluetooth"], "Collecting Bluetooth mount details"
-            )[1]
-            or "<no output>"
-        )
+        self._print_mount_details()
         print("\n## Service status")
         print(
             self._capture_with_status(
                 ["systemctl", "--no-pager", "--full", "status", PATHS.service_unit], "Collecting service status"
             )[1]
             or "<no output>"
+        )
+
+    def _print_mount_details(self) -> None:
+        root_mount = self._capture_with_status(["findmnt", "-n", "-T", "/"], "Collecting root mount details")[1].strip()
+        bluetooth_mount = self._capture_with_status(
+            ["findmnt", "-n", "-T", "/var/lib/bluetooth"], "Collecting Bluetooth mount details"
+        )[1].strip()
+        print("Root mount:")
+        print(root_mount or "<no output>")
+        print("\nBluetooth state mount:")
+        print(
+            "same as root mount"
+            if bluetooth_mount and bluetooth_mount == root_mount
+            else bluetooth_mount or "<no output>"
         )
 
 
