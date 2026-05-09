@@ -9,6 +9,10 @@ from unittest.mock import patch
 from bluetooth_2_usb.runtime.event_source import RuntimeEventSource
 from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, UdcState, UdcStateChanged
 
+RUNTIME_EVENT_SOURCE = "bluetooth_2_usb.runtime.event_source"
+RUNTIME_EVENT_SOURCE_PYUDEV = "bluetooth_2_usb.runtime.event_source.pyudev"
+RUNTIME_EVENT_SOURCE_PYUDEV_MONITOR = "bluetooth_2_usb.runtime.event_source.pyudev.Monitor"
+
 
 class _FakeMonitor:
     def __init__(self, events=None) -> None:
@@ -39,11 +43,18 @@ class _FakeMonitor:
 
 class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
     def _build_source(
-        self, events: asyncio.Queue, *, monitor: _FakeMonitor, udc_path: Path | None = None, poll_interval: float = 0.01
+        self,
+        events: asyncio.Queue,
+        *,
+        monitor: _FakeMonitor,
+        udc_path: Path | None = Path("/missing/udc-state"),
+        poll_interval: float = 0.01,
     ) -> RuntimeEventSource:
-        with patch("bluetooth_2_usb.runtime.event_source.pyudev.Context", return_value=object()):
-            with patch("bluetooth_2_usb.runtime.event_source.pyudev.Monitor.from_netlink", return_value=monitor):
-                return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
+        with (
+            patch(f"{RUNTIME_EVENT_SOURCE_PYUDEV}.Context", return_value=object()),
+            patch(f"{RUNTIME_EVENT_SOURCE_PYUDEV_MONITOR}.from_netlink", return_value=monitor),
+        ):
+            return RuntimeEventSource(events, udc_path=udc_path, poll_interval=poll_interval)
 
     async def test_runtime_event_source_rejects_non_positive_poll_interval(self) -> None:
         queue = asyncio.Queue()
@@ -110,10 +121,10 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event, UdcStateChanged(UdcState.NOT_ATTACHED))
         monitor.close()
 
-    async def test_runtime_event_source_treats_missing_udc_path_as_not_attached(self) -> None:
+    async def test_runtime_event_source_treats_injected_missing_udc_path_as_not_attached(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
-        source = self._build_source(queue, monitor=monitor, udc_path=None)
+        source = self._build_source(queue, monitor=monitor, udc_path=Path("/missing/udc-state"))
 
         task = asyncio.create_task(source.run())
         self.assertEqual(await asyncio.wait_for(queue.get(), timeout=1), UdcStateChanged("not_attached"))
@@ -122,15 +133,45 @@ class RuntimeEventSourceTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(task, timeout=1)
         monitor.close()
 
+    async def test_runtime_event_source_uses_shared_udc_discovery_when_not_injected(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = Path(tmpdir) / "state"
+            state.write_text("configured\n", encoding="utf-8")
+
+            with patch(f"{RUNTIME_EVENT_SOURCE}.resolve_single_udc_state_path", return_value=state):
+                source = self._build_source(queue, monitor=monitor, udc_path=None)
+
+            self.assertEqual(source.read_udc_state(), UdcState.CONFIGURED)
+
+        monitor.close()
+
+    async def test_runtime_event_source_fails_when_shared_udc_discovery_fails(self) -> None:
+        queue = asyncio.Queue()
+        monitor = _FakeMonitor()
+
+        with (
+            patch(
+                f"{RUNTIME_EVENT_SOURCE}.resolve_single_udc_state_path",
+                side_effect=RuntimeError("Multiple UDC controllers"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "Multiple UDC controllers"),
+        ):
+            self._build_source(queue, monitor=monitor, udc_path=None)
+        monitor.close()
+
     async def test_runtime_event_source_stops_when_start_monitoring_fails(self) -> None:
         queue = asyncio.Queue()
         monitor = _FakeMonitor()
         source = self._build_source(queue, monitor=monitor)
 
-        with patch.object(source, "_start_monitoring", side_effect=OSError("monitor unavailable")):
-            with patch.object(source, "_stop_monitoring") as stop_monitoring:
-                with self.assertRaisesRegex(OSError, "monitor unavailable"):
-                    await source.run()
+        with (
+            patch.object(source, "_start_monitoring", side_effect=OSError("monitor unavailable")),
+            patch.object(source, "_stop_monitoring") as stop_monitoring,
+            self.assertRaisesRegex(OSError, "monitor unavailable"),
+        ):
+            await source.run()
 
         stop_monitoring.assert_called_once_with()
         monitor.close()

@@ -20,7 +20,8 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
 LogsDirectory=bluetooth_2_usb
-ReadWritePaths=/var/lib/bluetooth
+StateDirectory=bluetooth_2_usb
+ReadWritePaths=/var/lib/bluetooth /var/lib/bluetooth_2_usb
 
 [Install]
 WantedBy=multi-user.target

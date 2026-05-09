@@ -18,26 +18,21 @@ special drivers are required on the target system.
 
 This is the quickest supported path to a working setup.
 
-### 1. Clone the project to the managed install path
+### 1. Clone and install
 
 ```bash
 sudo apt update && sudo apt install -y git
 sudo git clone https://github.com/quaxalber/bluetooth_2_usb.git /opt/bluetooth_2_usb
-```
-
-### 2. Install
-
-```bash
 cd /opt/bluetooth_2_usb && sudo env PYTHONPATH=src python3 -m bluetooth_2_usb install
 ```
 
-### 3. Reboot
+### 2. Reboot
 
 ```bash
 sudo reboot
 ```
 
-### 4. Pair your Bluetooth device
+### 3. Pair your Bluetooth device
 
 ```bash
 bluetoothctl
@@ -54,13 +49,13 @@ exit
 > Some devices trigger an interactive `bluetoothctl` authorization prompt
 > during pairing. Answer it immediately or BlueZ may cancel the request.
 
-### 5. Run the smoketest
+### 4. Run the smoketest
 
 ```bash
 sudo bluetooth_2_usb smoketest
 ```
 
-### 6. Connect the Pi to the target host
+### 5. Connect the Pi to the target host
 
 - Pi 4B / 5: use the USB-C power port
 - Pi Zero W / Zero 2 W: use the USB data port
@@ -94,17 +89,15 @@ sudo bluetooth_2_usb uninstall
 
 ## Diagnostics
 
-For most issues, start with the two built-in diagnostics:
+Start with:
 
 ```bash
-sudo bluetooth_2_usb smoketest --verbose
+sudo bluetooth_2_usb smoketest
 sudo bluetooth_2_usb debug --duration 10
 ```
 
-The `smoketest` is the quick health gate. `debug` collects a fuller
-redacted snapshot and can run a short bounded foreground debug session. If you
-need the next steps after those checks, use
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+Use `smoketest --verbose` for the full probe transcript. Use `debug` when you
+need a redacted report with logs and live runtime output.
 
 ## Runtime behavior
 
@@ -112,13 +105,52 @@ The service runs one asyncio runtime that turns UDC cable state, input hotplug,
 and shutdown signals into typed runtime events. A relay supervisor consumes
 those events and owns all per-device relay tasks.
 
-Relaying starts only when the USB device controller reports `configured`.
-Relaying pauses, and all HID gadget state is released, when the controller
-leaves `configured`. That keeps host-visible keys and buttons from sticking
-across cable disconnects, suspend transitions, and USB resets.
-
 For implementation details, see
 [docs/runtime-architecture.md](docs/runtime-architecture.md).
+
+## Runtime settings and CLI reference
+
+Manual runs use CLI flags. The managed service reads runtime settings from:
+
+```bash
+/etc/default/bluetooth_2_usb
+```
+
+Default managed-service values:
+
+| Environment setting | Default value |
+| --- | --- |
+| `B2U_AUTO` | `true` |
+| `B2U_DEVICES` | empty |
+| `B2U_GRAB` | `true` |
+| `B2U_SHORTCUT` | `CTRL+SHIFT+F12` |
+| `B2U_DEBUG` | `false` |
+
+After editing the runtime settings:
+
+```bash
+sudo systemctl restart bluetooth_2_usb.service
+```
+
+Runtime CLI and environment reference:
+
+| CLI argument | Environment setting | Explanation |
+| --- | --- | --- |
+| `--auto, -a` | `B2U_AUTO` | Enable auto relay. All readable input devices are relayed automatically except known excluded platform devices. |
+| `--devices DEVICES` | `B2U_DEVICES` | Comma-separated list of devices to relay. Each value may match an input device path, `uniq`, `phys`, Bluetooth MAC address, or case-insensitive substring of the device name. Example: `--devices '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'`. |
+| `--grab, -g` | `B2U_GRAB` | Grab the input devices, suppressing local events on the Pi while the devices are relayed. |
+| `--shortcut SHORTCUT, -s SHORTCUT` | `B2U_SHORTCUT` | A plus-separated list of key names to press simultaneously in order to toggle relaying. |
+| `--debug, -d` | `B2U_DEBUG` | Enable debug mode and increase log verbosity. |
+| `--list, -l` | n/a | List all available input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
+| `--validate-env` | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
+| `--output {text,json}` | n/a | Output format for `--list` and `--validate-env`. Use `json` for scripting or automation. |
+| `--version, -v` | n/a | Display the version number of this software and exit. |
+| `--help, -h` | n/a | Show built-in CLI help and exit. |
+
+> [!NOTE]
+> Despite the project name, broad auto relay can also relay other suitable
+> Linux input devices that are visible on the Pi. The intended primary use case
+> remains Bluetooth keyboard and mouse bridging.
 
 ## Read-only operation
 
@@ -127,96 +159,39 @@ For the supported appliance-style read-only workflow, use
 
 ## Host wake from suspend
 
-> [!WARNING]
-> Wake-from-suspend support requires a patched Raspberry Pi kernel. This is not
-> part of the stock install path. For the validated custom-kernel workflow, use
-> [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
-
-## Configuration
-
-The service reads structured runtime settings from:
-
-```bash
-/etc/default/bluetooth_2_usb
-```
-
-Default content:
-
-```bash
-B2U_AUTO_DISCOVER=true
-B2U_DEVICE_IDS=
-B2U_GRAB_DEVICES=true
-B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12
-B2U_LOG_TO_FILE=false
-B2U_LOG_PATH=/var/log/bluetooth_2_usb/bluetooth_2_usb.log
-B2U_DEBUG=false
-B2U_UDC_PATH=
-```
-
-Meaning:
-
-- `B2U_AUTO_DISCOVER=true` is the easiest default. It relays all suitable
-  readable input devices except known excluded platform devices.
-- `B2U_DEVICE_IDS` pins the runtime to a specific set of event paths,
-  Bluetooth MACs, and/or case-insensitive name fragments, for example
-  `/dev/input/event4,A1:B2:C3:D4:E5:F6,MX Keys`.
-- `B2U_GRAB_DEVICES=true` grabs the selected input devices so the Pi stops
-  consuming their local events. That is usually what you want for an
-  appliance-like setup, but it also means the Pi will not keep using those
-  inputs locally while they are grabbed.
-- `B2U_INTERRUPT_SHORTCUT=CTRL+SHIFT+F12` defines a key chord that toggles
-  relaying on and off.
-- `B2U_LOG_TO_FILE=false` disables file logging by default.
-- `B2U_LOG_PATH=...` controls the file path used when file logging is enabled.
-- `B2U_DEBUG=false` keeps normal log verbosity.
-- `B2U_UDC_PATH` is optional and only needed when you must pin UDC detection on
-  a system with multiple gadget-capable controllers.
-
-After editing the runtime settings:
-
-```bash
-sudo systemctl restart bluetooth_2_usb.service
-```
+The stock install path focuses on reliable HID relay while the target host is
+awake. For wake-from-suspend support, use the validated custom-kernel workflow
+in [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md).
 
 > [!NOTE]
-> Despite the project name, broad auto-discovery can also relay other suitable
-> Linux input devices that are visible on the Pi. The intended primary use case
-> remains Bluetooth keyboard and mouse bridging.
-
-## CLI reference
-
-| Argument | Explanation |
-| --- | --- |
-| `--auto_discover, -a` | Relay all suitable readable input devices automatically. This is the best default when you want the Pi to behave like a simple appliance. |
-| `--device_ids DEVICE_IDS, -i DEVICE_IDS` | Pin the runtime to a specific comma-separated list of event paths, Bluetooth MACs, and case-insensitive name fragments. |
-| `--grab_devices, -g` | Grab the selected input devices so the Pi no longer consumes their local events while they are being relayed. |
-| `--interrupt_shortcut INTERRUPT_SHORTCUT, -s INTERRUPT_SHORTCUT` | Define a plus-separated key chord that toggles relaying at runtime. Example: `-s CTRL+SHIFT+F12`. |
-| `--list_devices, -l` | List readable input devices and exit. Use this before setting `B2U_DEVICE_IDS` or `--device_ids` if you want to confirm the paths and names the runtime actually sees. |
-| `--log_to_file, -f` | Add file logging in addition to stdout logging. |
-| `--log_path LOG_PATH, -p LOG_PATH` | Override the path used with `--log_to_file`. |
-| `--debug, -d` | Increase log verbosity for manual troubleshooting. |
-| `--version, -v` | Print the installed version and exit. |
-| `--validate-env` | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
-| `--output {text,json}` | Choose the output format for `--list_devices` and `--validate-env`. Use `json` for scripting or automation. |
-| `--help, -h` | Show built-in CLI help and exit. |
+> Wake-from-suspend support requires a patched Raspberry Pi kernel and is not
+> part of the stock install path.
 
 ## Operational command reference
 
 Managed deployment commands use the same `bluetooth_2_usb` CLI as the runtime.
 During the initial source-tree install, run the module with `PYTHONPATH`
 pointed at the checkout. After installation, use the managed `bluetooth_2_usb`
-console command.
+console command. Use built-in `--help` for the complete command-specific
+interface.
+
+```bash
+sudo bluetooth_2_usb COMMAND [ARGS...]
+```
 
 ### `install`
 
 Apply the current checkout in `/opt/bluetooth_2_usb` to the managed install.
-Use this after cloning into the supported install path.
+Use this after cloning into the supported install path. The managed virtual
+environment is reused when it is valid; pass `--recreate-venv` to delete and
+recreate it before installing.
 
 ### `update`
 
 Fast-forward the managed checkout and reapply `install`. This is the normal
-update path for an installed system, and it rebuilds the managed environment
-even when the checkout is already current.
+update path for an installed system. The managed virtual environment is reused
+when it is valid; pass `--recreate-venv` after dependency removals, suspected
+venv corruption, or clean-install release validation.
 
 ### `uninstall`
 
@@ -226,62 +201,46 @@ clone.
 
 ### `smoketest`
 
-Fast health check for the supported managed deployment. Use this first when you
-want to confirm that the service, gadget path, and Bluetooth basics are
-healthy.
-
-| Argument | Meaning |
-| --- | --- |
-| `--verbose` | Print fuller diagnostics, including the collected summary data. |
-| `--output {text,json}` | Choose the output format. JSON output is written to stdout for automation; probe text is redirected to stderr. |
+Run the managed deployment health check. Use `--verbose` for the full probe
+transcript.
 
 ### `debug`
 
-Collect a redacted diagnostics report and optionally run a bounded live
-foreground debug session. Use this when the `smoketest` is not enough or when
-you need a report to share.
+Write a redacted diagnostics report. See
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) for what to collect and how to
+interpret the report.
 
-| Argument | Meaning |
-| --- | --- |
-| `--duration DURATION_SEC` | Limit the live debug run. Omit it to keep the foreground session running until interrupted. |
-
-### `loopback inject`
+### `loopback inject|capture`
 
 Create temporary virtual input devices on the Pi and inject a deterministic
-test sequence into the running relay service. This is the Pi-side half of the
-loopback inject/capture validation.
+test sequence, then capture host-side gadget HID reports and verify the
+expected sequence. Use [docs/host-relay-loopback.md](docs/host-relay-loopback.md)
+for scenarios, host prerequisites, and capture filters.
 
-### `loopback capture`
+### `device capture`
 
-Capture host-side gadget HID reports and verify that the relay emitted the
-expected sequence. This is the host-side half of the loopback inject/capture
-validation. On Windows, use the same Python CLI from an environment that can
-import `hid`; strict Windows event capture uses the Python Raw Input backend.
+Capture source-device metadata and live evidence for new device support. For
+full guidance and sharing cautions, use
+[docs/device-capture.md](docs/device-capture.md).
 
 ### `udev install`
 
 Install the Linux host-side udev rule that grants `hidapi` access to the USB
 gadget device nodes.
 
-### `readonly setup`
+From a host checkout or development virtual environment, point the command at
+the checkout that contains the rule source:
 
-Prepare persistent ext4-backed storage for `/var/lib/bluetooth` before enabling
-read-only mode.
+```bash
+sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
+```
 
-### `readonly status`
+### `readonly setup|status|enable|disable|migrate`
 
-Show the configured and live read-only state, including OverlayFS, root
-filesystem, and persistent Bluetooth-state mount status.
-
-### `readonly enable`
-
-Switch Raspberry Pi OS into the supported read-only mode while keeping
-Bluetooth state on separate persistent storage.
-
-### `readonly disable`
-
-Return the system to normal writable mode while keeping the persistent
-Bluetooth-state storage configuration available.
+Prepare persistent ext4-backed Bluetooth state, inspect read-only state, switch
+read-only mode on or off, or migrate Bluetooth state back to rootfs. For setup,
+enable/disable, migration, and validation details, use
+[docs/persistent-readonly.md](docs/persistent-readonly.md).
 
 ## Managed paths
 
@@ -290,7 +249,7 @@ Bluetooth-state storage configuration available.
 | `/opt/bluetooth_2_usb` | Managed installation root |
 | `/opt/bluetooth_2_usb/venv` | Managed virtual environment |
 | `/etc/default/bluetooth_2_usb` | Structured runtime settings |
-| `/etc/default/bluetooth_2_usb_readonly` | Read-only configuration |
+| `/etc/default/bluetooth_2_usb_readonly` | Persistent Bluetooth state configuration |
 | `/var/log/bluetooth_2_usb` | Operational command and runtime diagnostic output |
 | `/mnt/b2u-persist` | Default persistent mount target |
 | `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |

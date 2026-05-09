@@ -19,22 +19,27 @@ To retrieve the latest redacted debug report from a Pi after running `debug`:
 
 > [!NOTE]
 > Change `PI_USER` and `PI_HOST` if your Pi uses a different SSH user or
-> hostname.
+> hostname. Keep the `.local` suffix when mDNS works; otherwise use the Pi's
+> IP address or another resolvable hostname.
 
 ```bash
 PI_USER=pi
 PI_HOST=raspberrypi.local
 PI_SSH="${PI_USER}@${PI_HOST}"
-DEBUG_REPORT_MD=bluetooth_2_usb-debug-latest.md
 
-ssh -t "${PI_SSH}" "sudo sh -c 'latest=\$(ls -t /var/log/bluetooth_2_usb/debug_*.md 2>/dev/null | head -n 1); test -n \"\$latest\" && cp \"\$latest\" \"/tmp/${DEBUG_REPORT_MD}\" && chmod 0644 \"/tmp/${DEBUG_REPORT_MD}\" && chown \"\$SUDO_UID:\$SUDO_GID\" \"/tmp/${DEBUG_REPORT_MD}\"'" \
-  && scp "${PI_SSH}:/tmp/${DEBUG_REPORT_MD}" "./${DEBUG_REPORT_MD}" \
-  && ssh "${PI_SSH}" "rm -f /tmp/${DEBUG_REPORT_MD}"
+ssh "${PI_SSH}" 'sudo bluetooth_2_usb debug --duration 10'
+DEBUG_REPORT=$(ssh "${PI_SSH}" 'ls -t /var/log/bluetooth_2_usb/debug_*.md | head -n 1')
+scp "${PI_SSH}:${DEBUG_REPORT}" ./bluetooth_2_usb-debug-latest.md
 ```
 
 If the problem involves pairing, relay behavior, suspend/wake, service startup,
 or read-only mode, also mention what changed recently and whether the Pi is
 connected to the target host through the OTG-capable data port.
+
+For new-device support requests, also include a local capture from the real
+device when possible. See [docs/device-capture.md](docs/device-capture.md).
+Review captures before sharing them publicly because they may contain typed keys
+or unique device identifiers.
 
 ## Pull Requests
 
@@ -137,6 +142,9 @@ Use this venv for repo-local validation.
 
 - when an interface changes, update callers and docs to the new interface
   directly instead of preserving old paths
+- the only compatibility exception is install/update-time normalization of
+  existing managed env files; normalization must remove old keys and write the
+  current supported keys rather than keeping legacy names as product surface
 
 ### Documentation
 
@@ -180,6 +188,7 @@ Use these repo-owned guides when they match the task:
 - [docs/persistent-readonly.md](docs/persistent-readonly.md)
 - [docs/remote-wakeup-kernel.md](docs/remote-wakeup-kernel.md)
 - [docs/runtime-architecture.md](docs/runtime-architecture.md)
+- [docs/testing-strategy.md](docs/testing-strategy.md)
 
 Minimum Pi-side validation after runtime-affecting changes:
 

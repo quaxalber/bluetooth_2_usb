@@ -216,6 +216,17 @@ def find_versioned_initramfs_image(kernel_release: str | None = None) -> Path | 
     return None
 
 
+def kernel_config_candidates(kernel_release: str | None = None) -> list[Path]:
+    resolved = current_kernel_release() if kernel_release is None else kernel_release
+    candidates = [Path(f"/boot/config-{resolved}")]
+    boot_dir = detect_boot_dir()
+    firmware_candidate = boot_dir / f"config-{resolved}"
+    if firmware_candidate not in candidates:
+        candidates.append(firmware_candidate)
+    candidates.append(Path("/proc/config.gz"))
+    return candidates
+
+
 def ensure_initramfs_tools_ready() -> None:
     require_commands(["install", "python3", "update-initramfs"])
     if not any(Path(path, "mkinitramfs").exists() for path in os.environ.get("PATH", "").split(os.pathsep)):
@@ -225,10 +236,11 @@ def ensure_initramfs_tools_ready() -> None:
 def ensure_kernel_artifacts_present_for_initramfs(kernel_release: str) -> None:
     if not Path(f"/lib/modules/{kernel_release}").is_dir():
         fail(f"Kernel modules for {kernel_release} are missing at /lib/modules/{kernel_release}.")
-    if not Path(f"/boot/config-{kernel_release}").is_file() and not Path("/proc/config.gz").is_file():
+    if not any(candidate.is_file() for candidate in kernel_config_candidates(kernel_release)):
         fail(
             f"Kernel configuration for {kernel_release} is unavailable. "
-            + f"Expected /boot/config-{kernel_release} or /proc/config.gz."
+            + "Expected one of: "
+            + ", ".join(str(candidate) for candidate in kernel_config_candidates(kernel_release))
         )
 
 
@@ -292,12 +304,16 @@ def ensure_bootable_initramfs_for_current_kernel() -> Path:
 
 
 def kernel_config_snippet() -> str:
-    kernel_config = Path(f"/boot/config-{current_kernel_release()}")
-    if kernel_config.is_file():
-        text = kernel_config.read_text(encoding="utf-8", errors="replace")
-    elif Path("/proc/config.gz").is_file():
-        text = gzip.decompress(Path("/proc/config.gz").read_bytes()).decode("utf-8", "replace")
-    else:
+    text = ""
+    for kernel_config in kernel_config_candidates():
+        if not kernel_config.is_file():
+            continue
+        if kernel_config == Path("/proc/config.gz"):
+            text = gzip.decompress(kernel_config.read_bytes()).decode("utf-8", "replace")
+        else:
+            text = kernel_config.read_text(encoding="utf-8", errors="replace")
+        break
+    if not text:
         return ""
     return "\n".join(
         line for line in text.splitlines() if line.startswith(("CONFIG_USB_DWC2=", "CONFIG_USB_LIBCOMPOSITE="))

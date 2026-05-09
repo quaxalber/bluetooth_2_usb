@@ -22,6 +22,14 @@ assignees: ""
 
 <!-- Include the Pi model, target host type, OS, and relevant Bluetooth or USB devices. -->
 
+## Hardware Support Capture
+
+<!-- If this request is about supporting a new keyboard, mouse, gamepad, touchpad, remote, or other input device, attach a device capture if possible. See docs/device-capture.md. -->
+
+```bash
+sudo bluetooth_2_usb device capture --device /dev/input/eventX --duration 30 --grab
+```
+
 ## Constraints
 
 <!-- Mention any reliability, read-only mode, suspend/wake, pairing, or hardware constraints that matter. -->

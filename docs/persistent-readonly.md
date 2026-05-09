@@ -59,6 +59,10 @@ sudo mkfs.ext4 -L B2U_PERSIST <persist-partition>
 
 ## Enable read-only mode
 
+The setup step installs the OverlayFS and initramfs prerequisites, configures
+initramfs-tools for read-only operation, and prepares persistent Bluetooth
+state storage.
+
 Run:
 
 ```bash
@@ -85,22 +89,6 @@ else:
     print(f"boot initramfs: {path}")
 PY
 ```
-
-> [!TIP]
-> If `readonly enable` fails while `overlayroot` is being installed and the log
-> shows `mkinitramfs: failed to determine device for /`, repair the package
-> state before rebooting:
-
-### OverlayFS Repair Guidance
-
-```bash
-sudo sed -i 's/^MODULES=dep$/MODULES=most/' /etc/initramfs-tools/initramfs.conf
-sudo dpkg --configure -a
-sudo bluetooth_2_usb readonly enable
-```
-
-That failure mode has been observed on current Raspberry Pi OS releases when
-`initramfs-tools` cannot infer the root device during `overlayroot` setup.
 
 After any failed `readonly enable`, inspect the current state before rebooting:
 
@@ -131,6 +119,16 @@ In practice this means the running kernel release needs its module tree under
 `/boot/config-$(uname -r)` or `/proc/config.gz`, otherwise the command aborts
 instead of leaving you with a half-configured read-only boot path.
 
+## Arguments
+
+| Command | Argument | Meaning |
+| --- | --- | --- |
+| `readonly setup` | `--device DEVICE` | Persistent ext4 storage block device to mount for Bluetooth state. Required. |
+| `readonly status` | n/a | This command has no command-specific arguments. |
+| `readonly enable` | n/a | This command has no command-specific arguments. |
+| `readonly disable` | n/a | This command has no command-specific arguments. |
+| `readonly migrate` | n/a | This command has no command-specific arguments. |
+
 ## Disable read-only mode
 
 ```bash
@@ -138,6 +136,21 @@ bluetooth_2_usb readonly status
 sudo bluetooth_2_usb readonly disable
 sudo reboot
 ```
+
+`readonly disable` leaves Bluetooth state on the persistent storage mount. If
+you want to move Bluetooth state back to the root filesystem, reboot first so
+the root filesystem is writable, then run:
+
+```bash
+sudo bluetooth_2_usb readonly migrate
+```
+
+`readonly migrate` refuses to run while the root filesystem is still
+overlay-backed, because writes to rootfs would be discarded on the next reboot.
+When migration succeeds, the managed persistent-state mounts are disabled and
+unmounted. The old Bluetooth state on the persistent device is preserved; wipe
+or reformat that device manually only if you intentionally want to reuse it for
+something else.
 
 ## Validation
 

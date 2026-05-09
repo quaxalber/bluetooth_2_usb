@@ -10,7 +10,6 @@ from ..paths import PATHS
 
 @dataclass(slots=True)
 class ReadonlyConfig:
-    mode: str = "disabled"
     persist_mount: Path = PATHS.persist_mount
     persist_bluetooth_dir: Path = PATHS.default_persist_bluetooth_dir
     persist_spec: str = ""
@@ -53,7 +52,6 @@ def load_readonly_config(path: Path = PATHS.readonly_env_file) -> ReadonlyConfig
     )
 
     return ReadonlyConfig(
-        mode=values.get("B2U_READONLY_MODE", "disabled"),
         persist_mount=persist_mount,
         persist_bluetooth_dir=persist_bluetooth_dir,
         persist_spec=values.get("B2U_PERSIST_SPEC", ""),
@@ -74,7 +72,6 @@ def write_readonly_config(config: ReadonlyConfig, path: Path = PATHS.readonly_en
     path.write_text(
         "\n".join(
             [
-                f'B2U_READONLY_MODE="{config.mode}"',
                 f'B2U_PERSIST_MOUNT="{config.persist_mount}"',
                 f'B2U_PERSIST_BLUETOOTH_DIR="{config.persist_bluetooth_dir}"',
                 f'B2U_PERSIST_SPEC="{config.persist_spec}"',

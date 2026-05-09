@@ -16,11 +16,12 @@ References:
 
 from __future__ import annotations
 
-import os
+import errno
 from pathlib import Path
 
 import usb_hid
 
+from ..udc import resolve_single_udc_name
 from .identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX, USB_MANUFACTURER, usb_configfs_hex_u16
 from .layout import GadgetHidDevice, GadgetLayout
 
@@ -48,12 +49,25 @@ USB_DEV_PROTOCOL_NONE = "0x00"
 USB_DEV_SUBCLASS_NONE = "0x00"
 """USB device subclass 0: no device-level subclass."""
 
+CONFIGFS_UNLINK_IGNORED_ERRNOS = {errno.EACCES, errno.EBUSY, errno.EPERM}
+"""Unlink errors that can occur when configfs exposes kernel-managed attribute nodes."""
+
+CONFIGFS_RMDIR_IGNORED_ERRNOS = {errno.EBUSY, errno.ENOTEMPTY}
+"""Directory removal errors tolerated while tearing down configfs gadget trees."""
+
+
+def _ignore_configfs_teardown_error(exc: OSError, *, ignored_errnos: set[int]) -> None:
+    if exc.errno not in ignored_errnos:
+        raise exc
+
 
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
     except FileNotFoundError:
         pass
+    except OSError as exc:
+        _ignore_configfs_teardown_error(exc, ignored_errnos=CONFIGFS_UNLINK_IGNORED_ERRNOS)
 
 
 def _safe_rmdir(path: Path) -> None:
@@ -61,6 +75,8 @@ def _safe_rmdir(path: Path) -> None:
         path.rmdir()
     except FileNotFoundError:
         pass
+    except OSError as exc:
+        _ignore_configfs_teardown_error(exc, ignored_errnos=CONFIGFS_RMDIR_IGNORED_ERRNOS)
 
 
 def _safe_write_text(path: Path, value: str) -> None:
@@ -122,20 +138,6 @@ def _maybe_write_wakeup_on_write(device_root: Path, enabled: bool) -> None:
     _write_text(wakeup_path, "1" if enabled else "0")
 
 
-def _resolve_udc_name() -> str:
-    override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
-    if override_path:
-        candidate = Path(override_path)
-        if candidate.name == "state":
-            return candidate.parent.name
-        return candidate.name
-
-    controllers = sorted(entry.name for entry in Path("/sys/class/udc").iterdir())
-    if not controllers:
-        raise FileNotFoundError("No UDC controller was found in /sys/class/udc")
-    return controllers[0]
-
-
 def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
     _teardown_existing_gadget()
 
@@ -177,7 +179,7 @@ def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
         _maybe_write_wakeup_on_write(device_root, device.wakeup_on_write)
         (config_root / f"hid.usb{device.function_index}").symlink_to(device_root)
 
-    _write_text(USB_GADGET_ROOT / "UDC", _resolve_udc_name())
+    _write_text(USB_GADGET_ROOT / "UDC", resolve_single_udc_name())
 
     usb_hid.devices = list(layout.devices)
     for device in layout.devices:

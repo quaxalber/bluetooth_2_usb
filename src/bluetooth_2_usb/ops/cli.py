@@ -11,9 +11,15 @@ from .deployment import install, uninstall, update
 from .diagnostics import SmokeTest, debug_report
 from .hid_udev_rule import install_hid_udev_rule
 from .paths import PATHS
-from .readonly import disable_readonly, enable_readonly, print_readonly_status, setup_persistent_bluetooth_state
+from .readonly import (
+    disable_readonly,
+    enable_readonly,
+    migrate_bluetooth_state_to_rootfs,
+    print_readonly_status,
+    setup_persistent_bluetooth_state,
+)
 
-OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev"})
+OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev", "device"})
 
 
 def run() -> None:
@@ -32,15 +38,29 @@ def main(argv: list[str] | None = None, *, prog: str = "bluetooth_2_usb") -> int
 
 
 def _main(argv: list[str], *, prog: str) -> int:
+    if argv[:1] == ["device"]:
+        from .devices import run as device_run
+
+        return device_run(argv[1:])
+
     parser = argparse.ArgumentParser(prog=prog)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    _command_parser(subparsers, "install", "Apply the managed system install.")
-    _command_parser(subparsers, "update", "Fast-forward and reapply the managed install.")
+    install_parser = _command_parser(subparsers, "install", "Apply the managed system install.")
+    install_parser.add_argument(
+        "--recreate-venv",
+        action="store_true",
+        help="Delete and recreate the managed virtual environment instead of reusing a valid one.",
+    )
+    update_parser = _command_parser(subparsers, "update", "Fast-forward and reapply the managed install.")
+    update_parser.add_argument(
+        "--recreate-venv",
+        action="store_true",
+        help="Delete and recreate the managed virtual environment instead of reusing a valid one.",
+    )
     _command_parser(subparsers, "uninstall", "Remove the managed system integration.")
     smoketest_parser = _command_parser(subparsers, "smoketest", "Run deployment health checks.")
     smoketest_parser.add_argument("--verbose", action="store_true")
-    smoketest_parser.add_argument("--allow-non-pi", action="store_true")
     smoketest_parser.add_argument("--output", choices=["text", "json"], default="text", help="Default: text")
     debug_parser = _command_parser(subparsers, "debug", "Collect a redacted diagnostics report.")
     debug_parser.add_argument("--duration", type=_positive_int)
@@ -51,22 +71,20 @@ def _main(argv: list[str], *, prog: str) -> int:
     _command_parser(readonly_subparsers, "status", "Show read-only status.")
     _command_parser(readonly_subparsers, "enable", "Enable read-only mode.")
     _command_parser(readonly_subparsers, "disable", "Disable OverlayFS.")
+    _command_parser(readonly_subparsers, "migrate", "Move persistent Bluetooth state back to the root filesystem.")
 
     udev_parser = _command_parser(subparsers, "udev", "Manage host-side hidapi udev rules.")
     udev_subparsers = udev_parser.add_subparsers(dest="udev_command", required=True)
-    _command_parser(
-        udev_subparsers,
-        "install",
-        "Install the host-side hidapi udev rule.",
-        repo_root_help=(
-            f"Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. Default: {PATHS.install_dir}"
-        ),
+    udev_install_parser = _command_parser(udev_subparsers, "install", "Install the host-side hidapi udev rule.")
+    udev_install_parser.add_argument(
+        "--repo-root",
+        default=None,
+        help=("Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. " + f"Default: {PATHS.install_dir}"),
     )
 
     namespace, remainder = parser.parse_known_args(argv)
     if remainder:
         parser.error(f"unrecognized arguments: {' '.join(remainder)}")
-    repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else PATHS.install_dir
 
     command_path = _command_path(namespace)
 
@@ -74,7 +92,7 @@ def _main(argv: list[str], *, prog: str) -> int:
         ensure_root()
 
     log_name = "_".join(command_path)
-    if command_path in {
+    prepare_command_log = command_path in {
         ("install",),
         ("update",),
         ("uninstall",),
@@ -83,20 +101,26 @@ def _main(argv: list[str], *, prog: str) -> int:
         ("readonly", "setup"),
         ("readonly", "enable"),
         ("readonly", "disable"),
-    }:
+        ("readonly", "migrate"),
+    }
+    if command_path == ("smoketest",) and namespace.output == "json":
+        prepare_command_log = False
+    if prepare_command_log:
         prepare_log(log_name)
 
     if command_path == ("install",):
-        install(repo_root)
+        install(recreate_venv=namespace.recreate_venv)
     elif command_path == ("update",):
-        update(repo_root)
+        update(recreate_venv=namespace.recreate_venv)
     elif command_path == ("uninstall",):
         uninstall()
     elif command_path == ("smoketest",):
-        smoke_test = SmokeTest(verbose=namespace.verbose, allow_non_pi=namespace.allow_non_pi)
+        smoke_test = SmokeTest(verbose=namespace.verbose)
         if namespace.output == "json":
             with redirect_stdout(sys.stderr):
+                prepare_log(log_name)
                 exit_code = smoke_test.run()
+                close_log()
             print(json.dumps(smoke_test.result_dict(), sort_keys=True))
         else:
             exit_code = smoke_test.run()
@@ -111,8 +135,11 @@ def _main(argv: list[str], *, prog: str) -> int:
         enable_readonly()
     elif command_path == ("readonly", "disable"):
         disable_readonly()
+    elif command_path == ("readonly", "migrate"):
+        migrate_bluetooth_state_to_rootfs()
     elif command_path == ("udev", "install"):
         ensure_root()
+        repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else None
         install_hid_udev_rule(repo_root)
     else:
         fail(f"Unhandled operational command: {' '.join(command_path)}")
@@ -128,16 +155,9 @@ def _command_path(namespace: argparse.Namespace) -> tuple[str, ...]:
 
 
 def _command_parser(
-    subparsers: argparse._SubParsersAction,
-    name: str,
-    help_text: str,
-    *,
-    add_help: bool = True,
-    repo_root_help: str = argparse.SUPPRESS,
+    subparsers: argparse._SubParsersAction, name: str, help_text: str, *, add_help: bool = True
 ) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser(name, help=help_text, add_help=add_help)
-    parser.add_argument("--repo-root", default=None, help=repo_root_help)
-    return parser
+    return subparsers.add_parser(name, help=help_text, add_help=add_help)
 
 
 def _positive_int(raw: str) -> int:

@@ -18,6 +18,13 @@ HID_I16_MAX = 32767
 HID_I16_MIN = -32767
 HID_I8_MAX = 127
 HID_I8_MIN = -127
+ADAFRUIT_HID = "adafruit_hid"
+ADAFRUIT_HID_CONSUMER_CONTROL = "adafruit_hid.consumer_control"
+ADAFRUIT_HID_KEYBOARD = "adafruit_hid.keyboard"
+HID_CONSUMER_ASYNCIO = "bluetooth_2_usb.hid.consumer.asyncio"
+HID_DISPATCH = "bluetooth_2_usb.hid.dispatch"
+HID_KEYBOARD_ASYNCIO = "bluetooth_2_usb.hid.keyboard.asyncio"
+HID_MOUSE_ASYNCIO = "bluetooth_2_usb.hid.mouse.asyncio"
 
 
 def _mouse_report(buttons: int = NO_BUTTONS, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> bytes:
@@ -126,8 +133,8 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
         keyboard_device = Mock()
 
         with (
-            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
-            patch("bluetooth_2_usb.hid.keyboard.asyncio.sleep") as sleep,
+            patch(f"{ADAFRUIT_HID_KEYBOARD}.Keyboard", return_value=keyboard_device),
+            patch(f"{HID_KEYBOARD_ASYNCIO}.sleep") as sleep,
         ):
             keyboard = ExtendedKeyboard(devices=[])
             await keyboard.press(1)
@@ -144,8 +151,8 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
         keyboard_device.press.side_effect = [BlockingIOError(), None]
 
         with (
-            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
-            patch("bluetooth_2_usb.hid.keyboard.asyncio.sleep") as sleep,
+            patch(f"{ADAFRUIT_HID_KEYBOARD}.Keyboard", return_value=keyboard_device),
+            patch(f"{HID_KEYBOARD_ASYNCIO}.sleep") as sleep,
         ):
             keyboard = ExtendedKeyboard(devices=[])
             await keyboard.press(1)
@@ -158,8 +165,8 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
         keyboard_device.release.side_effect = BlockingIOError()
 
         with (
-            patch("adafruit_hid.keyboard.Keyboard", return_value=keyboard_device),
-            patch("bluetooth_2_usb.hid.keyboard.asyncio.sleep") as sleep,
+            patch(f"{ADAFRUIT_HID_KEYBOARD}.Keyboard", return_value=keyboard_device),
+            patch(f"{HID_KEYBOARD_ASYNCIO}.sleep") as sleep,
         ):
             keyboard = ExtendedKeyboard(devices=[])
             with self.assertRaises(BlockingIOError):
@@ -176,8 +183,8 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
         consumer_device = Mock()
 
         with (
-            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
-            patch("bluetooth_2_usb.hid.consumer.asyncio.sleep") as sleep,
+            patch(f"{ADAFRUIT_HID_CONSUMER_CONTROL}.ConsumerControl", return_value=consumer_device),
+            patch(f"{HID_CONSUMER_ASYNCIO}.sleep") as sleep,
         ):
             consumer = ExtendedConsumerControl(devices=[])
             await consumer.press(1)
@@ -192,8 +199,8 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
         consumer_device.press.side_effect = [BlockingIOError(), None]
 
         with (
-            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
-            patch("bluetooth_2_usb.hid.consumer.asyncio.sleep") as sleep,
+            patch(f"{ADAFRUIT_HID_CONSUMER_CONTROL}.ConsumerControl", return_value=consumer_device),
+            patch(f"{HID_CONSUMER_ASYNCIO}.sleep") as sleep,
         ):
             consumer = ExtendedConsumerControl(devices=[])
             await consumer.press(1)
@@ -206,8 +213,8 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
         consumer_device.release.side_effect = BlockingIOError()
 
         with (
-            patch("adafruit_hid.consumer_control.ConsumerControl", return_value=consumer_device),
-            patch("bluetooth_2_usb.hid.consumer.asyncio.sleep") as sleep,
+            patch(f"{ADAFRUIT_HID_CONSUMER_CONTROL}.ConsumerControl", return_value=consumer_device),
+            patch(f"{HID_CONSUMER_ASYNCIO}.sleep") as sleep,
         ):
             consumer = ExtendedConsumerControl(devices=[])
             with self.assertRaises(BlockingIOError):
@@ -228,10 +235,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.hid.mouse.asyncio.sleep") as sleep,
-        ):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
             mouse = ExtendedMouse(devices=[])
             await mouse.press(MouseButtons.LEFT)
             await mouse.release(MouseButtons.LEFT)
@@ -248,7 +252,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
             await mouse.move(x=300, y=-300, wheel=1, pan=-1)
 
@@ -262,7 +266,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
             await mouse.move(pan=0.5)
             await mouse.move(pan=0.5)
@@ -279,7 +283,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
             await mouse.move(wheel=0.5)
             await mouse.move(wheel=0.5)
@@ -296,7 +300,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
             await mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
 
@@ -316,10 +320,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.hid.mouse.asyncio.sleep") as sleep,
-        ):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
             mouse = ExtendedMouse(devices=[])
             await mouse.move(x=40000)
             await mouse.move(x=1)
@@ -339,10 +340,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.hid.mouse.asyncio.sleep") as sleep,
-        ):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
             mouse = ExtendedMouse(devices=[])
             await mouse.move(x=1)
 
@@ -360,10 +358,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with (
-            patch("adafruit_hid.find_device", return_value=device),
-            patch("bluetooth_2_usb.hid.mouse.asyncio.sleep") as sleep,
-        ):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
             mouse = ExtendedMouse(devices=[])
             with self.assertRaises(BlockingIOError):
                 await mouse.move(x=1)
@@ -382,7 +377,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
             with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
                 await mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
@@ -409,7 +404,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
             await mouse.press(MouseButtons.TASK)
             await mouse.release(MouseButtons.TASK)
@@ -423,8 +418,8 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
         with (
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.KeyEvent", _TestKeyEvent),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
         ):
             await dispatcher.dispatch(_TestKeyEvent(ecodes.KEY_VOLUMEUP, _TestKeyEvent.key_up))
 
@@ -436,7 +431,7 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         raw_event = object()
         categorized = _TestSynEvent()
 
-        with patch("bluetooth_2_usb.hid.dispatch.categorize", return_value=categorized) as categorize:
+        with patch(f"{HID_DISPATCH}.categorize", return_value=categorized) as categorize:
             await dispatcher.dispatch(raw_event)
 
         categorize.assert_called_once_with(raw_event)
@@ -446,12 +441,12 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
         with (
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.RelEvent", _TestRelEvent),
+            self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs,
         ):
-            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
-                await dispatcher.dispatch(_TestSynEvent())
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
+            await dispatcher.dispatch(_TestSynEvent())
 
         self.assertEqual(hid_gadgets.mouse.moves, [(7, 0, 0, 0)])
         self.assertTrue(any("coalesced_events=1" in message and "emitted=True" in message for message in logs.output))
@@ -461,13 +456,13 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
         with (
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.RelEvent", _TestRelEvent),
+            self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs,
         ):
-            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -3))
-                await dispatcher.dispatch(_TestSynEvent())
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -3))
+            await dispatcher.dispatch(_TestSynEvent())
 
         self.assertEqual(hid_gadgets.mouse.moves, [(7, -3, 0, 0)])
         self.assertTrue(any("coalesced_events=2" in message and "emitted=True" in message for message in logs.output))
@@ -477,12 +472,12 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
         with (
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.RelEvent", _TestRelEvent),
+            self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs,
         ):
-            with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
-                await dispatcher.dispatch(_TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60))
-                await dispatcher.dispatch(_TestSynEvent())
+            await dispatcher.dispatch(_TestRelEvent(ecodes.REL_WHEEL_HI_RES, 60))
+            await dispatcher.dispatch(_TestSynEvent())
 
         self.assertEqual(hid_gadgets.mouse.moves, [])
         self.assertTrue(any("coalesced_events=1" in message and "emitted=False" in message for message in logs.output))
@@ -493,8 +488,8 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(hid_gadgets, gate)
 
         with (
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.RelEvent", _TestRelEvent),
         ):
             await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 7))
             gate.set_host_configured(False)
@@ -514,8 +509,8 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(hid_gadgets, gate)
 
         with (
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _TestRelEvent),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.RelEvent", _TestRelEvent),
         ):
             await dispatcher.dispatch(_TestRelEvent(ecodes.REL_X, 40000))
             await dispatcher.dispatch(_TestRelEvent(ecodes.REL_Y, -40000))
@@ -537,7 +532,7 @@ class HidDescriptorContractTest(unittest.TestCase):
 
         device.send_report = send_report
 
-        with patch("adafruit_hid.find_device", return_value=device):
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
             mouse = ExtendedMouse(devices=[])
 
         self.assertEqual(len(mouse.report), MOUSE_IN_REPORT_LENGTH)

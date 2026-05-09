@@ -42,7 +42,7 @@ nodes are live before running `combo`.
 
 - the Pi is connected to the host through the OTG-capable data path
 - `bluetooth_2_usb.service` is active on the Pi
-- `B2U_AUTO_DISCOVER=true` is enabled in `/etc/default/bluetooth_2_usb`
+- `B2U_AUTO=true` is enabled in `/etc/default/bluetooth_2_usb`
 - `/dev/uinput` exists on the Pi
 - the host Python environment has `hidapi` installed for gadget discovery
 
@@ -60,13 +60,7 @@ python3 -m pip install -r requirements-host-capture.txt
 On Linux, install the udev rule once:
 
 ```bash
-sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
-```
-
-For a managed host-side install, use:
-
-```bash
-sudo bluetooth_2_usb udev install
+sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
 Recommended baseline checks on the Pi:
@@ -76,18 +70,42 @@ sudo bluetooth_2_usb smoketest --verbose
 sudo bluetooth_2_usb debug --duration 10
 ```
 
+## Arguments
+
+### `loopback inject`
+
+| Argument | Meaning |
+| --- | --- |
+| `--scenario SCENARIO` | Deterministic scenario to inject. Default: `combo`. |
+| `--pre-delay-ms MS` | Delay after virtual device creation. Default: `1000`. |
+| `--event-gap-ms MS` | Delay between emitted events. Default: scenario-specific. |
+| `--post-delay-ms MS` | Delay after injection before closing virtual devices. Default: scenario-specific. |
+| `--keyboard-name NAME` | Virtual keyboard device name. |
+| `--mouse-name NAME` | Virtual mouse device name. |
+| `--consumer-name NAME` | Virtual consumer-control device name. |
+| `--output {text,json}` | Choose the output format. Default: `text`. |
+
+### `loopback capture`
+
+| Argument | Meaning |
+| --- | --- |
+| `--scenario SCENARIO` | Expected scenario to observe. Default: `combo`. |
+| `--timeout-sec SECONDS` | Timeout waiting for relay events. Default: scenario-specific. |
+| `--devices DEVICES` | Comma-separated host-side gadget device filters. Required. |
+| `--output {text,json}` | Choose the output format. Default: `text`. |
+
 ## 1. Confirm host-side enumeration
 
 On Linux:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery --output json
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 Experimental: macOS
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery --output json
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 > [!NOTE]
@@ -99,7 +117,7 @@ On Windows:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\src"
-python -m bluetooth_2_usb loopback capture --scenario node-discovery --output json
+python -m bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 If the Pi gadget is visible, the output will include candidate keyboard, mouse,
@@ -118,7 +136,7 @@ discovery step, not the primary event backend. Use a Python environment where
 With the repository virtual environment on Windows:
 
 ```powershell
-.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --scenario node-discovery --output json
+.\venv\Scripts\python.exe -m bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery --output json
 ```
 
 ## 2. Start the host capture
@@ -126,12 +144,13 @@ With the repository virtual environment on Windows:
 From the repository checkout on the host:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario combo
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario combo
 ```
 
-Default behavior:
+Capture behavior:
 
-- detects the gadget HID device by product name and HID usage
+- requires `--devices` to select the gadget HID device by path, `uniq`, `phys`,
+  Bluetooth MAC-shaped `uniq`, or case-insensitive product-name fragment
 - waits up to the scenario-specific timeout for the complete sequence (`20`
   seconds by default; `node-discovery` uses `10` seconds and `combo` uses `60`
   seconds)
@@ -140,14 +159,21 @@ Default behavior:
 - uses a single loopback lock file; do not run multiple inject/capture sessions
   in parallel against the same host/Pi pair
 
-If automatic detection is ambiguous, pin the nodes explicitly:
+When multiple Bluetooth-2-USB gadgets are attached, select the target by its
+host-visible USB serial exposed as `uniq`:
 
 ```bash
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario combo \
-  --keyboard-node '<candidate keyboard path>' \
-  --mouse-node '<candidate mouse path>' \
-  --consumer-node '<candidate consumer path>'
+  --devices '<usb serial>'
+```
+
+If discovery is ambiguous, pass multiple comma-separated filters:
+
+```bash
+venv/bin/bluetooth_2_usb loopback capture \
+  --scenario combo \
+  --devices '<keyboard path>,<mouse path>,<consumer path>'
 ```
 
 Keep this command running while you trigger the Pi-side injection.
@@ -158,9 +184,7 @@ with the minimal discovery scenario:
 ```bash
 venv/bin/bluetooth_2_usb loopback capture \
   --scenario node-discovery \
-  --keyboard-node '<candidate keyboard path>' \
-  --mouse-node '<candidate mouse path>' \
-  --consumer-node '<candidate consumer path>'
+  --devices '<keyboard path>,<mouse path>,<consumer path>'
 ```
 
 Then, on the Pi:
@@ -287,28 +311,28 @@ complete Raw Input event stream.
 Keyboard-only:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario keyboard
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario keyboard
 sudo bluetooth_2_usb loopback inject --scenario keyboard
 ```
 
 Mouse-only:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario mouse
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario mouse
 sudo bluetooth_2_usb loopback inject --scenario mouse
 ```
 
 Consumer-control only:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario consumer
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario consumer
 sudo bluetooth_2_usb loopback inject --scenario consumer
 ```
 
 Minimal node discovery:
 
 ```bash
-venv/bin/bluetooth_2_usb loopback capture --scenario node-discovery
+venv/bin/bluetooth_2_usb loopback capture --devices '<device filter>' --scenario node-discovery
 sudo bluetooth_2_usb loopback inject --scenario node-discovery
 ```
 
@@ -339,16 +363,13 @@ ls -l /dev/bus/usb/*/*
 If needed:
 
 ```bash
-sudo venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
+sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
-
-For a managed host-side install, run `sudo bluetooth_2_usb udev install`
-instead.
 
 ### Host capture times out
 
 - the relay service on the Pi may not be active
-- auto-discovery may be off
+- auto relay may be off
 - the Pi may not have picked up the temporary virtual devices
 - the host gadget HID device may be present but not currently carrying reports
 - on Windows, candidate enumeration may be fine while Raw Input still sees the
@@ -358,7 +379,7 @@ Check on the Pi:
 
 ```bash
 systemctl is-active bluetooth_2_usb.service
-sudo bluetooth_2_usb --list_devices --output json
+sudo bluetooth_2_usb --list --output json
 sudo journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 ```
 

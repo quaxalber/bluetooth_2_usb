@@ -55,7 +55,7 @@ all metadata is ready. `DeviceRemoved` cancels the probe and active relay for
 that path.
 
 Startup enumeration and later hotplug use the same filter path, so
-auto-discovery and explicit device identifiers behave consistently.
+auto relay and explicit device filters behave consistently.
 
 ## Operational Commands
 

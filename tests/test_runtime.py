@@ -1,7 +1,6 @@
 import asyncio
 import signal
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -9,41 +8,26 @@ from bluetooth_2_usb.runtime.app import Runtime, handled_shutdown_signals
 from bluetooth_2_usb.runtime.config import runtime_config_from_args
 from bluetooth_2_usb.runtime.events import ShutdownRequested
 
+RUNTIME_APP = "bluetooth_2_usb.runtime.app"
+RUNTIME_APP_SIGNAL = "bluetooth_2_usb.runtime.app.signal"
+
 
 class RuntimeConfigTest(unittest.TestCase):
     def test_runtime_config_from_args_normalizes_mutable_cli_values(self) -> None:
         args = SimpleNamespace(
-            auto_discover=True,
-            debug=False,
-            device_ids=["/dev/input/event7"],
-            grab_devices=True,
-            interrupt_shortcut=["KEY_LEFTCTRL", "KEY_F12"],
-            log_path="/tmp/b2u.log",
-            log_to_file=True,
+            auto=True, debug=False, devices=["/dev/input/event7"], grab=True, shortcut=["KEY_LEFTCTRL", "KEY_F12"]
         )
 
-        config = runtime_config_from_args(args, udc_path=Path("/tmp/udc-state"))
+        config = runtime_config_from_args(args)
 
-        self.assertEqual(config.device_ids, ("/dev/input/event7",))
-        self.assertEqual(config.interrupt_shortcut, ("KEY_LEFTCTRL", "KEY_F12"))
-        self.assertEqual(config.udc_path, Path("/tmp/udc-state"))
+        self.assertEqual(config.devices, ("/dev/input/event7",))
+        self.assertEqual(config.shortcut, ("KEY_LEFTCTRL", "KEY_F12"))
 
 
 class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
     def _runtime(self) -> Runtime:
         return Runtime(
-            runtime_config_from_args(
-                SimpleNamespace(
-                    auto_discover=False,
-                    debug=False,
-                    device_ids=[],
-                    grab_devices=False,
-                    interrupt_shortcut=[],
-                    log_path="",
-                    log_to_file=False,
-                ),
-                udc_path=None,
-            )
+            runtime_config_from_args(SimpleNamespace(auto=False, debug=False, devices=[], grab=False, shortcut=[]))
         )
 
     async def test_signal_handlers_request_runtime_shutdown(self) -> None:
@@ -73,15 +57,17 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                 event = await events.get()
                 self.shutdown_events.append(event)
 
-        with patch("bluetooth_2_usb.runtime.app.HidGadgets") as hid_gadgets_cls:
+        with (
+            patch(f"{RUNTIME_APP}.HidGadgets") as hid_gadgets_cls,
+            patch(f"{RUNTIME_APP}.RuntimeEventSource", WaitingEventSource),
+            patch(f"{RUNTIME_APP}.RelaySupervisor", RecordingSupervisor),
+        ):
             hid_gadgets_cls.return_value.enable = AsyncMock()
-            with patch("bluetooth_2_usb.runtime.app.RuntimeEventSource", WaitingEventSource):
-                with patch("bluetooth_2_usb.runtime.app.RelaySupervisor", RecordingSupervisor):
-                    task = asyncio.create_task(runtime.run())
-                    await asyncio.wait_for(event_source_started.wait(), timeout=1)
-                    await asyncio.wait_for(supervisor_started.wait(), timeout=1)
-                    signal.raise_signal(signal.SIGTERM)
-                    await asyncio.wait_for(task, timeout=1)
+            task = asyncio.create_task(runtime.run())
+            await asyncio.wait_for(event_source_started.wait(), timeout=1)
+            await asyncio.wait_for(supervisor_started.wait(), timeout=1)
+            signal.raise_signal(signal.SIGTERM)
+            await asyncio.wait_for(task, timeout=1)
 
         self.assertEqual(RecordingSupervisor.shutdown_events, [ShutdownRequested("SIGTERM")])
 
@@ -114,22 +100,24 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
                 event = await events.get()
                 self.shutdown_events.append(event)
 
-        with patch.object(loop, "add_signal_handler", side_effect=NotImplementedError):
-            with patch("bluetooth_2_usb.runtime.app.signal.getsignal", side_effect=str):
-                with patch(
-                    "bluetooth_2_usb.runtime.app.signal.signal",
-                    side_effect=lambda sig, handler: registered_handlers.setdefault(sig, handler),
-                ):
-                    with patch("bluetooth_2_usb.runtime.app.HidGadgets") as hid_gadgets_cls:
-                        hid_gadgets_cls.return_value.enable = AsyncMock()
-                        with patch("bluetooth_2_usb.runtime.app.RuntimeEventSource", WaitingEventSource):
-                            with patch("bluetooth_2_usb.runtime.app.RelaySupervisor", RecordingSupervisor):
-                                task = asyncio.create_task(runtime.run())
-                                await asyncio.wait_for(event_source_started.wait(), timeout=1)
-                                await asyncio.wait_for(supervisor_started.wait(), timeout=1)
-                                self.assertEqual(set(registered_handlers), set(handled_shutdown_signals()))
-                                registered_handlers[signal.SIGTERM](signal.SIGTERM, None)
-                                await asyncio.wait_for(task, timeout=1)
+        with (
+            patch.object(loop, "add_signal_handler", side_effect=NotImplementedError),
+            patch(f"{RUNTIME_APP_SIGNAL}.getsignal", side_effect=str),
+            patch(
+                f"{RUNTIME_APP_SIGNAL}.signal",
+                side_effect=lambda sig, handler: registered_handlers.setdefault(sig, handler),
+            ),
+            patch(f"{RUNTIME_APP}.HidGadgets") as hid_gadgets_cls,
+            patch(f"{RUNTIME_APP}.RuntimeEventSource", WaitingEventSource),
+            patch(f"{RUNTIME_APP}.RelaySupervisor", RecordingSupervisor),
+        ):
+            hid_gadgets_cls.return_value.enable = AsyncMock()
+            task = asyncio.create_task(runtime.run())
+            await asyncio.wait_for(event_source_started.wait(), timeout=1)
+            await asyncio.wait_for(supervisor_started.wait(), timeout=1)
+            self.assertEqual(set(registered_handlers), set(handled_shutdown_signals()))
+            registered_handlers[signal.SIGTERM](signal.SIGTERM, None)
+            await asyncio.wait_for(task, timeout=1)
 
         self.assertEqual(RecordingSupervisor.shutdown_events, [ShutdownRequested("SIGTERM")])
 
@@ -152,10 +140,12 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
             async def run(self, events) -> None:
                 await events.get()
 
-        with patch("bluetooth_2_usb.runtime.app.HidGadgets", return_value=hid_gadgets):
-            with patch("bluetooth_2_usb.runtime.app.RuntimeEventSource", return_value=CompletingEventSource()):
-                with patch("bluetooth_2_usb.runtime.app.RelaySupervisor", RecordingSupervisor):
-                    await runtime.run()
+        with (
+            patch(f"{RUNTIME_APP}.HidGadgets", return_value=hid_gadgets),
+            patch(f"{RUNTIME_APP}.RuntimeEventSource", return_value=CompletingEventSource()),
+            patch(f"{RUNTIME_APP}.RelaySupervisor", RecordingSupervisor),
+        ):
+            await runtime.run()
 
         hid_gadgets.enable.assert_awaited_once_with()
         self.assertIs(observed["hid_gadgets"], hid_gadgets)
@@ -191,11 +181,13 @@ class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
         runtime = self._runtime()
         event_source = CompletingEventSource()
 
-        with patch("bluetooth_2_usb.runtime.app.HidGadgets") as hid_gadgets_cls:
+        with (
+            patch(f"{RUNTIME_APP}.HidGadgets") as hid_gadgets_cls,
+            patch(f"{RUNTIME_APP}.RuntimeEventSource", return_value=event_source),
+            patch(f"{RUNTIME_APP}.RelaySupervisor", WaitingSupervisor),
+        ):
             hid_gadgets_cls.return_value.enable = AsyncMock()
-            with patch("bluetooth_2_usb.runtime.app.RuntimeEventSource", return_value=event_source):
-                with patch("bluetooth_2_usb.runtime.app.RelaySupervisor", WaitingSupervisor):
-                    await asyncio.wait_for(runtime.run(), timeout=1)
+            await asyncio.wait_for(runtime.run(), timeout=1)
 
         supervisor = WaitingSupervisor.instances[0]
         self.assertTrue(supervisor.child_task_created)

@@ -8,6 +8,9 @@ from bluetooth_2_usb.relay.gate import RelayGate
 from bluetooth_2_usb.relay.supervisor import RelaySupervisor
 from bluetooth_2_usb.runtime.events import ShutdownRequested, UdcState, UdcStateChanged
 
+HID_DISPATCH = "bluetooth_2_usb.hid.dispatch"
+RELAY_SUPERVISOR = "bluetooth_2_usb.relay.supervisor"
+
 
 class _FakeKeyboard:
     def __init__(self) -> None:
@@ -130,14 +133,14 @@ class RuntimeRelayIntegrationTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
 
         with (
-            patch("bluetooth_2_usb.relay.supervisor.list_input_devices", return_value=[device]),
-            patch("bluetooth_2_usb.hid.dispatch.categorize", side_effect=lambda event: event),
-            patch("bluetooth_2_usb.hid.dispatch.KeyEvent", _FakeKeyEvent),
-            patch("bluetooth_2_usb.hid.dispatch.RelEvent", _FakeRelEvent),
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[device]),
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _FakeKeyEvent),
+            patch(f"{HID_DISPATCH}.RelEvent", _FakeRelEvent),
         ):
             async with asyncio.TaskGroup() as task_group:
                 supervisor = RelaySupervisor(
-                    hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_discover=True
+                    hid_gadgets=hid_gadgets, relay_gate=gate, task_group=task_group, auto_relay=True
                 )
                 run_task = task_group.create_task(supervisor.run(runtime_events))
 

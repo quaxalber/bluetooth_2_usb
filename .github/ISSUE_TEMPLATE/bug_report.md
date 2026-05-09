@@ -22,17 +22,17 @@ To retrieve the latest redacted debug report from a Pi after running `debug`:
 
 > [!NOTE]
 > Change `PI_USER` and `PI_HOST` if your Pi uses a different SSH user or
-> hostname.
+> hostname. Keep the `.local` suffix when mDNS works; otherwise use the Pi's
+> IP address or another resolvable hostname.
 
 ```bash
 PI_USER=pi
 PI_HOST=raspberrypi.local
 PI_SSH="${PI_USER}@${PI_HOST}"
-DEBUG_REPORT_MD=bluetooth_2_usb-debug-latest.md
 
-ssh -t "${PI_SSH}" "sudo sh -c 'latest=\$(ls -t /var/log/bluetooth_2_usb/debug_*.md 2>/dev/null | head -n 1); test -n \"\$latest\" && cp \"\$latest\" \"/tmp/${DEBUG_REPORT_MD}\" && chmod 0644 \"/tmp/${DEBUG_REPORT_MD}\" && chown \"\$SUDO_UID:\$SUDO_GID\" \"/tmp/${DEBUG_REPORT_MD}\"'" \
-  && scp "${PI_SSH}:/tmp/${DEBUG_REPORT_MD}" "./${DEBUG_REPORT_MD}" \
-  && ssh "${PI_SSH}" "rm -f /tmp/${DEBUG_REPORT_MD}"
+ssh "${PI_SSH}" 'sudo bluetooth_2_usb debug --duration 10'
+DEBUG_REPORT=$(ssh "${PI_SSH}" 'ls -t /var/log/bluetooth_2_usb/debug_*.md | head -n 1')
+scp "${PI_SSH}:${DEBUG_REPORT}" ./bluetooth_2_usb-debug-latest.md
 ```
 
 ## Reproduction Steps

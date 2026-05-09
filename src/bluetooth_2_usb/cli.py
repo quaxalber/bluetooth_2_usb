@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 from dataclasses import dataclass
 from logging import DEBUG
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .logging import add_file_handler, get_logger
+from .logging import get_logger
+from .udc import resolve_single_udc_state_path
 from .version import get_versioned_name
 
 if TYPE_CHECKING:
@@ -43,41 +43,10 @@ class EnvironmentStatus:
 
 
 def get_udc_path() -> Path | None:
-    override_path = os.environ.get("BLUETOOTH_2_USB_UDC_PATH")
-    if override_path:
-        candidate = Path(override_path)
-        return candidate if candidate.is_file() else None
-
-    udc_root = Path("/sys/class/udc")
-    if not udc_root.is_dir():
+    try:
+        return resolve_single_udc_state_path()
+    except (FileNotFoundError, RuntimeError, OSError):
         return None
-
-    controllers = sorted(entry for entry in udc_root.iterdir() if entry.is_dir())
-    if not controllers:
-        return None
-
-    def state_path(controller: Path) -> Path:
-        return controller / "state"
-
-    scored_controllers: list[tuple[int, str, Path]] = []
-    for controller in controllers:
-        candidate = state_path(controller)
-        if not candidate.is_file():
-            continue
-
-        name = controller.name.lower()
-        score = 0
-        if any(token in name for token in ("otg", "gadget", "dwc2")):
-            score += 100
-        if name.startswith("2098") or name.startswith("fe98"):
-            score += 25
-        scored_controllers.append((score, controller.name, candidate))
-
-    if scored_controllers:
-        scored_controllers.sort(key=lambda item: (-item[0], item[1]))
-        return scored_controllers[0][2]
-
-    return None
 
 
 def validate_environment() -> EnvironmentStatus:
@@ -109,9 +78,6 @@ def configure_logging(args: Arguments) -> None:
     if args.debug:
         get_logger().setLevel(DEBUG)
 
-    if args.log_to_file:
-        add_file_handler(args.log_path)
-
     logger.debug("CLI args: %s", args)
 
 
@@ -119,7 +85,7 @@ async def async_run(args: Arguments) -> int:
     if args.version:
         return print_version()
 
-    if args.list_devices:
+    if args.list:
         from .inputs.inventory import DeviceEnumerationError, describe_input_devices, inventory_to_text
 
         try:
@@ -156,7 +122,7 @@ async def async_run(args: Arguments) -> int:
     from .runtime.app import Runtime
     from .runtime.config import runtime_config_from_args
 
-    runtime = Runtime(runtime_config_from_args(args, udc_path=env_status.udc_path))
+    runtime = Runtime(runtime_config_from_args(args))
     await runtime.run()
 
     return EXIT_OK
@@ -176,7 +142,8 @@ def run(argv: list[str] | None = None) -> int:
     if raw_args[:1] and not raw_args[0].startswith("-"):
         print(
             f"Unknown command: {raw_args[0]}. "
-            + "Use bluetooth_2_usb loopback inject/capture for loopback validation.",
+            + "Use bluetooth_2_usb loopback inject/capture for loopback validation "
+            + "or bluetooth_2_usb device capture for source-device captures.",
             file=sys.stderr,
         )
         return EXIT_USAGE

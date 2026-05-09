@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from .debug import debug_report
 from .redaction import redact
-from .report import debug_report
 from .smoketest import SmokeTest
 from .types import ProbeResult, ProbeStatus
 

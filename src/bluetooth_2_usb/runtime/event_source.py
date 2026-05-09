@@ -6,6 +6,7 @@ from pathlib import Path
 import pyudev
 
 from ..logging import get_logger
+from ..udc import resolve_single_udc_state_path
 from .events import DeviceAdded, DeviceRemoved, RuntimeEvent, UdcState, UdcStateChanged
 
 logger = get_logger(__name__)
@@ -16,11 +17,13 @@ class RuntimeEventSource:
     Emits runtime events from UDC state polling and udev input hotplug.
     """
 
-    def __init__(self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None, poll_interval: float = 0.5) -> None:
+    def __init__(
+        self, events: asyncio.Queue[RuntimeEvent], udc_path: Path | None = None, poll_interval: float = 0.5
+    ) -> None:
         if poll_interval <= 0:
             raise ValueError("poll_interval must be > 0")
         self._events = events
-        self._udc_path = udc_path
+        self._udc_path = resolve_single_udc_state_path() if udc_path is None else udc_path
         self._poll_interval = poll_interval
 
         self._stop_event = asyncio.Event()
@@ -31,9 +34,7 @@ class RuntimeEventSource:
         self._monitor = pyudev.Monitor.from_netlink(context)
         self._monitor.filter_by("input")
 
-        if self._udc_path is None:
-            logger.warning("UDC state file not found. Cable monitoring may be unavailable.")
-        elif not self._udc_path.is_file():
+        if not self._udc_path.is_file():
             logger.warning("UDC state file %s not found. Cable monitoring may be unavailable.", self._udc_path)
 
     async def run(self) -> None:

@@ -5,6 +5,7 @@ from .service import restart_b2u_if_installed, stop_b2u_if_installed
 from .status import (
     READONLY_PACKAGES,
     bluetooth_state_persistent,
+    bluetooth_state_storage,
     display_readonly_mode,
     machine_id_valid,
     overlay_configured_status,
@@ -13,9 +14,7 @@ from .status import (
     print_readonly_status,
     readonly_mode,
     readonly_stack_package_report,
-    readonly_stack_packages_bootstrap_safe,
     readonly_stack_packages_healthy,
-    readonly_stack_packages_missing,
 )
 from .units import (
     install_bluetooth_persist_dropin,
@@ -27,7 +26,12 @@ from .units import (
     write_bluetooth_bind_mount_unit,
     write_persist_mount_unit,
 )
-from .workflows import disable_readonly, enable_readonly, setup_persistent_bluetooth_state
+from .workflows import (
+    disable_readonly,
+    enable_readonly,
+    migrate_bluetooth_state_to_rootfs,
+    setup_persistent_bluetooth_state,
+)
 
 __all__ = [
     "READONLY_PACKAGES",
@@ -35,12 +39,14 @@ __all__ = [
     "restart_b2u_if_installed",
     "stop_b2u_if_installed",
     "bluetooth_state_persistent",
+    "bluetooth_state_storage",
     "disable_readonly",
     "enable_readonly",
     "display_readonly_mode",
     "install_bluetooth_persist_dropin",
     "load_readonly_config",
     "machine_id_valid",
+    "migrate_bluetooth_state_to_rootfs",
     "overlay_configured_status",
     "overlay_status",
     "package_status",
@@ -49,9 +55,7 @@ __all__ = [
     "print_readonly_status",
     "readonly_mode",
     "readonly_stack_package_report",
-    "readonly_stack_packages_bootstrap_safe",
     "readonly_stack_packages_healthy",
-    "readonly_stack_packages_missing",
     "remove_bluetooth_bind_mount_unit",
     "remove_bluetooth_persist_dropin",
     "remove_persist_mount_unit",

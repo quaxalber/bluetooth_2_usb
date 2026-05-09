@@ -79,11 +79,13 @@ ssh <pi-host> '
   PYTHONPATH=src python3 -m bluetooth_2_usb smoketest --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb debug --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb udev install --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb device capture --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb loopback inject --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb loopback capture --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly status --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly enable --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly disable --help >/dev/null
+  PYTHONPATH=src python3 -m bluetooth_2_usb readonly migrate --help >/dev/null
   PYTHONPATH=src python3 -m bluetooth_2_usb readonly setup --help >/dev/null
 '
 ```
@@ -108,6 +110,9 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
 done
 ```
 
+The installer reuses a valid managed virtual environment. Use
+`install --recreate-venv` when validating a clean environment rebuild.
+
 After reboot:
 
 ```bash
@@ -130,7 +135,10 @@ ssh <pi-host> 'sudo -n bluetooth_2_usb update'
 ```
 
 If no new commit is available on the checked-out branch, this should exit `0`
-after reapplying the managed install and restarting the service.
+after reapplying the managed install and restarting the service. The update
+path reuses a valid managed virtual environment; use
+`sudo -n bluetooth_2_usb update --recreate-venv` after dependency removals,
+suspected venv corruption, or clean-install release validation.
 
 Reboot and repeat the post-boot smoketest checks if the updated change touched boot
 configuration or other reboot-sensitive behavior.
@@ -208,12 +216,6 @@ until new_boot_id="$(ssh -o ConnectTimeout=5 <pi-host> 'cat /proc/sys/kernel/ran
 done
 ```
 
-> [!TIP]
-> If the enable step fails with `mkinitramfs: failed to determine device for /`,
-> follow the repair step in
-> [persistent-readonly.md](persistent-readonly.md#enable-read-only-mode),
-> then rerun `readonly enable` and resume validation here before rebooting.
-
 After reboot:
 
 ```bash
@@ -238,6 +240,10 @@ grep '^B2U_' /etc/default/bluetooth_2_usb_readonly
 EOF
 ```
 
+The read-only config file should contain only persistent Bluetooth state
+settings: `B2U_PERSIST_MOUNT`, `B2U_PERSIST_BLUETOOTH_DIR`,
+`B2U_PERSIST_SPEC`, and `B2U_PERSIST_DEVICE`.
+
 ## Pairing persistence across reboot
 
 Before reboot:
@@ -245,7 +251,7 @@ Before reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list --output json
 '
 ```
 
@@ -260,7 +266,7 @@ After reboot:
 ```bash
 ssh <pi-host> '
   bluetoothctl devices Paired
-  sudo -n bluetooth_2_usb --list_devices --output json
+  sudo -n bluetooth_2_usb --list --output json
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager
 '
 ```
@@ -326,9 +332,29 @@ done
 ```
 
 > [!WARNING]
-> Only run destructive read-only rollback checks after disabling read-only mode
-> and rebooting, once `findmnt -no FSTYPE,SOURCE /` no longer shows `overlay`
-> for the live root filesystem.
+> Only run `readonly migrate` after disabling read-only mode and rebooting, once
+> `findmnt -no FSTYPE,SOURCE /` no longer shows `overlay` for the live root
+> filesystem.
+
+Optional Bluetooth state migration back to rootfs:
+
+```bash
+ssh <pi-host> 'sudo -n bluetooth_2_usb readonly migrate'
+ssh <pi-host> '
+  persist_unit="$(systemd-escape --path --suffix=mount /mnt/b2u-persist)"
+  bluetooth_2_usb readonly status
+  findmnt /var/lib/bluetooth || true
+  findmnt /mnt/b2u-persist || true
+  systemctl is-enabled var-lib-bluetooth.mount || true
+  systemctl is-enabled "$persist_unit" || true
+  systemctl is-active bluetooth_2_usb.service
+  bluetoothctl devices Paired
+'
+```
+
+`readonly migrate` disables and unmounts the managed persistent-state mounts.
+It preserves the old Bluetooth state on the persistent device as a rollback
+copy; wipe or reformat that device manually only when you intend to reuse it.
 
 ## Uninstall validation
 
@@ -358,7 +384,7 @@ ssh <pi-host> '
   uname -a
   cat /etc/os-release
   echo SERVICE=$(systemctl is-active bluetooth_2_usb.service || true)
-  echo READONLY=$(grep "^B2U_READONLY_MODE=" /etc/default/bluetooth_2_usb_readonly 2>/dev/null || echo disabled)
+  bluetooth_2_usb readonly status
   sudo -n journalctl -u bluetooth_2_usb.service -n 100 --no-pager || true
 '
 ```
