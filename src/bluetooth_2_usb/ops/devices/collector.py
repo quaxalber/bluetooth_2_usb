@@ -48,6 +48,7 @@ LiveMode = Literal["summarized", "raw"]
 _AXIS_SAMPLE_LIMIT = 8
 _HIDRAW_SAMPLE_LIMIT = 16
 _EVDEV_SAMPLE_SEQUENCE_LIMIT = 20
+_PER_CODE_SAMPLE_EVENT_LIMIT = 8
 
 
 class _TimedSummary(Protocol):
@@ -406,12 +407,15 @@ class _AxisSnapshot:
     same_value_repeat_count: int = 0
     sample_values: list[int] | None = None
     sample_values_truncated: bool = False
+    sample_events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
     first_monotonic: float | None = None
     last_monotonic: float | None = None
 
     def add(self, value: int, *, observed_monotonic: float) -> None:
         if self.sample_values is None:
             self.sample_values = []
+        self._add_sample_event(value=value, observed_monotonic=observed_monotonic)
         _update_timing(self, observed_monotonic)
         previous = self.last_value
         self.count += 1
@@ -451,6 +455,8 @@ class _AxisSnapshot:
             "max_value": self.max_value,
             "sample_values": self.sample_values or [],
             "sample_values_truncated": self.sample_values_truncated,
+            "sample_events": self.sample_events or [],
+            "sample_events_truncated": self.sample_events_truncated,
             "first_monotonic": self.first_monotonic,
             "last_monotonic": self.last_monotonic,
         }
@@ -462,6 +468,14 @@ class _AxisSnapshot:
             record["same_value_repeat_count"] = self.same_value_repeat_count
         return record
 
+    def _add_sample_event(self, *, value: int, observed_monotonic: float) -> None:
+        if self.sample_events is None:
+            self.sample_events = []
+        if len(self.sample_events) >= _PER_CODE_SAMPLE_EVENT_LIMIT:
+            self.sample_events_truncated = True
+            return
+        self.sample_events.append({"monotonic": observed_monotonic, "value": value})
+
 
 @dataclass(slots=True)
 class _KeySnapshot:
@@ -472,10 +486,13 @@ class _KeySnapshot:
     repeat_count: int = 0
     first_value: int | None = None
     last_value: int | None = None
+    sample_events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
     first_monotonic: float | None = None
     last_monotonic: float | None = None
 
     def add(self, value: int, *, observed_monotonic: float) -> None:
+        self._add_sample_event(value=value, observed_monotonic=observed_monotonic)
         _update_timing(self, observed_monotonic)
         if self.first_value is None:
             self.first_value = value
@@ -500,9 +517,19 @@ class _KeySnapshot:
             "repeat_count": self.repeat_count,
             "first_value": self.first_value,
             "last_value": self.last_value,
+            "sample_events": self.sample_events or [],
+            "sample_events_truncated": self.sample_events_truncated,
             "first_monotonic": self.first_monotonic,
             "last_monotonic": self.last_monotonic,
         }
+
+    def _add_sample_event(self, *, value: int, observed_monotonic: float) -> None:
+        if self.sample_events is None:
+            self.sample_events = []
+        if len(self.sample_events) >= _PER_CODE_SAMPLE_EVENT_LIMIT:
+            self.sample_events_truncated = True
+            return
+        self.sample_events.append({"monotonic": observed_monotonic, "value": value})
 
 
 @dataclass(slots=True)
@@ -549,12 +576,15 @@ class _MiscSnapshot:
     max_value: int | None = None
     sample_values: list[int] | None = None
     sample_values_truncated: bool = False
+    sample_events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
     first_monotonic: float | None = None
     last_monotonic: float | None = None
 
     def add(self, value: int, *, observed_monotonic: float) -> None:
         if self.sample_values is None:
             self.sample_values = []
+        self._add_sample_event(value=value, observed_monotonic=observed_monotonic)
         _update_timing(self, observed_monotonic)
         previous = self.last_value
         self.count += 1
@@ -584,9 +614,19 @@ class _MiscSnapshot:
             "max_value": self.max_value,
             "sample_values": self.sample_values or [],
             "sample_values_truncated": self.sample_values_truncated,
+            "sample_events": self.sample_events or [],
+            "sample_events_truncated": self.sample_events_truncated,
             "first_monotonic": self.first_monotonic,
             "last_monotonic": self.last_monotonic,
         }
+
+    def _add_sample_event(self, *, value: int, observed_monotonic: float) -> None:
+        if self.sample_events is None:
+            self.sample_events = []
+        if len(self.sample_events) >= _PER_CODE_SAMPLE_EVENT_LIMIT:
+            self.sample_events_truncated = True
+            return
+        self.sample_events.append({"monotonic": observed_monotonic, "value": value})
 
 
 @dataclass(slots=True)
@@ -597,7 +637,7 @@ class _HidrawGroupSnapshot:
     count: int = 0
     exact_duplicate_count: int = 0
     truncated_report_count: int = 0
-    sample_reports: list[bytes] | None = None
+    sample_reports: list[dict[str, object]] | None = None
     seen_reports: set[bytes] | None = None
     sample_reports_truncated: bool = False
     changed_byte_indexes: set[int] | None = None
@@ -624,7 +664,7 @@ class _HidrawGroupSnapshot:
         else:
             self.seen_reports.add(report)
             if len(self.sample_reports) < _HIDRAW_SAMPLE_LIMIT:
-                self.sample_reports.append(report)
+                self.sample_reports.append({"monotonic": observed_monotonic, "report": report.hex(" ")})
             else:
                 self.sample_reports_truncated = True
         for index, byte in enumerate(report):
@@ -643,7 +683,7 @@ class _HidrawGroupSnapshot:
             "count": self.count,
             "exact_duplicate_count": self.exact_duplicate_count,
             "unique_report_count": len(self.seen_reports or ()),
-            "sample_reports": [report.hex(" ") for report in self.sample_reports or []],
+            "sample_reports": self.sample_reports or [],
             "sample_reports_truncated": self.sample_reports_truncated,
             "changed_byte_indexes": sorted(self.changed_byte_indexes or ()),
             "truncated_report_count": self.truncated_report_count,

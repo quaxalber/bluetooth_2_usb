@@ -1103,10 +1103,13 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(rel["sum_abs_value"], 4)
         self.assertIn("first_monotonic", rel)
         self.assertIn("last_monotonic", rel)
+        self.assertEqual([event["value"] for event in rel["sample_events"]], [3, -1])
+        self.assertFalse(rel["sample_events_truncated"])
         self.assertEqual(abs_axis["count"], 3)
         self.assertEqual(abs_axis["min_value"], 10)
         self.assertEqual(abs_axis["max_value"], 20)
         self.assertEqual(abs_axis["sample_values"], [10, 20])
+        self.assertEqual([event["value"] for event in abs_axis["sample_events"]], [10, 10, 20])
         self.assertEqual(abs_axis["changed_value_count"], 2)
         self.assertEqual(abs_axis["same_value_repeat_count"], 1)
 
@@ -1184,6 +1187,8 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(misc["min_value"], 458792)
         self.assertEqual(misc["max_value"], 458793)
         self.assertEqual(misc["sample_values"], [458792, 458793])
+        self.assertEqual([event["value"] for event in misc["sample_events"]], [458792, 458793, 458793])
+        self.assertFalse(misc["sample_events_truncated"])
         self.assertIn("first_monotonic", misc)
         self.assertIn("last_monotonic", misc)
 
@@ -1285,6 +1290,43 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(len(sample["events"]), 20)
         self.assertTrue(sample["sample_events_truncated"])
 
+    def test_summarized_capture_truncates_per_key_axis_and_misc_sample_events(self) -> None:
+        device = _FakeInputDevice(
+            "/dev/input/event1",
+            "Controller",
+            events=[
+                *(SimpleNamespace(sec=1, usec=index, type=1, code=30, value=index % 3) for index in range(10)),
+                *(SimpleNamespace(sec=2, usec=index, type=2, code=0, value=index) for index in range(10)),
+                *(SimpleNamespace(sec=3, usec=index, type=4, code=4, value=1000 + index) for index in range(10)),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=1,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        key = next(record for record in records if record["record_type"] == "evdev_key_snapshot")
+        axis = next(record for record in records if record["record_type"] == "evdev_axis_snapshot")
+        misc = next(record for record in records if record["record_type"] == "evdev_misc_snapshot")
+        for record in (key, axis, misc):
+            self.assertEqual(len(record["sample_events"]), 8)
+            self.assertTrue(record["sample_events_truncated"])
+
     def test_summarized_capture_records_hidraw_group_summary(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Controller")
         hidraw = Path("/dev/hidraw1")
@@ -1326,6 +1368,8 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(summary["exact_duplicate_count"], 1)
         self.assertEqual(summary["unique_report_count"], 2)
         self.assertEqual(summary["changed_byte_indexes"], [1])
+        self.assertEqual([sample["report"] for sample in summary["sample_reports"]], ["01 00 00", "01 02 00"])
+        self.assertTrue(all("monotonic" in sample for sample in summary["sample_reports"]))
         self.assertIn("first_monotonic", summary)
         self.assertIn("last_monotonic", summary)
 
