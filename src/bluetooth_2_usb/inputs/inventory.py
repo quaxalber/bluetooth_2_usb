@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import io
+import shutil
 from dataclasses import asdict, dataclass
 from types import SimpleNamespace
 from typing import Any
 
 from rich import box
+from rich.console import Console
 from rich.table import Table
 
-from ..logging import get_logger, plain_text_console
+from ..logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -144,6 +146,12 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
         )
 
     output = io.StringIO()
-    console = plain_text_console(output)
+    console = Console(
+        file=output,
+        force_terminal=False,
+        no_color=True,
+        color_system=None,
+        width=max(shutil.get_terminal_size(fallback=(140, 20)).columns, 140),
+    )
     console.print(table)
     return output.getvalue().rstrip()

@@ -8,8 +8,11 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.live import Live
+from rich.text import Text
+
 from ...evdev import ecodes
-from ...logging import Console, ConsoleOptions, Live, RenderResult, Text, device_capture_console, live
 from ..commands import info, ok, warn
 from .collector import capture_device
 from .linux import DeviceCaptureError
@@ -187,8 +190,8 @@ class _CliProgress:
         self._started_monotonic = time.monotonic()
         summaries = ", ".join(f"{getattr(device, 'path', '')} ({getattr(device, 'name', '')})" for device in devices)
         info(f"Capturing these matching devices: {summaries}")
-        self._console = device_capture_console()
-        self._live = live(self, console=self._console, refresh_per_second=4, transient=False)
+        self._console = Console(stderr=True, highlight=False)
+        self._live = Live(self, console=self._console, refresh_per_second=4, transient=False)
         self._live.start()
 
     def evdev_event(self, device, event: object) -> None:

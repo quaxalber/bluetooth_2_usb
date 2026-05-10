@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 
-from ...logging import status
+from rich.console import Console
+
 from ...udc import udc_states as read_udc_states
 from .. import boot_config
 from ..bluetooth import (
@@ -449,8 +452,13 @@ class SmokeTest:
         return completed.returncode, (completed.stdout + completed.stderr)
 
     def _capture_with_status(self, command: list[str | Path], message: str) -> tuple[int, str]:
-        with status(message):
+        with self._status(message):
             return self._capture(command)
+
+    @contextmanager
+    def _status(self, message: str):
+        with Console(file=sys.stdout).status(message, spinner="dots"):
+            yield
 
     def _heading(self, title: str) -> None:
         if self.current_section:

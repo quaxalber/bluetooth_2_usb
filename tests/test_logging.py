@@ -1,4 +1,3 @@
-import io
 import logging
 import os
 import tempfile
@@ -74,34 +73,3 @@ class LoggingConfigurationTest(unittest.TestCase):
             for handler in file_handlers:
                 self.package_logger.removeHandler(handler)
                 handler.close()
-
-    def test_plain_text_console_uses_minimum_width(self) -> None:
-        output = io.StringIO()
-
-        with patch("bluetooth_2_usb.logging.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
-            console = bt_logging.plain_text_console(output)
-
-        self.assertEqual(console.width, bt_logging.RICH_MIN_TEXT_WIDTH)
-
-    def test_status_uses_shared_rich_spinner(self) -> None:
-        calls: list[tuple[str, str]] = []
-
-        class FakeStatus:
-            def __enter__(self) -> None:
-                return None
-
-            def __exit__(self, *args: object) -> None:
-                return None
-
-        class FakeConsole:
-            def status(self, message: str, *, spinner: str) -> FakeStatus:
-                calls.append((message, spinner))
-                return FakeStatus()
-
-        with (
-            patch.object(bt_logging, "stdout_console", return_value=FakeConsole()),
-            bt_logging.status("Collecting diagnostics"),
-        ):
-            pass
-
-        self.assertEqual(calls, [("Collecting diagnostics", bt_logging.RICH_STATUS_SPINNER)])

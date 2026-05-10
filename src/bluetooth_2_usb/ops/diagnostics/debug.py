@@ -7,9 +7,11 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
-from ...logging import status
+from rich.console import Console
+
 from .. import boot_config
 from ..artifacts import make_user_copyable
 from ..bluetooth import rfkill_list_bluetooth
@@ -38,6 +40,12 @@ def _timeout_output_text(exc: subprocess.TimeoutExpired) -> str:
     return decode(exc.stdout) + decode(exc.stderr)
 
 
+@contextmanager
+def _status(message: str):
+    with Console(file=sys.stdout).status(message, spinner="dots"):
+        yield
+
+
 def debug_report(duration: int | None) -> int:
     PATHS.log_dir.mkdir(parents=True, exist_ok=True)
     report_file = PATHS.log_dir / f"debug_{timestamp()}.md"
@@ -59,7 +67,7 @@ def debug_report(duration: int | None) -> int:
 
     def command_block(title: str, command: list[str | Path]) -> None:
         heading(title)
-        with status(f"Collecting {title}"):
+        with _status(f"Collecting {title}"):
             try:
                 completed = run(command, check=False, capture=True, timeout=DEBUG_COMMAND_TIMEOUT_SECONDS)
                 text = completed.stdout + completed.stderr
@@ -77,7 +85,7 @@ def debug_report(duration: int | None) -> int:
         body.append("```console\n" + redact((text or "<no output>") + suffix, hostname) + "\n```\n")
 
     try:
-        with status("Checking service state"):
+        with _status("Checking service state"):
             initial_service_state = (
                 run(
                     ["systemctl", "is-active", PATHS.service_unit],
@@ -167,7 +175,7 @@ def debug_report(duration: int | None) -> int:
         ["bash", "-lc", "dmesg | grep -Ei 'dwc2|gadget|udc|bluetooth|overlay' | tail -200 || true"],
     )
     if PATHS.venv_python.exists():
-        with status("Preparing live debug command"):
+        with _status("Preparing live debug command"):
             try:
                 debug_command = run(
                     [
