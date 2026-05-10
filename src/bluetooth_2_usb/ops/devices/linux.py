@@ -104,6 +104,26 @@ def evdev_capabilities_record(device: InputDevice) -> dict[str, object]:
     return {"record_type": "evdev_capabilities", "path": getattr(device, "path", ""), "capabilities": verbose}
 
 
+def evdev_input_properties_record(device: InputDevice) -> dict[str, object]:
+    path = getattr(device, "path", "")
+    input_props = getattr(device, "input_props", None)
+    if input_props is None:
+        return {
+            "record_type": "evdev_input_properties",
+            "path": path,
+            "properties": [],
+            "error": "input properties unavailable",
+        }
+    try:
+        try:
+            properties = input_props(verbose=True)
+        except TypeError:
+            properties = input_props()
+    except Exception as exc:
+        return {"record_type": "evdev_input_properties", "path": path, "properties": [], "error": str(exc)}
+    return {"record_type": "evdev_input_properties", "path": path, "properties": properties}
+
+
 def udev_properties_record(device: InputDevice) -> dict[str, object]:
     path = getattr(device, "path", "")
     properties: dict[str, object] = {}

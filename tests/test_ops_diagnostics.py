@@ -24,6 +24,11 @@ class _RfkillEntry:
         return "rfkill0 type=bluetooth soft=0 hard=0 state=1"
 
 
+class _TtyStringIO(StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 class OpsDiagnosticsTest(unittest.TestCase):
     def assert_ordered_substrings(self, text: str, substrings: list[str]) -> None:
         previous = -1
@@ -298,8 +303,8 @@ class OpsDiagnosticsTest(unittest.TestCase):
     def test_smoketest_non_verbose_prints_compact_readonly_summary(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
 
-        stdout = StringIO()
-        with redirect_stdout(stdout):
+        stdout = _TtyStringIO()
+        with redirect_stdout(stdout), patch.dict(os.environ, {"NO_COLOR": ""}):
             smoke._heading("Read-Only Mode")
             smoke._check_overlay_runtime("disabled", "no", False)
             smoke._check_readonly("disabled", "disabled", "no", False, "rootfs", False)
@@ -307,8 +312,24 @@ class OpsDiagnosticsTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("[+] disabled: rootfs writable, Bluetooth state on rootfs", output)
+        self.assertNotIn("\033[1m[+] disabled: rootfs writable, Bluetooth state on rootfs", output)
         self.assertNotIn("[+] Root filesystem is writable", output)
         self.assertNotIn("[+] Bluetooth state is stored on rootfs", output)
+
+    def test_smoketest_verbose_bolds_compact_readonly_summary(self) -> None:
+        smoke = SmokeTest(verbose=True, allow_non_pi=True)
+
+        stdout = _TtyStringIO()
+        with redirect_stdout(stdout), patch.dict(os.environ, {"NO_COLOR": ""}):
+            smoke._heading("Read-Only Mode")
+            smoke._check_overlay_runtime("disabled", "no", False)
+            smoke._check_readonly("disabled", "disabled", "no", False, "rootfs", False)
+            smoke._print_readonly_summary("disabled", "disabled", "no", "rootfs")
+
+        output = stdout.getvalue()
+        self.assertIn("\033[1mRead-only summary: disabled: rootfs writable, Bluetooth state on rootfs\033[0m", output)
+        self.assertIn("[+] Root filesystem is writable", output)
+        self.assertIn("[+] Bluetooth state is stored on rootfs", output)
 
     def test_smoketest_rejects_rootfs_bluetooth_state_when_readonly_is_active(self) -> None:
         smoke = SmokeTest(verbose=False, allow_non_pi=True)
