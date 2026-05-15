@@ -3,11 +3,10 @@
 
 ![Bluetooth-to-USB HID bridge overview for Raspberry Pi](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
 
-Use Bluetooth keyboards and mice in BIOS and boot menus, installers, kiosks,
-tablets, KVM setups, retro systems, consoles, and other hosts where Bluetooth
-is unavailable or inconvenient.
+Use Bluetooth keyboards and mice in BIOS and boot menus, KVM setups, retro systems, consoles, 
+and other hosts where Bluetooth is unavailable or inconvenient.
 
-Bluetooth-2-USB (meaning Bluetooth to USB) turns a Raspberry Pi into a USB HID
+Bluetooth-2-USB ("Bluetooth to USB") turns a Raspberry Pi into a USB HID
 bridge for Bluetooth keyboards and mice. To the target host, the Pi appears as
 a standard wired USB keyboard and mouse.
 
