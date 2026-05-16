@@ -5,9 +5,11 @@ from typing import TYPE_CHECKING
 
 from ..evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from ..evdev.types import InputEvent, KeyEvent, RelEvent, categorize
+from ..inputs.profile import DEFAULT_PROFILE, InputDeviceKind, InputDeviceProfile
 from ..logging import get_logger
 from ..relay.gate import RelayGate
 from ..relay.shortcut import ShortcutToggler
+from .absolute import TABLET_PAD_BUTTONS, PadAccumulator, PenAccumulator, TouchAccumulator, event_code
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator
 
 logger = get_logger(__name__)
@@ -25,12 +27,24 @@ class HidDispatcher:
     """
 
     def __init__(
-        self, hid_gadgets: HidGadgets, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
+        self,
+        hid_gadgets: HidGadgets,
+        relay_gate: RelayGate,
+        shortcut_toggler: ShortcutToggler | None = None,
+        source_profile: InputDeviceProfile = DEFAULT_PROFILE,
     ) -> None:
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
+        self._source_profile = source_profile
         self._mouse_delta = MouseDeltaAccumulator()
+        self._touch = (
+            TouchAccumulator(source_profile)
+            if source_profile.kind in (InputDeviceKind.TOUCHPAD, InputDeviceKind.TABLET_TOUCH)
+            else None
+        )
+        self._pen = PenAccumulator(source_profile) if source_profile.kind is InputDeviceKind.TABLET_PEN else None
+        self._pad = PadAccumulator() if source_profile.kind is InputDeviceKind.TABLET_PAD else None
         self._hid_write_failures = 0
 
     @property
@@ -52,8 +66,15 @@ class HidDispatcher:
             self._mouse_delta.add_event(event)
             return
 
-        if getattr(event, "type", None) == ecodes.EV_SYN and getattr(event, "code", None) == ecodes.SYN_REPORT:
+        event_type = getattr(event, "type", getattr(getattr(event, "event", None), "type", None))
+        if event_type == ecodes.EV_SYN and event_code(event) == ecodes.SYN_REPORT:
             await self.flush()
+            return
+
+        if self._process_absolute_event(event):
+            return
+
+        if isinstance(event, KeyEvent) and self._process_digitizer_key_event(event):
             return
 
         # Preserve cross-gadget event order if another event arrives before SYN_REPORT.
@@ -63,6 +84,9 @@ class HidDispatcher:
 
     def discard_pending(self) -> None:
         self._mouse_delta.discard()
+        for accumulator in (self._touch, self._pen, self._pad):
+            if accumulator is not None:
+                accumulator.discard()
 
     async def flush(self) -> None:
         if not self._relay_gate.active:
@@ -81,8 +105,72 @@ class HidDispatcher:
                 delta is not None,
             )
         if delta is None:
+            await self._flush_digitizers()
             return
         await self._process_mouse_delta(delta)
+        await self._flush_digitizers()
+
+    def _process_absolute_event(self, event: object) -> bool:
+        event_type = getattr(event, "type", getattr(getattr(event, "event", None), "type", None))
+        event_code = getattr(event, "code", getattr(getattr(event, "event", None), "code", None))
+        if event_type == ecodes.EV_ABS:
+            if self._touch is not None:
+                self._touch.add_event(event)
+                return True
+            if self._pen is not None:
+                self._pen.add_event(event)
+                return True
+            if self._pad is not None:
+                self._pad.add_event(event)
+                return True
+        if event_type == ecodes.EV_MSC and event_code == ecodes.MSC_SERIAL and self._pen is not None:
+            self._pen.add_misc(event)
+            return True
+        return False
+
+    def _process_digitizer_key_event(self, event: KeyEvent) -> bool:
+        if self._touch is not None:
+            self._touch.add_key(event)
+            return event.scancode in {
+                ecodes.BTN_LEFT,
+                ecodes.BTN_TOUCH,
+                ecodes.BTN_TOOL_FINGER,
+                ecodes.BTN_TOOL_DOUBLETAP,
+                ecodes.BTN_TOOL_TRIPLETAP,
+                ecodes.BTN_TOOL_QUADTAP,
+                ecodes.BTN_TOOL_QUINTTAP,
+            }
+        if self._pen is not None:
+            self._pen.add_key(event)
+            return event.scancode in {
+                ecodes.BTN_DIGI,
+                ecodes.BTN_TOOL_PEN,
+                ecodes.BTN_TOOL_RUBBER,
+                ecodes.BTN_TOUCH,
+                ecodes.BTN_STYLUS,
+                ecodes.BTN_STYLUS2,
+            }
+        if self._pad is not None:
+            self._pad.add_key(event)
+            return event.scancode in TABLET_PAD_BUTTONS
+        return False
+
+    async def _flush_digitizers(self) -> None:
+        if self._touch is not None and (touch_report := self._touch.flush()) is not None:
+            touch = self._hid_gadgets.touch
+            if touch is None:
+                raise RuntimeError("Touch digitizer gadget is not available; HID gadgets are not enabled.")
+            await self._write_hid_report(touch.send, "Touch digitizer", touch_report, touch_report)
+        if self._pen is not None and (pen_report := self._pen.flush()) is not None:
+            tablet = self._hid_gadgets.tablet
+            if tablet is None:
+                raise RuntimeError("Tablet digitizer gadget is not available; HID gadgets are not enabled.")
+            await self._write_hid_report(tablet.send_pen, "Tablet pen", pen_report, pen_report)
+        if self._pad is not None and (pad_report := self._pad.flush()) is not None:
+            tablet = self._hid_gadgets.tablet
+            if tablet is None:
+                raise RuntimeError("Tablet digitizer gadget is not available; HID gadgets are not enabled.")
+            await self._write_hid_report(tablet.send_pad, "Tablet pad", pad_report, pad_report)
 
     async def _process_mouse_delta(self, delta: MouseDelta) -> None:
         mouse = self._hid_gadgets.mouse

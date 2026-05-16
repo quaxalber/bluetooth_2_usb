@@ -8,6 +8,8 @@ from pathlib import Path
 from ..hid.consumer import ExtendedConsumerControl
 from ..hid.keyboard import ExtendedKeyboard
 from ..hid.mouse import ExtendedMouse
+from ..hid.tablet import ExtendedTabletDigitizer
+from ..hid.touch import ExtendedTouchDigitizer
 from ..logging import get_logger
 from .config import rebuild_gadget
 from .identity import UsbIdentity
@@ -35,7 +37,7 @@ class HidGadgets:
         self._clear_gadget_state()
 
     def _clear_gadget_state(self) -> None:
-        self._gadgets = {"keyboard": None, "mouse": None, "consumer": None}
+        self._gadgets = {"keyboard": None, "mouse": None, "consumer": None, "touch": None, "tablet": None}
         self._enabled = False
 
     def requested_devices(self):
@@ -162,6 +164,8 @@ class HidGadgets:
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
         self._gadgets["consumer"] = ExtendedConsumerControl(enabled_devices)
+        self._gadgets["touch"] = ExtendedTouchDigitizer(enabled_devices)
+        self._gadgets["tablet"] = ExtendedTabletDigitizer(enabled_devices)
         self._enabled = True
 
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)
@@ -195,6 +199,24 @@ class HidGadgets:
         :rtype: ExtendedConsumerControl | None
         """
         return self._gadgets["consumer"]
+
+    @property
+    def touch(self) -> ExtendedTouchDigitizer | None:
+        """
+        Get the touch digitizer gadget.
+
+        :return: An ExtendedTouchDigitizer object, or None if not initialized
+        """
+        return self._gadgets["touch"]
+
+    @property
+    def tablet(self) -> ExtendedTabletDigitizer | None:
+        """
+        Get the tablet digitizer gadget.
+
+        :return: An ExtendedTabletDigitizer object, or None if not initialized
+        """
+        return self._gadgets["tablet"]
 
     async def release_all(self) -> None:
         """

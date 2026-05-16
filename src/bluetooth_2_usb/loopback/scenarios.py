@@ -6,6 +6,8 @@ from ..evdev import ecodes
 from ..evdev.types import KeyEvent
 
 EV_KEY = ecodes.EV_KEY
+EV_ABS = ecodes.EV_ABS
+EV_MSC = ecodes.EV_MSC
 EV_REL = ecodes.EV_REL
 KEY_DOWN = KeyEvent.key_down
 KEY_UP = KeyEvent.key_up
@@ -42,13 +44,14 @@ REL_WHEEL = ecodes.REL_WHEEL
 REL_WHEEL_HI_RES = ecodes.REL_WHEEL_HI_RES
 REL_HWHEEL_HI_RES = ecodes.REL_HWHEEL_HI_RES
 
-EVENT_TYPE_NAMES = {EV_KEY: "EV_KEY", EV_REL: "EV_REL"}
+EVENT_TYPE_NAMES = {EV_KEY: "EV_KEY", EV_ABS: "EV_ABS", EV_MSC: "EV_MSC", EV_REL: "EV_REL"}
 
 SCENARIO_KEYBOARD = "keyboard"
 SCENARIO_MOUSE = "mouse"
 SCENARIO_NODE_DISCOVERY = "node-discovery"
 SCENARIO_CONSUMER = "consumer"
 SCENARIO_COMBO = "combo"
+SCENARIO_DIGITIZER = "digitizer"
 
 DEFAULT_MOUSE_COALESCED_TAIL_COUNT = 0
 DEFAULT_EVENT_GAP_MS = 25
@@ -62,6 +65,8 @@ NODE_DISCOVERY_POST_DELAY_MS = DEFAULT_POST_DELAY_MS
 NODE_DISCOVERY_CAPTURE_TIMEOUT_SEC = 10.0
 COMBO_POST_DELAY_MS = KEYBOARD_POST_DELAY_MS
 COMBO_CAPTURE_TIMEOUT_SEC = 60.0
+DIGITIZER_POST_DELAY_MS = 1000
+DIGITIZER_CAPTURE_TIMEOUT_SEC = 20.0
 
 KEYBOARD_TEXT_BURST = "kEyBoArD"
 KEYBOARD_TEXT_BURST_REPETITIONS = 9
@@ -71,6 +76,7 @@ MOUSE_Y_POSITIVE_DELTA = 210000
 MOUSE_Y_NEGATIVE_DELTA = -180000
 MOUSE_WHEEL_DELTA = 2400
 NODE_DISCOVERY_MOUSE_DELTA = 1
+DIGITIZER_MOUSE_DELTA = 12
 
 
 def _event_code_names(prefixes: tuple[str, ...]) -> dict[int, str]:
@@ -116,6 +122,7 @@ class ScenarioDefinition:
     mouse_rel_steps: tuple[ExpectedEvent, ...]
     mouse_button_steps: tuple[ExpectedEvent, ...]
     consumer_steps: tuple[ExpectedEvent, ...]
+    digitizer_report_ids: tuple[int, ...] = ()
     mouse_coalesced_tail_count: int = DEFAULT_MOUSE_COALESCED_TAIL_COUNT
     default_event_gap_ms: int = DEFAULT_EVENT_GAP_MS
     default_post_delay_ms: int = DEFAULT_POST_DELAY_MS
@@ -134,6 +141,10 @@ class ScenarioDefinition:
         return bool(self.consumer_steps)
 
     @property
+    def digitizer_enabled(self) -> bool:
+        return bool(self.digitizer_report_ids)
+
+    @property
     def required_nodes(self) -> tuple[str, ...]:
         nodes: list[str] = []
         if self.keyboard_enabled:
@@ -142,6 +153,8 @@ class ScenarioDefinition:
             nodes.append("mouse")
         if self.consumer_enabled:
             nodes.append("consumer")
+        if self.digitizer_enabled:
+            nodes.append("digitizer")
         return tuple(nodes)
 
 
@@ -205,6 +218,11 @@ NODE_DISCOVERY_REL_STEPS = (
     ExpectedEvent(EV_REL, REL_X, -NODE_DISCOVERY_MOUSE_DELTA),
 )
 NODE_DISCOVERY_CONSUMER_STEPS = _press_release_steps(KEY_VOLUMEUP, KEY_VOLUMEDOWN)
+DIGITIZER_MOUSE_REL_STEPS = (
+    ExpectedEvent(EV_REL, REL_X, DIGITIZER_MOUSE_DELTA),
+    ExpectedEvent(EV_REL, REL_X, -DIGITIZER_MOUSE_DELTA),
+)
+DIGITIZER_MOUSE_BUTTON_STEPS = (*_press_release_steps(BTN_LEFT), *_press_release_steps(BTN_FORWARD))
 
 MOUSE_BUTTON_STEPS = (
     *_press_release_steps(BTN_LEFT),
@@ -312,6 +330,16 @@ SCENARIOS = {
         default_post_delay_ms=COMBO_POST_DELAY_MS,
         default_capture_timeout_sec=COMBO_CAPTURE_TIMEOUT_SEC,
     ),
+    SCENARIO_DIGITIZER: ScenarioDefinition(
+        name=SCENARIO_DIGITIZER,
+        keyboard_steps=(),
+        mouse_rel_steps=DIGITIZER_MOUSE_REL_STEPS,
+        mouse_button_steps=DIGITIZER_MOUSE_BUTTON_STEPS,
+        consumer_steps=(),
+        digitizer_report_ids=(1, 1, 2, 2, 3, 3),
+        default_post_delay_ms=DIGITIZER_POST_DELAY_MS,
+        default_capture_timeout_sec=DIGITIZER_CAPTURE_TIMEOUT_SEC,
+    ),
 }
 
 SCENARIO_NAMES = tuple(SCENARIOS.keys())
@@ -341,6 +369,7 @@ def scenario_to_dict(scenario: ScenarioDefinition) -> dict[str, object]:
         "mouse_rel_steps": [event_to_dict(step) for step in scenario.mouse_rel_steps],
         "mouse_button_steps": [event_to_dict(step) for step in scenario.mouse_button_steps],
         "consumer_steps": [event_to_dict(step) for step in scenario.consumer_steps],
+        "digitizer_report_ids": list(scenario.digitizer_report_ids),
         "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
         "default_event_gap_ms": scenario.default_event_gap_ms,
         "default_post_delay_ms": scenario.default_post_delay_ms,
@@ -353,13 +382,15 @@ def scenario_summary(scenario: ScenarioDefinition) -> dict[str, object]:
     mouse_rel_steps = len(scenario.mouse_rel_steps)
     mouse_button_steps = len(scenario.mouse_button_steps)
     consumer_steps = len(scenario.consumer_steps)
+    digitizer_reports = len(scenario.digitizer_report_ids)
     return {
         "name": scenario.name,
         "keyboard_steps": keyboard_steps,
         "mouse_rel_steps": mouse_rel_steps,
         "mouse_button_steps": mouse_button_steps,
         "consumer_steps": consumer_steps,
-        "total_steps": keyboard_steps + mouse_rel_steps + mouse_button_steps + consumer_steps,
+        "digitizer_reports": digitizer_reports,
+        "total_steps": keyboard_steps + mouse_rel_steps + mouse_button_steps + consumer_steps + digitizer_reports,
         "mouse_coalesced_tail_count": scenario.mouse_coalesced_tail_count,
         "default_event_gap_ms": scenario.default_event_gap_ms,
         "default_post_delay_ms": scenario.default_post_delay_ms,

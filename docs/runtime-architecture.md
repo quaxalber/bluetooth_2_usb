@@ -9,14 +9,23 @@ The service runtime is intentionally centered on one asyncio event flow:
   tasks.
 - `RelayGate` tracks why relaying is active or inactive: host cable state, user
   pause state, and HID write suspension are separate causes.
-- `InputRelay` reads one evdev device, handles per-device grab state, applies
-  the optional interrupt shortcut, and forwards events to HID dispatch.
+- `InputRelay` reads one evdev device, classifies its source profile, handles
+  per-device grab state, applies the optional interrupt shortcut, and forwards
+  events to HID dispatch.
 - `HidDispatcher` owns HID translation, mouse frame coalescing, final
-  write-failure handling, and write-failure suspension. The concrete HID
-  writers own report shaping and short transient write retry for their own
-  gadget type.
-- `HidGadgets` owns the configured keyboard, mouse, and consumer-control HID
-  handles created from `gadgets.config` and `gadgets.layout`.
+  write-failure handling, absolute touch/tablet state flushing, and
+  write-failure suspension. The concrete HID writers own report shaping and
+  short transient write retry for their own gadget type.
+- `HidGadgets` owns the configured keyboard, mouse, consumer-control, and
+  combined generic digitizer HID handles created from `gadgets.config` and
+  `gadgets.layout`.
+
+The default USB gadget layout exposes four HID functions. Function indexes 0-2
+remain keyboard, mouse, and consumer control. Function index 3 exposes one
+generic digitizer interface with touch/tablet-touch, tablet pen, and tablet pad
+report IDs. This default layout change can make hosts re-enumerate or recache
+the USB device after an update. The touch interface is generic HID digitizer
+support, not Windows Precision Touchpad support.
 
 Runtime events are plain value objects from `runtime.events`:
 

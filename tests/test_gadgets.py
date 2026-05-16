@@ -27,6 +27,7 @@ from bluetooth_2_usb.gadgets.identity import (
 )
 from bluetooth_2_usb.gadgets.layout import (
     HID_FUNC_INDEX_CONSUMER,
+    HID_FUNC_INDEX_DIGITIZER,
     HID_FUNC_INDEX_KEYBOARD,
     HID_FUNC_INDEX_MOUSE,
     HID_FUNC_PROTOCOL_BOOT_KEYBOARD,
@@ -49,8 +50,13 @@ from bluetooth_2_usb.hid.constants import (
     KEYBOARD_IN_REPORT_LENGTH,
     MOUSE_CONFIGFS_REPORT_LENGTH,
     MOUSE_IN_REPORT_LENGTH,
+    TOUCH_DIGITIZER_IN_REPORT_LENGTH,
 )
-from bluetooth_2_usb.hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
+from bluetooth_2_usb.hid.descriptors import (
+    DEFAULT_DIGITIZER_DESCRIPTOR,
+    DEFAULT_KEYBOARD_DESCRIPTOR,
+    DEFAULT_MOUSE_DESCRIPTOR,
+)
 
 GADGETS_CONFIG = "bluetooth_2_usb.gadgets.config"
 GADGETS_MANAGER = "bluetooth_2_usb.gadgets.manager"
@@ -110,6 +116,14 @@ class _FakeConsumer:
         self.release_calls += 1
 
 
+class _FakeDigitizer:
+    def __init__(self) -> None:
+        self.release_all_calls = 0
+
+    async def release_all(self) -> None:
+        self.release_all_calls += 1
+
+
 class _FakeHidGadgets:
     def __init__(self) -> None:
         self.keyboard = _FakeKeyboard()
@@ -125,7 +139,17 @@ class _FakeHidGadgets:
 
 
 class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
-    async def _enable_with_fakes(self, hid_gadgets: HidGadgets, keyboard, mouse, consumer) -> None:
+    async def _enable_with_fakes(
+        self,
+        hid_gadgets: HidGadgets,
+        keyboard,
+        mouse,
+        consumer,
+        touch: _FakeDigitizer | None = None,
+        tablet: _FakeDigitizer | None = None,
+    ) -> None:
+        touch = _FakeDigitizer() if touch is None else touch
+        tablet = _FakeDigitizer() if tablet is None else tablet
         with (
             patch(f"{GADGETS_MANAGER}.rebuild_gadget", return_value=[]),
             patch.object(hid_gadgets, "prune_stale_hidg_nodes"),
@@ -133,6 +157,8 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{GADGETS_MANAGER}.ExtendedKeyboard", return_value=keyboard),
             patch(f"{GADGETS_MANAGER}.ExtendedMouse", return_value=mouse),
             patch(f"{GADGETS_MANAGER}.ExtendedConsumerControl", return_value=consumer),
+            patch(f"{GADGETS_MANAGER}.ExtendedTouchDigitizer", return_value=touch),
+            patch(f"{GADGETS_MANAGER}.ExtendedTabletDigitizer", return_value=tablet),
         ):
             await hid_gadgets.enable()
 
@@ -147,23 +173,29 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{GADGETS_MANAGER}.ExtendedKeyboard"),
             patch(f"{GADGETS_MANAGER}.ExtendedMouse"),
             patch(f"{GADGETS_MANAGER}.ExtendedConsumerControl"),
+            patch(f"{GADGETS_MANAGER}.ExtendedTouchDigitizer"),
+            patch(f"{GADGETS_MANAGER}.ExtendedTabletDigitizer"),
         ):
             await HidGadgets().enable()
 
         rebuild.assert_called_once_with(layout)
 
-    async def test_release_all_releases_keyboard_mouse_and_consumer(self) -> None:
+    async def test_release_all_releases_keyboard_mouse_consumer_and_digitizers(self) -> None:
         hid_gadgets = HidGadgets()
         keyboard = _FakeKeyboard()
         mouse = _FakeMouse()
         consumer = _FakeConsumer()
-        await self._enable_with_fakes(hid_gadgets, keyboard, mouse, consumer)
+        touch = _FakeDigitizer()
+        tablet = _FakeDigitizer()
+        await self._enable_with_fakes(hid_gadgets, keyboard, mouse, consumer, touch, tablet)
 
         await hid_gadgets.release_all()
 
         self.assertEqual(keyboard.release_all_calls, 1)
         self.assertEqual(mouse.release_all_calls, 1)
         self.assertEqual(consumer.release_calls, 1)
+        self.assertEqual(touch.release_all_calls, 1)
+        self.assertEqual(tablet.release_all_calls, 1)
 
     async def test_release_all_continues_when_one_raises(self) -> None:
         hid_gadgets = HidGadgets()
@@ -219,7 +251,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
     async def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(self) -> None:
         layout = build_default_layout()
 
-        self.assertEqual(len(layout.devices), 3)
+        self.assertEqual(len(layout.devices), 4)
         self.assertEqual(bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR)
         self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
         self.assertEqual(DEFAULT_MOUSE_DESCRIPTOR.count(bytes((0x09, 0x48))), 2)
@@ -228,6 +260,11 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (HID_OUT_REPORT_LENGTH_NONE,))
         self.assertEqual(layout.devices[1].configfs_report_length, MOUSE_CONFIGFS_REPORT_LENGTH)
         self.assertEqual(bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor))
+        self.assertEqual(bytes(layout.devices[3].descriptor), DEFAULT_DIGITIZER_DESCRIPTOR)
+        self.assertEqual(layout.devices[0].function_index, HID_FUNC_INDEX_KEYBOARD)
+        self.assertEqual(layout.devices[1].function_index, HID_FUNC_INDEX_MOUSE)
+        self.assertEqual(layout.devices[2].function_index, HID_FUNC_INDEX_CONSUMER)
+        self.assertEqual(layout.devices[3].function_index, HID_FUNC_INDEX_DIGITIZER)
         self.assertEqual(layout.bcd_device, USB_DEV_RELEASE_BCD)
         self.assertEqual(layout.product_name, USB_PRODUCT_NAME)
         self.assertEqual(layout.serial_number, USB_SERIAL_NUMBER)
@@ -237,6 +274,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(layout.devices[0].wakeup_on_write)
         self.assertFalse(layout.devices[1].wakeup_on_write)
         self.assertFalse(layout.devices[2].wakeup_on_write)
+        self.assertFalse(layout.devices[3].wakeup_on_write)
 
     async def test_default_layout_accepts_runtime_usb_identity(self) -> None:
         identity = UsbIdentity(product_name="USB Combo Device pi0w", serial_number="b2upi0w")
@@ -386,6 +424,12 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
                 .read_text(encoding="utf-8")
                 .strip(),
                 str(CONSUMER_IN_REPORT_LENGTH),
+            )
+            self.assertEqual(
+                (gadget_root / _hid_function_path(HID_FUNC_INDEX_DIGITIZER) / "report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                str(TOUCH_DIGITIZER_IN_REPORT_LENGTH + 1),
             )
 
     async def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:

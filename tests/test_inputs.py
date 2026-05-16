@@ -5,6 +5,7 @@ from unittest.mock import patch
 from bluetooth_2_usb.evdev import ecodes
 from bluetooth_2_usb.inputs.filter import DeviceFilter, DeviceFilterType
 from bluetooth_2_usb.inputs.inventory import auto_relay_exclusion_reason, describe_input_devices, inventory_to_text
+from bluetooth_2_usb.inputs.profile import InputDeviceKind, input_device_profile
 
 INPUTS_INVENTORY = "bluetooth_2_usb.inputs.inventory"
 
@@ -96,6 +97,31 @@ class _FakeInputDevice:
         self.closed = True
 
 
+class _FakeProfileInputDevice(_FakeInputDevice):
+    def __init__(
+        self,
+        *,
+        path: str = "/dev/input/event7",
+        name: str,
+        capabilities: dict[int, list[int]],
+        props: list[int] | None = None,
+        absinfo: dict[int, tuple[int, int]] | None = None,
+    ) -> None:
+        super().__init__(path=path, name=name, capabilities=capabilities)
+        self._props = props or []
+        self._absinfo = absinfo or {}
+        self.info = SimpleNamespace(vendor=1, product=2)
+
+    def input_props(self, *, verbose: bool):
+        if verbose:
+            raise AssertionError("profile should request numeric input properties")
+        return self._props
+
+    def absinfo(self, code: int):
+        minimum, maximum = self._absinfo.get(code, (0, 0))
+        return SimpleNamespace(min=minimum, max=maximum, fuzz=0, flat=0, resolution=0)
+
+
 class InputInventoryTest(unittest.TestCase):
     def test_auto_relay_excludes_default_noise_prefixes_case_insensitively(self) -> None:
         device = _FakeInputDevice(path="/dev/input/event0", name="GPIO Keys", capabilities={ecodes.EV_KEY: []})
@@ -125,6 +151,60 @@ class InputInventoryTest(unittest.TestCase):
         self.assertEqual(devices[0].uniq, "AA-BB")
         self.assertIn("permission denied", devices[2].exclusion_reason or "")
         self.assertTrue(all(device.closed for device in (keyboard, mouse, broken)))
+
+    def test_describe_input_devices_reports_absolute_devices_as_relay_candidates(self) -> None:
+        tablet = _FakeInputDevice(path="/dev/input/event4", name="Tablet", capabilities={ecodes.EV_ABS: []})
+
+        with patch(f"{INPUTS_INVENTORY}.list_input_devices", return_value=[tablet]):
+            devices = describe_input_devices()
+
+        self.assertEqual(devices[0].capabilities, ["EV_ABS"])
+        self.assertTrue(devices[0].relay_candidate)
+
+    def test_profile_classifies_buttonpad_trackpad(self) -> None:
+        device = _FakeProfileInputDevice(
+            name="Apple Inc. Magic Trackpad",
+            capabilities={
+                ecodes.EV_ABS: [ecodes.ABS_MT_SLOT, ecodes.ABS_MT_POSITION_X, ecodes.ABS_MT_POSITION_Y],
+                ecodes.EV_KEY: [ecodes.BTN_TOUCH],
+            },
+            props=[ecodes.INPUT_PROP_BUTTONPAD],
+            absinfo={ecodes.ABS_MT_SLOT: (0, 15), ecodes.ABS_MT_POSITION_X: (-3678, 3934)},
+        )
+
+        profile = input_device_profile(device)
+
+        self.assertEqual(profile.kind, InputDeviceKind.TOUCHPAD)
+        self.assertEqual(profile.max_contacts, 16)
+        self.assertEqual(profile.vendor_id, 1)
+        self.assertEqual(profile.product_id, 2)
+
+    def test_profile_classifies_wacom_pen_and_pad(self) -> None:
+        pen = _FakeProfileInputDevice(
+            name="Wacom Intuos Pro L Pen",
+            capabilities={
+                ecodes.EV_ABS: [ecodes.ABS_X, ecodes.ABS_Y, ecodes.ABS_PRESSURE],
+                ecodes.EV_KEY: [ecodes.BTN_TOOL_PEN, ecodes.BTN_TOUCH],
+            },
+        )
+        pad = _FakeProfileInputDevice(
+            name="Wacom Intuos Pro L Pad", capabilities={ecodes.EV_KEY: [ecodes.BTN_0, ecodes.BTN_1]}
+        )
+
+        self.assertEqual(input_device_profile(pen).kind, InputDeviceKind.TABLET_PEN)
+        self.assertEqual(input_device_profile(pad).kind, InputDeviceKind.TABLET_PAD)
+
+    def test_profile_classifies_wacom_pt_pad_before_stylus_button_looks_like_pen(self) -> None:
+        pad = _FakeProfileInputDevice(
+            name="Wacom Intuos PT M Pad",
+            capabilities={
+                ecodes.EV_ABS: [ecodes.ABS_X, ecodes.ABS_Y],
+                ecodes.EV_KEY: [ecodes.BTN_LEFT, ecodes.BTN_RIGHT, ecodes.BTN_BACK, ecodes.BTN_STYLUS],
+            },
+            absinfo={ecodes.ABS_X: (0, 1), ecodes.ABS_Y: (0, 1)},
+        )
+
+        self.assertEqual(input_device_profile(pad).kind, InputDeviceKind.TABLET_PAD)
 
     def test_inventory_text_marks_relay_and_skipped_devices(self) -> None:
         with patch(

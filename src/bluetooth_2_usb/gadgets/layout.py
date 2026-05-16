@@ -20,8 +20,20 @@ from pathlib import Path
 
 import usb_hid
 
-from ..hid.constants import MOUSE_CONFIGFS_REPORT_LENGTH, MOUSE_IN_REPORT_LENGTH
-from ..hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
+from ..hid.constants import (
+    DIGITIZER_OUT_REPORT_LENGTH,
+    HID_PAGE_DIGITIZER,
+    HID_USAGE_DIGITIZER_TOUCH_PAD,
+    MOUSE_CONFIGFS_REPORT_LENGTH,
+    MOUSE_IN_REPORT_LENGTH,
+    TABLET_PAD_IN_REPORT_LENGTH,
+    TABLET_PAD_REPORT_ID,
+    TABLET_PEN_IN_REPORT_LENGTH,
+    TABLET_PEN_REPORT_ID,
+    TOUCH_DIGITIZER_IN_REPORT_LENGTH,
+    TOUCH_DIGITIZER_REPORT_ID,
+)
+from ..hid.descriptors import DEFAULT_DIGITIZER_DESCRIPTOR, DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
 from .identity import USB_PRODUCT_NAME, USB_SERIAL_NUMBER, UsbIdentity
 
 USB_CFG_REQUIRED_ATTR = 0x80
@@ -71,6 +83,15 @@ HID_FUNC_INDEX_MOUSE = 1
 
 HID_FUNC_INDEX_CONSUMER = 2
 """Configfs HID function index for the consumer-control gadget."""
+
+HID_FUNC_INDEX_DIGITIZER = 3
+"""Configfs HID function index for the generic touch/tablet digitizer gadget."""
+
+HID_FUNC_INDEX_TOUCH = HID_FUNC_INDEX_DIGITIZER
+"""Configfs HID function index for the generic touch digitizer report collection."""
+
+HID_FUNC_INDEX_TABLET = HID_FUNC_INDEX_DIGITIZER
+"""Configfs HID function index for the generic tablet digitizer report collection."""
 
 HID_REPORT_ID_NONE = 0
 """Report ID value for HID functions that do not use numbered reports."""
@@ -206,6 +227,27 @@ def build_default_layout(identity: UsbIdentity | None = None) -> GadgetLayout:
                 function_index=HID_FUNC_INDEX_CONSUMER,
                 protocol=HID_FUNC_PROTOCOL_NONE,
                 subclass=HID_FUNC_SUBCLASS_NONE,
+            ),
+            GadgetHidDevice(
+                descriptor=DEFAULT_DIGITIZER_DESCRIPTOR,
+                usage_page=HID_PAGE_DIGITIZER,
+                usage=HID_USAGE_DIGITIZER_TOUCH_PAD,
+                report_ids=(TOUCH_DIGITIZER_REPORT_ID, TABLET_PEN_REPORT_ID, TABLET_PAD_REPORT_ID),
+                in_report_lengths=(
+                    TOUCH_DIGITIZER_IN_REPORT_LENGTH,
+                    TABLET_PEN_IN_REPORT_LENGTH,
+                    TABLET_PAD_IN_REPORT_LENGTH,
+                ),
+                out_report_lengths=(
+                    DIGITIZER_OUT_REPORT_LENGTH,
+                    DIGITIZER_OUT_REPORT_LENGTH,
+                    DIGITIZER_OUT_REPORT_LENGTH,
+                ),
+                name="digitizer gadget",
+                function_index=HID_FUNC_INDEX_DIGITIZER,
+                protocol=HID_FUNC_PROTOCOL_NONE,
+                subclass=HID_FUNC_SUBCLASS_NONE,
+                configfs_report_length=TOUCH_DIGITIZER_IN_REPORT_LENGTH + 1,
             ),
         ),
         bcd_device=USB_DEV_RELEASE_BCD,

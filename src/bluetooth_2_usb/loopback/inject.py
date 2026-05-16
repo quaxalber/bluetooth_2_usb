@@ -7,7 +7,7 @@ import time
 from contextlib import suppress
 from pathlib import Path
 
-from evdev import UInput, ecodes
+from evdev import AbsInfo, UInput, ecodes
 
 from ..hid.constants import HI_RES_WHEEL_UNITS_PER_DETENT
 from .constants import (
@@ -81,6 +81,43 @@ def _mouse_capabilities() -> dict[int, list[int]]:
 def _consumer_capabilities() -> dict[int, list[int]]:
     consumer_codes = sorted({step.code for scenario in SCENARIOS.values() for step in scenario.consumer_steps})
     return {ecodes.EV_KEY: consumer_codes}
+
+
+def _touch_capabilities() -> dict[int, list[object]]:
+    return {
+        ecodes.EV_KEY: [ecodes.BTN_TOUCH, ecodes.BTN_LEFT],
+        ecodes.EV_ABS: [
+            (ecodes.ABS_MT_SLOT, AbsInfo(0, 0, 4, 0, 0, 0)),
+            (ecodes.ABS_MT_TRACKING_ID, AbsInfo(0, -1, 65535, 0, 0, 0)),
+            (ecodes.ABS_MT_POSITION_X, AbsInfo(0, 0, 2000, 0, 0, 20)),
+            (ecodes.ABS_MT_POSITION_Y, AbsInfo(0, 0, 1200, 0, 0, 20)),
+            (ecodes.ABS_MT_TOUCH_MAJOR, AbsInfo(0, 0, 255, 0, 0, 0)),
+            (ecodes.ABS_MT_TOUCH_MINOR, AbsInfo(0, 0, 255, 0, 0, 0)),
+            (ecodes.ABS_MT_PRESSURE, AbsInfo(0, 0, 255, 0, 0, 0)),
+        ],
+    }
+
+
+def _pen_capabilities() -> dict[int, list[object]]:
+    return {
+        ecodes.EV_KEY: [ecodes.BTN_TOOL_PEN, ecodes.BTN_TOUCH, ecodes.BTN_STYLUS, ecodes.BTN_STYLUS2],
+        ecodes.EV_ABS: [
+            (ecodes.ABS_X, AbsInfo(0, 0, 4095, 0, 0, 20)),
+            (ecodes.ABS_Y, AbsInfo(0, 0, 4095, 0, 0, 20)),
+            (ecodes.ABS_PRESSURE, AbsInfo(0, 0, 4095, 0, 0, 0)),
+            (ecodes.ABS_DISTANCE, AbsInfo(0, 0, 1023, 0, 0, 0)),
+            (ecodes.ABS_TILT_X, AbsInfo(0, -60, 60, 0, 0, 0)),
+            (ecodes.ABS_TILT_Y, AbsInfo(0, -60, 60, 0, 0, 0)),
+        ],
+        ecodes.EV_MSC: [ecodes.MSC_SERIAL],
+    }
+
+
+def _pad_capabilities() -> dict[int, list[object]]:
+    return {
+        ecodes.EV_KEY: [ecodes.BTN_0, ecodes.BTN_1, ecodes.BTN_FORWARD, ecodes.BTN_BACK],
+        ecodes.EV_ABS: [(ecodes.ABS_WHEEL, AbsInfo(0, -127, 127, 0, 0, 0))],
+    }
 
 
 def service_settle_sec() -> float:
@@ -189,6 +226,9 @@ def run_inject(
     keyboard = None
     mouse = None
     consumer = None
+    touch = None
+    pen = None
+    pad = None
     try:
         if scenario.keyboard_enabled:
             keyboard = UInput(_keyboard_capabilities(), name=keyboard_name)
@@ -196,8 +236,14 @@ def run_inject(
             mouse = UInput(_mouse_capabilities(), name=mouse_name)
         if scenario.consumer_enabled:
             consumer = UInput(_consumer_capabilities(), name=consumer_name)
+        if scenario.digitizer_enabled:
+            touch = UInput(
+                _touch_capabilities(), name="B2U Test Touch Digitizer", input_props=[ecodes.INPUT_PROP_BUTTONPAD]
+            )
+            pen = UInput(_pen_capabilities(), name="B2U Test Tablet Pen")
+            pad = UInput(_pad_capabilities(), name="B2U Test Tablet Pad")
     except PermissionError as exc:
-        _close_devices(consumer, mouse, keyboard)
+        _close_devices(pad, pen, touch, consumer, mouse, keyboard)
         return LoopbackResult(
             command="inject",
             scenario=scenario.name,
@@ -207,7 +253,7 @@ def run_inject(
             details={"uinput_path": str(UINPUT_PATH)},
         )
     except OSError as exc:
-        _close_devices(consumer, mouse, keyboard)
+        _close_devices(pad, pen, touch, consumer, mouse, keyboard)
         return LoopbackResult(
             command="inject",
             scenario=scenario.name,
@@ -249,6 +295,9 @@ def run_inject(
             for step_event in scenario.consumer_steps:
                 _send_step(consumer, step_event, resolved_event_gap_ms)
 
+        if touch is not None and pen is not None and pad is not None:
+            _send_digitizer_steps(touch, pen, pad, resolved_event_gap_ms)
+
         time.sleep(resolved_post_delay_ms / 1000.0)
 
     except OSError as exc:
@@ -263,14 +312,18 @@ def run_inject(
                 "keyboard_name": keyboard_name if keyboard is not None else None,
                 "mouse_name": mouse_name if mouse is not None else None,
                 "consumer_name": consumer_name if consumer is not None else None,
+                "touch_name": str(touch.name) if touch is not None else None,
+                "pen_name": str(pen.name) if pen is not None else None,
+                "pad_name": str(pad.name) if pad is not None else None,
             },
         )
     finally:
-        _close_devices(consumer, mouse, keyboard)
+        _close_devices(pad, pen, touch, consumer, mouse, keyboard)
 
     injected_events = len(scenario.keyboard_steps) + len(scenario.mouse_rel_steps)
     injected_events += len(scenario.mouse_button_steps)
     injected_events += len(scenario.consumer_steps)
+    injected_events += len(scenario.digitizer_report_ids)
     return LoopbackResult(
         command="inject",
         scenario=scenario.name,
@@ -282,6 +335,9 @@ def run_inject(
             "keyboard_name": keyboard_name if scenario.keyboard_enabled else None,
             "mouse_name": mouse_name if scenario.mouse_enabled else None,
             "consumer_name": consumer_name if scenario.consumer_enabled else None,
+            "touch_name": "B2U Test Touch Digitizer" if scenario.digitizer_enabled else None,
+            "pen_name": "B2U Test Tablet Pen" if scenario.digitizer_enabled else None,
+            "pad_name": "B2U Test Tablet Pad" if scenario.digitizer_enabled else None,
             "pre_delay_ms": pre_delay_ms,
             "event_gap_ms": resolved_event_gap_ms,
             "post_delay_ms": resolved_post_delay_ms,
@@ -289,3 +345,60 @@ def run_inject(
             "injected_event_count": injected_events,
         },
     )
+
+
+def _digitizer_syn(device: UInput, event_gap_ms: int) -> None:
+    device.syn()
+    time.sleep(event_gap_ms / 1000.0)
+
+
+def _send_digitizer_steps(touch: UInput, pen: UInput, pad: UInput, event_gap_ms: int) -> None:
+    _send_touch_digitizer_steps(touch, event_gap_ms)
+    _send_pen_digitizer_steps(pen, event_gap_ms)
+    _send_pad_digitizer_steps(pad, event_gap_ms)
+
+
+def _send_touch_digitizer_steps(touch: UInput, event_gap_ms: int) -> None:
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_SLOT, 0)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_TRACKING_ID, 11)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_POSITION_X, 900)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_POSITION_Y, 500)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_TOUCH_MAJOR, 32)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_TOUCH_MINOR, 18)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_PRESSURE, 160)
+    touch.write(ecodes.EV_KEY, ecodes.BTN_TOUCH, 1)
+    _digitizer_syn(touch, event_gap_ms)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_SLOT, 0)
+    touch.write(ecodes.EV_ABS, ecodes.ABS_MT_TRACKING_ID, -1)
+    touch.write(ecodes.EV_KEY, ecodes.BTN_TOUCH, 0)
+    _digitizer_syn(touch, event_gap_ms)
+
+
+def _send_pen_digitizer_steps(pen: UInput, event_gap_ms: int) -> None:
+    pen.write(ecodes.EV_KEY, ecodes.BTN_TOOL_PEN, 1)
+    pen.write(ecodes.EV_KEY, ecodes.BTN_TOUCH, 1)
+    pen.write(ecodes.EV_KEY, ecodes.BTN_STYLUS, 1)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_X, 2048)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_Y, 1024)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_PRESSURE, 2000)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_DISTANCE, 12)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_TILT_X, -20)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_TILT_Y, 25)
+    pen.write(ecodes.EV_MSC, ecodes.MSC_SERIAL, 0x12345678)
+    _digitizer_syn(pen, event_gap_ms)
+    pen.write(ecodes.EV_KEY, ecodes.BTN_TOUCH, 0)
+    pen.write(ecodes.EV_KEY, ecodes.BTN_STYLUS, 0)
+    pen.write(ecodes.EV_KEY, ecodes.BTN_TOOL_PEN, 0)
+    pen.write(ecodes.EV_ABS, ecodes.ABS_PRESSURE, 0)
+    _digitizer_syn(pen, event_gap_ms)
+
+
+def _send_pad_digitizer_steps(pad: UInput, event_gap_ms: int) -> None:
+    pad.write(ecodes.EV_KEY, ecodes.BTN_0, 1)
+    pad.write(ecodes.EV_KEY, ecodes.BTN_FORWARD, 1)
+    pad.write(ecodes.EV_ABS, ecodes.ABS_WHEEL, -3)
+    _digitizer_syn(pad, event_gap_ms)
+    pad.write(ecodes.EV_KEY, ecodes.BTN_0, 0)
+    pad.write(ecodes.EV_KEY, ecodes.BTN_FORWARD, 0)
+    pad.write(ecodes.EV_ABS, ecodes.ABS_WHEEL, 0)
+    _digitizer_syn(pad, event_gap_ms)

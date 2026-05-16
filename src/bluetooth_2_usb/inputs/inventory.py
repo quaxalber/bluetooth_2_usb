@@ -27,13 +27,13 @@ try:
 except ModuleNotFoundError as exc:
     InputDevice = Any  # type: ignore[assignment]
     list_devices = None  # type: ignore[assignment]
-    native_ecodes = SimpleNamespace(EV_KEY=0x01, EV_REL=0x02)
+    native_ecodes = SimpleNamespace(EV_KEY=0x01, EV_REL=0x02, EV_ABS=0x03)
     _EVDEV_IMPORT_ERROR: ModuleNotFoundError | None = exc
 else:
     _EVDEV_IMPORT_ERROR = None
 
 
-EVENT_TYPE_NAMES = {native_ecodes.EV_KEY: "EV_KEY", native_ecodes.EV_REL: "EV_REL"}
+EVENT_TYPE_NAMES = {native_ecodes.EV_KEY: "EV_KEY", native_ecodes.EV_REL: "EV_REL", native_ecodes.EV_ABS: "EV_ABS"}
 
 
 @dataclass(slots=True)

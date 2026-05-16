@@ -3,12 +3,21 @@ from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes
+from bluetooth_2_usb.hid.absolute import PadReport, PenReport, TouchReport, TouchReportContact
 from bluetooth_2_usb.hid.buttons import MouseButtons
-from bluetooth_2_usb.hid.constants import MOUSE_IN_REPORT_LENGTH
+from bluetooth_2_usb.hid.constants import (
+    MOUSE_IN_REPORT_LENGTH,
+    TABLET_PAD_REPORT_ID,
+    TABLET_PEN_REPORT_ID,
+    TOUCH_DIGITIZER_REPORT_ID,
+)
 from bluetooth_2_usb.hid.consumer import ExtendedConsumerControl
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.hid.keyboard import ExtendedKeyboard
 from bluetooth_2_usb.hid.mouse import ExtendedMouse
+from bluetooth_2_usb.hid.tablet import ExtendedTabletDigitizer
+from bluetooth_2_usb.hid.touch import ExtendedTouchDigitizer
+from bluetooth_2_usb.inputs.profile import AbsAxisInfo, InputDeviceKind, InputDeviceProfile
 from bluetooth_2_usb.relay.gate import RelayGate
 
 NUL = 0x00
@@ -25,6 +34,8 @@ HID_CONSUMER_ASYNCIO = "bluetooth_2_usb.hid.consumer.asyncio"
 HID_DISPATCH = "bluetooth_2_usb.hid.dispatch"
 HID_KEYBOARD_ASYNCIO = "bluetooth_2_usb.hid.keyboard.asyncio"
 HID_MOUSE_ASYNCIO = "bluetooth_2_usb.hid.mouse.asyncio"
+HID_TABLET_ASYNCIO = "bluetooth_2_usb.hid.tablet.asyncio"
+HID_TOUCH_ASYNCIO = "bluetooth_2_usb.hid.touch.asyncio"
 
 
 def _mouse_report(buttons: int = NO_BUTTONS, x: int = 0, y: int = 0, wheel: int = 0, pan: int = 0) -> bytes:
@@ -87,11 +98,41 @@ class _FakeConsumer:
         self.release_calls += 1
 
 
+class _FakeTouch:
+    def __init__(self) -> None:
+        self.reports = []
+        self.release_all_calls = 0
+
+    async def send(self, report) -> None:
+        self.reports.append(report)
+
+    async def release_all(self) -> None:
+        self.release_all_calls += 1
+
+
+class _FakeTablet:
+    def __init__(self) -> None:
+        self.pen_reports = []
+        self.pad_reports = []
+        self.release_all_calls = 0
+
+    async def send_pen(self, report) -> None:
+        self.pen_reports.append(report)
+
+    async def send_pad(self, report) -> None:
+        self.pad_reports.append(report)
+
+    async def release_all(self) -> None:
+        self.release_all_calls += 1
+
+
 class _FakeHidGadgets:
     def __init__(self) -> None:
         self.keyboard = _FakeKeyboard()
         self.mouse = _FakeMouse()
         self.consumer = _FakeConsumer()
+        self.touch = _FakeTouch()
+        self.tablet = _FakeTablet()
         self.release_all_calls = 0
 
     async def release_all(self) -> None:
@@ -99,6 +140,8 @@ class _FakeHidGadgets:
         await self.keyboard.release_all()
         await self.mouse.release_all()
         await self.consumer.release()
+        await self.touch.release_all()
+        await self.tablet.release_all()
 
 
 def _active_gate() -> RelayGate:
@@ -126,6 +169,69 @@ class _TestSynEvent:
     type = ecodes.EV_SYN
     code = ecodes.SYN_REPORT
     value = ecodes.SYN_REPORT
+
+
+class _WrappedSynEvent:
+    def __init__(self) -> None:
+        self.event = SimpleNamespace(type=ecodes.EV_SYN, code=ecodes.SYN_REPORT, value=0)
+
+
+class _TestAbsEvent:
+    type = ecodes.EV_ABS
+
+    def __init__(self, code: int, value: int) -> None:
+        self.code = code
+        self.value = value
+
+
+class _WrappedAbsEvent:
+    def __init__(self, code: int, value: int) -> None:
+        self.event = SimpleNamespace(type=ecodes.EV_ABS, code=code, value=value)
+
+
+class _TestMiscEvent:
+    type = ecodes.EV_MSC
+
+    def __init__(self, code: int, value: int) -> None:
+        self.code = code
+        self.value = value
+
+
+class _WrappedMiscEvent:
+    def __init__(self, code: int, value: int) -> None:
+        self.event = SimpleNamespace(type=ecodes.EV_MSC, code=code, value=value)
+
+
+def _touch_profile() -> InputDeviceProfile:
+    return InputDeviceProfile(
+        kind=InputDeviceKind.TOUCHPAD,
+        abs_axes={
+            ecodes.ABS_MT_SLOT: AbsAxisInfo(ecodes.ABS_MT_SLOT, 0, 15),
+            ecodes.ABS_MT_POSITION_X: AbsAxisInfo(ecodes.ABS_MT_POSITION_X, -3678, 3934),
+            ecodes.ABS_MT_POSITION_Y: AbsAxisInfo(ecodes.ABS_MT_POSITION_Y, -2478, 2587),
+            ecodes.ABS_MT_TOUCH_MAJOR: AbsAxisInfo(ecodes.ABS_MT_TOUCH_MAJOR, 0, 1020),
+            ecodes.ABS_MT_TOUCH_MINOR: AbsAxisInfo(ecodes.ABS_MT_TOUCH_MINOR, 0, 1020),
+            ecodes.ABS_MT_PRESSURE: AbsAxisInfo(ecodes.ABS_MT_PRESSURE, 0, 253),
+        },
+    )
+
+
+def _pen_profile() -> InputDeviceProfile:
+    return InputDeviceProfile(
+        kind=InputDeviceKind.TABLET_PEN,
+        abs_axes={
+            ecodes.ABS_X: AbsAxisInfo(ecodes.ABS_X, 0, 65024),
+            ecodes.ABS_Y: AbsAxisInfo(ecodes.ABS_Y, 0, 40640),
+            ecodes.ABS_PRESSURE: AbsAxisInfo(ecodes.ABS_PRESSURE, 0, 2047),
+            ecodes.ABS_DISTANCE: AbsAxisInfo(ecodes.ABS_DISTANCE, 0, 63),
+            ecodes.ABS_TILT_X: AbsAxisInfo(ecodes.ABS_TILT_X, -64, 63),
+            ecodes.ABS_TILT_Y: AbsAxisInfo(ecodes.ABS_TILT_Y, -64, 63),
+        },
+    )
+
+
+def _pad_profile() -> InputDeviceProfile:
+    return InputDeviceProfile(kind=InputDeviceKind.TABLET_PAD)
 
 
 class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
@@ -412,6 +518,79 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(device.sent, [_mouse_report(MouseButtons.TASK), _mouse_report()])
 
 
+class ExtendedDigitizerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_touch_digitizer_packs_contact_report(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report, report_id=None) -> None:
+            device.sent.append((report_id, bytes(report)))
+
+        device.send_report = send_report
+        touch_report = TouchReport(
+            contacts=(TouchReportContact(report_id=3, active=True, x=1000, y=2000, width=12, height=13, pressure=14),),
+            button=True,
+            scan_time=99,
+        )
+
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_TOUCH_ASYNCIO}.sleep") as sleep:
+            touch = ExtendedTouchDigitizer(devices=[])
+            await touch.send(touch_report)
+
+        self.assertEqual(device.sent[0][0], TOUCH_DIGITIZER_REPORT_ID)
+        self.assertEqual(device.sent[0][1][0:9], bytes([0x03, 0x03, 0xE8, 0x03, 0xD0, 0x07, 12, 13, 14]))
+        self.assertEqual(device.sent[0][1][45:49], bytes([1, 1, 99, 0]))
+        sleep.assert_not_called()
+
+    async def test_tablet_digitizer_packs_pen_and_pad_reports(self) -> None:
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report, report_id=None) -> None:
+            device.sent.append((report_id, bytes(report)))
+
+        device.send_report = send_report
+
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_TABLET_ASYNCIO}.sleep") as sleep:
+            tablet = ExtendedTabletDigitizer(devices=[])
+            await tablet.send_pen(
+                PenReport(
+                    in_range=True,
+                    tip=True,
+                    eraser=False,
+                    barrel=True,
+                    barrel2=False,
+                    x=300,
+                    y=400,
+                    pressure=500,
+                    distance=6,
+                    tilt_x=-7,
+                    tilt_y=8,
+                    serial=9,
+                )
+            )
+            await tablet.send_pad(PadReport(buttons=0x0102, wheel=-3))
+
+        self.assertEqual(device.sent[0][0], TABLET_PEN_REPORT_ID)
+        self.assertEqual(device.sent[0][1], bytes([0x0B, 0x2C, 0x01, 0x90, 0x01, 0xF4, 0x01, 6, 0, 249, 8, 9, 0, 0, 0]))
+        self.assertEqual(device.sent[1], (TABLET_PAD_REPORT_ID, bytes([0x02, 0x01, 253])))
+        sleep.assert_not_called()
+
+    async def test_tablet_digitizer_pads_reports_for_combined_configfs_function(self) -> None:
+        device = SimpleNamespace(sent=[], configfs_report_length=53)
+
+        def send_report(report, report_id=None) -> None:
+            device.sent.append((report_id, bytes(report)))
+
+        device.send_report = send_report
+
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
+            tablet = ExtendedTabletDigitizer(devices=[])
+            await tablet.send_pad(PadReport(buttons=0x0001, wheel=2))
+
+        self.assertEqual(device.sent[0][0], TABLET_PAD_REPORT_ID)
+        self.assertEqual(len(device.sent[0][1]), 52)
+        self.assertEqual(device.sent[0][1][:3], bytes([0x01, 0x00, 0x02]))
+
+
 class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
     async def test_consumer_key_release_uses_consumer_control_release_api(self) -> None:
         hid_gadgets = _FakeHidGadgets()
@@ -521,6 +700,150 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets.mouse.move.assert_called_once_with(40000, -40000, 200, -200)
         self.assertEqual(dispatcher.write_failures, 1)
         self.assertTrue(gate.active)
+
+    async def test_dispatch_routes_touchpad_absolute_frame_to_touch_digitizer(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_touch_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_SLOT, 0))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_TRACKING_ID, 42))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_POSITION_X, -3678))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_POSITION_Y, 2587))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_TOUCH_MAJOR, 510))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_TOUCH_MINOR, 1020))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_PRESSURE, 253))
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_LEFT, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestSynEvent())
+
+        self.assertEqual(len(hid_gadgets.touch.reports), 1)
+        report = hid_gadgets.touch.reports[0]
+        self.assertTrue(report.button)
+        self.assertEqual(len(report.contacts), 1)
+        self.assertEqual(report.contacts[0].x, 0)
+        self.assertEqual(report.contacts[0].y, 32767)
+        self.assertEqual(report.contacts[0].width, 128)
+        self.assertEqual(report.contacts[0].height, 255)
+        self.assertEqual(report.contacts[0].pressure, 255)
+
+    async def test_dispatch_routes_evdev_wrapped_touch_frame_to_touch_digitizer(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_touch_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_SLOT, 0))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_TRACKING_ID, 42))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_POSITION_X, -3678))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_POSITION_Y, 2587))
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_LEFT, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_WrappedSynEvent())
+
+        self.assertEqual(len(hid_gadgets.touch.reports), 1)
+        report = hid_gadgets.touch.reports[0]
+        self.assertTrue(report.button)
+        self.assertEqual(len(report.contacts), 1)
+        self.assertEqual(report.contacts[0].x, 0)
+        self.assertEqual(report.contacts[0].y, 32767)
+
+    async def test_dispatch_routes_button_lifetime_touch_frame_to_touch_digitizer(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_touch_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_SLOT, 0))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_POSITION_X, -3678))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_MT_POSITION_Y, 2587))
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_WrappedSynEvent())
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_up))
+            await dispatcher.dispatch(_WrappedSynEvent())
+
+        self.assertEqual(len(hid_gadgets.touch.reports), 2)
+        press_report, release_report = hid_gadgets.touch.reports
+        self.assertEqual(len(press_report.contacts), 1)
+        self.assertTrue(press_report.contacts[0].active)
+        self.assertEqual(press_report.contacts[0].x, 0)
+        self.assertEqual(press_report.contacts[0].y, 32767)
+        self.assertEqual(len(release_report.contacts), 1)
+        self.assertFalse(release_report.contacts[0].active)
+
+    async def test_dispatch_routes_pen_frame_to_tablet_digitizer(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_pen_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOOL_PEN, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_X, 65024))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_Y, 40640))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_PRESSURE, 2047))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_TILT_X, -64))
+            await dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_TILT_Y, 63))
+            await dispatcher.dispatch(_TestMiscEvent(ecodes.MSC_SERIAL, 123))
+            await dispatcher.dispatch(_TestSynEvent())
+
+        self.assertEqual(len(hid_gadgets.tablet.pen_reports), 1)
+        report = hid_gadgets.tablet.pen_reports[0]
+        self.assertTrue(report.in_range)
+        self.assertTrue(report.tip)
+        self.assertEqual(report.x, 32767)
+        self.assertEqual(report.y, 32767)
+        self.assertEqual(report.pressure, 4095)
+        self.assertEqual(report.tilt_x, -127)
+        self.assertEqual(report.tilt_y, 127)
+        self.assertEqual(report.serial, 123)
+
+    async def test_dispatch_routes_evdev_wrapped_pen_frame_to_tablet_digitizer(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_pen_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOOL_PEN, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_X, 65024))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_Y, 40640))
+            await dispatcher.dispatch(_WrappedAbsEvent(ecodes.ABS_PRESSURE, 2047))
+            await dispatcher.dispatch(_WrappedMiscEvent(ecodes.MSC_SERIAL, 123))
+            await dispatcher.dispatch(_WrappedSynEvent())
+
+        self.assertEqual(len(hid_gadgets.tablet.pen_reports), 1)
+        report = hid_gadgets.tablet.pen_reports[0]
+        self.assertTrue(report.in_range)
+        self.assertTrue(report.tip)
+        self.assertEqual(report.x, 32767)
+        self.assertEqual(report.y, 32767)
+        self.assertEqual(report.pressure, 4095)
+        self.assertEqual(report.serial, 123)
+
+    async def test_dispatch_routes_wacom_pt_pad_buttons_to_tablet_pad_report(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_pad_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_LEFT, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_BACK, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestSynEvent())
+
+        self.assertEqual(len(hid_gadgets.tablet.pad_reports), 1)
+        self.assertEqual(hid_gadgets.tablet.pad_reports[0].buttons, 0x09)
 
 
 class HidDescriptorContractTest(unittest.TestCase):

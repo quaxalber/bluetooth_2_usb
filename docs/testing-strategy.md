@@ -29,8 +29,10 @@ sudo bluetooth_2_usb debug --duration 10
 ```
 
 For relay-path changes, add host/Pi loopback validation from
-[host-relay-loopback.md](host-relay-loopback.md). For read-only storage work,
-use [persistent-readonly.md](persistent-readonly.md).
+[host-relay-loopback.md](host-relay-loopback.md). For digitizer relay changes,
+also verify that the host sees the added touch/tablet HID interface and that
+source disconnect releases active contacts, pen state, and pad buttons. For
+read-only storage work, use [persistent-readonly.md](persistent-readonly.md).
 
 ## Test Structure
 
