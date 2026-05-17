@@ -17,7 +17,7 @@ from ..evdev import (
     is_consumer_key,
     is_mouse_button,
 )
-from ..inputs.profile import DEFAULT_PROFILE, InputDeviceKind, InputDeviceProfile
+from ..inputs.profile import DEFAULT_PROFILE, TABLET_PEN_KEYS, InputDeviceKind, InputDeviceProfile
 from ..logging import get_logger
 from ..relay.gate import RelayGate
 from ..relay.shortcut import ShortcutToggler
@@ -97,14 +97,7 @@ class _DigitizerAccumulators:
             }
         if self._pen is not None:
             self._pen.add_key(event)
-            return event_scancode(event) in {
-                ecodes.BTN_DIGI,
-                ecodes.BTN_TOOL_PEN,
-                ecodes.BTN_TOOL_RUBBER,
-                ecodes.BTN_TOUCH,
-                ecodes.BTN_STYLUS,
-                ecodes.BTN_STYLUS2,
-            }
+            return event_scancode(event) in TABLET_PEN_KEYS
         if self._pad is not None:
             self._pad.add_key(event)
             return event_scancode(event) in TABLET_PAD_BUTTONS

@@ -194,6 +194,22 @@ class InputInventoryTest(unittest.TestCase):
         self.assertEqual(input_device_profile(pen).kind, InputDeviceKind.TABLET_PEN)
         self.assertEqual(input_device_profile(pad).kind, InputDeviceKind.TABLET_PAD)
 
+    def test_profile_classifies_all_dispatched_pen_tool_keys_as_pen(self) -> None:
+        for tool_key in (
+            ecodes.BTN_TOOL_BRUSH,
+            ecodes.BTN_TOOL_PENCIL,
+            ecodes.BTN_TOOL_AIRBRUSH,
+            ecodes.BTN_TOOL_MOUSE,
+            ecodes.BTN_TOOL_LENS,
+        ):
+            with self.subTest(tool_key=tool_key):
+                pen = _FakeProfileInputDevice(
+                    name="Generic Tablet Tool",
+                    capabilities={ecodes.EV_ABS: [ecodes.ABS_X, ecodes.ABS_Y], ecodes.EV_KEY: [tool_key]},
+                )
+
+                self.assertEqual(input_device_profile(pen).kind, InputDeviceKind.TABLET_PEN)
+
     def test_profile_classifies_wacom_pt_pad_before_stylus_button_looks_like_pen(self) -> None:
         pad = _FakeProfileInputDevice(
             name="Wacom Intuos PT M Pad",

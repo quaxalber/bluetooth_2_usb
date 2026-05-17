@@ -8,6 +8,22 @@ from typing import Any
 from ..evdev import ecodes
 from ..evdev.types import InputDevice
 
+TABLET_PEN_TOOL_KEYS = frozenset(
+    {
+        ecodes.BTN_TOOL_PEN,
+        ecodes.BTN_TOOL_RUBBER,
+        ecodes.BTN_TOOL_BRUSH,
+        ecodes.BTN_TOOL_PENCIL,
+        ecodes.BTN_TOOL_AIRBRUSH,
+        ecodes.BTN_TOOL_MOUSE,
+        ecodes.BTN_TOOL_LENS,
+    }
+)
+"""evdev tool-presence keys represented through the generic tablet pen report."""
+
+TABLET_PEN_KEYS = TABLET_PEN_TOOL_KEYS | {ecodes.BTN_DIGI, ecodes.BTN_TOUCH, ecodes.BTN_STYLUS, ecodes.BTN_STYLUS2}
+"""evdev pen keys consumed by the generic tablet pen dispatcher."""
+
 
 class InputDeviceKind(StrEnum):
     KEYBOARD_MOUSE = "keyboard_mouse"
@@ -87,33 +103,12 @@ def _classify(
         return InputDeviceKind.TABLET_TOUCH
 
     has_pen_axes = {ecodes.ABS_X, ecodes.ABS_Y}.issubset(abs_axes)
-    if (
-        " pad" in f" {name.lower()}"
-        and not {
-            ecodes.BTN_TOOL_PEN,
-            ecodes.BTN_TOOL_RUBBER,
-            ecodes.BTN_TOOL_BRUSH,
-            ecodes.BTN_TOOL_PENCIL,
-            ecodes.BTN_TOOL_AIRBRUSH,
-        }
-        & key_codes
-    ):
+    if " pad" in f" {name.lower()}" and not TABLET_PEN_TOOL_KEYS & key_codes:
         return InputDeviceKind.TABLET_PAD
 
-    pen_keys = {
-        ecodes.BTN_DIGI,
-        ecodes.BTN_TOOL_PEN,
-        ecodes.BTN_TOOL_RUBBER,
-        ecodes.BTN_TOOL_BRUSH,
-        ecodes.BTN_TOOL_PENCIL,
-        ecodes.BTN_TOOL_AIRBRUSH,
-        ecodes.BTN_TOOL_MOUSE,
-        ecodes.BTN_TOOL_LENS,
-        ecodes.BTN_TOUCH,
-        ecodes.BTN_STYLUS,
-        ecodes.BTN_STYLUS2,
-    }
-    if has_pen_axes and (key_codes & pen_keys or ecodes.ABS_PRESSURE in abs_axes or ecodes.ABS_DISTANCE in abs_axes):
+    if has_pen_axes and (
+        key_codes & TABLET_PEN_KEYS or ecodes.ABS_PRESSURE in abs_axes or ecodes.ABS_DISTANCE in abs_axes
+    ):
         return InputDeviceKind.TABLET_PEN
 
     pad_buttons = set(range(ecodes.BTN_0, ecodes.BTN_0 + 16))

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..evdev import ecodes, event_code, event_keystate, event_scancode, event_value
-from ..inputs.profile import AbsAxisInfo, InputDeviceProfile
+from ..inputs.profile import TABLET_PEN_TOOL_KEYS, AbsAxisInfo, InputDeviceProfile
 from .constants import TOUCH_DIGITIZER_CONTACT_COUNT
 
 HID_ABS_MAX = 32767
@@ -263,11 +263,15 @@ class PenAccumulator:
     def add_key(self, event: object) -> None:
         scancode = event_scancode(event)
         pressed = event_keystate(event) != 0
-        if scancode in (ecodes.BTN_DIGI, ecodes.BTN_TOOL_PEN):
+        if scancode == ecodes.BTN_DIGI:
             self._in_range = pressed
         elif scancode == ecodes.BTN_TOOL_RUBBER:
             self._eraser = pressed
-            self._in_range = pressed or self._in_range
+            self._in_range = pressed
+        elif scancode in TABLET_PEN_TOOL_KEYS:
+            self._in_range = pressed
+            if pressed:
+                self._eraser = False
         elif scancode == ecodes.BTN_TOUCH:
             self._tip = pressed
         elif scancode == ecodes.BTN_STYLUS:

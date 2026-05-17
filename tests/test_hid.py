@@ -805,6 +805,46 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.tilt_y, 127)
         self.assertEqual(report.serial, 123)
 
+    async def test_dispatch_consumes_all_classified_pen_tool_keys(self) -> None:
+        for tool_key in (
+            ecodes.BTN_TOOL_BRUSH,
+            ecodes.BTN_TOOL_PENCIL,
+            ecodes.BTN_TOOL_AIRBRUSH,
+            ecodes.BTN_TOOL_MOUSE,
+            ecodes.BTN_TOOL_LENS,
+        ):
+            with self.subTest(tool_key=tool_key):
+                hid_gadgets = _FakeHidGadgets()
+                dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_pen_profile())
+
+                with (
+                    patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+                    patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+                ):
+                    await dispatcher.dispatch(_TestKeyEvent(tool_key, _TestKeyEvent.key_down))
+                    await dispatcher.dispatch(_TestSynEvent())
+
+                self.assertEqual(hid_gadgets.keyboard.presses, [])
+                self.assertEqual(hid_gadgets.tablet.pen_reports[-1].in_range, True)
+
+    async def test_dispatch_rubber_tool_release_clears_pen_range_state(self) -> None:
+        hid_gadgets = _FakeHidGadgets()
+        dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_pen_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOOL_RUBBER, _TestKeyEvent.key_down))
+            await dispatcher.dispatch(_TestSynEvent())
+            await dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOOL_RUBBER, _TestKeyEvent.key_up))
+            await dispatcher.dispatch(_TestSynEvent())
+
+        self.assertTrue(hid_gadgets.tablet.pen_reports[0].in_range)
+        self.assertTrue(hid_gadgets.tablet.pen_reports[0].eraser)
+        self.assertFalse(hid_gadgets.tablet.pen_reports[1].in_range)
+        self.assertFalse(hid_gadgets.tablet.pen_reports[1].eraser)
+
     async def test_dispatch_routes_evdev_wrapped_pen_frame_to_tablet_digitizer(self) -> None:
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate(), source_profile=_pen_profile())
