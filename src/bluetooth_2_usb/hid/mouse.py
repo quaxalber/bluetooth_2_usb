@@ -21,7 +21,7 @@ from .constants import (
 logger = get_logger(__name__)
 
 
-class ExtendedMouse:
+class Mouse:
     """Small mouse report writer with horizontal pan support."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES

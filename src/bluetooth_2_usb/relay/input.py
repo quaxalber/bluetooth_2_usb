@@ -139,6 +139,7 @@ class InputRelay:
                 logger.debug(
                     "Stopping relay loop for %s because the input device disappeared.", self._input_device.path
                 )
+                await self._dispatcher.release_active_digitizers()
                 self._dispatcher.discard_pending()
                 break
             else:

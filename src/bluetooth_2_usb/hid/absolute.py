@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..evdev import ecodes
+from ..evdev import ecodes, event_code, event_keystate, event_scancode, event_value
 from ..inputs.profile import AbsAxisInfo, InputDeviceProfile
 from .constants import TOUCH_DIGITIZER_CONTACT_COUNT
 
@@ -19,14 +19,6 @@ TABLET_PAD_BUTTONS = {
     ecodes.BTN_BACK,
     *range(ecodes.BTN_0, ecodes.BTN_0 + 16),
 }
-
-
-def event_code(event: object, default: int = -1) -> int:
-    return int(getattr(event, "code", getattr(getattr(event, "event", None), "code", default)))
-
-
-def event_value(event: object, default: int = 0) -> int:
-    return int(getattr(event, "value", getattr(getattr(event, "event", None), "value", default)))
 
 
 def scale_axis(value: int, axis: AbsAxisInfo | None, target_min: int = 0, target_max: int = HID_ABS_MAX) -> int:
@@ -138,8 +130,8 @@ class TouchAccumulator:
             self._dirty = True
 
     def add_key(self, event: object) -> None:
-        scancode = int(getattr(event, "scancode", getattr(event, "code", -1)))
-        keystate = int(getattr(event, "keystate", getattr(event, "value", 0)))
+        scancode = event_scancode(event)
+        keystate = event_keystate(event)
         if scancode == ecodes.BTN_LEFT:
             self._button = keystate != 0
             self._dirty = True
@@ -269,8 +261,8 @@ class PenAccumulator:
         self._dirty = True
 
     def add_key(self, event: object) -> None:
-        scancode = int(getattr(event, "scancode", getattr(event, "code", -1)))
-        pressed = int(getattr(event, "keystate", getattr(event, "value", 0))) != 0
+        scancode = event_scancode(event)
+        pressed = event_keystate(event) != 0
         if scancode in (ecodes.BTN_DIGI, ecodes.BTN_TOOL_PEN):
             self._in_range = pressed
         elif scancode == ecodes.BTN_TOOL_RUBBER:
@@ -347,10 +339,10 @@ class PadAccumulator:
         return PadReport(buttons=0, wheel=0)
 
     def add_key(self, event: object) -> None:
-        scancode = int(getattr(event, "scancode", getattr(event, "code", -1)))
+        scancode = event_scancode(event)
         if scancode not in self._button_map:
             return
-        pressed = int(getattr(event, "keystate", getattr(event, "value", 0))) != 0
+        pressed = event_keystate(event) != 0
         bit = 1 << self._button_map[scancode]
         self._buttons = self._buttons | bit if pressed else self._buttons & ~bit
         self._dirty = True

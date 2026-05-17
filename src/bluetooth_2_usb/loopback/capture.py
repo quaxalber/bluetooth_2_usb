@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 import time
-from collections import Counter
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
@@ -355,10 +354,12 @@ class ConsumerSequenceMatcher:
 class DigitizerSequenceMatcher:
     expected_report_ids: tuple[int, ...]
     index: int = 0
-    _remaining: Counter[int] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._remaining = Counter(self.expected_report_ids)
+        if self.expected_report_ids != (1, 1, 2, 2, 3, 3):
+            raise ValueError(
+                "DigitizerSequenceMatcher expects the built-in touch, pen, and pad active/release sequence"
+            )
 
     def handle(self, report: bytes) -> None:
         if not report:
@@ -366,17 +367,64 @@ class DigitizerSequenceMatcher:
         report_id = report[0]
         if report_id == 0:
             return
-        if not self._remaining:
+        if self.complete:
             return
-        if self._remaining[report_id] <= 0:
+        expected_report_id = self.expected_report_ids[self.index]
+        if report_id != expected_report_id:
             raise CaptureMismatchError(
-                f"Unexpected digitizer report ID {report_id}; expected one of {sorted(self._remaining)}: "
-                + report.hex(sep=" ")
+                f"Unexpected digitizer report ID {report_id}; expected {expected_report_id}: {report.hex(sep=' ')}"
             )
-        self._remaining[report_id] -= 1
-        if self._remaining[report_id] == 0:
-            del self._remaining[report_id]
+        self._validate_payload(report_id, report[1:])
         self.index += 1
+
+    def _validate_payload(self, report_id: int, payload: bytes) -> None:
+        release = self.index % 2 == 1
+        if report_id == 1:
+            self._validate_touch_payload(payload, release=release)
+        elif report_id == 2:
+            self._validate_pen_payload(payload, release=release)
+        elif report_id == 3:
+            self._validate_pad_payload(payload, release=release)
+        else:
+            raise CaptureMismatchError(f"Unexpected digitizer report ID {report_id}")
+
+    def _validate_touch_payload(self, payload: bytes, *, release: bool) -> None:
+        if len(payload) < 49:
+            raise CaptureMismatchError(f"Touch report is too short: {payload.hex(sep=' ')}")
+        flags = payload[0]
+        contact_id = payload[1]
+        contact_count = payload[45]
+        if release:
+            if flags & 0x01 or contact_count != 0:
+                raise CaptureMismatchError(
+                    f"Touch release report still has active contact state: {payload.hex(sep=' ')}"
+                )
+        elif not flags & 0x01 or contact_id == 0 or contact_count == 0:
+            raise CaptureMismatchError(f"Touch active report is missing contact state: {payload.hex(sep=' ')}")
+
+    def _validate_pen_payload(self, payload: bytes, *, release: bool) -> None:
+        if len(payload) < 15:
+            raise CaptureMismatchError(f"Pen report is too short: {payload.hex(sep=' ')}")
+        flags = payload[0]
+        pressure = int.from_bytes(payload[5:7], "little")
+        if release:
+            if flags != 0 or pressure != 0:
+                raise CaptureMismatchError(f"Pen release report still has active state: {payload.hex(sep=' ')}")
+        elif flags & 0x0B != 0x0B or pressure == 0:
+            raise CaptureMismatchError(
+                f"Pen active report is missing tip/barrel/pressure state: {payload.hex(sep=' ')}"
+            )
+
+    def _validate_pad_payload(self, payload: bytes, *, release: bool) -> None:
+        if len(payload) < 3:
+            raise CaptureMismatchError(f"Pad report is too short: {payload.hex(sep=' ')}")
+        buttons = int.from_bytes(payload[0:2], "little")
+        wheel = int.from_bytes(payload[2:3], "little", signed=True)
+        if release:
+            if buttons != 0 or wheel != 0:
+                raise CaptureMismatchError(f"Pad release report still has active state: {payload.hex(sep=' ')}")
+        elif buttons == 0 or wheel == 0:
+            raise CaptureMismatchError(f"Pad active report is missing button/wheel state: {payload.hex(sep=' ')}")
 
     @property
     def complete(self) -> bool:
@@ -389,9 +437,7 @@ class DigitizerSequenceMatcher:
             "steps_expected": len(self.expected_report_ids),
         }
         if not self.complete:
-            details["next_expected"] = "digitizer report IDs " + ",".join(
-                str(report_id) for report_id in sorted(self._remaining)
-            )
+            details["next_expected"] = f"digitizer report ID {self.expected_report_ids[self.index]}"
         return details
 
 

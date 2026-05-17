@@ -907,21 +907,58 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
             matcher.handle(bytes([CONSUMER_REPORT_ID, NUL, NUL]))
 
 
+def _touch_digitizer_report(*, active: bool) -> bytes:
+    payload = bytearray(52)
+    payload[0] = 0x03 if active else 0x00
+    payload[1] = 1
+    payload[45] = 1 if active else 0
+    return bytes([1, *payload])
+
+
+def _pen_digitizer_report(*, active: bool) -> bytes:
+    payload = bytearray(15)
+    if active:
+        payload[0] = 0x0B
+        payload[5:7] = (100).to_bytes(2, "little")
+    return bytes([2, *payload])
+
+
+def _pad_digitizer_report(*, active: bool) -> bytes:
+    payload = bytearray(3)
+    if active:
+        payload[0:2] = (0x05).to_bytes(2, "little")
+        payload[2] = (-3).to_bytes(1, "little", signed=True)[0]
+    return bytes([3, *payload])
+
+
 class DigitizerSequenceMatcherTest(unittest.TestCase):
     def test_digitizer_matcher_accepts_touch_pen_and_pad_reports(self) -> None:
         matcher = DigitizerSequenceMatcher((1, 1, 2, 2, 3, 3))
 
-        for report_id in (1, 1, 2, 2, 3, 3):
-            matcher.handle(bytes([report_id, 0, 0, 0]))
+        for report in (
+            _touch_digitizer_report(active=True),
+            _touch_digitizer_report(active=False),
+            _pen_digitizer_report(active=True),
+            _pen_digitizer_report(active=False),
+            _pad_digitizer_report(active=True),
+            _pad_digitizer_report(active=False),
+        ):
+            matcher.handle(report)
 
         self.assertTrue(matcher.complete)
         self.assertEqual(matcher.progress_details()["steps_seen"], 6)
 
     def test_digitizer_matcher_rejects_unexpected_report_id(self) -> None:
-        matcher = DigitizerSequenceMatcher((1, 2))
+        matcher = DigitizerSequenceMatcher((1, 1, 2, 2, 3, 3))
 
         with self.assertRaises(CaptureMismatchError):
-            matcher.handle(bytes([3, 0, 0, 0]))
+            matcher.handle(_pad_digitizer_report(active=True))
+
+    def test_digitizer_matcher_rejects_wrong_payload_with_expected_report_id(self) -> None:
+        matcher = DigitizerSequenceMatcher((1, 1, 2, 2, 3, 3))
+
+        with self.assertRaises(CaptureMismatchError):
+            matcher.handle(_touch_digitizer_report(active=False))
 
 
 class WindowsRawInputHelpersTest(unittest.TestCase):

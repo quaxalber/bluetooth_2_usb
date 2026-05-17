@@ -11,12 +11,12 @@ from bluetooth_2_usb.hid.constants import (
     TABLET_PEN_REPORT_ID,
     TOUCH_DIGITIZER_REPORT_ID,
 )
-from bluetooth_2_usb.hid.consumer import ExtendedConsumerControl
+from bluetooth_2_usb.hid.consumer import ConsumerControl
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
-from bluetooth_2_usb.hid.keyboard import ExtendedKeyboard
-from bluetooth_2_usb.hid.mouse import ExtendedMouse
-from bluetooth_2_usb.hid.tablet import ExtendedTabletDigitizer
-from bluetooth_2_usb.hid.touch import ExtendedTouchDigitizer
+from bluetooth_2_usb.hid.keyboard import Keyboard
+from bluetooth_2_usb.hid.mouse import Mouse
+from bluetooth_2_usb.hid.tablet import TabletDigitizer
+from bluetooth_2_usb.hid.touch import TouchDigitizer
 from bluetooth_2_usb.inputs.profile import AbsAxisInfo, InputDeviceKind, InputDeviceProfile
 from bluetooth_2_usb.relay.gate import RelayGate
 
@@ -234,7 +234,7 @@ def _pad_profile() -> InputDeviceProfile:
     return InputDeviceProfile(kind=InputDeviceKind.TABLET_PAD)
 
 
-class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
+class KeyboardTest(unittest.IsolatedAsyncioTestCase):
     async def test_press_release_and_release_all_do_not_sleep(self) -> None:
         keyboard_device = Mock()
 
@@ -242,7 +242,7 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{ADAFRUIT_HID_KEYBOARD}.Keyboard", return_value=keyboard_device),
             patch(f"{HID_KEYBOARD_ASYNCIO}.sleep") as sleep,
         ):
-            keyboard = ExtendedKeyboard(devices=[])
+            keyboard = Keyboard(devices=[])
             await keyboard.press(1)
             await keyboard.release(1)
             await keyboard.release_all()
@@ -260,7 +260,7 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{ADAFRUIT_HID_KEYBOARD}.Keyboard", return_value=keyboard_device),
             patch(f"{HID_KEYBOARD_ASYNCIO}.sleep") as sleep,
         ):
-            keyboard = ExtendedKeyboard(devices=[])
+            keyboard = Keyboard(devices=[])
             await keyboard.press(1)
 
         self.assertEqual(keyboard_device.press.mock_calls, [call(1), call(1)])
@@ -274,7 +274,7 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{ADAFRUIT_HID_KEYBOARD}.Keyboard", return_value=keyboard_device),
             patch(f"{HID_KEYBOARD_ASYNCIO}.sleep") as sleep,
         ):
-            keyboard = ExtendedKeyboard(devices=[])
+            keyboard = Keyboard(devices=[])
             with self.assertRaises(BlockingIOError):
                 await keyboard.release(1)
 
@@ -284,7 +284,7 @@ class ExtendedKeyboardTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
-class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
+class ConsumerControlTest(unittest.IsolatedAsyncioTestCase):
     async def test_press_and_release_delegate_without_sleep(self) -> None:
         consumer_device = Mock()
 
@@ -292,7 +292,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{ADAFRUIT_HID_CONSUMER_CONTROL}.ConsumerControl", return_value=consumer_device),
             patch(f"{HID_CONSUMER_ASYNCIO}.sleep") as sleep,
         ):
-            consumer = ExtendedConsumerControl(devices=[])
+            consumer = ConsumerControl(devices=[])
             await consumer.press(1)
             await consumer.release()
 
@@ -308,7 +308,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{ADAFRUIT_HID_CONSUMER_CONTROL}.ConsumerControl", return_value=consumer_device),
             patch(f"{HID_CONSUMER_ASYNCIO}.sleep") as sleep,
         ):
-            consumer = ExtendedConsumerControl(devices=[])
+            consumer = ConsumerControl(devices=[])
             await consumer.press(1)
 
         self.assertEqual(consumer_device.press.mock_calls, [call(1), call(1)])
@@ -322,7 +322,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{ADAFRUIT_HID_CONSUMER_CONTROL}.ConsumerControl", return_value=consumer_device),
             patch(f"{HID_CONSUMER_ASYNCIO}.sleep") as sleep,
         ):
-            consumer = ExtendedConsumerControl(devices=[])
+            consumer = ConsumerControl(devices=[])
             with self.assertRaises(BlockingIOError):
                 await consumer.release()
 
@@ -332,7 +332,7 @@ class ExtendedConsumerControlTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
-class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
+class MouseTest(unittest.IsolatedAsyncioTestCase):
     async def test_button_reports_do_not_sleep(self) -> None:
         device = SimpleNamespace(sent=[])
 
@@ -342,7 +342,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.press(MouseButtons.LEFT)
             await mouse.release(MouseButtons.LEFT)
             await mouse.release_all()
@@ -359,7 +359,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.move(x=300, y=-300, wheel=1, pan=-1)
 
         self.assertEqual(device.sent, [_mouse_report(x=300, y=-300, wheel=1, pan=-1)])
@@ -373,7 +373,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.move(pan=0.5)
             await mouse.move(pan=0.5)
             await mouse.move(pan=-0.5)
@@ -390,7 +390,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.move(wheel=0.5)
             await mouse.move(wheel=0.5)
             await mouse.move(wheel=-0.5)
@@ -407,7 +407,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
 
         self.assertEqual(
@@ -427,7 +427,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.move(x=40000)
             await mouse.move(x=1)
 
@@ -447,7 +447,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.move(x=1)
 
         expected_report = _mouse_report(x=1)
@@ -465,7 +465,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_MOUSE_ASYNCIO}.sleep") as sleep:
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             with self.assertRaises(BlockingIOError):
                 await mouse.move(x=1)
 
@@ -484,7 +484,7 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             with self.assertLogs("bluetooth_2_usb", level="DEBUG") as logs:
                 await mouse.move(x=40000, y=-40000, wheel=200, pan=-200)
 
@@ -511,14 +511,14 @@ class ExtendedMouseTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
             await mouse.press(MouseButtons.TASK)
             await mouse.release(MouseButtons.TASK)
 
         self.assertEqual(device.sent, [_mouse_report(MouseButtons.TASK), _mouse_report()])
 
 
-class ExtendedDigitizerTest(unittest.IsolatedAsyncioTestCase):
+class DigitizerTest(unittest.IsolatedAsyncioTestCase):
     async def test_touch_digitizer_packs_contact_report(self) -> None:
         device = SimpleNamespace(sent=[])
 
@@ -533,7 +533,7 @@ class ExtendedDigitizerTest(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_TOUCH_ASYNCIO}.sleep") as sleep:
-            touch = ExtendedTouchDigitizer(devices=[])
+            touch = TouchDigitizer(devices=[])
             await touch.send(touch_report)
 
         self.assertEqual(device.sent[0][0], TOUCH_DIGITIZER_REPORT_ID)
@@ -550,7 +550,7 @@ class ExtendedDigitizerTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device), patch(f"{HID_TABLET_ASYNCIO}.sleep") as sleep:
-            tablet = ExtendedTabletDigitizer(devices=[])
+            tablet = TabletDigitizer(devices=[])
             await tablet.send_pen(
                 PenReport(
                     in_range=True,
@@ -583,7 +583,7 @@ class ExtendedDigitizerTest(unittest.IsolatedAsyncioTestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            tablet = ExtendedTabletDigitizer(devices=[])
+            tablet = TabletDigitizer(devices=[])
             await tablet.send_pad(PadReport(buttons=0x0001, wheel=2))
 
         self.assertEqual(device.sent[0][0], TABLET_PAD_REPORT_ID)
@@ -615,7 +615,7 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
 
         categorize.assert_called_once_with(raw_event)
 
-    async def test_dispatch_accepts_single_syn_event_and_flushes_mouse_delta(self) -> None:
+    async def test_dispatch_accepts_single_syn_event_and_flushes_mouse(self) -> None:
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
@@ -630,7 +630,7 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(hid_gadgets.mouse.moves, [(7, 0, 0, 0)])
         self.assertTrue(any("coalesced_events=1" in message and "emitted=True" in message for message in logs.output))
 
-    async def test_dispatch_logs_coalesced_mouse_delta_count_on_flush(self) -> None:
+    async def test_dispatch_logs_coalesced_mouse_count_on_flush(self) -> None:
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
@@ -646,7 +646,7 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(hid_gadgets.mouse.moves, [(7, -3, 0, 0)])
         self.assertTrue(any("coalesced_events=2" in message and "emitted=True" in message for message in logs.output))
 
-    async def test_dispatch_logs_fractional_mouse_delta_flush_without_report(self) -> None:
+    async def test_dispatch_logs_fractional_mouse_flush_without_report(self) -> None:
         hid_gadgets = _FakeHidGadgets()
         dispatcher = HidDispatcher(hid_gadgets, _active_gate())
 
@@ -845,6 +845,35 @@ class HidDispatchTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(hid_gadgets.tablet.pad_reports), 1)
         self.assertEqual(hid_gadgets.tablet.pad_reports[0].buttons, 0x09)
 
+    async def test_release_active_digitizers_releases_touch_pen_and_pad_state(self) -> None:
+        touch_gadgets = _FakeHidGadgets()
+        touch_dispatcher = HidDispatcher(touch_gadgets, _active_gate(), source_profile=_touch_profile())
+        pen_gadgets = _FakeHidGadgets()
+        pen_dispatcher = HidDispatcher(pen_gadgets, _active_gate(), source_profile=_pen_profile())
+        pad_gadgets = _FakeHidGadgets()
+        pad_dispatcher = HidDispatcher(pad_gadgets, _active_gate(), source_profile=_pad_profile())
+
+        with (
+            patch(f"{HID_DISPATCH}.categorize", side_effect=lambda event: event),
+            patch(f"{HID_DISPATCH}.KeyEvent", _TestKeyEvent),
+        ):
+            await touch_dispatcher.dispatch(_TestAbsEvent(ecodes.ABS_MT_TRACKING_ID, 42))
+            await touch_dispatcher.dispatch(_TestSynEvent())
+            await pen_dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOOL_PEN, _TestKeyEvent.key_down))
+            await pen_dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_TOUCH, _TestKeyEvent.key_down))
+            await pen_dispatcher.dispatch(_TestSynEvent())
+            await pad_dispatcher.dispatch(_TestKeyEvent(ecodes.BTN_LEFT, _TestKeyEvent.key_down))
+            await pad_dispatcher.dispatch(_TestSynEvent())
+
+        await touch_dispatcher.release_active_digitizers()
+        await pen_dispatcher.release_active_digitizers()
+        await pad_dispatcher.release_active_digitizers()
+
+        self.assertFalse(touch_gadgets.touch.reports[-1].contacts[0].active)
+        self.assertFalse(pen_gadgets.tablet.pen_reports[-1].in_range)
+        self.assertFalse(pen_gadgets.tablet.pen_reports[-1].tip)
+        self.assertEqual(pad_gadgets.tablet.pad_reports[-1].buttons, 0)
+
 
 class HidDescriptorContractTest(unittest.TestCase):
     def test_mouse_report_writer_uses_descriptor_report_length(self) -> None:
@@ -856,6 +885,6 @@ class HidDescriptorContractTest(unittest.TestCase):
         device.send_report = send_report
 
         with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
-            mouse = ExtendedMouse(devices=[])
+            mouse = Mouse(devices=[])
 
         self.assertEqual(len(mouse.report), MOUSE_IN_REPORT_LENGTH)

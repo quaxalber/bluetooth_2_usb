@@ -5,16 +5,16 @@ import asyncio
 from . import timing
 
 
-class ExtendedConsumerControl:
+class ConsumerControl:
     """Consumer-control report writer with short transient write retry."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
     REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
 
     def __init__(self, devices) -> None:
-        from adafruit_hid.consumer_control import ConsumerControl
+        from adafruit_hid.consumer_control import ConsumerControl as AdafruitConsumerControl
 
-        self._consumer_control = ConsumerControl(devices)
+        self._consumer_control = AdafruitConsumerControl(devices)
 
     def __str__(self):
         return str(self._consumer_control)

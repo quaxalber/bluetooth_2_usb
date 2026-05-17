@@ -18,7 +18,7 @@ from .constants import (
 logger = get_logger(__name__)
 
 
-class ExtendedTabletDigitizer:
+class TabletDigitizer:
     """Generic tablet pen and pad report writer."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES

@@ -16,7 +16,7 @@ from .constants import (
 logger = get_logger(__name__)
 
 
-class ExtendedTouchDigitizer:
+class TouchDigitizer:
     """Generic multitouch digitizer report writer."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES

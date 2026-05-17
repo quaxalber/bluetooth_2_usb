@@ -154,11 +154,11 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{GADGETS_MANAGER}.rebuild_gadget", return_value=[]),
             patch.object(hid_gadgets, "prune_stale_hidg_nodes"),
             patch.object(hid_gadgets, "validate_hidg_nodes"),
-            patch(f"{GADGETS_MANAGER}.ExtendedKeyboard", return_value=keyboard),
-            patch(f"{GADGETS_MANAGER}.ExtendedMouse", return_value=mouse),
-            patch(f"{GADGETS_MANAGER}.ExtendedConsumerControl", return_value=consumer),
-            patch(f"{GADGETS_MANAGER}.ExtendedTouchDigitizer", return_value=touch),
-            patch(f"{GADGETS_MANAGER}.ExtendedTabletDigitizer", return_value=tablet),
+            patch(f"{GADGETS_MANAGER}.Keyboard", return_value=keyboard),
+            patch(f"{GADGETS_MANAGER}.Mouse", return_value=mouse),
+            patch(f"{GADGETS_MANAGER}.ConsumerControl", return_value=consumer),
+            patch(f"{GADGETS_MANAGER}.TouchDigitizer", return_value=touch),
+            patch(f"{GADGETS_MANAGER}.TabletDigitizer", return_value=tablet),
         ):
             await hid_gadgets.enable()
 
@@ -170,11 +170,11 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{GADGETS_MANAGER}.rebuild_gadget", return_value=[]) as rebuild,
             patch.object(HidGadgets, "prune_stale_hidg_nodes"),
             patch.object(HidGadgets, "validate_hidg_nodes"),
-            patch(f"{GADGETS_MANAGER}.ExtendedKeyboard"),
-            patch(f"{GADGETS_MANAGER}.ExtendedMouse"),
-            patch(f"{GADGETS_MANAGER}.ExtendedConsumerControl"),
-            patch(f"{GADGETS_MANAGER}.ExtendedTouchDigitizer"),
-            patch(f"{GADGETS_MANAGER}.ExtendedTabletDigitizer"),
+            patch(f"{GADGETS_MANAGER}.Keyboard"),
+            patch(f"{GADGETS_MANAGER}.Mouse"),
+            patch(f"{GADGETS_MANAGER}.ConsumerControl"),
+            patch(f"{GADGETS_MANAGER}.TouchDigitizer"),
+            patch(f"{GADGETS_MANAGER}.TabletDigitizer"),
         ):
             await HidGadgets().enable()
 

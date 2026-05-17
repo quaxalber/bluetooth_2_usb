@@ -5,11 +5,11 @@ import os
 import stat
 from pathlib import Path
 
-from ..hid.consumer import ExtendedConsumerControl
-from ..hid.keyboard import ExtendedKeyboard
-from ..hid.mouse import ExtendedMouse
-from ..hid.tablet import ExtendedTabletDigitizer
-from ..hid.touch import ExtendedTouchDigitizer
+from ..hid.consumer import ConsumerControl
+from ..hid.keyboard import Keyboard
+from ..hid.mouse import Mouse
+from ..hid.tablet import TabletDigitizer
+from ..hid.touch import TouchDigitizer
 from ..logging import get_logger
 from .config import rebuild_gadget
 from .identity import UsbIdentity
@@ -161,60 +161,60 @@ class HidGadgets:
             enabled_devices = list(rebuild_gadget(build_default_layout(self._identity)))
             await self.validate_hidg_nodes(enabled_devices)
 
-        self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
-        self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
-        self._gadgets["consumer"] = ExtendedConsumerControl(enabled_devices)
-        self._gadgets["touch"] = ExtendedTouchDigitizer(enabled_devices)
-        self._gadgets["tablet"] = ExtendedTabletDigitizer(enabled_devices)
+        self._gadgets["keyboard"] = Keyboard(enabled_devices)
+        self._gadgets["mouse"] = Mouse(enabled_devices)
+        self._gadgets["consumer"] = ConsumerControl(enabled_devices)
+        self._gadgets["touch"] = TouchDigitizer(enabled_devices)
+        self._gadgets["tablet"] = TabletDigitizer(enabled_devices)
         self._enabled = True
 
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)
 
     @property
-    def keyboard(self) -> ExtendedKeyboard | None:
+    def keyboard(self) -> Keyboard | None:
         """
         Get the Keyboard gadget.
 
-        :return: An ExtendedKeyboard object, or None if not initialized
-        :rtype: ExtendedKeyboard | None
+        :return: A Keyboard object, or None if not initialized
+        :rtype: Keyboard | None
         """
         return self._gadgets["keyboard"]
 
     @property
-    def mouse(self) -> ExtendedMouse | None:
+    def mouse(self) -> Mouse | None:
         """
         Get the Mouse gadget.
 
-        :return: An ExtendedMouse object, or None if not initialized
-        :rtype: ExtendedMouse | None
+        :return: A Mouse object, or None if not initialized
+        :rtype: Mouse | None
         """
         return self._gadgets["mouse"]
 
     @property
-    def consumer(self) -> ExtendedConsumerControl | None:
+    def consumer(self) -> ConsumerControl | None:
         """
         Get the ConsumerControl gadget.
 
-        :return: An ExtendedConsumerControl object, or None if not initialized
-        :rtype: ExtendedConsumerControl | None
+        :return: A ConsumerControl object, or None if not initialized
+        :rtype: ConsumerControl | None
         """
         return self._gadgets["consumer"]
 
     @property
-    def touch(self) -> ExtendedTouchDigitizer | None:
+    def touch(self) -> TouchDigitizer | None:
         """
         Get the touch digitizer gadget.
 
-        :return: An ExtendedTouchDigitizer object, or None if not initialized
+        :return: A TouchDigitizer object, or None if not initialized
         """
         return self._gadgets["touch"]
 
     @property
-    def tablet(self) -> ExtendedTabletDigitizer | None:
+    def tablet(self) -> TabletDigitizer | None:
         """
         Get the tablet digitizer gadget.
 
-        :return: An ExtendedTabletDigitizer object, or None if not initialized
+        :return: A TabletDigitizer object, or None if not initialized
         """
         return self._gadgets["tablet"]
 

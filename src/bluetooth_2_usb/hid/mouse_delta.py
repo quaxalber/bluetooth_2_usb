@@ -3,8 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from ..evdev import ecodes, get_mouse_movement
-from ..evdev.types import RelEvent
+from ..evdev import RelEvent, ecodes, get_mouse_movement
 from ..logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,7 +23,7 @@ class MouseDelta:
         yield self.pan
 
 
-class MouseDeltaAccumulator:
+class MouseAccumulator:
     def __init__(self) -> None:
         self._x = 0
         self._y = 0

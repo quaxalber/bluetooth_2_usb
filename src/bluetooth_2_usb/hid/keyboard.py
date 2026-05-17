@@ -5,16 +5,16 @@ import asyncio
 from . import timing
 
 
-class ExtendedKeyboard:
+class Keyboard:
     """Keyboard report writer with short transient write retry."""
 
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
     REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
 
     def __init__(self, devices) -> None:
-        from adafruit_hid.keyboard import Keyboard
+        from adafruit_hid.keyboard import Keyboard as AdafruitKeyboard
 
-        self._keyboard = Keyboard(devices)
+        self._keyboard = AdafruitKeyboard(devices)
 
     def __str__(self):
         return str(self._keyboard)
