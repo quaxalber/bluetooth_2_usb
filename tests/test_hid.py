@@ -603,6 +603,42 @@ class DigitizerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(device.sent[0][1]), 52)
         self.assertEqual(device.sent[0][1][:3], bytes([0x01, 0x00, 0x02]))
 
+    async def test_tablet_digitizer_release_all_holds_lock_across_pen_and_pad_reports(self) -> None:
+        class RecordingAsyncLock:
+            def __init__(self) -> None:
+                self.active = False
+                self.enter_count = 0
+                self.exit_count = 0
+
+            async def __aenter__(self):
+                if self.active:
+                    raise AssertionError("lock re-entered")
+                self.active = True
+                self.enter_count += 1
+
+            async def __aexit__(self, exc_type, exc, tb):
+                if not self.active:
+                    raise AssertionError("lock exited without entering")
+                self.active = False
+                self.exit_count += 1
+
+        lock = RecordingAsyncLock()
+        device = SimpleNamespace(sent=[])
+
+        def send_report(report, report_id=None) -> None:
+            device.sent.append((report_id, bytes(report), lock.active))
+
+        device.send_report = send_report
+
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
+            tablet = TabletDigitizer(devices=[], report_lock=lock)
+            await tablet.release_all()
+
+        self.assertEqual(lock.enter_count, 1)
+        self.assertEqual(lock.exit_count, 1)
+        self.assertEqual([sent[0] for sent in device.sent], [TABLET_PEN_REPORT_ID, TABLET_PAD_REPORT_ID])
+        self.assertEqual([sent[2] for sent in device.sent], [True, True])
+
     async def test_pad_accumulator_emits_relative_wheel_once(self) -> None:
         pad = PadAccumulator()
 

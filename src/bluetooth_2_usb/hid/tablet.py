@@ -40,52 +40,59 @@ class TabletDigitizer:
     def __str__(self) -> str:
         return str(self._device)
 
+    async def _send_pen_unlocked(self, pen_report: PenReport) -> None:
+        report = bytearray(TABLET_PEN_IN_REPORT_LENGTH)
+        report[0] = (
+            (0x01 if pen_report.in_range else 0)
+            | (0x02 if pen_report.tip else 0)
+            | (0x04 if pen_report.eraser else 0)
+            | (0x08 if pen_report.barrel else 0)
+            | (0x10 if pen_report.barrel2 else 0)
+        )
+        report[1:3] = pen_report.x.to_bytes(2, "little")
+        report[3:5] = pen_report.y.to_bytes(2, "little")
+        report[5:7] = pen_report.pressure.to_bytes(2, "little")
+        report[7:9] = pen_report.distance.to_bytes(2, "little")
+        report[9] = pen_report.tilt_x.to_bytes(1, "little", signed=True)[0]
+        report[10] = pen_report.tilt_y.to_bytes(1, "little", signed=True)[0]
+        report[11:15] = pen_report.serial.to_bytes(4, "little")
+        logger.debug("Sending tablet pen report: %s", report.hex(" "))
+        await self._send_report(report, TABLET_PEN_REPORT_ID)
+
     async def send_pen(self, pen_report: PenReport) -> None:
         async with self._report_lock:
-            report = bytearray(TABLET_PEN_IN_REPORT_LENGTH)
-            report[0] = (
-                (0x01 if pen_report.in_range else 0)
-                | (0x02 if pen_report.tip else 0)
-                | (0x04 if pen_report.eraser else 0)
-                | (0x08 if pen_report.barrel else 0)
-                | (0x10 if pen_report.barrel2 else 0)
-            )
-            report[1:3] = pen_report.x.to_bytes(2, "little")
-            report[3:5] = pen_report.y.to_bytes(2, "little")
-            report[5:7] = pen_report.pressure.to_bytes(2, "little")
-            report[7:9] = pen_report.distance.to_bytes(2, "little")
-            report[9] = pen_report.tilt_x.to_bytes(1, "little", signed=True)[0]
-            report[10] = pen_report.tilt_y.to_bytes(1, "little", signed=True)[0]
-            report[11:15] = pen_report.serial.to_bytes(4, "little")
-            logger.debug("Sending tablet pen report: %s", report.hex(" "))
-            await self._send_report(report, TABLET_PEN_REPORT_ID)
+            await self._send_pen_unlocked(pen_report)
+
+    async def _send_pad_unlocked(self, pad_report: PadReport) -> None:
+        report = bytearray(TABLET_PAD_IN_REPORT_LENGTH)
+        report[0:2] = pad_report.buttons.to_bytes(2, "little")
+        report[2] = pad_report.wheel.to_bytes(1, "little", signed=True)[0]
+        logger.debug("Sending tablet pad report: %s", report.hex(" "))
+        await self._send_report(report, TABLET_PAD_REPORT_ID)
 
     async def send_pad(self, pad_report: PadReport) -> None:
         async with self._report_lock:
-            report = bytearray(TABLET_PAD_IN_REPORT_LENGTH)
-            report[0:2] = pad_report.buttons.to_bytes(2, "little")
-            report[2] = pad_report.wheel.to_bytes(1, "little", signed=True)[0]
-            logger.debug("Sending tablet pad report: %s", report.hex(" "))
-            await self._send_report(report, TABLET_PAD_REPORT_ID)
+            await self._send_pad_unlocked(pad_report)
 
     async def release_all(self) -> None:
-        await self.send_pen(
-            PenReport(
-                in_range=False,
-                tip=False,
-                eraser=False,
-                barrel=False,
-                barrel2=False,
-                x=0,
-                y=0,
-                pressure=0,
-                distance=0,
-                tilt_x=0,
-                tilt_y=0,
-                serial=0,
+        async with self._report_lock:
+            await self._send_pen_unlocked(
+                PenReport(
+                    in_range=False,
+                    tip=False,
+                    eraser=False,
+                    barrel=False,
+                    barrel2=False,
+                    x=0,
+                    y=0,
+                    pressure=0,
+                    distance=0,
+                    tilt_x=0,
+                    tilt_y=0,
+                    serial=0,
+                )
             )
-        )
-        await self.send_pad(PadReport(buttons=0, wheel=0))
+            await self._send_pad_unlocked(PadReport(buttons=0, wheel=0))
 
     async def _send_report(self, report: bytearray, report_id: int) -> None:
         target_report_length = getattr(self._device, "configfs_report_length", 0)
