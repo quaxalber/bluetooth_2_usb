@@ -1,19 +1,128 @@
 from __future__ import annotations
 
+import errno
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
-from ..evdev.types import InputEvent, KeyEvent, RelEvent, categorize
+from ..evdev import (
+    InputEvent,
+    KeyEvent,
+    RelEvent,
+    categorize,
+    ecodes,
+    evdev_to_usb_hid,
+    event_code,
+    event_scancode,
+    event_type,
+    is_consumer_key,
+    is_mouse_button,
+)
+from ..inputs.profile import DEFAULT_PROFILE, TABLET_PEN_KEYS, InputDeviceKind, InputDeviceProfile
 from ..logging import get_logger
 from ..relay.gate import RelayGate
 from ..relay.shortcut import ShortcutToggler
-from .mouse_delta import MouseDelta, MouseDeltaAccumulator
+from .absolute import (
+    TABLET_PAD_BUTTONS,
+    PadAccumulator,
+    PadReport,
+    PenAccumulator,
+    PenReport,
+    TouchAccumulator,
+    TouchReport,
+)
+from .mouse import MouseAccumulator, MouseDelta
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from ..gadgets.manager import HidGadgets
+
+
+_DIGITIZER_TOUCH = "touch"
+_DIGITIZER_PEN = "pen"
+_DIGITIZER_PAD = "pad"
+
+
+@dataclass(frozen=True, slots=True)
+class _DigitizerOutput:
+    kind: str
+    description: str
+    report: TouchReport | PenReport | PadReport
+
+
+class _DigitizerAccumulators:
+    def __init__(self, source_profile: InputDeviceProfile) -> None:
+        self._touch = (
+            TouchAccumulator(source_profile)
+            if source_profile.kind in (InputDeviceKind.TOUCHPAD, InputDeviceKind.TABLET_TOUCH)
+            else None
+        )
+        self._pen = PenAccumulator(source_profile) if source_profile.kind is InputDeviceKind.TABLET_PEN else None
+        self._pad = PadAccumulator() if source_profile.kind is InputDeviceKind.TABLET_PAD else None
+
+    def discard(self) -> None:
+        for accumulator in (self._touch, self._pen, self._pad):
+            if accumulator is not None:
+                accumulator.discard()
+
+    def process_absolute_event(self, event: object) -> bool:
+        resolved_event_type = event_type(event)
+        resolved_event_code = event_code(event)
+        if resolved_event_type == ecodes.EV_ABS:
+            if self._touch is not None:
+                self._touch.add_event(event)
+                return True
+            if self._pen is not None:
+                self._pen.add_event(event)
+                return True
+            if self._pad is not None:
+                self._pad.add_event(event)
+                return True
+        if resolved_event_type == ecodes.EV_MSC and resolved_event_code == ecodes.MSC_SERIAL and self._pen is not None:
+            self._pen.add_misc(event)
+            return True
+        return False
+
+    def process_key_event(self, event: KeyEvent) -> bool:
+        if self._touch is not None:
+            self._touch.add_key(event)
+            return event_scancode(event) in {
+                ecodes.BTN_LEFT,
+                ecodes.BTN_TOUCH,
+                ecodes.BTN_TOOL_FINGER,
+                ecodes.BTN_TOOL_DOUBLETAP,
+                ecodes.BTN_TOOL_TRIPLETAP,
+                ecodes.BTN_TOOL_QUADTAP,
+                ecodes.BTN_TOOL_QUINTTAP,
+            }
+        if self._pen is not None:
+            self._pen.add_key(event)
+            return event_scancode(event) in TABLET_PEN_KEYS
+        if self._pad is not None:
+            self._pad.add_key(event)
+            return event_scancode(event) in TABLET_PAD_BUTTONS
+        return False
+
+    def flush(self) -> tuple[_DigitizerOutput, ...]:
+        outputs: list[_DigitizerOutput] = []
+        if self._touch is not None and (touch_report := self._touch.flush()) is not None:
+            outputs.append(_DigitizerOutput(_DIGITIZER_TOUCH, "Touch digitizer", touch_report))
+        if self._pen is not None and (pen_report := self._pen.flush()) is not None:
+            outputs.append(_DigitizerOutput(_DIGITIZER_PEN, "Tablet pen", pen_report))
+        if self._pad is not None and (pad_report := self._pad.flush()) is not None:
+            outputs.append(_DigitizerOutput(_DIGITIZER_PAD, "Tablet pad", pad_report))
+        return tuple(outputs)
+
+    def release_all(self) -> tuple[_DigitizerOutput, ...]:
+        outputs: list[_DigitizerOutput] = []
+        if self._touch is not None and (touch_report := self._touch.release_all()) is not None:
+            outputs.append(_DigitizerOutput(_DIGITIZER_TOUCH, "Touch digitizer release", touch_report))
+        if self._pen is not None and (pen_report := self._pen.release_all()) is not None:
+            outputs.append(_DigitizerOutput(_DIGITIZER_PEN, "Tablet pen release", pen_report))
+        if self._pad is not None and (pad_report := self._pad.release_all()) is not None:
+            outputs.append(_DigitizerOutput(_DIGITIZER_PAD, "Tablet pad release", pad_report))
+        return tuple(outputs)
 
 
 class HidDispatcher:
@@ -25,12 +134,18 @@ class HidDispatcher:
     """
 
     def __init__(
-        self, hid_gadgets: HidGadgets, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
+        self,
+        hid_gadgets: HidGadgets,
+        relay_gate: RelayGate,
+        shortcut_toggler: ShortcutToggler | None = None,
+        source_profile: InputDeviceProfile = DEFAULT_PROFILE,
     ) -> None:
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
-        self._mouse_delta = MouseDeltaAccumulator()
+        self._source_profile = source_profile
+        self._mouse = MouseAccumulator()
+        self._digitizers = _DigitizerAccumulators(source_profile)
         self._hid_write_failures = 0
 
     @property
@@ -49,11 +164,17 @@ class HidDispatcher:
             return
 
         if isinstance(event, RelEvent):
-            self._mouse_delta.add_event(event)
+            self._mouse.add_event(event)
             return
 
-        if getattr(event, "type", None) == ecodes.EV_SYN and getattr(event, "code", None) == ecodes.SYN_REPORT:
+        if event_type(event) == ecodes.EV_SYN and event_code(event) == ecodes.SYN_REPORT:
             await self.flush()
+            return
+
+        if self._process_absolute_event(event):
+            return
+
+        if isinstance(event, KeyEvent) and self._process_digitizer_key_event(event):
             return
 
         # Preserve cross-gadget event order if another event arrives before SYN_REPORT.
@@ -62,14 +183,15 @@ class HidDispatcher:
             await self._process_key_event(event)
 
     def discard_pending(self) -> None:
-        self._mouse_delta.discard()
+        self._mouse.discard()
+        self._digitizers.discard()
 
     async def flush(self) -> None:
         if not self._relay_gate.active:
             self.discard_pending()
             return
-        coalesced_events = self._mouse_delta.pending_event_count
-        delta = self._mouse_delta.flush()
+        coalesced_events = self._mouse.pending_event_count
+        delta = self._mouse.flush()
         if coalesced_events:
             logger.debug(
                 "Flushing mouse delta: coalesced_events=%s x=%s y=%s wheel=%s pan=%s emitted=%s",
@@ -81,10 +203,42 @@ class HidDispatcher:
                 delta is not None,
             )
         if delta is None:
+            await self._flush_digitizers()
             return
-        await self._process_mouse_delta(delta)
+        await self._process_mouse(delta)
+        await self._flush_digitizers()
 
-    async def _process_mouse_delta(self, delta: MouseDelta) -> None:
+    def _process_absolute_event(self, event: object) -> bool:
+        return self._digitizers.process_absolute_event(event)
+
+    def _process_digitizer_key_event(self, event: KeyEvent) -> bool:
+        return self._digitizers.process_key_event(event)
+
+    async def release_active_digitizers(self) -> None:
+        for output in self._digitizers.release_all():
+            await self._write_digitizer_output(output)
+
+    async def _flush_digitizers(self) -> None:
+        for output in self._digitizers.flush():
+            await self._write_digitizer_output(output)
+
+    async def _write_digitizer_output(self, output: _DigitizerOutput) -> None:
+        if output.kind == _DIGITIZER_TOUCH:
+            touch = self._hid_gadgets.touch
+            if touch is None:
+                raise RuntimeError("Touch digitizer gadget is not available; HID gadgets are not enabled.")
+            await self._write_hid_report(touch.send, output.description, output.report, output.report)
+            return
+        if output.kind in (_DIGITIZER_PEN, _DIGITIZER_PAD):
+            tablet = self._hid_gadgets.tablet
+            if tablet is None:
+                raise RuntimeError("Tablet digitizer gadget is not available; HID gadgets are not enabled.")
+            operation = tablet.send_pen if output.kind == _DIGITIZER_PEN else tablet.send_pad
+            await self._write_hid_report(operation, output.description, output.report, output.report)
+            return
+        raise RuntimeError(f"Unknown digitizer output kind: {output.kind}")
+
+    async def _process_mouse(self, delta: MouseDelta) -> None:
         mouse = self._hid_gadgets.mouse
         if mouse is None:
             raise RuntimeError("Mouse gadget is not available; HID gadgets are not enabled.")
@@ -107,6 +261,13 @@ class HidDispatcher:
             logger.debug("%s HID write blocked; dropping %s", description, context)
         except BrokenPipeError:
             self._handle_broken_pipe()
+        except OSError as exc:
+            if exc.errno in (errno.ENODEV, errno.ESHUTDOWN):
+                self._handle_broken_pipe()
+                return
+            self._hid_write_failures += 1
+            logger.exception("Unexpected error processing %s", context)
+            raise
         except Exception:
             self._hid_write_failures += 1
             logger.exception("Unexpected error processing %s", context)

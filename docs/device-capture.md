@@ -1,9 +1,9 @@
 # Device Capture
 
 Use device capture when requesting or adding support for a new keyboard, mouse,
-gamepad, touchpad, remote, or other Linux input/HID-like device. It collects
-source-device metadata, evdev capabilities, compact live input snapshots, and
-best-effort hidraw report summaries from the real device.
+gamepad, touchpad, drawing tablet, remote, or other Linux input/HID-like
+device. It collects source-device metadata, evdev capabilities, compact live
+input snapshots, and best-effort hidraw report summaries from the real device.
 
 Capture output is redacted with the same pipeline used by diagnostics reports,
 but captures are still local artifacts that can include typed keys, button
@@ -25,6 +25,12 @@ devices, all matches are captured into the same JSONL artifact.
 Use it when collecting support data so the Pi desktop/session does not also
 consume the same input. While grabbed, those inputs may not control the Pi
 locally.
+
+During the capture window, exercise the controls that should be relayed. For
+touchpads and drawing tablets, capture all related event nodes together when
+possible. Many tablets expose separate pen, finger, and pad nodes; include
+contact movement, clicks, pen hover, tip pressure, eraser, stylus side buttons,
+pad buttons, and wheel or ring controls when the device has them.
 
 ## Arguments
 

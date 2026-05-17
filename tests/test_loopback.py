@@ -16,11 +16,19 @@ from bluetooth_2_usb.gadgets.identity import (
     USB_SERIAL_NUMBER,
     usb_udev_hex_u16,
 )
-from bluetooth_2_usb.gadgets.layout import HID_FUNC_INDEX_CONSUMER, HID_FUNC_INDEX_KEYBOARD, HID_FUNC_INDEX_MOUSE
+from bluetooth_2_usb.gadgets.layout import (
+    HID_FUNC_INDEX_CONSUMER,
+    HID_FUNC_INDEX_DIGITIZER,
+    HID_FUNC_INDEX_KEYBOARD,
+    HID_FUNC_INDEX_MOUSE,
+)
 from bluetooth_2_usb.hid.constants import (
     HID_PAGE_CONSUMER,
+    HID_PAGE_DIGITIZER,
     HID_PAGE_GENERIC_DESKTOP,
     HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_DIGITIZER_PEN,
+    HID_USAGE_DIGITIZER_TOUCH_PAD,
     HID_USAGE_KEYBOARD,
     HID_USAGE_MOUSE,
 )
@@ -29,6 +37,7 @@ from bluetooth_2_usb.loopback import run as run_loopback
 from bluetooth_2_usb.loopback.capture import (
     CaptureMismatchError,
     ConsumerSequenceMatcher,
+    DigitizerSequenceMatcher,
     KeyboardSequenceMatcher,
     MissingNodeError,
     MouseSequenceMatcher,
@@ -91,6 +100,7 @@ from bluetooth_2_usb.loopback.scenarios import (
     REL_Y,
     SCENARIO_COMBO,
     SCENARIO_CONSUMER,
+    SCENARIO_DIGITIZER,
     SCENARIO_KEYBOARD,
     SCENARIO_MOUSE,
     SCENARIO_NODE_DISCOVERY,
@@ -117,7 +127,14 @@ HID_I8_MIN = -127
 RAW_INPUT_WHEEL_VALUE_SHIFT = capture_windows.RAW_INPUT_WHEEL_VALUE_SHIFT
 RAW_INPUT_POSITIVE_ONE_WHEEL_DELTA = 0x0001 << RAW_INPUT_WHEEL_VALUE_SHIFT
 RAW_INPUT_NEGATIVE_ONE_WHEEL_DELTA = 0xFFFF << RAW_INPUT_WHEEL_VALUE_SHIFT
-PUBLIC_SCENARIO_NAMES = {SCENARIO_KEYBOARD, SCENARIO_MOUSE, SCENARIO_NODE_DISCOVERY, SCENARIO_CONSUMER, SCENARIO_COMBO}
+PUBLIC_SCENARIO_NAMES = {
+    SCENARIO_KEYBOARD,
+    SCENARIO_MOUSE,
+    SCENARIO_NODE_DISCOVERY,
+    SCENARIO_CONSUMER,
+    SCENARIO_COMBO,
+    SCENARIO_DIGITIZER,
+}
 LOOPBACK_CAPTURE = "bluetooth_2_usb.loopback.capture"
 LOOPBACK_CLI = "bluetooth_2_usb.loopback.cli"
 LOOPBACK_INJECT = "bluetooth_2_usb.loopback.inject"
@@ -330,6 +347,14 @@ class ScenarioDefinitionTest(unittest.TestCase):
         self.assertEqual(combo.default_event_gap_ms, DEFAULT_EVENT_GAP_MS)
         self.assertEqual(combo.default_capture_timeout_sec, COMBO_CAPTURE_TIMEOUT_SEC)
 
+    def test_digitizer_scenario_covers_mouse_digitizer_conflicts(self) -> None:
+        digitizer = SCENARIOS[SCENARIO_DIGITIZER]
+
+        self.assertCountEqual(digitizer.required_nodes, ("mouse", "digitizer"))
+        self.assertEqual(digitizer.digitizer_report_ids, (1, 1, 2, 2, 3, 3))
+        self.assertTrue(any(step.code == ecodes.BTN_LEFT for step in digitizer.mouse_button_steps))
+        self.assertTrue(any(step.code == ecodes.BTN_FORWARD for step in digitizer.mouse_button_steps))
+
     def test_invalid_scenario_name_is_reported_cleanly(self) -> None:
         with self.assertRaises(ValueError) as error:
             get_scenario("nope")
@@ -347,11 +372,13 @@ class ScenarioDefinitionTest(unittest.TestCase):
                 "mouse_rel_steps": len(SCENARIOS[SCENARIO_COMBO].mouse_rel_steps),
                 "mouse_button_steps": len(SCENARIOS[SCENARIO_COMBO].mouse_button_steps),
                 "consumer_steps": len(SCENARIOS[SCENARIO_COMBO].consumer_steps),
+                "digitizer_reports": 0,
                 "total_steps": (
                     len(SCENARIOS[SCENARIO_COMBO].keyboard_steps)
                     + len(SCENARIOS[SCENARIO_COMBO].mouse_rel_steps)
                     + len(SCENARIOS[SCENARIO_COMBO].mouse_button_steps)
                     + len(SCENARIOS[SCENARIO_COMBO].consumer_steps)
+                    + len(SCENARIOS[SCENARIO_COMBO].digitizer_report_ids)
                 ),
                 "mouse_coalesced_tail_count": SCENARIOS[SCENARIO_COMBO].mouse_coalesced_tail_count,
                 "default_event_gap_ms": SCENARIOS[SCENARIO_COMBO].default_event_gap_ms,
@@ -368,6 +395,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                 _hid_entry("kbd0", usage_page=HID_PAGE_GENERIC_DESKTOP, usage=HID_USAGE_KEYBOARD),
                 _hid_entry("mouse0", usage_page=HID_PAGE_GENERIC_DESKTOP, usage=HID_USAGE_MOUSE),
                 _hid_entry("consumer0", usage_page=HID_PAGE_CONSUMER, usage=HID_USAGE_CONSUMER_CONTROL),
+                _hid_entry("digitizer0", usage_page=HID_PAGE_DIGITIZER, usage=HID_USAGE_DIGITIZER_TOUCH_PAD),
                 _hid_entry(
                     "other0",
                     device_name="some other device",
@@ -382,6 +410,19 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["kbd0"])
         self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
         self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["consumer0"])
+        self.assertCountEqual([info.node for info in candidates.digitizer_nodes], ["digitizer0"])
+
+    def test_discovery_deduplicates_digitizer_collections_by_raw_path(self) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry("digitizer0", usage_page=HID_PAGE_DIGITIZER, usage=HID_USAGE_DIGITIZER_TOUCH_PAD),
+                _hid_entry("digitizer0", usage_page=HID_PAGE_DIGITIZER, usage=HID_USAGE_DIGITIZER_PEN),
+            ]
+        )
+
+        candidates = discover_gadget_node_candidates(devices=USB_PRODUCT_NAME, hid_module=hid_module)
+
+        self.assertEqual([info.node for info in candidates.digitizer_nodes], ["digitizer0"])
 
     def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(self) -> None:
         hid_module = _FakeHidModule(
@@ -586,6 +627,16 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
                     usage_page=0,
                     usage=0,
                 ),
+                _hid_entry(
+                    "1-2.1.2:1.3",
+                    device_name=USB_PRODUCT_NAME,
+                    serial=USB_SERIAL_NUMBER,
+                    vendor_id=USB_GADGET_VID_LINUX,
+                    product_id=USB_GADGET_PID_COMBO,
+                    interface_number=HID_FUNC_INDEX_DIGITIZER,
+                    usage_page=0,
+                    usage=0,
+                ),
             ]
         )
 
@@ -594,6 +645,7 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertCountEqual([info.node for info in candidates.keyboard_nodes], ["1-2.1.2:1.0"])
         self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["1-2.1.2:1.1"])
         self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["1-2.1.2:1.2"])
+        self.assertCountEqual([info.node for info in candidates.digitizer_nodes], ["1-2.1.2:1.3"])
 
 
 class KeyboardSequenceMatcherTest(unittest.TestCase):
@@ -868,6 +920,60 @@ class ConsumerSequenceMatcherTest(unittest.TestCase):
             matcher.handle(bytes([CONSUMER_REPORT_ID, NUL, NUL]))
 
 
+def _touch_digitizer_report(*, active: bool) -> bytes:
+    payload = bytearray(52)
+    payload[0] = 0x03 if active else 0x00
+    payload[1] = 1
+    payload[45] = 1 if active else 0
+    return bytes([1, *payload])
+
+
+def _pen_digitizer_report(*, active: bool) -> bytes:
+    payload = bytearray(15)
+    if active:
+        payload[0] = 0x0B
+        payload[5:7] = (100).to_bytes(2, "little")
+    return bytes([2, *payload])
+
+
+def _pad_digitizer_report(*, active: bool) -> bytes:
+    payload = bytearray(3)
+    if active:
+        payload[0:2] = (0x05).to_bytes(2, "little")
+        payload[2] = (-3).to_bytes(1, "little", signed=True)[0]
+    return bytes([3, *payload])
+
+
+class DigitizerSequenceMatcherTest(unittest.TestCase):
+    def test_digitizer_matcher_accepts_touch_pen_and_pad_reports(self) -> None:
+        matcher = DigitizerSequenceMatcher((1, 1, 2, 2, 3, 3))
+
+        for report in (
+            _touch_digitizer_report(active=True),
+            _touch_digitizer_report(active=False),
+            _pen_digitizer_report(active=True),
+            _pen_digitizer_report(active=False),
+            _pad_digitizer_report(active=True),
+            _pad_digitizer_report(active=False),
+        ):
+            matcher.handle(report)
+
+        self.assertTrue(matcher.complete)
+        self.assertEqual(matcher.progress_details()["steps_seen"], 6)
+
+    def test_digitizer_matcher_rejects_unexpected_report_id(self) -> None:
+        matcher = DigitizerSequenceMatcher((1, 1, 2, 2, 3, 3))
+
+        with self.assertRaises(CaptureMismatchError):
+            matcher.handle(_pad_digitizer_report(active=True))
+
+    def test_digitizer_matcher_rejects_wrong_payload_with_expected_report_id(self) -> None:
+        matcher = DigitizerSequenceMatcher((1, 1, 2, 2, 3, 3))
+
+        with self.assertRaises(CaptureMismatchError):
+            matcher.handle(_touch_digitizer_report(active=False))
+
+
 class WindowsRawInputHelpersTest(unittest.TestCase):
     def test_extract_device_identities_collapses_windows_hid_paths(self) -> None:
         self.assertEqual(
@@ -1117,6 +1223,29 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertIn("Windows Raw Input capture failed: boom", result.message)
         self.assertEqual(result.details["capture_backend"], "raw_input")
 
+    def test_raw_input_digitizer_scenario_passes_digitizer_candidate_identities(self) -> None:
+        mouse_node = SimpleNamespace(node=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_01\\mouse\\{{guid}}")
+        digitizer_node = SimpleNamespace(node=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_03\\digitizer\\{{guid}}")
+        candidate_nodes = capture_windows.GadgetNodeCandidates(
+            keyboard_nodes=(), mouse_nodes=(mouse_node,), consumer_nodes=(), digitizer_nodes=(digitizer_node,)
+        )
+
+        with (
+            patch(f"{LOOPBACK_CAPTURE_WINDOWS}.IS_WINDOWS", True),
+            patch(
+                f"{LOOPBACK_CAPTURE_WINDOWS}._pump_raw_input",
+                return_value=LoopbackResult(
+                    command="capture", scenario=SCENARIO_DIGITIZER, success=True, exit_code=0, message="ok", details={}
+                ),
+            ) as pump,
+        ):
+            result = capture_windows.run_raw_input_capture(SCENARIO_DIGITIZER, 1.0, candidate_nodes)
+
+        self.assertTrue(result.success)
+        self.assertEqual(
+            pump.call_args.kwargs["digitizer_candidate_identities"], (f"hid\\{WINDOWS_USB_ID}&mi_03\\digitizer",)
+        )
+
     def test_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
         steps, skipped = capture_windows.mouse_button_expectations(SCENARIOS[SCENARIO_MOUSE])
 
@@ -1142,6 +1271,26 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(result.details["capture_backend"], "raw_input")
         self.assertEqual(result.details["keyboard_steps_seen"], 2)
         self.assertEqual(result.details["nodes"]["keyboard_node"], candidate.matched_name)
+        self.assertIsNone(result.details["nodes"]["digitizer_node"])
+
+    def test_windows_raw_input_success_details_include_matched_digitizer_node(self) -> None:
+        debug = capture_windows._RawInputDebug()
+        candidate = capture_windows._RawInputCandidate(
+            role="digitizer",
+            candidate_identities=(f"hid\\{WINDOWS_USB_ID}&mi_03\\instance",),
+            matcher=SimpleNamespace(complete=True, index=6),
+            matched_name=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_03\\instance\\{{guid}}",
+        )
+        candidate.note_report(_touch_digitizer_report(active=True))
+
+        result = capture_windows._raw_input_success_result(
+            SCENARIOS[SCENARIO_DIGITIZER], 15.0, debug, None, None, None, (), candidate
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.details["nodes"]["digitizer_node"], candidate.matched_name)
+        self.assertEqual(result.details["digitizer_reports_seen"], 6)
+        self.assertEqual(result.details["digitizer_reports"], [_touch_digitizer_report(active=True).hex(" ")])
 
     def test_windows_raw_input_failure_details_include_compact_progress(self) -> None:
         debug = capture_windows._RawInputDebug()
@@ -1168,6 +1317,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(details["keyboard_steps_seen"], 1)
         self.assertEqual(details["keyboard_steps_expected"], len(SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps))
         self.assertEqual(details["nodes"]["keyboard_node"], candidate.matched_name)
+        self.assertIsNone(details["nodes"]["digitizer_node"])
         self.assertIn("next_expected", details["progress"]["keyboard"][0])
         self.assertEqual(len(details["raw_input_debug"]["sample_events"]), 12)
 

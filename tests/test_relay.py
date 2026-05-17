@@ -445,6 +445,17 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([event[0] for event in seen], ["key_down", "key_up"])
 
+    async def test_input_device_removal_releases_active_digitizer_state(self) -> None:
+        gate = _active_gate()
+        input_device = _TestInputDevice([], removal_errno=errno.ENODEV)
+        relay = InputRelay(input_device, _FakeHidGadgets(), relay_gate=gate)
+
+        with patch(f"{RELAY_INPUT_HIDDISPATCHER}.release_active_digitizers", new=AsyncMock()) as release:
+            async with relay:
+                await relay.async_relay_events_loop()
+
+        release.assert_awaited_once_with()
+
     async def test_input_device_removal_ignores_final_flush_enodev(self) -> None:
         gate = _active_gate()
         input_device = _TestInputDevice([], removal_errno=errno.ENODEV)
@@ -500,11 +511,23 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
                 await relay.async_relay_events_loop()
 
-    async def test_dispatch_enodev_is_not_treated_as_input_device_removal(self) -> None:
+    async def test_dispatch_enodev_suspends_writes_without_treating_input_as_removed(self) -> None:
         gate = _active_gate()
         input_device = _TestInputDevice([_TestKeyEvent(ecodes.KEY_A, _TestKeyEvent.key_down)])
         hid_gadgets = _FakeHidGadgets()
         hid_gadgets.keyboard.press = Mock(side_effect=OSError(errno.ENODEV, "No device"))
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
+
+        async with relay:
+            await relay.async_relay_events_loop()
+
+        self.assertFalse(gate.active)
+
+    async def test_dispatch_unexpected_os_error_still_propagates(self) -> None:
+        gate = _active_gate()
+        input_device = _TestInputDevice([_TestKeyEvent(ecodes.KEY_A, _TestKeyEvent.key_down)])
+        hid_gadgets = _FakeHidGadgets()
+        hid_gadgets.keyboard.press = Mock(side_effect=OSError(errno.EIO, "I/O error"))
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         async with relay:
@@ -532,7 +555,7 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(hid_gadgets.mouse.moves, [(2, -3, 1, 1)])
 
-    async def test_pending_mouse_delta_flushes_before_later_key_event(self) -> None:
+    async def test_pending_mouse_flushes_before_later_key_event(self) -> None:
         gate = _active_gate()
         order = []
         input_device = _TestInputDevice(

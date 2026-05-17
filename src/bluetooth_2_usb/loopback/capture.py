@@ -10,11 +10,19 @@ from adafruit_hid.keycode import Keycode
 
 from ..evdev import KeyEvent, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from ..gadgets.identity import USB_GADGET_PID_COMBO, USB_GADGET_VID_LINUX
-from ..gadgets.layout import HID_FUNC_INDEX_CONSUMER, HID_FUNC_INDEX_KEYBOARD, HID_FUNC_INDEX_MOUSE
+from ..gadgets.layout import (
+    HID_FUNC_INDEX_CONSUMER,
+    HID_FUNC_INDEX_DIGITIZER,
+    HID_FUNC_INDEX_KEYBOARD,
+    HID_FUNC_INDEX_MOUSE,
+)
 from ..hid.constants import (
     HID_PAGE_CONSUMER,
+    HID_PAGE_DIGITIZER,
     HID_PAGE_GENERIC_DESKTOP,
     HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_DIGITIZER_PEN,
+    HID_USAGE_DIGITIZER_TOUCH_PAD,
     HID_USAGE_KEYBOARD,
     HID_USAGE_MOUSE,
 )
@@ -79,18 +87,31 @@ class GadgetNodeCandidates:
     keyboard_nodes: tuple[HidDeviceInfo, ...]
     mouse_nodes: tuple[HidDeviceInfo, ...]
     consumer_nodes: tuple[HidDeviceInfo, ...]
+    digitizer_nodes: tuple[HidDeviceInfo, ...] = ()
 
     def matched_nodes(
-        self, keyboard_node: str | None = None, mouse_node: str | None = None, consumer_node: str | None = None
+        self,
+        keyboard_node: str | None = None,
+        mouse_node: str | None = None,
+        consumer_node: str | None = None,
+        digitizer_node: str | None = None,
     ) -> GadgetNodes:
-        return GadgetNodes(keyboard_node=keyboard_node, mouse_node=mouse_node, consumer_node=consumer_node)
+        return GadgetNodes(
+            keyboard_node=keyboard_node,
+            mouse_node=mouse_node,
+            consumer_node=consumer_node,
+            digitizer_node=digitizer_node,
+        )
 
     def to_dict(self) -> dict[str, list[str]]:
-        return {
+        nodes = {
             "keyboard_nodes": [info.node for info in self.keyboard_nodes],
             "mouse_nodes": [info.node for info in self.mouse_nodes],
             "consumer_nodes": [info.node for info in self.consumer_nodes],
         }
+        if self.digitizer_nodes:
+            nodes["digitizer_nodes"] = [info.node for info in self.digitizer_nodes]
+        return nodes
 
 
 @dataclass(slots=True)
@@ -329,6 +350,97 @@ class ConsumerSequenceMatcher:
         return details
 
 
+@dataclass(slots=True)
+class DigitizerSequenceMatcher:
+    expected_report_ids: tuple[int, ...]
+    index: int = 0
+
+    def __post_init__(self) -> None:
+        if self.expected_report_ids != (1, 1, 2, 2, 3, 3):
+            raise ValueError(
+                "DigitizerSequenceMatcher expects the built-in touch, pen, and pad active/release sequence"
+            )
+
+    def handle(self, report: bytes) -> None:
+        if not report:
+            return
+        report_id = report[0]
+        if report_id == 0:
+            return
+        if self.complete:
+            return
+        expected_report_id = self.expected_report_ids[self.index]
+        if report_id != expected_report_id:
+            raise CaptureMismatchError(
+                f"Unexpected digitizer report ID {report_id}; expected {expected_report_id}: {report.hex(sep=' ')}"
+            )
+        self._validate_payload(report_id, report[1:])
+        self.index += 1
+
+    def _validate_payload(self, report_id: int, payload: bytes) -> None:
+        release = self.index % 2 == 1
+        if report_id == 1:
+            self._validate_touch_payload(payload, release=release)
+        elif report_id == 2:
+            self._validate_pen_payload(payload, release=release)
+        elif report_id == 3:
+            self._validate_pad_payload(payload, release=release)
+        else:
+            raise CaptureMismatchError(f"Unexpected digitizer report ID {report_id}")
+
+    def _validate_touch_payload(self, payload: bytes, *, release: bool) -> None:
+        if len(payload) < 49:
+            raise CaptureMismatchError(f"Touch report is too short: {payload.hex(sep=' ')}")
+        flags = payload[0]
+        contact_id = payload[1]
+        contact_count = payload[45]
+        if release:
+            if flags & 0x01 or contact_count != 0:
+                raise CaptureMismatchError(
+                    f"Touch release report still has active contact state: {payload.hex(sep=' ')}"
+                )
+        elif not flags & 0x01 or contact_id == 0 or contact_count == 0:
+            raise CaptureMismatchError(f"Touch active report is missing contact state: {payload.hex(sep=' ')}")
+
+    def _validate_pen_payload(self, payload: bytes, *, release: bool) -> None:
+        if len(payload) < 15:
+            raise CaptureMismatchError(f"Pen report is too short: {payload.hex(sep=' ')}")
+        flags = payload[0]
+        pressure = int.from_bytes(payload[5:7], "little")
+        if release:
+            if flags != 0 or pressure != 0:
+                raise CaptureMismatchError(f"Pen release report still has active state: {payload.hex(sep=' ')}")
+        elif flags & 0x0B != 0x0B or pressure == 0:
+            raise CaptureMismatchError(
+                f"Pen active report is missing tip/barrel/pressure state: {payload.hex(sep=' ')}"
+            )
+
+    def _validate_pad_payload(self, payload: bytes, *, release: bool) -> None:
+        if len(payload) < 3:
+            raise CaptureMismatchError(f"Pad report is too short: {payload.hex(sep=' ')}")
+        buttons = int.from_bytes(payload[0:2], "little")
+        wheel = int.from_bytes(payload[2:3], "little", signed=True)
+        if release:
+            if buttons != 0 or wheel != 0:
+                raise CaptureMismatchError(f"Pad release report still has active state: {payload.hex(sep=' ')}")
+        elif buttons == 0 or wheel == 0:
+            raise CaptureMismatchError(f"Pad active report is missing button/wheel state: {payload.hex(sep=' ')}")
+
+    @property
+    def complete(self) -> bool:
+        return self.index >= len(self.expected_report_ids)
+
+    def progress_details(self) -> dict[str, object]:
+        details: dict[str, object] = {
+            "complete": self.complete,
+            "steps_seen": self.index,
+            "steps_expected": len(self.expected_report_ids),
+        }
+        if not self.complete:
+            details["next_expected"] = f"digitizer report ID {self.expected_report_ids[self.index]}"
+        return details
+
+
 def _mapped_hid_usage(expected) -> int:
     usage, _name = evdev_to_usb_hid(SimpleNamespace(scancode=expected.code, keystate=expected.value))
     if usage is None:
@@ -356,7 +468,7 @@ class _CandidateMatcher:
     role: str
     info: HidDeviceInfo
     device: Any
-    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher | DigitizerSequenceMatcher
     failed_message: str | None = None
 
     @property
@@ -373,7 +485,7 @@ class _CandidateMatcher:
 
 
 def matcher_progress_details(
-    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher | DigitizerSequenceMatcher,
 ) -> dict[str, object]:
     return matcher.progress_details()
 
@@ -381,7 +493,7 @@ def matcher_progress_details(
 def candidate_progress_details(
     *,
     node: str | None,
-    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher | DigitizerSequenceMatcher,
     failed_message: str | None = None,
 ) -> dict[str, object]:
     details: dict[str, object] = {"node": node}
@@ -440,6 +552,9 @@ def _add_best_progress_counts(details: dict[str, object], role: str, progress_it
     elif role == "consumer":
         details["consumer_steps_seen"] = progress["steps_seen"]
         details["consumer_steps_expected"] = progress["steps_expected"]
+    elif role == "digitizer":
+        details["digitizer_reports_seen"] = progress["steps_seen"]
+        details["digitizer_reports_expected"] = progress["steps_expected"]
 
 
 def _nodes_from_progress(progress: dict[str, list[dict[str, object]]]) -> GadgetNodes:
@@ -454,13 +569,14 @@ def _nodes_from_progress(progress: dict[str, list[dict[str, object]]]) -> Gadget
         keyboard_node=_completed_node("keyboard"),
         mouse_node=_completed_node("mouse"),
         consumer_node=_completed_node("consumer"),
+        digitizer_node=_completed_node("digitizer"),
     )
 
 
 def progress_summary_details(progress: dict[str, list[dict[str, object]]]) -> dict[str, object]:
     details: dict[str, object] = {}
     summary: dict[str, str] = {}
-    for role in ("keyboard", "mouse", "consumer"):
+    for role in ("keyboard", "mouse", "consumer", "digitizer"):
         progress_items = progress.get(role, [])
         if not progress_items:
             continue
@@ -551,6 +667,8 @@ def _role_for_device(info: HidDeviceInfo) -> str | None:
         return "mouse"
     if info.usage_page == HID_PAGE_CONSUMER and info.usage == HID_USAGE_CONSUMER_CONTROL:
         return "consumer"
+    if info.usage_page == HID_PAGE_DIGITIZER and info.usage in (HID_USAGE_DIGITIZER_TOUCH_PAD, HID_USAGE_DIGITIZER_PEN):
+        return "digitizer"
     if info.vendor_id == USB_GADGET_VID_LINUX and info.product_id == USB_GADGET_PID_COMBO:
         if info.interface_number == HID_FUNC_INDEX_KEYBOARD:
             return "keyboard"
@@ -558,6 +676,8 @@ def _role_for_device(info: HidDeviceInfo) -> str | None:
             return "mouse"
         if info.interface_number == HID_FUNC_INDEX_CONSUMER:
             return "consumer"
+        if info.interface_number == HID_FUNC_INDEX_DIGITIZER:
+            return "digitizer"
     return None
 
 
@@ -599,6 +719,7 @@ def discover_gadget_node_candidates(devices: str, hid_module: Any | None = None)
     keyboard_nodes: list[HidDeviceInfo] = []
     mouse_nodes: list[HidDeviceInfo] = []
     consumer_nodes: list[HidDeviceInfo] = []
+    digitizer_nodes: list[HidDeviceInfo] = []
 
     for info in infos:
         role = _role_for_device(info)
@@ -612,15 +733,32 @@ def discover_gadget_node_candidates(devices: str, hid_module: Any | None = None)
             mouse_nodes.append(info)
         elif role == "consumer":
             consumer_nodes.append(info)
+        elif role == "digitizer":
+            digitizer_nodes.append(info)
 
-    if not keyboard_nodes and not mouse_nodes and not consumer_nodes:
+    digitizer_nodes = _dedupe_digitizer_nodes(digitizer_nodes)
+
+    if not keyboard_nodes and not mouse_nodes and not consumer_nodes and not digitizer_nodes:
         raise MissingNodeError(f"No HID devices matched {devices!r} through hidapi enumeration")
 
     return GadgetNodeCandidates(
         keyboard_nodes=tuple(sorted(keyboard_nodes, key=lambda info: info.node)),
         mouse_nodes=tuple(sorted(mouse_nodes, key=lambda info: info.node)),
         consumer_nodes=tuple(sorted(consumer_nodes, key=lambda info: info.node)),
+        digitizer_nodes=tuple(sorted(digitizer_nodes, key=lambda info: info.node)),
     )
+
+
+def _dedupe_digitizer_nodes(infos: list[HidDeviceInfo]) -> list[HidDeviceInfo]:
+    seen: set[object] = set()
+    deduped: list[HidDeviceInfo] = []
+    for info in infos:
+        key: object = info.raw_path or info.node
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(info)
+    return deduped
 
 
 def discover_gadget_nodes(devices: str, hid_module: Any | None = None) -> GadgetNodes:
@@ -638,11 +776,16 @@ def discover_gadget_nodes(devices: str, hid_module: Any | None = None) -> Gadget
             "Multiple consumer-control HID devices matched: "
             + ", ".join(info.node for info in candidates.consumer_nodes)
         )
+    if len(candidates.digitizer_nodes) > 1:
+        raise MissingNodeError(
+            "Multiple digitizer HID devices matched: " + ", ".join(info.node for info in candidates.digitizer_nodes)
+        )
 
     return GadgetNodes(
         keyboard_node=(candidates.keyboard_nodes[0].node if candidates.keyboard_nodes else None),
         mouse_node=candidates.mouse_nodes[0].node if candidates.mouse_nodes else None,
         consumer_node=(candidates.consumer_nodes[0].node if candidates.consumer_nodes else None),
+        digitizer_node=(candidates.digitizer_nodes[0].node if candidates.digitizer_nodes else None),
     )
 
 
@@ -685,7 +828,7 @@ def _capture_once(
     def _register_candidate(
         role: str,
         info: HidDeviceInfo,
-        matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher,
+        matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher | DigitizerSequenceMatcher,
     ) -> None:
         candidates.append(
             _CandidateMatcher(role=role, info=info, device=_open_hid_device(hid_module, info), matcher=matcher)
@@ -698,6 +841,8 @@ def _capture_once(
             return not scenario.mouse_enabled or _completed_candidate(role) is not None
         if role == "consumer":
             return not scenario.consumer_enabled or _completed_candidate(role) is not None
+        if role == "digitizer":
+            return not scenario.digitizer_enabled or _completed_candidate(role) is not None
         raise AssertionError(f"Unexpected role: {role}")
 
     try:
@@ -721,15 +866,27 @@ def _capture_once(
             for info in candidate_nodes.consumer_nodes:
                 _register_candidate("consumer", info, ConsumerSequenceMatcher(scenario.consumer_steps))
 
+        if scenario.digitizer_enabled:
+            if not candidate_nodes.digitizer_nodes:
+                raise MissingNodeError("Digitizer HID device was not found")
+            for info in candidate_nodes.digitizer_nodes:
+                _register_candidate("digitizer", info, DigitizerSequenceMatcher(scenario.digitizer_report_ids))
+
         deadline = time.monotonic() + timeout_sec
         while True:
-            if _required_role_done("keyboard") and _required_role_done("mouse") and _required_role_done("consumer"):
+            if (
+                _required_role_done("keyboard")
+                and _required_role_done("mouse")
+                and _required_role_done("consumer")
+                and _required_role_done("digitizer")
+            ):
                 break
 
             for role, enabled in (
                 ("keyboard", scenario.keyboard_enabled),
                 ("mouse", scenario.mouse_enabled),
                 ("consumer", scenario.consumer_enabled),
+                ("digitizer", scenario.digitizer_enabled),
             ):
                 if not enabled:
                     continue
@@ -792,6 +949,7 @@ def _capture_once(
         keyboard_node=keyboard_matcher.node if keyboard_matcher else None,
         mouse_node=mouse_matcher.node if mouse_matcher else None,
         consumer_node=consumer_matcher.node if consumer_matcher else None,
+        digitizer_node=(_completed_candidate("digitizer").node if _completed_candidate("digitizer") else None),
     )
     details: dict[str, object] = {
         "capture_backend": "hidapi",
@@ -806,6 +964,9 @@ def _capture_once(
         details["mouse_button_steps_seen"] = mouse_matcher.matcher.button_index
     if consumer_matcher is not None:
         details["consumer_steps_seen"] = consumer_matcher.matcher.index
+    digitizer_matcher = _completed_candidate("digitizer")
+    if digitizer_matcher is not None:
+        details["digitizer_reports_seen"] = digitizer_matcher.matcher.index
 
     return LoopbackResult(
         command="capture",

@@ -5,6 +5,7 @@ import errno
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
 from ..hid.dispatch import HidDispatcher
+from ..inputs.profile import input_device_profile
 from ..logging import get_logger
 from .gate import RelayGate
 from .shortcut import ShortcutToggler
@@ -36,7 +37,8 @@ class InputRelay:
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
         """
         self._input_device = input_device
-        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler)
+        self._profile = input_device_profile(input_device)
+        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler, self._profile)
         self._grab = grab
         self._relay_gate = relay_gate
 
@@ -137,6 +139,7 @@ class InputRelay:
                 logger.debug(
                     "Stopping relay loop for %s because the input device disappeared.", self._input_device.path
                 )
+                await self._dispatcher.release_active_digitizers()
                 self._dispatcher.discard_pending()
                 break
             else:

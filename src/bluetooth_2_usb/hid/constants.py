@@ -11,6 +11,9 @@ HID_PAGE_GENERIC_DESKTOP = 0x01
 HID_PAGE_CONSUMER = 0x0C
 """HID Usage Page: Consumer."""
 
+HID_PAGE_DIGITIZER = 0x0D
+"""HID Usage Page: Digitizers."""
+
 HID_USAGE_POINTER = 0x01
 """Generic Desktop usage: Pointer."""
 
@@ -22,6 +25,12 @@ HID_USAGE_KEYBOARD = 0x06
 
 HID_USAGE_CONSUMER_CONTROL = 0x01
 """Consumer Page usage: Consumer Control."""
+
+HID_USAGE_DIGITIZER_PEN = 0x02
+"""Digitizer usage: Pen."""
+
+HID_USAGE_DIGITIZER_TOUCH_PAD = 0x05
+"""Digitizer usage: Touch Pad."""
 
 KEYBOARD_IN_REPORT_LENGTH = 8
 """Boot keyboard input report size in bytes."""
@@ -40,6 +49,30 @@ CONSUMER_IN_REPORT_LENGTH = 2
 
 CONSUMER_OUT_REPORT_LENGTH = 0
 """Consumer-control output report size in bytes."""
+
+TOUCH_DIGITIZER_REPORT_ID = 1
+"""Report ID for generic touch/tablet-touch digitizer input."""
+
+TOUCH_DIGITIZER_IN_REPORT_LENGTH = 52
+"""Touch digitizer input report size without the report ID byte."""
+
+TOUCH_DIGITIZER_CONTACT_COUNT = 5
+"""Maximum contacts emitted by the generic touch digitizer report."""
+
+TABLET_PEN_REPORT_ID = 2
+"""Report ID for tablet pen input."""
+
+TABLET_PEN_IN_REPORT_LENGTH = 15
+"""Tablet pen input report size without the report ID byte."""
+
+TABLET_PAD_REPORT_ID = 3
+"""Report ID for tablet pad button input."""
+
+TABLET_PAD_IN_REPORT_LENGTH = 3
+"""Tablet pad input report size without the report ID byte."""
+
+DIGITIZER_OUT_REPORT_LENGTH = 0
+"""Digitizer output report size."""
 
 MOUSE_BUTTON_REPORT_INDEX = 0
 """Mouse report byte index containing the button bitmask."""

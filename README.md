@@ -3,12 +3,14 @@
 
 ![Bluetooth-to-USB HID bridge overview for Raspberry Pi](https://raw.githubusercontent.com/quaxalber/bluetooth_2_usb/main/assets/overview.png)
 
-Use Bluetooth keyboards and mice in BIOS and boot menus, KVM setups, retro systems, consoles, 
-and other hosts where Bluetooth is unavailable or inconvenient.
+Use Bluetooth keyboards, mice, touchpads, and drawing tablets in BIOS and boot
+menus, KVM setups, retro systems, consoles, and other hosts where Bluetooth is
+unavailable or inconvenient.
 
 Bluetooth-2-USB ("Bluetooth to USB") turns a Raspberry Pi into a USB HID
-bridge for Bluetooth keyboards and mice. To the target host, the Pi appears as
-a standard wired USB keyboard and mouse.
+bridge for Bluetooth keyboards, mice, generic touch digitizers, and tablet
+digitizers. To the target host, the Pi appears as a wired composite USB HID
+device.
 
 That keeps the host side simple: no Bluetooth support, pairing flow, or
 special drivers are required on the target system.
@@ -64,7 +66,7 @@ sudo bluetooth_2_usb smoketest
 - Raspberry Pi Zero W, Zero 2 W, 4B, or 5
 - Raspberry Pi OS Bookworm or newer
 - Internet access during installation
-- Bluetooth keyboard, mouse, or both
+- Bluetooth keyboard, mouse, touchpad, drawing tablet, or a combination
 - USB cable that supports data
 
 > [!NOTE]
@@ -149,7 +151,14 @@ Runtime CLI and environment reference:
 > [!NOTE]
 > Despite the project name, broad auto relay can also relay other suitable
 > Linux input devices that are visible on the Pi. The intended primary use case
-> remains Bluetooth keyboard and mouse bridging.
+> remains Bluetooth keyboard and mouse bridging. Generic touch/tablet digitizer
+> reports are part of the default USB gadget layout, so updating from older
+> versions can cause the target host to re-enumerate the USB device and cache a
+> new composite shape.
+
+The touch/tablet support is generic HID digitizer support. Windows Precision
+Touchpad behavior is not claimed; it requires HID feature-report handling
+and remains future work.
 
 ## Read-only operation
 
