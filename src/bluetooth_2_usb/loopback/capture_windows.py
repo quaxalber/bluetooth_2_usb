@@ -12,8 +12,11 @@ from adafruit_hid.keycode import Keycode
 from ..evdev import KeyEvent, ecodes, evdev_to_usb_hid
 from ..hid.constants import (
     HID_PAGE_CONSUMER,
+    HID_PAGE_DIGITIZER,
     HID_PAGE_GENERIC_DESKTOP,
     HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_DIGITIZER_PEN,
+    HID_USAGE_DIGITIZER_TOUCH_PAD,
     HID_USAGE_KEYBOARD,
     HID_USAGE_MOUSE,
 )
@@ -21,6 +24,7 @@ from .capture import (
     CaptureMismatchError,
     CaptureTimeoutError,
     ConsumerSequenceMatcher,
+    DigitizerSequenceMatcher,
     GadgetNodeCandidates,
     KeyboardSequenceMatcher,
     MissingNodeError,
@@ -364,7 +368,7 @@ if IS_WINDOWS:
 class _RawInputCandidate:
     role: str
     candidate_identities: tuple[str, ...]
-    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher
+    matcher: KeyboardSequenceMatcher | MouseSequenceMatcher | ConsumerSequenceMatcher | DigitizerSequenceMatcher
     matched_name: str | None = None
     matched_reports: list[str] = field(default_factory=list)
 
@@ -384,9 +388,11 @@ class _RawInputDebug:
     keyboard_messages_seen: int = 0
     mouse_messages_seen: int = 0
     consumer_messages_seen: int = 0
+    digitizer_messages_seen: int = 0
     keyboard_matches_seen: int = 0
     mouse_matches_seen: int = 0
     consumer_matches_seen: int = 0
+    digitizer_matches_seen: int = 0
     device_names_seen: dict[str, int] | None = None
     sample_events: list[dict[str, object]] | None = None
     raw_device_list: list[dict[str, object]] | None = None
@@ -427,6 +433,10 @@ class _RawInputDebug:
             self.consumer_messages_seen += 1
             if matched:
                 self.consumer_matches_seen += 1
+        elif role == "digitizer":
+            self.digitizer_messages_seen += 1
+            if matched:
+                self.digitizer_matches_seen += 1
 
         self.note_device(device_name)
         assert self.sample_events is not None
@@ -459,9 +469,11 @@ class _RawInputDebug:
             "keyboard_messages_seen": self.keyboard_messages_seen,
             "mouse_messages_seen": self.mouse_messages_seen,
             "consumer_messages_seen": self.consumer_messages_seen,
+            "digitizer_messages_seen": self.digitizer_messages_seen,
             "keyboard_matches_seen": self.keyboard_matches_seen,
             "mouse_matches_seen": self.mouse_matches_seen,
             "consumer_matches_seen": self.consumer_matches_seen,
+            "digitizer_matches_seen": self.digitizer_matches_seen,
             "device_names_seen": dict(sorted(self.device_names_seen.items())),
             "raw_device_list": list(self.raw_device_list),
             "sample_events": list(self.sample_events),
@@ -669,7 +681,7 @@ def _list_raw_input_devices() -> list[dict[str, object]]:
 
 
 def _register_raw_input(hwnd: int) -> None:
-    devices = (RAWINPUTDEVICE * 3)(
+    devices = (RAWINPUTDEVICE * 5)(
         RAWINPUTDEVICE(
             usUsagePage=HID_PAGE_GENERIC_DESKTOP, usUsage=HID_USAGE_KEYBOARD, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
@@ -678,6 +690,15 @@ def _register_raw_input(hwnd: int) -> None:
         ),
         RAWINPUTDEVICE(
             usUsagePage=HID_PAGE_CONSUMER, usUsage=HID_USAGE_CONSUMER_CONTROL, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
+        ),
+        RAWINPUTDEVICE(
+            usUsagePage=HID_PAGE_DIGITIZER,
+            usUsage=HID_USAGE_DIGITIZER_TOUCH_PAD,
+            dwFlags=RIDEV_INPUTSINK,
+            hwndTarget=hwnd,
+        ),
+        RAWINPUTDEVICE(
+            usUsagePage=HID_PAGE_DIGITIZER, usUsage=HID_USAGE_DIGITIZER_PEN, dwFlags=RIDEV_INPUTSINK, hwndTarget=hwnd
         ),
     )
     if not user32.RegisterRawInputDevices(devices, len(devices), ctypes.sizeof(RAWINPUTDEVICE)):
@@ -752,11 +773,13 @@ def _raw_input_complete(
     keyboard_candidate: _RawInputCandidate | None,
     mouse_candidate: _RawInputCandidate | None,
     consumer_candidate: _RawInputCandidate | None,
+    digitizer_candidate: _RawInputCandidate | None = None,
 ) -> bool:
     return (
         (keyboard_candidate is None or keyboard_candidate.complete)
         and (mouse_candidate is None or mouse_candidate.complete)
         and (consumer_candidate is None or consumer_candidate.complete)
+        and (digitizer_candidate is None or digitizer_candidate.complete)
     )
 
 
@@ -764,11 +787,13 @@ def _raw_input_nodes(
     keyboard_candidate: _RawInputCandidate | None,
     mouse_candidate: _RawInputCandidate | None,
     consumer_candidate: _RawInputCandidate | None,
+    digitizer_candidate: _RawInputCandidate | None = None,
 ) -> GadgetNodes:
     return GadgetNodes(
         keyboard_node=(keyboard_candidate.matched_name if keyboard_candidate else None),
         mouse_node=(mouse_candidate.matched_name if mouse_candidate else None),
         consumer_node=(consumer_candidate.matched_name if consumer_candidate else None),
+        digitizer_node=(digitizer_candidate.matched_name if digitizer_candidate else None),
     )
 
 
@@ -776,9 +801,10 @@ def _raw_input_progress(
     keyboard_candidate: _RawInputCandidate | None,
     mouse_candidate: _RawInputCandidate | None,
     consumer_candidate: _RawInputCandidate | None,
+    digitizer_candidate: _RawInputCandidate | None = None,
 ) -> dict[str, list[dict[str, object]]]:
     progress: dict[str, list[dict[str, object]]] = {}
-    for candidate in (keyboard_candidate, mouse_candidate, consumer_candidate):
+    for candidate in (keyboard_candidate, mouse_candidate, consumer_candidate, digitizer_candidate):
         if candidate is None:
             continue
         progress.setdefault(candidate.role, []).append(
@@ -794,12 +820,15 @@ def _raw_input_failure_details(
     keyboard_candidate: _RawInputCandidate | None = None,
     mouse_candidate: _RawInputCandidate | None = None,
     consumer_candidate: _RawInputCandidate | None = None,
+    digitizer_candidate: _RawInputCandidate | None = None,
 ) -> dict[str, object]:
-    progress = _raw_input_progress(keyboard_candidate, mouse_candidate, consumer_candidate)
+    progress = _raw_input_progress(keyboard_candidate, mouse_candidate, consumer_candidate, digitizer_candidate)
     details: dict[str, object] = {
         "capture_backend": "raw_input",
         "timeout_sec": timeout_sec,
-        "nodes": _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate).to_dict(),
+        "nodes": _raw_input_nodes(
+            keyboard_candidate, mouse_candidate, consumer_candidate, digitizer_candidate
+        ).to_dict(),
         "raw_input_debug": debug.to_dict(),
         "windows_skipped_mouse_buttons": list(windows_skipped_mouse_buttons),
     }
@@ -815,8 +844,9 @@ def _raw_input_success_result(
     mouse_candidate: _RawInputCandidate | None,
     consumer_candidate: _RawInputCandidate | None,
     windows_skipped_mouse_buttons: tuple[str, ...],
+    digitizer_candidate: _RawInputCandidate | None = None,
 ) -> LoopbackResult:
-    nodes = _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate)
+    nodes = _raw_input_nodes(keyboard_candidate, mouse_candidate, consumer_candidate, digitizer_candidate)
     details: dict[str, object] = {
         "capture_backend": "raw_input",
         "timeout_sec": timeout_sec,
@@ -835,6 +865,9 @@ def _raw_input_success_result(
     if consumer_candidate is not None:
         details["consumer_steps_seen"] = consumer_candidate.matcher.index
         details["consumer_reports_seen"] = list(consumer_candidate.matched_reports)
+    if digitizer_candidate is not None:
+        details["digitizer_reports_seen"] = digitizer_candidate.matcher.index
+        details["digitizer_reports"] = list(digitizer_candidate.matched_reports)
     return LoopbackResult(
         command="capture",
         scenario=scenario.name,
@@ -851,6 +884,7 @@ def _pump_raw_input(
     mouse_candidate_identities: tuple[str, ...],
     consumer_candidate_identities: tuple[str, ...],
     scenario_name: str,
+    digitizer_candidate_identities: tuple[str, ...] = (),
     mouse_button_steps: tuple | None = None,
     windows_skipped_mouse_buttons: tuple[str, ...] = (),
 ) -> LoopbackResult:
@@ -875,6 +909,13 @@ def _pump_raw_input(
     consumer_candidate = (
         _RawInputCandidate("consumer", consumer_candidate_identities, ConsumerSequenceMatcher(scenario.consumer_steps))
         if scenario.consumer_enabled
+        else None
+    )
+    digitizer_candidate = (
+        _RawInputCandidate(
+            "digitizer", digitizer_candidate_identities, DigitizerSequenceMatcher(scenario.digitizer_report_ids)
+        )
+        if scenario.digitizer_enabled
         else None
     )
 
@@ -944,27 +985,43 @@ def _pump_raw_input(
                         for report in mouse_report_builder.reports_for(raw.mouse):
                             mouse_candidate.note_report(report)
                             mouse_candidate.matcher.handle(report)
-                    elif raw.header.dwType == RIM_TYPEHID and consumer_candidate:
-                        matched = device_matches_candidate(device_name, consumer_candidate.candidate_identities)
+                    elif raw.header.dwType == RIM_TYPEHID and (consumer_candidate or digitizer_candidate):
                         for report in _extract_raw_hid_reports(raw_bytes):
-                            debug.note_event(
-                                role="consumer",
-                                device_name=device_name,
-                                device_identity=device_identity,
-                                candidate_identities=(consumer_candidate.candidate_identities),
-                                matched=matched,
-                                report=report,
-                            )
-                            if not matched:
-                                continue
-                            consumer_candidate.matched_name = device_name
-                            consumer_candidate.note_report(report)
-                            consumer_candidate.matcher.handle(report)
+                            if consumer_candidate is not None:
+                                matched = device_matches_candidate(device_name, consumer_candidate.candidate_identities)
+                                debug.note_event(
+                                    role="consumer",
+                                    device_name=device_name,
+                                    device_identity=device_identity,
+                                    candidate_identities=(consumer_candidate.candidate_identities),
+                                    matched=matched,
+                                    report=report,
+                                )
+                                if matched:
+                                    consumer_candidate.matched_name = device_name
+                                    consumer_candidate.note_report(report)
+                                    consumer_candidate.matcher.handle(report)
+                            if digitizer_candidate is not None:
+                                matched = device_matches_candidate(
+                                    device_name, digitizer_candidate.candidate_identities
+                                )
+                                debug.note_event(
+                                    role="digitizer",
+                                    device_name=device_name,
+                                    device_identity=device_identity,
+                                    candidate_identities=(digitizer_candidate.candidate_identities),
+                                    matched=matched,
+                                    report=report,
+                                )
+                                if matched:
+                                    digitizer_candidate.matched_name = device_name
+                                    digitizer_candidate.note_report(report)
+                                    digitizer_candidate.matcher.handle(report)
 
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
 
-            if _raw_input_complete(keyboard_candidate, mouse_candidate, consumer_candidate):
+            if _raw_input_complete(keyboard_candidate, mouse_candidate, consumer_candidate, digitizer_candidate):
                 return _raw_input_success_result(
                     scenario,
                     timeout_sec,
@@ -973,6 +1030,7 @@ def _pump_raw_input(
                     mouse_candidate,
                     consumer_candidate,
                     windows_skipped_mouse_buttons,
+                    digitizer_candidate,
                 )
 
             time.sleep(0.01)
@@ -990,6 +1048,7 @@ def _pump_raw_input(
                 keyboard_candidate,
                 mouse_candidate,
                 consumer_candidate,
+                digitizer_candidate,
             ),
         )
     except OSError as exc:
@@ -1006,6 +1065,7 @@ def _pump_raw_input(
                 keyboard_candidate,
                 mouse_candidate,
                 consumer_candidate,
+                digitizer_candidate,
             ),
         )
     finally:
@@ -1020,7 +1080,13 @@ def _pump_raw_input(
         exit_code=CaptureTimeoutError.exit_code,
         message=f"Timed out waiting for {scenario.name} events after {timeout_sec}s",
         details=_raw_input_failure_details(
-            timeout_sec, debug, windows_skipped_mouse_buttons, keyboard_candidate, mouse_candidate, consumer_candidate
+            timeout_sec,
+            debug,
+            windows_skipped_mouse_buttons,
+            keyboard_candidate,
+            mouse_candidate,
+            consumer_candidate,
+            digitizer_candidate,
         ),
     )
 
@@ -1052,6 +1118,7 @@ def run_raw_input_capture(
     keyboard_candidate_identities: tuple[str, ...] = ()
     mouse_candidate_identities: tuple[str, ...] = ()
     consumer_candidate_identities: tuple[str, ...] = ()
+    digitizer_candidate_identities: tuple[str, ...] = ()
     if scenario.keyboard_enabled:
         if not candidate_nodes.keyboard_nodes:
             return _missing_node_result(scenario.name, "Keyboard HID device was not found", candidate_nodes)
@@ -1068,6 +1135,12 @@ def run_raw_input_capture(
         consumer_candidate_identities = extract_device_identities(
             tuple(info.node for info in candidate_nodes.consumer_nodes)
         )
+    if scenario.digitizer_enabled:
+        if not candidate_nodes.digitizer_nodes:
+            return _missing_node_result(scenario.name, "Digitizer HID device was not found", candidate_nodes)
+        digitizer_candidate_identities = extract_device_identities(
+            tuple(info.node for info in candidate_nodes.digitizer_nodes)
+        )
 
     result = _pump_raw_input(
         timeout_sec=timeout_sec,
@@ -1075,6 +1148,7 @@ def run_raw_input_capture(
         mouse_candidate_identities=mouse_candidate_identities,
         consumer_candidate_identities=consumer_candidate_identities,
         scenario_name=scenario_name,
+        digitizer_candidate_identities=digitizer_candidate_identities,
         mouse_button_steps=mouse_button_steps,
         windows_skipped_mouse_buttons=windows_skipped_mouse_buttons,
     )

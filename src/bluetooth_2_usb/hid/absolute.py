@@ -336,9 +336,10 @@ class PadAccumulator:
         self._dirty = False
 
     def release_all(self) -> PadReport | None:
-        if self._buttons == 0:
+        if self._buttons == 0 and self._wheel == 0:
             return None
         self._buttons = 0
+        self._wheel = 0
         self._dirty = False
         return PadReport(buttons=0, wheel=0)
 
@@ -359,5 +360,7 @@ class PadAccumulator:
     def flush(self) -> PadReport | None:
         if not self._dirty:
             return None
+        wheel = self._wheel
+        self._wheel = 0
         self._dirty = False
-        return PadReport(buttons=self._buttons, wheel=self._wheel)
+        return PadReport(buttons=self._buttons, wheel=wheel)

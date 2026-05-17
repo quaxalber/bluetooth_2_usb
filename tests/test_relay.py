@@ -511,11 +511,23 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "dispatch bug"):
                 await relay.async_relay_events_loop()
 
-    async def test_dispatch_enodev_is_not_treated_as_input_device_removal(self) -> None:
+    async def test_dispatch_enodev_suspends_writes_without_treating_input_as_removed(self) -> None:
         gate = _active_gate()
         input_device = _TestInputDevice([_TestKeyEvent(ecodes.KEY_A, _TestKeyEvent.key_down)])
         hid_gadgets = _FakeHidGadgets()
         hid_gadgets.keyboard.press = Mock(side_effect=OSError(errno.ENODEV, "No device"))
+        relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
+
+        async with relay:
+            await relay.async_relay_events_loop()
+
+        self.assertFalse(gate.active)
+
+    async def test_dispatch_unexpected_os_error_still_propagates(self) -> None:
+        gate = _active_gate()
+        input_device = _TestInputDevice([_TestKeyEvent(ecodes.KEY_A, _TestKeyEvent.key_down)])
+        hid_gadgets = _FakeHidGadgets()
+        hid_gadgets.keyboard.press = Mock(side_effect=OSError(errno.EIO, "I/O error"))
         relay = InputRelay(input_device, hid_gadgets, relay_gate=gate)
 
         async with relay:

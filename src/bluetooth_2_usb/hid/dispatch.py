@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -260,6 +261,13 @@ class HidDispatcher:
             logger.debug("%s HID write blocked; dropping %s", description, context)
         except BrokenPipeError:
             self._handle_broken_pipe()
+        except OSError as exc:
+            if exc.errno in (errno.ENODEV, errno.ESHUTDOWN):
+                self._handle_broken_pipe()
+                return
+            self._hid_write_failures += 1
+            logger.exception("Unexpected error processing %s", context)
+            raise
         except Exception:
             self._hid_write_failures += 1
             logger.exception("Unexpected error processing %s", context)

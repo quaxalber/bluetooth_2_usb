@@ -164,6 +164,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_enable_requests_default_layout(self) -> None:
         layout = SimpleNamespace(devices=("keyboard", "mouse", "consumer"))
+        shared_digitizer_lock = object()
 
         with (
             patch(f"{GADGETS_MANAGER}.build_default_layout", return_value=layout),
@@ -173,12 +174,15 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{GADGETS_MANAGER}.Keyboard"),
             patch(f"{GADGETS_MANAGER}.Mouse"),
             patch(f"{GADGETS_MANAGER}.ConsumerControl"),
-            patch(f"{GADGETS_MANAGER}.TouchDigitizer"),
-            patch(f"{GADGETS_MANAGER}.TabletDigitizer"),
+            patch(f"{GADGETS_MANAGER_ASYNCIO}.Lock", return_value=shared_digitizer_lock),
+            patch(f"{GADGETS_MANAGER}.TouchDigitizer") as touch,
+            patch(f"{GADGETS_MANAGER}.TabletDigitizer") as tablet,
         ):
             await HidGadgets().enable()
 
         rebuild.assert_called_once_with(layout)
+        touch.assert_called_once_with([], report_lock=shared_digitizer_lock)
+        tablet.assert_called_once_with([], report_lock=shared_digitizer_lock)
 
     async def test_release_all_releases_keyboard_mouse_consumer_and_digitizers(self) -> None:
         hid_gadgets = HidGadgets()
@@ -225,6 +229,8 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(hid_gadgets.keyboard)
         self.assertIsNone(hid_gadgets.mouse)
         self.assertIsNone(hid_gadgets.consumer)
+        self.assertIsNone(hid_gadgets.touch)
+        self.assertIsNone(hid_gadgets.tablet)
 
     async def test_declared_hidg_paths_use_declared_function_indexes(self) -> None:
         devices = (SimpleNamespace(function_index=2), SimpleNamespace(function_index=7))

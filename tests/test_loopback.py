@@ -27,6 +27,7 @@ from bluetooth_2_usb.hid.constants import (
     HID_PAGE_DIGITIZER,
     HID_PAGE_GENERIC_DESKTOP,
     HID_USAGE_CONSUMER_CONTROL,
+    HID_USAGE_DIGITIZER_PEN,
     HID_USAGE_DIGITIZER_TOUCH_PAD,
     HID_USAGE_KEYBOARD,
     HID_USAGE_MOUSE,
@@ -410,6 +411,18 @@ class GadgetNodeDiscoveryTest(unittest.TestCase):
         self.assertCountEqual([info.node for info in candidates.mouse_nodes], ["mouse0"])
         self.assertCountEqual([info.node for info in candidates.consumer_nodes], ["consumer0"])
         self.assertCountEqual([info.node for info in candidates.digitizer_nodes], ["digitizer0"])
+
+    def test_discovery_deduplicates_digitizer_collections_by_raw_path(self) -> None:
+        hid_module = _FakeHidModule(
+            [
+                _hid_entry("digitizer0", usage_page=HID_PAGE_DIGITIZER, usage=HID_USAGE_DIGITIZER_TOUCH_PAD),
+                _hid_entry("digitizer0", usage_page=HID_PAGE_DIGITIZER, usage=HID_USAGE_DIGITIZER_PEN),
+            ]
+        )
+
+        candidates = discover_gadget_node_candidates(devices=USB_PRODUCT_NAME, hid_module=hid_module)
+
+        self.assertEqual([info.node for info in candidates.digitizer_nodes], ["digitizer0"])
 
     def test_discovery_returns_multiple_candidates_when_duplicate_devices_exist(self) -> None:
         hid_module = _FakeHidModule(
@@ -1210,6 +1223,29 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertIn("Windows Raw Input capture failed: boom", result.message)
         self.assertEqual(result.details["capture_backend"], "raw_input")
 
+    def test_raw_input_digitizer_scenario_passes_digitizer_candidate_identities(self) -> None:
+        mouse_node = SimpleNamespace(node=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_01\\mouse\\{{guid}}")
+        digitizer_node = SimpleNamespace(node=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_03\\digitizer\\{{guid}}")
+        candidate_nodes = capture_windows.GadgetNodeCandidates(
+            keyboard_nodes=(), mouse_nodes=(mouse_node,), consumer_nodes=(), digitizer_nodes=(digitizer_node,)
+        )
+
+        with (
+            patch(f"{LOOPBACK_CAPTURE_WINDOWS}.IS_WINDOWS", True),
+            patch(
+                f"{LOOPBACK_CAPTURE_WINDOWS}._pump_raw_input",
+                return_value=LoopbackResult(
+                    command="capture", scenario=SCENARIO_DIGITIZER, success=True, exit_code=0, message="ok", details={}
+                ),
+            ) as pump,
+        ):
+            result = capture_windows.run_raw_input_capture(SCENARIO_DIGITIZER, 1.0, candidate_nodes)
+
+        self.assertTrue(result.success)
+        self.assertEqual(
+            pump.call_args.kwargs["digitizer_candidate_identities"], (f"hid\\{WINDOWS_USB_ID}&mi_03\\digitizer",)
+        )
+
     def test_mouse_button_expectations_skip_buttons_raw_input_cannot_surface(self) -> None:
         steps, skipped = capture_windows.mouse_button_expectations(SCENARIOS[SCENARIO_MOUSE])
 
@@ -1235,6 +1271,26 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(result.details["capture_backend"], "raw_input")
         self.assertEqual(result.details["keyboard_steps_seen"], 2)
         self.assertEqual(result.details["nodes"]["keyboard_node"], candidate.matched_name)
+        self.assertIsNone(result.details["nodes"]["digitizer_node"])
+
+    def test_windows_raw_input_success_details_include_matched_digitizer_node(self) -> None:
+        debug = capture_windows._RawInputDebug()
+        candidate = capture_windows._RawInputCandidate(
+            role="digitizer",
+            candidate_identities=(f"hid\\{WINDOWS_USB_ID}&mi_03\\instance",),
+            matcher=SimpleNamespace(complete=True, index=6),
+            matched_name=f"\\\\?\\hid\\{WINDOWS_USB_ID}&mi_03\\instance\\{{guid}}",
+        )
+        candidate.note_report(_touch_digitizer_report(active=True))
+
+        result = capture_windows._raw_input_success_result(
+            SCENARIOS[SCENARIO_DIGITIZER], 15.0, debug, None, None, None, (), candidate
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.details["nodes"]["digitizer_node"], candidate.matched_name)
+        self.assertEqual(result.details["digitizer_reports_seen"], 6)
+        self.assertEqual(result.details["digitizer_reports"], [_touch_digitizer_report(active=True).hex(" ")])
 
     def test_windows_raw_input_failure_details_include_compact_progress(self) -> None:
         debug = capture_windows._RawInputDebug()
@@ -1261,6 +1317,7 @@ class WindowsRawInputHelpersTest(unittest.TestCase):
         self.assertEqual(details["keyboard_steps_seen"], 1)
         self.assertEqual(details["keyboard_steps_expected"], len(SCENARIOS[SCENARIO_KEYBOARD].keyboard_steps))
         self.assertEqual(details["nodes"]["keyboard_node"], candidate.matched_name)
+        self.assertIsNone(details["nodes"]["digitizer_node"])
         self.assertIn("next_expected", details["progress"]["keyboard"][0])
         self.assertEqual(len(details["raw_input_debug"]["sample_events"]), 12)
 

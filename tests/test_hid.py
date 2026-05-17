@@ -1,9 +1,10 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 from bluetooth_2_usb.evdev import KeyEvent, ecodes
-from bluetooth_2_usb.hid.absolute import PadReport, PenReport, TouchReport, TouchReportContact
+from bluetooth_2_usb.hid.absolute import PadAccumulator, PadReport, PenReport, TouchReport, TouchReportContact
 from bluetooth_2_usb.hid.buttons import MouseButtons
 from bluetooth_2_usb.hid.constants import (
     MOUSE_IN_REPORT_LENGTH,
@@ -519,6 +520,18 @@ class MouseTest(unittest.IsolatedAsyncioTestCase):
 
 
 class DigitizerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_touch_and_tablet_digitizers_use_provided_shared_lock(self) -> None:
+        device = SimpleNamespace(sent=[])
+        device.send_report = lambda report, report_id=None: device.sent.append((report_id, bytes(report)))
+        report_lock = asyncio.Lock()
+
+        with patch(f"{ADAFRUIT_HID}.find_device", return_value=device):
+            touch = TouchDigitizer(devices=[], report_lock=report_lock)
+            tablet = TabletDigitizer(devices=[], report_lock=report_lock)
+
+        self.assertIs(touch._report_lock, report_lock)
+        self.assertIs(tablet._report_lock, report_lock)
+
     async def test_touch_digitizer_packs_contact_report(self) -> None:
         device = SimpleNamespace(sent=[])
 
@@ -589,6 +602,23 @@ class DigitizerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(device.sent[0][0], TABLET_PAD_REPORT_ID)
         self.assertEqual(len(device.sent[0][1]), 52)
         self.assertEqual(device.sent[0][1][:3], bytes([0x01, 0x00, 0x02]))
+
+    async def test_pad_accumulator_emits_relative_wheel_once(self) -> None:
+        pad = PadAccumulator()
+
+        pad.add_event(_TestAbsEvent(ecodes.ABS_WHEEL, -3))
+        self.assertEqual(pad.flush(), PadReport(buttons=0, wheel=-3))
+        pad.add_key(_TestKeyEvent(ecodes.BTN_LEFT, _TestKeyEvent.key_down))
+
+        self.assertEqual(pad.flush(), PadReport(buttons=0x01, wheel=0))
+
+    async def test_pad_accumulator_release_all_clears_wheel_only_state(self) -> None:
+        pad = PadAccumulator()
+
+        pad.add_event(_TestAbsEvent(ecodes.ABS_WHEEL, 4))
+
+        self.assertEqual(pad.release_all(), PadReport(buttons=0, wheel=0))
+        self.assertIsNone(pad.flush())
 
 
 class HidDispatchTest(unittest.IsolatedAsyncioTestCase):

@@ -736,6 +736,8 @@ def discover_gadget_node_candidates(devices: str, hid_module: Any | None = None)
         elif role == "digitizer":
             digitizer_nodes.append(info)
 
+    digitizer_nodes = _dedupe_digitizer_nodes(digitizer_nodes)
+
     if not keyboard_nodes and not mouse_nodes and not consumer_nodes and not digitizer_nodes:
         raise MissingNodeError(f"No HID devices matched {devices!r} through hidapi enumeration")
 
@@ -745,6 +747,18 @@ def discover_gadget_node_candidates(devices: str, hid_module: Any | None = None)
         consumer_nodes=tuple(sorted(consumer_nodes, key=lambda info: info.node)),
         digitizer_nodes=tuple(sorted(digitizer_nodes, key=lambda info: info.node)),
     )
+
+
+def _dedupe_digitizer_nodes(infos: list[HidDeviceInfo]) -> list[HidDeviceInfo]:
+    seen: set[object] = set()
+    deduped: list[HidDeviceInfo] = []
+    for info in infos:
+        key: object = info.raw_path or info.node
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(info)
+    return deduped
 
 
 def discover_gadget_nodes(devices: str, hid_module: Any | None = None) -> GadgetNodes:

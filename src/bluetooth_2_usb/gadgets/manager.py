@@ -161,11 +161,12 @@ class HidGadgets:
             enabled_devices = list(rebuild_gadget(build_default_layout(self._identity)))
             await self.validate_hidg_nodes(enabled_devices)
 
+        shared_digitizer_lock = asyncio.Lock()
         self._gadgets["keyboard"] = Keyboard(enabled_devices)
         self._gadgets["mouse"] = Mouse(enabled_devices)
         self._gadgets["consumer"] = ConsumerControl(enabled_devices)
-        self._gadgets["touch"] = TouchDigitizer(enabled_devices)
-        self._gadgets["tablet"] = TabletDigitizer(enabled_devices)
+        self._gadgets["touch"] = TouchDigitizer(enabled_devices, report_lock=shared_digitizer_lock)
+        self._gadgets["tablet"] = TabletDigitizer(enabled_devices, report_lock=shared_digitizer_lock)
         self._enabled = True
 
         logger.debug("USB HID gadgets initialized: %s", enabled_devices)

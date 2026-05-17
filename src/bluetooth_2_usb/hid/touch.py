@@ -22,13 +22,13 @@ class TouchDigitizer:
     REPORT_WRITE_MAX_TRIES = timing.REPORT_WRITE_MAX_TRIES
     REPORT_WRITE_RETRY_DELAY_SEC = timing.REPORT_WRITE_RETRY_DELAY_SEC
 
-    def __init__(self, devices) -> None:
+    def __init__(self, devices, report_lock: asyncio.Lock | None = None) -> None:
         from adafruit_hid import find_device
 
         self._device = find_device(devices, usage_page=HID_PAGE_DIGITIZER, usage=HID_USAGE_DIGITIZER_TOUCH_PAD)
         if not self._device:
             raise ValueError("Could not find matching touch digitizer HID device.")
-        self._report_lock = asyncio.Lock()
+        self._report_lock = asyncio.Lock() if report_lock is None else report_lock
 
     def __str__(self) -> str:
         return str(self._device)

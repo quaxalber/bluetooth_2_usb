@@ -157,7 +157,7 @@ Runtime CLI and environment reference:
 > new composite shape.
 
 The touch/tablet support is generic HID digitizer support. Windows Precision
-Touchpad behavior is not claimed; it needs required HID feature-report handling
+Touchpad behavior is not claimed; it requires HID feature-report handling
 and remains future work.
 
 ## Read-only operation

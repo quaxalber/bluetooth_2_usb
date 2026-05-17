@@ -18,9 +18,8 @@ class GadgetNodes:
             "keyboard_node": self.keyboard_node,
             "mouse_node": self.mouse_node,
             "consumer_node": self.consumer_node,
+            "digitizer_node": self.digitizer_node,
         }
-        if self.digitizer_node is not None:
-            nodes["digitizer_node"] = self.digitizer_node
         return nodes
 
 
