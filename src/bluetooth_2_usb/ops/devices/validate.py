@@ -17,6 +17,7 @@ KNOWN_RECORD_TYPES = {
     "capture_warning",
     "input_device",
     "evdev_capabilities",
+    "evdev_input_properties",
     "udev_properties",
     "sysfs_snapshot",
     "hidraw_node",
@@ -24,6 +25,9 @@ KNOWN_RECORD_TYPES = {
     "hidraw_report",
     "evdev_axis_snapshot",
     "evdev_key_snapshot",
+    "evdev_misc_snapshot",
+    "evdev_event_type_summary",
+    "evdev_sample_sequence",
     "evdev_sync_summary",
     "hidraw_report_group_summary",
 }
@@ -132,7 +136,13 @@ def validate_capture(path: Path, *, generated_output: bool = False) -> CaptureVa
         warnings.append("elapsed_sec is missing")
     if not matched_devices:
         warnings.append("no matched devices recorded")
-    for required_type in ("input_device", "evdev_capabilities", "udev_properties", "sysfs_snapshot"):
+    for required_type in (
+        "input_device",
+        "evdev_capabilities",
+        "evdev_input_properties",
+        "udev_properties",
+        "sysfs_snapshot",
+    ):
         if record_counts.get(required_type, 0) == 0:
             warnings.append(f"missing {required_type} records")
 
@@ -143,6 +153,7 @@ def validate_capture(path: Path, *, generated_output: bool = False) -> CaptureVa
     unique_key_codes = _unique_codes(records, ecodes.EV_KEY)
     unique_rel_codes = _unique_codes(records, ecodes.EV_REL)
     unique_abs_codes = _unique_codes(records, ecodes.EV_ABS)
+    unique_msc_codes = _unique_codes(records, ecodes.EV_MSC)
     if warning_records:
         for record in warning_records:
             message = str(record.get("message") or "capture warning")
@@ -177,6 +188,7 @@ def validate_capture(path: Path, *, generated_output: bool = False) -> CaptureVa
         "capture_end": record_counts.get("capture_end", 0) > 0,
         "input_device": record_counts.get("input_device", 0) > 0,
         "evdev_capabilities": record_counts.get("evdev_capabilities", 0) > 0,
+        "evdev_input_properties": record_counts.get("evdev_input_properties", 0) > 0,
         "udev_properties": record_counts.get("udev_properties", 0) > 0,
         "sysfs_snapshot": record_counts.get("sysfs_snapshot", 0) > 0,
         "grabbed": any(
@@ -189,6 +201,9 @@ def validate_capture(path: Path, *, generated_output: bool = False) -> CaptureVa
         "evdev_event_raw": record_counts.get("evdev_event", 0) > 0,
         "evdev_key_snapshot": record_counts.get("evdev_key_snapshot", 0) > 0,
         "evdev_axis_snapshot": record_counts.get("evdev_axis_snapshot", 0) > 0,
+        "evdev_misc_snapshot": record_counts.get("evdev_misc_snapshot", 0) > 0,
+        "evdev_event_type_summary": record_counts.get("evdev_event_type_summary", 0) > 0,
+        "evdev_sample_sequence": record_counts.get("evdev_sample_sequence", 0) > 0,
         "evdev_sync_summary": record_counts.get("evdev_sync_summary", 0) > 0,
     }
     unique_paths = sorted(
@@ -203,8 +218,13 @@ def validate_capture(path: Path, *, generated_output: bool = False) -> CaptureVa
         "unique_key_codes": sorted(unique_key_codes),
         "unique_rel_codes": sorted(unique_rel_codes),
         "unique_abs_codes": sorted(unique_abs_codes),
+        "unique_msc_codes": sorted(unique_msc_codes),
+        "input_properties_count": record_counts.get("evdev_input_properties", 0),
         "axis_snapshot_count": record_counts.get("evdev_axis_snapshot", 0),
         "key_snapshot_count": record_counts.get("evdev_key_snapshot", 0),
+        "misc_snapshot_count": record_counts.get("evdev_misc_snapshot", 0),
+        "event_type_summary_count": record_counts.get("evdev_event_type_summary", 0),
+        "sample_sequence_count": record_counts.get("evdev_sample_sequence", 0),
         "raw_evdev_event_count": record_counts.get("evdev_event", 0),
         "raw_hidraw_report_count": record_counts.get("hidraw_report", 0),
         "hidraw_summary_count": record_counts.get("hidraw_report_group_summary", 0),
@@ -276,6 +296,9 @@ def _live_record_types() -> tuple[str, ...]:
         "hidraw_report",
         "evdev_axis_snapshot",
         "evdev_key_snapshot",
+        "evdev_misc_snapshot",
+        "evdev_event_type_summary",
+        "evdev_sample_sequence",
         "evdev_sync_summary",
         "hidraw_report_group_summary",
     )
@@ -291,7 +314,9 @@ def _unique_codes(records: list[dict[str, object]], event_type: int) -> set[str]
             continue
         if record_type == "evdev_key_snapshot" and event_type != ecodes.EV_KEY:
             continue
-        if record_type not in {"evdev_event", "evdev_axis_snapshot", "evdev_key_snapshot"}:
+        if record_type == "evdev_misc_snapshot" and event_type != ecodes.EV_MSC:
+            continue
+        if record_type not in {"evdev_event", "evdev_axis_snapshot", "evdev_key_snapshot", "evdev_misc_snapshot"}:
             continue
         code = record.get("code_name") or record.get("code")
         if code is not None:

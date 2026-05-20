@@ -486,10 +486,13 @@ class SmokeTest:
     def _print_readonly_summary(
         self, readonly: str, overlay: str, root_overlay_active: str, bluetooth_storage: str
     ) -> None:
-        if self.verbose or self.section_statuses.get("Read-Only Mode") is ProbeStatus.FAIL:
+        if self.section_statuses.get("Read-Only Mode") is ProbeStatus.FAIL:
             return
         message = _readonly_summary_message(readonly, overlay, root_overlay_active, bluetooth_storage)
-        ok_final(message)
+        if self.verbose:
+            print(bold(f"Read-only summary: {message}"))
+        else:
+            ok(message)
         self.results.append(ProbeResult(ProbeStatus.PASS, message, ""))
 
     def _print_verbose(self, rfkill_entries, *logs: tuple[int, str]) -> None:

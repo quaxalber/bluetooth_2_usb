@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from rich.console import Console
+from rich.console import Console, ConsoleOptions, RenderResult
 from rich.live import Live
+from rich.text import Text
 
 from ...evdev import ecodes
 from ..commands import info, ok, warn
@@ -21,6 +22,8 @@ EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_ENVIRONMENT = 3
 EXIT_INTERRUPTED = 130
+_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+_PROGRESS_WIDTH = 8
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -106,9 +109,11 @@ def run(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         progress.finish_line()
         if progress.output_path is not None:
-            print(f"Device capture interrupted; wrote partial capture: {progress.output_path}", file=sys.stderr)
+            warn("Received keyboard interrupt; finalizing partial capture.")
+            ok(f"Wrote: {progress.output_path}")
+            _print_capture_summary(progress.output_path, generated_output=args.output is None)
         else:
-            print("Device capture interrupted", file=sys.stderr)
+            warn("Received keyboard interrupt before a capture path was created.")
         return EXIT_INTERRUPTED
     except DeviceCaptureError as exc:
         progress.finish_line()
@@ -174,16 +179,19 @@ class _CliProgress:
     abs_codes: set[str] = field(default_factory=set)
     hidraw_paths: set[str] = field(default_factory=set)
     _last_render_monotonic: float = 0.0
+    _started_monotonic: float = 0.0
+    _duration_sec: int = 0
     _live: Live | None = None
     _console: Console | None = None
 
-    def capture_started(self, devices, output_path: Path) -> None:
+    def capture_started(self, devices, output_path: Path, *, duration_sec: int) -> None:
         self.output_path = output_path
+        self._duration_sec = duration_sec
+        self._started_monotonic = time.monotonic()
         summaries = ", ".join(f"{getattr(device, 'path', '')} ({getattr(device, 'name', '')})" for device in devices)
         info(f"Capturing these matching devices: {summaries}")
-        info("Waiting for input; stop capturing with Ctrl-C.")
-        self._console = Console(stderr=True)
-        self._live = Live(self._render_text(), console=self._console, refresh_per_second=4, transient=False)
+        self._console = Console(stderr=True, highlight=False)
+        self._live = Live(self, console=self._console, refresh_per_second=4, transient=False)
         self._live.start()
 
     def evdev_event(self, device, event: object) -> None:
@@ -218,17 +226,53 @@ class _CliProgress:
             return
         self._last_render_monotonic = now
         if self._live is not None:
-            self._live.update(self._render_text())
+            self._live.update(self)
 
     def _render_text(self) -> str:
+        return self._render_status().plain
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        del console, options
+        yield self._render_status()
+
+    def _render_status(self, *, now: float | None = None) -> Text:
+        now = time.monotonic() if now is None else now
+        elapsed_sec = max(0, int(now - self._started_monotonic)) if self._started_monotonic else 0
+        duration_sec = max(0, self._duration_sec)
+        remaining_sec = max(0, duration_sec - elapsed_sec) if duration_sec else 0
+        frame = _SPINNER_FRAMES[int(now * 4) % len(_SPINNER_FRAMES)]
         axes = len(self.rel_codes) + len(self.abs_codes)
-        size = ""
-        if self.output_path is not None and self.output_path.exists():
-            size = f" size={_format_bytes(self.output_path.stat().st_size)}"
-        return (
-            f"events={self.evdev_events} keys={len(self.key_codes)} axes={axes} "
-            f"hidraw={self.hidraw_reports} groups={len(self.hidraw_paths)}{size}"
+        status = Text()
+        status.append(frame, style="cyan")
+        status.append(" Waiting for input...", style="cyan")
+        status.append("   ")
+        status.append(
+            _progress_indicator(elapsed_sec=elapsed_sec, duration_sec=duration_sec, remaining_sec=remaining_sec)
         )
+        status.append("   |   ", style="white")
+        _append_metric(status, "events", self.evdev_events)
+        _append_metric(status, "keys", len(self.key_codes))
+        _append_metric(status, "axes", axes)
+        _append_metric(status, "hidraw", self.hidraw_reports)
+        _append_metric(status, "groups", len(self.hidraw_paths))
+        if self.output_path is not None and self.output_path.exists():
+            _append_metric(status, "size", _format_bytes(self.output_path.stat().st_size), trailing=False)
+        return status
+
+
+def _progress_indicator(*, elapsed_sec: int, duration_sec: int, remaining_sec: int) -> Text:
+    if duration_sec <= 0:
+        return Text(f"[{'-' * _PROGRESS_WIDTH}] {elapsed_sec}s", style="cyan")
+    filled = min(_PROGRESS_WIDTH, int((_PROGRESS_WIDTH * min(elapsed_sec, duration_sec)) / duration_sec))
+    bar = "#" * filled + "-" * (_PROGRESS_WIDTH - filled)
+    return Text(f"[{bar}] {remaining_sec}s", style="cyan")
+
+
+def _append_metric(status: Text, label: str, value: object, *, trailing: bool = True) -> None:
+    status.append(f"{label}=", style="yellow")
+    status.append(str(value), style="cyan")
+    if trailing:
+        status.append("   ")
 
 
 def _event_code_label(event: object) -> str:

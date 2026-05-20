@@ -47,6 +47,13 @@ _LOCAL_EVENT_CODE_NAMES = {
 LiveMode = Literal["summarized", "raw"]
 _AXIS_SAMPLE_LIMIT = 8
 _HIDRAW_SAMPLE_LIMIT = 16
+_EVDEV_SAMPLE_SEQUENCE_LIMIT = 20
+_PER_CODE_SAMPLE_EVENT_LIMIT = 8
+
+
+class _TimedSummary(Protocol):
+    first_monotonic: float | None
+    last_monotonic: float | None
 
 
 class JsonlWriter:
@@ -64,7 +71,7 @@ class JsonlWriter:
 
 
 class CaptureProgress(Protocol):
-    def capture_started(self, devices: list[InputDevice], output_path: Path) -> None: ...
+    def capture_started(self, devices: list[InputDevice], output_path: Path, *, duration_sec: int) -> None: ...
 
     def evdev_event(self, device: InputDevice, event: object) -> None: ...
 
@@ -105,7 +112,7 @@ async def capture_device(
             writer = JsonlWriter(output_file, hostname=hostname)
             writer_lock = asyncio.Lock()
             if progress is not None:
-                progress.capture_started(input_devices, output_path)
+                progress.capture_started(input_devices, output_path, duration_sec=duration_sec)
             _write_capture_start(
                 writer, duration_sec=duration_sec, live_mode=live_mode, devices_filter=devices, handles=handles
             )
@@ -271,7 +278,12 @@ def _close_capture_handles(handles: list[_CaptureHandle]) -> None:
 
 
 def _write_static_records(writer: JsonlWriter, device: InputDevice, max_sysfs_file_bytes: int) -> None:
-    for record_factory in (linux.input_device_record, linux.evdev_capabilities_record, linux.udev_properties_record):
+    for record_factory in (
+        linux.input_device_record,
+        linux.evdev_capabilities_record,
+        linux.evdev_input_properties_record,
+        linux.udev_properties_record,
+    ):
         try:
             writer.write(record_factory(device), flush=True)
         except Exception as exc:
@@ -327,7 +339,7 @@ async def _capture_live_records(
                     async with writer_lock:
                         writer.write(evdev_event_record(device, event), flush=True)
                 else:
-                    summaries.add_event(event)
+                    summaries.add_event(event, observed_monotonic=round(time.monotonic(), 6))
                 if progress is not None:
                     progress.evdev_event(device, event)
                 pending_event = _pending_event(reader)
@@ -363,7 +375,11 @@ async def _capture_live_records(
                             writer.write(hidraw_report_record(path, report, truncated=truncated), flush=True)
                     else:
                         summaries.add_hidraw_report(
-                            path, report, truncated=truncated, has_report_id=path in hidraw_report_id_paths
+                            path,
+                            report,
+                            truncated=truncated,
+                            has_report_id=path in hidraw_report_id_paths,
+                            observed_monotonic=round(time.monotonic(), 6),
                         )
                     if progress is not None:
                         progress.hidraw_report(path, report)
@@ -391,10 +407,16 @@ class _AxisSnapshot:
     same_value_repeat_count: int = 0
     sample_values: list[int] | None = None
     sample_values_truncated: bool = False
+    sample_events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
+    first_monotonic: float | None = None
+    last_monotonic: float | None = None
 
-    def add(self, value: int) -> None:
+    def add(self, value: int, *, observed_monotonic: float) -> None:
         if self.sample_values is None:
             self.sample_values = []
+        self._add_sample_event(value=value, observed_monotonic=observed_monotonic)
+        _update_timing(self, observed_monotonic)
         previous = self.last_value
         self.count += 1
         if self.first_value is None:
@@ -433,6 +455,10 @@ class _AxisSnapshot:
             "max_value": self.max_value,
             "sample_values": self.sample_values or [],
             "sample_values_truncated": self.sample_values_truncated,
+            "sample_events": self.sample_events or [],
+            "sample_events_truncated": self.sample_events_truncated,
+            "first_monotonic": self.first_monotonic,
+            "last_monotonic": self.last_monotonic,
         }
         if self.event_type == ecodes.EV_REL:
             record["sum_value"] = self.sum_value
@@ -441,6 +467,14 @@ class _AxisSnapshot:
             record["changed_value_count"] = self.changed_value_count
             record["same_value_repeat_count"] = self.same_value_repeat_count
         return record
+
+    def _add_sample_event(self, *, value: int, observed_monotonic: float) -> None:
+        if self.sample_events is None:
+            self.sample_events = []
+        if len(self.sample_events) >= _PER_CODE_SAMPLE_EVENT_LIMIT:
+            self.sample_events_truncated = True
+            return
+        self.sample_events.append({"monotonic": observed_monotonic, "value": value})
 
 
 @dataclass(slots=True)
@@ -452,8 +486,14 @@ class _KeySnapshot:
     repeat_count: int = 0
     first_value: int | None = None
     last_value: int | None = None
+    sample_events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
+    first_monotonic: float | None = None
+    last_monotonic: float | None = None
 
-    def add(self, value: int) -> None:
+    def add(self, value: int, *, observed_monotonic: float) -> None:
+        self._add_sample_event(value=value, observed_monotonic=observed_monotonic)
+        _update_timing(self, observed_monotonic)
         if self.first_value is None:
             self.first_value = value
         self.last_value = value
@@ -477,7 +517,19 @@ class _KeySnapshot:
             "repeat_count": self.repeat_count,
             "first_value": self.first_value,
             "last_value": self.last_value,
+            "sample_events": self.sample_events or [],
+            "sample_events_truncated": self.sample_events_truncated,
+            "first_monotonic": self.first_monotonic,
+            "last_monotonic": self.last_monotonic,
         }
+
+    def _add_sample_event(self, *, value: int, observed_monotonic: float) -> None:
+        if self.sample_events is None:
+            self.sample_events = []
+        if len(self.sample_events) >= _PER_CODE_SAMPLE_EVENT_LIMIT:
+            self.sample_events_truncated = True
+            return
+        self.sample_events.append({"monotonic": observed_monotonic, "value": value})
 
 
 @dataclass(slots=True)
@@ -486,8 +538,11 @@ class _SyncSnapshot:
     syn_report_count: int = 0
     syn_dropped_count: int = 0
     other_sync_counts: dict[str, int] | None = None
+    first_monotonic: float | None = None
+    last_monotonic: float | None = None
 
-    def add(self, code: int) -> None:
+    def add(self, code: int, *, observed_monotonic: float) -> None:
+        _update_timing(self, observed_monotonic)
         if code == ecodes.SYN_REPORT:
             self.syn_report_count += 1
         elif code == ecodes.SYN_DROPPED:
@@ -505,7 +560,73 @@ class _SyncSnapshot:
             "syn_report_count": self.syn_report_count,
             "syn_dropped_count": self.syn_dropped_count,
             "other_sync_counts": self.other_sync_counts or {},
+            "first_monotonic": self.first_monotonic,
+            "last_monotonic": self.last_monotonic,
         }
+
+
+@dataclass(slots=True)
+class _MiscSnapshot:
+    path: str
+    code: int
+    count: int = 0
+    first_value: int | None = None
+    last_value: int | None = None
+    min_value: int | None = None
+    max_value: int | None = None
+    sample_values: list[int] | None = None
+    sample_values_truncated: bool = False
+    sample_events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
+    first_monotonic: float | None = None
+    last_monotonic: float | None = None
+
+    def add(self, value: int, *, observed_monotonic: float) -> None:
+        if self.sample_values is None:
+            self.sample_values = []
+        self._add_sample_event(value=value, observed_monotonic=observed_monotonic)
+        _update_timing(self, observed_monotonic)
+        previous = self.last_value
+        self.count += 1
+        if self.first_value is None:
+            self.first_value = value
+        self.last_value = value
+        self.min_value = value if self.min_value is None else min(self.min_value, value)
+        self.max_value = value if self.max_value is None else max(self.max_value, value)
+        if previous != value:
+            if len(self.sample_values) < _AXIS_SAMPLE_LIMIT:
+                self.sample_values.append(value)
+            else:
+                self.sample_values_truncated = True
+
+    def record(self) -> dict[str, object]:
+        return {
+            "record_type": "evdev_misc_snapshot",
+            "path": self.path,
+            "type": ecodes.EV_MSC,
+            "type_name": _event_type_name(ecodes.EV_MSC),
+            "code": self.code,
+            "code_name": _event_code_name(ecodes.EV_MSC, self.code),
+            "count": self.count,
+            "first_value": self.first_value,
+            "last_value": self.last_value,
+            "min_value": self.min_value,
+            "max_value": self.max_value,
+            "sample_values": self.sample_values or [],
+            "sample_values_truncated": self.sample_values_truncated,
+            "sample_events": self.sample_events or [],
+            "sample_events_truncated": self.sample_events_truncated,
+            "first_monotonic": self.first_monotonic,
+            "last_monotonic": self.last_monotonic,
+        }
+
+    def _add_sample_event(self, *, value: int, observed_monotonic: float) -> None:
+        if self.sample_events is None:
+            self.sample_events = []
+        if len(self.sample_events) >= _PER_CODE_SAMPLE_EVENT_LIMIT:
+            self.sample_events_truncated = True
+            return
+        self.sample_events.append({"monotonic": observed_monotonic, "value": value})
 
 
 @dataclass(slots=True)
@@ -516,13 +637,15 @@ class _HidrawGroupSnapshot:
     count: int = 0
     exact_duplicate_count: int = 0
     truncated_report_count: int = 0
-    sample_reports: list[bytes] | None = None
+    sample_reports: list[dict[str, object]] | None = None
     seen_reports: set[bytes] | None = None
     sample_reports_truncated: bool = False
     changed_byte_indexes: set[int] | None = None
     byte_values: list[int | None] | None = None
+    first_monotonic: float | None = None
+    last_monotonic: float | None = None
 
-    def add(self, report: bytes, *, truncated: bool) -> None:
+    def add(self, report: bytes, *, truncated: bool, observed_monotonic: float) -> None:
         if self.sample_reports is None:
             self.sample_reports = []
         if self.seen_reports is None:
@@ -532,6 +655,7 @@ class _HidrawGroupSnapshot:
         if self.byte_values is None:
             self.byte_values = [None] * len(report)
 
+        _update_timing(self, observed_monotonic)
         self.count += 1
         if truncated:
             self.truncated_report_count += 1
@@ -540,7 +664,7 @@ class _HidrawGroupSnapshot:
         else:
             self.seen_reports.add(report)
             if len(self.sample_reports) < _HIDRAW_SAMPLE_LIMIT:
-                self.sample_reports.append(report)
+                self.sample_reports.append({"monotonic": observed_monotonic, "report": report.hex(" ")})
             else:
                 self.sample_reports_truncated = True
         for index, byte in enumerate(report):
@@ -559,10 +683,74 @@ class _HidrawGroupSnapshot:
             "count": self.count,
             "exact_duplicate_count": self.exact_duplicate_count,
             "unique_report_count": len(self.seen_reports or ()),
-            "sample_reports": [report.hex(" ") for report in self.sample_reports or []],
+            "sample_reports": self.sample_reports or [],
             "sample_reports_truncated": self.sample_reports_truncated,
             "changed_byte_indexes": sorted(self.changed_byte_indexes or ()),
             "truncated_report_count": self.truncated_report_count,
+            "first_monotonic": self.first_monotonic,
+            "last_monotonic": self.last_monotonic,
+        }
+
+
+@dataclass(slots=True)
+class _EventTypeSummary:
+    path: str
+    counts: dict[int, int] | None = None
+    first_monotonic: float | None = None
+    last_monotonic: float | None = None
+
+    def add(self, event_type: int, *, observed_monotonic: float) -> None:
+        if self.counts is None:
+            self.counts = {}
+        _update_timing(self, observed_monotonic)
+        self.counts[event_type] = self.counts.get(event_type, 0) + 1
+
+    def record(self) -> dict[str, object]:
+        counts = self.counts or {}
+        return {
+            "record_type": "evdev_event_type_summary",
+            "path": self.path,
+            "counts": {
+                _event_type_name(event_type) or str(event_type): counts[event_type] for event_type in sorted(counts)
+            },
+            "type_codes": {str(event_type): _event_type_name(event_type) for event_type in sorted(counts)},
+            "first_monotonic": self.first_monotonic,
+            "last_monotonic": self.last_monotonic,
+        }
+
+
+@dataclass(slots=True)
+class _SampleSequence:
+    path: str
+    events: list[dict[str, object]] | None = None
+    sample_events_truncated: bool = False
+
+    def add(self, event: object, *, observed_monotonic: float) -> None:
+        if self.events is None:
+            self.events = []
+        if len(self.events) >= _EVDEV_SAMPLE_SEQUENCE_LIMIT:
+            self.sample_events_truncated = True
+            return
+        event_type = getattr(event, "type", None)
+        code = getattr(event, "code", None)
+        self.events.append(
+            {
+                "monotonic": observed_monotonic,
+                "type": event_type,
+                "type_name": _event_type_name(event_type),
+                "code": code,
+                "code_name": _event_code_name(event_type, code),
+                "value": getattr(event, "value", None),
+            }
+        )
+
+    def record(self) -> dict[str, object]:
+        return {
+            "record_type": "evdev_sample_sequence",
+            "path": self.path,
+            "sample_limit": _EVDEV_SAMPLE_SEQUENCE_LIMIT,
+            "sample_events_truncated": self.sample_events_truncated,
+            "events": self.events or [],
         }
 
 
@@ -571,46 +759,64 @@ class _LiveSummaries:
         self._path = getattr(device, "path", "")
         self._axes: dict[tuple[int, int], _AxisSnapshot] = {}
         self._keys: dict[int, _KeySnapshot] = {}
+        self._misc: dict[int, _MiscSnapshot] = {}
         self._sync: _SyncSnapshot | None = None
         self._hidraw: dict[tuple[Path, int | None, int], _HidrawGroupSnapshot] = {}
+        self._event_types = _EventTypeSummary(path=self._path)
+        self._sample_sequence = _SampleSequence(path=self._path)
 
-    def add_event(self, event: object) -> None:
+    def add_event(self, event: object, *, observed_monotonic: float) -> None:
         event_type = getattr(event, "type", None)
         code = getattr(event, "code", None)
         value = getattr(event, "value", None)
         if not isinstance(event_type, int) or not isinstance(code, int) or not isinstance(value, int):
             return
+        self._event_types.add(event_type, observed_monotonic=observed_monotonic)
+        self._sample_sequence.add(event, observed_monotonic=observed_monotonic)
         if event_type in (ecodes.EV_REL, ecodes.EV_ABS):
             key = (event_type, code)
             snapshot = self._axes.get(key)
             if snapshot is None:
                 snapshot = _AxisSnapshot(path=self._path, event_type=event_type, code=code)
                 self._axes[key] = snapshot
-            snapshot.add(value)
+            snapshot.add(value, observed_monotonic=observed_monotonic)
         elif event_type == ecodes.EV_KEY:
             snapshot = self._keys.get(code)
             if snapshot is None:
                 snapshot = _KeySnapshot(path=self._path, code=code)
                 self._keys[code] = snapshot
-            snapshot.add(value)
+            snapshot.add(value, observed_monotonic=observed_monotonic)
+        elif event_type == ecodes.EV_MSC:
+            snapshot = self._misc.get(code)
+            if snapshot is None:
+                snapshot = _MiscSnapshot(path=self._path, code=code)
+                self._misc[code] = snapshot
+            snapshot.add(value, observed_monotonic=observed_monotonic)
         elif event_type == ecodes.EV_SYN:
             if self._sync is None:
                 self._sync = _SyncSnapshot(path=self._path)
-            self._sync.add(code)
+            self._sync.add(code, observed_monotonic=observed_monotonic)
 
-    def add_hidraw_report(self, path: Path, report: bytes, *, truncated: bool, has_report_id: bool) -> None:
+    def add_hidraw_report(
+        self, path: Path, report: bytes, *, truncated: bool, has_report_id: bool, observed_monotonic: float
+    ) -> None:
         report_id = report[0] if has_report_id and report else None
         key = (path, report_id, len(report))
         snapshot = self._hidraw.get(key)
         if snapshot is None:
             snapshot = _HidrawGroupSnapshot(path=path, report_id=report_id, length=len(report))
             self._hidraw[key] = snapshot
-        snapshot.add(report, truncated=truncated)
+        snapshot.add(report, truncated=truncated, observed_monotonic=observed_monotonic)
 
     def records(self) -> list[dict[str, object]]:
         records: list[dict[str, object]] = []
+        if self._event_types.counts:
+            records.append(self._event_types.record())
+        if self._sample_sequence.events:
+            records.append(self._sample_sequence.record())
         records.extend(self._axes[key].record() for key in sorted(self._axes))
         records.extend(self._keys[key].record() for key in sorted(self._keys))
+        records.extend(self._misc[key].record() for key in sorted(self._misc))
         if self._sync is not None:
             records.append(self._sync.record())
         records.extend(
@@ -618,6 +824,12 @@ class _LiveSummaries:
             for key in sorted(self._hidraw, key=lambda item: (str(item[0]), item[1] or -1, item[2]))
         )
         return records
+
+
+def _update_timing(summary: _TimedSummary, observed_monotonic: float) -> None:
+    if summary.first_monotonic is None:
+        summary.first_monotonic = observed_monotonic
+    summary.last_monotonic = observed_monotonic
 
 
 def _hidraw_node_uses_report_ids(record: dict[str, object]) -> bool:

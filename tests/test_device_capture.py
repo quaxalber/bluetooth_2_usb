@@ -47,6 +47,9 @@ class _FakeInputDevice:
     def capabilities(self, verbose=True):
         return {1: [(30, "KEY_A")]}
 
+    def input_props(self, verbose=True):
+        return [(0, "INPUT_PROP_POINTER")]
+
     def async_read_loop(self):
         events = list(self._events)
 
@@ -151,7 +154,7 @@ def _minimal_capture_records(*, live_mode: str = "summarized", warning: str | No
     records: list[dict[str, object]] = [
         {
             "record_type": "capture_start",
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "bluetooth_2_usb device capture",
             "started_at": "2026-05-06T01:02:03Z",
             "duration_sec": 30,
@@ -161,6 +164,7 @@ def _minimal_capture_records(*, live_mode: str = "summarized", warning: str | No
         },
         {"record_type": "input_device", "path": "/dev/input/event1", "name": "Keyboard"},
         {"record_type": "evdev_capabilities", "path": "/dev/input/event1", "capabilities": {}},
+        {"record_type": "evdev_input_properties", "path": "/dev/input/event1", "properties": []},
         {"record_type": "udev_properties", "path": "/dev/input/event1", "properties": {}},
         {"record_type": "sysfs_snapshot", "path": "/dev/input/event1", "files": []},
         {"record_type": "capture_note", "path": "/dev/input/event1", "message": "grabbed input device"},
@@ -278,8 +282,10 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("Capture summary: mode=summarized matched=1 live=yes warnings=0", stdout.getvalue())
 
-    def test_capture_progress_status_line_stays_compact(self) -> None:
+    def test_capture_progress_status_line_includes_spinner_countdown_and_spaced_metrics(self) -> None:
         progress = _CliProgress()
+        progress._started_monotonic = 100.0
+        progress._duration_sec = 30
         progress.evdev_events = 12
         progress.hidraw_reports = 3
         progress.key_codes.update({"KEY_A", "BTN_LEFT"})
@@ -287,9 +293,85 @@ class DeviceCaptureTest(unittest.TestCase):
         progress.abs_codes.add("ABS_X")
         progress.hidraw_paths.add("hidraw0:8B")
 
-        line = progress._render_text()
+        line = progress._render_status(now=112.0).plain
 
-        self.assertEqual(line, "events=12 keys=2 axes=2 hidraw=3 groups=1")
+        self.assertIn("Waiting for input...", line)
+        self.assertIn("[###-----] 18s", line)
+        self.assertIn("events=12   keys=2   axes=2   hidraw=3   groups=1", line)
+
+    def test_capture_progress_status_colors_decimal_size_as_one_value(self) -> None:
+        progress = _CliProgress()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            output.write_bytes(b"x" * 14848)
+            progress.output_path = output
+
+            status = progress._render_status(now=0.0)
+
+        value_start = status.plain.index("14.5K")
+        value_end = value_start + len("14.5K")
+        self.assertTrue(
+            any(
+                span.start <= value_start and span.end >= value_end and str(span.style) == "cyan"
+                for span in status.spans
+            )
+        )
+
+    def test_capture_records_input_properties(self) -> None:
+        device = _FakeInputDevice("/dev/input/event1", "Touchpad")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=0,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        properties = next(record for record in records if record["record_type"] == "evdev_input_properties")
+        self.assertEqual(properties["path"], "/dev/input/event1")
+        self.assertEqual(properties["properties"], [[0, "INPUT_PROP_POINTER"]])
+
+    def test_capture_input_properties_records_error_when_unavailable(self) -> None:
+        class FailingInputPropsDevice(_FakeInputDevice):
+            def input_props(self, verbose=True):
+                raise OSError("props unavailable")
+
+        device = FailingInputPropsDevice("/dev/input/event1", "Touchpad")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=0,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        properties = next(record for record in records if record["record_type"] == "evdev_input_properties")
+        self.assertEqual(properties["properties"], [])
+        self.assertEqual(properties["error"], "props unavailable")
 
     def test_select_input_device_accepts_exact_path_and_closes_nonmatches(self) -> None:
         selected = _FakeInputDevice("/dev/input/event1", "Keyboard")
@@ -314,14 +396,31 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(exit_code, 3)
         self.assertIn("Device capture failed: denied", stderr.getvalue())
 
-    def test_capture_reports_interrupted_partial_output_path(self) -> None:
+    def test_capture_reports_interrupted_then_regular_write_success(self) -> None:
+        stdout = io.StringIO()
         stderr = io.StringIO()
 
-        with patch(f"{DEVICE_CLI}.capture_device", side_effect=KeyboardInterrupt), patch(f"{SYS}.stderr", stderr):
+        def interrupting_capture(*args, **kwargs):
+            progress = kwargs["progress"]
+            progress.output_path = Path("/tmp/capture.jsonl")
+            raise KeyboardInterrupt
+
+        with (
+            patch(f"{DEVICE_CLI}.capture_device", side_effect=interrupting_capture),
+            patch(f"{DEVICE_CLI}._print_capture_summary") as summary,
+            patch(f"{SYS}.stdout", stdout),
+            patch(f"{SYS}.stderr", stderr),
+        ):
             exit_code = run_device(["capture", "--devices", "/dev/input/event1"])
 
         self.assertEqual(exit_code, 130)
-        self.assertIn("Device capture interrupted", stderr.getvalue())
+        output_lines = stdout.getvalue().splitlines()
+        self.assertEqual(
+            output_lines[:2],
+            ["[!] Received keyboard interrupt; finalizing partial capture.", "[+] Wrote: /tmp/capture.jsonl"],
+        )
+        summary.assert_called_once_with(Path("/tmp/capture.jsonl"), generated_output=True)
+        self.assertEqual(stderr.getvalue(), "")
 
     def test_select_input_devices_returns_all_name_matches(self) -> None:
         devices = [_FakeInputDevice("/dev/input/event1", "Keyboard"), _FakeInputDevice("/dev/input/event2", "Keyboard")]
@@ -478,7 +577,7 @@ class DeviceCaptureTest(unittest.TestCase):
         started_devices = []
 
         class Progress:
-            def capture_started(self, devices, output_path: Path) -> None:
+            def capture_started(self, devices, output_path: Path, *, duration_sec: int) -> None:
                 started_devices.extend(devices)
 
             def evdev_event(self, device, event) -> None:
@@ -951,6 +1050,15 @@ class DeviceCaptureTest(unittest.TestCase):
             records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
 
         self.assertEqual([record["record_type"] for record in records].count("evdev_event"), 1)
+        summarized_record_types = {
+            "evdev_misc_snapshot",
+            "evdev_event_type_summary",
+            "evdev_sample_sequence",
+            "evdev_axis_snapshot",
+            "evdev_key_snapshot",
+            "evdev_sync_summary",
+        }
+        self.assertFalse(any(record["record_type"] in summarized_record_types for record in records))
 
     def test_summarized_capture_records_short_rel_and_abs_axis_snapshots(self) -> None:
         device = _FakeInputDevice(
@@ -993,10 +1101,15 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(rel["count"], 2)
         self.assertEqual(rel["sum_value"], 2)
         self.assertEqual(rel["sum_abs_value"], 4)
+        self.assertIn("first_monotonic", rel)
+        self.assertIn("last_monotonic", rel)
+        self.assertEqual([event["value"] for event in rel["sample_events"]], [3, -1])
+        self.assertFalse(rel["sample_events_truncated"])
         self.assertEqual(abs_axis["count"], 3)
         self.assertEqual(abs_axis["min_value"], 10)
         self.assertEqual(abs_axis["max_value"], 20)
         self.assertEqual(abs_axis["sample_values"], [10, 20])
+        self.assertEqual([event["value"] for event in abs_axis["sample_events"]], [10, 10, 20])
         self.assertEqual(abs_axis["changed_value_count"], 2)
         self.assertEqual(abs_axis["same_value_repeat_count"], 1)
 
@@ -1032,6 +1145,187 @@ class DeviceCaptureTest(unittest.TestCase):
         sync = next(record for record in records if record["record_type"] == "evdev_sync_summary")
         self.assertEqual(sync["syn_report_count"], 1)
         self.assertEqual(sync["syn_dropped_count"], 1)
+        self.assertIn("first_monotonic", sync)
+        self.assertIn("last_monotonic", sync)
+
+    def test_summarized_capture_records_misc_scan_summary(self) -> None:
+        device = _FakeInputDevice(
+            "/dev/input/event1",
+            "Remote",
+            events=[
+                SimpleNamespace(sec=1, usec=1, type=4, code=4, value=458792),
+                SimpleNamespace(sec=1, usec=2, type=4, code=4, value=458793),
+                SimpleNamespace(sec=1, usec=3, type=4, code=4, value=458793),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=1,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        misc = next(record for record in records if record["record_type"] == "evdev_misc_snapshot")
+        self.assertEqual(misc["type_name"], "EV_MSC")
+        self.assertEqual(misc["code_name"], "MSC_SCAN")
+        self.assertEqual(misc["count"], 3)
+        self.assertEqual(misc["first_value"], 458792)
+        self.assertEqual(misc["last_value"], 458793)
+        self.assertEqual(misc["min_value"], 458792)
+        self.assertEqual(misc["max_value"], 458793)
+        self.assertEqual(misc["sample_values"], [458792, 458793])
+        self.assertEqual([event["value"] for event in misc["sample_events"]], [458792, 458793, 458793])
+        self.assertFalse(misc["sample_events_truncated"])
+        self.assertIn("first_monotonic", misc)
+        self.assertIn("last_monotonic", misc)
+
+    def test_summarized_capture_records_event_type_summary_and_sample_sequence(self) -> None:
+        device = _FakeInputDevice(
+            "/dev/input/event1",
+            "Remote",
+            events=[
+                SimpleNamespace(sec=1, usec=1, type=4, code=4, value=458792),
+                SimpleNamespace(sec=1, usec=2, type=1, code=115, value=1),
+                SimpleNamespace(sec=1, usec=3, type=0, code=0, value=0),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=1,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        event_types = next(record for record in records if record["record_type"] == "evdev_event_type_summary")
+        self.assertEqual(event_types["counts"], {"EV_SYN": 1, "EV_KEY": 1, "EV_MSC": 1})
+        self.assertEqual(event_types["type_codes"], {"0": "EV_SYN", "1": "EV_KEY", "4": "EV_MSC"})
+        self.assertIn("first_monotonic", event_types)
+        self.assertIn("last_monotonic", event_types)
+        sample = next(record for record in records if record["record_type"] == "evdev_sample_sequence")
+        self.assertFalse(sample["sample_events_truncated"])
+        self.assertEqual([event["type_name"] for event in sample["events"]], ["EV_MSC", "EV_KEY", "EV_SYN"])
+        self.assertEqual(sample["events"][0]["code_name"], "MSC_SCAN")
+
+    def test_event_type_summary_counts_ignored_event_types(self) -> None:
+        device = _FakeInputDevice(
+            "/dev/input/event1", "Switch", events=[SimpleNamespace(sec=1, usec=1, type=5, code=0, value=1)]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=1,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        event_types = next(record for record in records if record["record_type"] == "evdev_event_type_summary")
+        self.assertEqual(event_types["counts"], {"EV_SW": 1})
+
+    def test_summarized_capture_truncates_evdev_sample_sequence(self) -> None:
+        device = _FakeInputDevice(
+            "/dev/input/event1",
+            "Keyboard",
+            events=[SimpleNamespace(sec=1, usec=index, type=1, code=30, value=1) for index in range(25)],
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=1,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        sample = next(record for record in records if record["record_type"] == "evdev_sample_sequence")
+        self.assertEqual(sample["sample_limit"], 20)
+        self.assertEqual(len(sample["events"]), 20)
+        self.assertTrue(sample["sample_events_truncated"])
+
+    def test_summarized_capture_truncates_per_key_axis_and_misc_sample_events(self) -> None:
+        device = _FakeInputDevice(
+            "/dev/input/event1",
+            "Controller",
+            events=[
+                *(SimpleNamespace(sec=1, usec=index, type=1, code=30, value=index % 3) for index in range(10)),
+                *(SimpleNamespace(sec=2, usec=index, type=2, code=0, value=index) for index in range(10)),
+                *(SimpleNamespace(sec=3, usec=index, type=4, code=4, value=1000 + index) for index in range(10)),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "capture.jsonl"
+            with (
+                patch(f"{DEVICE_LINUX}.select_input_devices", return_value=[device]),
+                patch(f"{DEVICE_LINUX}.discover_hidraw_nodes", return_value=[]),
+            ):
+                asyncio.run(
+                    collector.capture_device(
+                        devices="/dev/input/event1",
+                        duration_sec=1,
+                        output_path=output,
+                        grab=False,
+                        include_hidraw=False,
+                        max_report_bytes=8,
+                        max_sysfs_file_bytes=8,
+                    )
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        key = next(record for record in records if record["record_type"] == "evdev_key_snapshot")
+        axis = next(record for record in records if record["record_type"] == "evdev_axis_snapshot")
+        misc = next(record for record in records if record["record_type"] == "evdev_misc_snapshot")
+        for record in (key, axis, misc):
+            self.assertEqual(len(record["sample_events"]), 8)
+            self.assertTrue(record["sample_events_truncated"])
 
     def test_summarized_capture_records_hidraw_group_summary(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Controller")
@@ -1074,6 +1368,10 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertEqual(summary["exact_duplicate_count"], 1)
         self.assertEqual(summary["unique_report_count"], 2)
         self.assertEqual(summary["changed_byte_indexes"], [1])
+        self.assertEqual([sample["report"] for sample in summary["sample_reports"]], ["01 00 00", "01 02 00"])
+        self.assertTrue(all("monotonic" in sample for sample in summary["sample_reports"]))
+        self.assertIn("first_monotonic", summary)
+        self.assertIn("last_monotonic", summary)
 
     def test_summarized_capture_uses_hidraw_report_id_only_when_descriptor_declares_one(self) -> None:
         device = _FakeInputDevice("/dev/input/event1", "Controller")
@@ -1185,6 +1483,7 @@ class DeviceCaptureTest(unittest.TestCase):
         self.assertTrue(report.valid)
         self.assertEqual(report.live_mode, "summarized")
         self.assertTrue(report.captured["evdev_key_snapshot"])
+        self.assertTrue(report.captured["evdev_input_properties"])
         self.assertFalse(report.errors)
 
     def test_validate_capture_accepts_raw_capture_with_raw_filename(self) -> None:
@@ -1317,6 +1616,35 @@ class DeviceCaptureTest(unittest.TestCase):
 
         self.assertTrue(report.valid)
         self.assertIn("no live input evidence captured", report.warnings)
+
+    def test_validate_capture_counts_misc_evidence_as_live(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "remote_20260506_010203.jsonl"
+            records = [
+                record
+                for record in _minimal_capture_records()
+                if record["record_type"] not in {"evdev_key_snapshot", "evdev_axis_snapshot", "evdev_sync_summary"}
+            ]
+            records.insert(
+                -1,
+                {
+                    "record_type": "evdev_misc_snapshot",
+                    "path": "/dev/input/event1",
+                    "type": 4,
+                    "type_name": "EV_MSC",
+                    "code": 4,
+                    "code_name": "MSC_SCAN",
+                    "count": 1,
+                },
+            )
+            _write_jsonl(path, records)
+
+            report = validate_capture(path)
+
+        self.assertTrue(report.valid)
+        self.assertNotIn("no live input evidence captured", report.warnings)
+        self.assertEqual(report.metrics["unique_msc_codes"], ["MSC_SCAN"])
+        self.assertTrue(report.captured["evdev_misc_snapshot"])
 
 
 if __name__ == "__main__":
