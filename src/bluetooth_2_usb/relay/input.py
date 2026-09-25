@@ -6,6 +6,8 @@ from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
 from ..hid.dispatch import HidDispatcher
 from ..logging import get_logger
+from ..runtime.keylogger_fifo import publish_key_event as keylogger_fifo_publish_key_event
+from ..evdev import ecodes
 from .gate import RelayGate
 from .shortcut import ShortcutToggler
 
@@ -141,6 +143,8 @@ class InputRelay:
                 break
             else:
                 await self._dispatcher.dispatch(input_event)
+                if getattr(input_event, "type", None) == ecodes.EV_KEY:
+                    keylogger_fifo_publish_key_event(input_event)
         try:
             await self._dispatcher.flush()
         except OSError as ex:

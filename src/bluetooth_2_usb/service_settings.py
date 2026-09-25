@@ -11,8 +11,8 @@ from .inputs.filter import parse_devices
 
 DEFAULT_ENV_FILE = Path("/etc/default/bluetooth_2_usb")
 BOOL_KEYS = {"B2U_AUTO", "B2U_GRAB", "B2U_DEBUG"}
-RUNTIME_ENV_KEY_ORDER = ("B2U_AUTO", "B2U_DEVICES", "B2U_GRAB", "B2U_SHORTCUT", "B2U_DEBUG")
-ALLOWED_KEYS = BOOL_KEYS | {"B2U_SHORTCUT", "B2U_DEVICES"}
+RUNTIME_ENV_KEY_ORDER = ("B2U_AUTO", "B2U_DEVICES", "B2U_GRAB", "B2U_SHORTCUT", "B2U_DEBUG", "B2U_KEYLOGGER_FIFO")
+ALLOWED_KEYS = BOOL_KEYS | {"B2U_SHORTCUT", "B2U_DEVICES", "B2U_KEYLOGGER_FIFO"}
 
 
 class ServiceSettingsError(ValueError):
@@ -26,6 +26,7 @@ class ServiceSettings:
     grab: bool = True
     shortcut: str = "CTRL+SHIFT+F12"
     debug: bool = False
+    keylogger_fifo: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -83,6 +84,8 @@ def _canonical_value_for_key(key: str, settings: ServiceSettings) -> str:
         return _quote_if_needed(settings.shortcut)
     if key == "B2U_DEBUG":
         return _canonical_bool(settings.debug)
+    if key == "B2U_KEYLOGGER_FIFO":
+        return _quote_if_needed(settings.keylogger_fifo)
     raise ServiceSettingsError(f"Unexpected runtime settings key: {key!r}")
 
 
@@ -115,6 +118,10 @@ def load_service_settings(env_file: Path = DEFAULT_ENV_FILE) -> ServiceSettings:
             settings.debug = _parse_bool(value, key)
         elif key == "B2U_DEVICES":
             settings.devices = _parse_devices(value)
+        elif key == "B2U_KEYLOGGER_FIFO":
+            if value and not value.startswith("/"):
+                raise ServiceSettingsError(f"{key} must be an absolute path")
+            settings.keylogger_fifo = value
 
     return settings
 
@@ -258,6 +265,8 @@ def build_runtime_argv(settings: ServiceSettings, *, append_debug: bool = False)
         argv.extend(["--shortcut", settings.shortcut])
     if settings.debug or append_debug:
         argv.append("--debug")
+    if settings.keylogger_fifo:
+        argv.extend(["--keylogger-fifo", settings.keylogger_fifo])
     return argv
 
 

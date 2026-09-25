@@ -68,6 +68,7 @@ class _FakeHidGadgets:
 
 
 class _FakeKeyEvent:
+    type = ecodes.EV_KEY
     key_down = KeyEvent.key_down
     key_hold = KeyEvent.key_hold
     key_up = KeyEvent.key_up
@@ -78,6 +79,8 @@ class _FakeKeyEvent:
 
 
 class _FakeRelEvent:
+    type = ecodes.EV_REL
+    
     def __init__(self, code: int, value: int) -> None:
         self.event = SimpleNamespace(type=ecodes.EV_REL, code=code, value=value)
 

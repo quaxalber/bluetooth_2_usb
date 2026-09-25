@@ -14,6 +14,7 @@ class RuntimeConfig:
     grab: bool
     shortcut: tuple[str, ...]
     debug: bool
+    keylogger_fifo: str | None
 
 
 def runtime_config_from_args(args: Arguments) -> RuntimeConfig:
@@ -23,4 +24,5 @@ def runtime_config_from_args(args: Arguments) -> RuntimeConfig:
         grab=args.grab,
         shortcut=tuple(args.shortcut or ()),
         debug=args.debug,
+        keylogger_fifo=args.keylogger_fifo,
     )

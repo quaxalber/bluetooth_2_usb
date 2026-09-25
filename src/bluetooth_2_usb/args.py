@@ -44,6 +44,12 @@ def _parse_shortcut(raw_value: str) -> list[str]:
     return parsed_keys
 
 
+def _parse_keylogger_fifo(raw_value: str) -> str:
+    if not raw_value.startswith("/"):
+        raise argparse.ArgumentTypeError("KEYLOGGER_FIFO must be an absolute path.")
+    return raw_value
+
+
 class CustomArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(
@@ -115,6 +121,13 @@ class CustomArgumentParser(argparse.ArgumentParser):
             help="Enable debug mode and increase log verbosity.\nDefault: disabled",
         )
         self.add_argument(
+            "--keylogger-fifo",
+            type=_parse_keylogger_fifo,
+            default=None,
+            metavar="PATH",
+            help="Create a keyboard-event FIFO at PATH; disabled if omitted.",
+        )
+        self.add_argument(
             "--version",
             "-v",
             action="store_true",
@@ -152,6 +165,7 @@ class Arguments:
     shortcut: list[str] | None
     list: bool
     debug: bool
+    keylogger_fifo: str | None
     version: bool
     validate_env: bool
     output: str
@@ -183,6 +197,7 @@ def parse_args(argv: list[str] | None = None) -> Arguments:
         shortcut=args.shortcut,
         list=args.list,
         debug=args.debug,
+        keylogger_fifo=args.keylogger_fifo,
         version=args.version,
         validate_env=args.validate_env,
         output=args.output,

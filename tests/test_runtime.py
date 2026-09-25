@@ -15,7 +15,7 @@ RUNTIME_APP_SIGNAL = "bluetooth_2_usb.runtime.app.signal"
 class RuntimeConfigTest(unittest.TestCase):
     def test_runtime_config_from_args_normalizes_mutable_cli_values(self) -> None:
         args = SimpleNamespace(
-            auto=True, debug=False, devices=["/dev/input/event7"], grab=True, shortcut=["KEY_LEFTCTRL", "KEY_F12"]
+            auto=True, debug=False, keylogger_fifo=None, devices=["/dev/input/event7"], grab=True, shortcut=["KEY_LEFTCTRL", "KEY_F12"],
         )
 
         config = runtime_config_from_args(args)
@@ -27,7 +27,7 @@ class RuntimeConfigTest(unittest.TestCase):
 class RuntimeSignalTest(unittest.IsolatedAsyncioTestCase):
     def _runtime(self) -> Runtime:
         return Runtime(
-            runtime_config_from_args(SimpleNamespace(auto=False, debug=False, devices=[], grab=False, shortcut=[]))
+            runtime_config_from_args(SimpleNamespace(auto=False, debug=False, devices=[], grab=False, shortcut=[], keylogger_fifo=None))
         )
 
     async def test_signal_handlers_request_runtime_shutdown(self) -> None:

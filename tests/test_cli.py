@@ -104,6 +104,7 @@ class CliTest(unittest.TestCase):
         args = SimpleNamespace(
             auto=False,
             debug=False,
+            keylogger_fifo=None,
             devices=[],
             grab=False,
             shortcut=None,

@@ -13,6 +13,7 @@ from ..relay.supervisor import RelaySupervisor
 from .config import RuntimeConfig
 from .event_source import RuntimeEventSource
 from .events import RuntimeEvent, ShutdownRequested
+from .keylogger_fifo import KeyloggerFifo, set_publisher as keylogger_fifo_set_publisher
 
 logger = get_logger(__name__)
 
@@ -43,20 +44,33 @@ class Runtime:
         self._supervisor: RelaySupervisor | None = None
 
     async def run(self) -> None:
-        relay_gate = RelayGate()
-        identity = load_or_create_usb_identity()
-        logger.info("Using USB gadget identity: product=%r serial=%r", identity.product_name, identity.serial_number)
-        hid_gadgets = HidGadgets(identity)
-        await hid_gadgets.enable()
-
-        shortcut_toggler = self._build_shortcut_toggler(relay_gate)
-        self._event_source = RuntimeEventSource(self._events)
-
-        handlers = self._install_signal_handlers()
+        handlers = None
+        keylogger_fifo = None
         try:
+            if self._config.keylogger_fifo:
+                keylogger_fifo = KeyloggerFifo(self._config.keylogger_fifo)
+                keylogger_fifo.start()
+                keylogger_fifo_set_publisher(keylogger_fifo)
+            
+            relay_gate = RelayGate()
+            identity = load_or_create_usb_identity()
+            logger.info("Using USB gadget identity: product=%r serial=%r", identity.product_name, identity.serial_number)
+            hid_gadgets = HidGadgets(identity)
+            await hid_gadgets.enable()
+
+            shortcut_toggler = self._build_shortcut_toggler(relay_gate)
+            self._event_source = RuntimeEventSource(self._events)
+
+            handlers = self._install_signal_handlers()
             await self._run_tasks(self._event_source, hid_gadgets, relay_gate, shortcut_toggler)
         finally:
-            self._restore_signal_handlers(handlers)
+            try:
+                if handlers is not None:
+                    self._restore_signal_handlers(handlers)
+            finally:
+                keylogger_fifo_set_publisher(None)
+                if keylogger_fifo is not None:
+                    await keylogger_fifo.close()
 
     def _build_supervisor(
         self,
