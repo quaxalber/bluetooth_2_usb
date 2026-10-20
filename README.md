@@ -123,6 +123,9 @@ Default managed-service values:
 | `B2U_DEVICES` | empty |
 | `B2U_GRAB` | `true` |
 | `B2U_SHORTCUT` | `CTRL+SHIFT+F12` |
+| `B2U_MOUSE_JIGGLER` | `false` |
+| `B2U_JIGGLER_SHORTCUT` | `CTRL+SHIFT+F11` |
+| `B2U_JIGGLER_LED` | `scroll_lock` |
 | `B2U_DEBUG` | `false` |
 
 After editing the runtime settings:
@@ -139,6 +142,9 @@ Runtime CLI and environment reference:
 | `--devices DEVICES` | `B2U_DEVICES` | Comma-separated list of devices to relay. Each value may match an input device path, `uniq`, `phys`, Bluetooth MAC address, or case-insensitive substring of the device name. Example: `--devices '/dev/input/event2,a1:b2:c3:d4:e5:f6,0A-1B-2C-3D-4E-5F,logi'`. |
 | `--grab, -g` | `B2U_GRAB` | Grab the input devices, suppressing local events on the Pi while the devices are relayed. |
 | `--shortcut SHORTCUT, -s SHORTCUT` | `B2U_SHORTCUT` | A plus-separated list of key names to press simultaneously in order to toggle relaying. |
+| `--mouse-jiggler, -j` | `B2U_MOUSE_JIGGLER` | Enable mouse jiggler. Moves the cursor 2 pixels in a random direction every ~2 minutes when no input activity is detected, preventing the host screen from timing out. |
+| `--jiggler-shortcut SHORTCUT` | `B2U_JIGGLER_SHORTCUT` | A plus-separated list of key names to press simultaneously in order to toggle the mouse jiggler on/off. Only effective when `--mouse-jiggler` is enabled. Example: `CTRL+SHIFT+F11`. Toggling it blinks a keyboard LED (see `--jiggler-led`) on the relayed keyboard(s) as visual confirmation: one long (~1.5 s) glow when enabling, three slow blinks when disabling. |
+| `--jiggler-led LED` | `B2U_JIGGLER_LED` | Which keyboard LED to blink for jiggler toggle feedback. Only effective when `--jiggler-shortcut` is set. Choices: `caps_lock`, `num_lock`, `scroll_lock`. Default: `scroll_lock`. Pick one your keyboard actually has; not all keyboards implement all three. |
 | `--debug, -d` | `B2U_DEBUG` | Enable debug mode and increase log verbosity. |
 | `--list, -l` | n/a | List all available input devices and exit. Use this before setting `B2U_DEVICES` or `--devices` if you want to confirm the paths and names the runtime actually sees. |
 | `--validate-env` | n/a | Validate gadget runtime prerequisites and exit. On a normal non-gadget workstation this is expected to report missing prerequisites quickly. |
@@ -150,6 +156,33 @@ Runtime CLI and environment reference:
 > Despite the project name, broad auto relay can also relay other suitable
 > Linux input devices that are visible on the Pi. The intended primary use case
 > remains Bluetooth keyboard and mouse bridging.
+
+## Desktop status indicator
+
+If the Pi also runs a desktop (Raspberry Pi OS with labwc and `wf-panel-pi`),
+a tray icon can show the mouse jiggler state and where input currently goes.
+It is display only.
+
+The service publishes its state to `/run/bluetooth_2_usb/status.json`. The
+indicator reads that file as the desktop user with the system Python. Set it
+up once with:
+
+```bash
+sudo bluetooth_2_usb tray install
+```
+
+It starts with the next desktop login. To start it right away, run
+`/usr/bin/python3 /opt/bluetooth_2_usb/desktop/bluetooth_2_usb_tray.py &` as
+your desktop user.
+
+The mouse is green while the jiggler is on and red with a slash while it is
+off. The badge shows the relay: blue arrow for forwarding to the USB host,
+orange pause for relay paused (input stays on the Pi), hollow grey for no
+usable USB host. A dashed grey outline means the service is not running. The
+menu spells out the same state in text.
+
+The indicator installs its icons into `~/.local/share/icons/hicolor`, because
+`wf-panel-pi` only resolves tray icons by theme name.
 
 ## Read-only operation
 
@@ -234,6 +267,14 @@ the checkout that contains the rule source:
 sudo ./venv/bin/bluetooth_2_usb udev install --repo-root "$PWD"
 ```
 
+### `tray install|uninstall`
+
+Install the desktop tray indicator's packages (`python3-gi`,
+`gir1.2-ayatanaappindicator3-0.1`) and autostart it for desktop users on the
+Pi, or remove that autostart entry. `install` and `update` keep an existing
+entry in sync, and `uninstall` removes it. See
+[Desktop status indicator](#desktop-status-indicator).
+
 ### `readonly setup|status|enable|disable|migrate`
 
 Prepare persistent ext4-backed Bluetooth state, inspect read-only state, switch
@@ -253,6 +294,8 @@ enable/disable, migration, and validation details, use
 | `/mnt/b2u-persist` | Default persistent mount target |
 | `/mnt/b2u-persist/bluetooth` | Default persistent Bluetooth state directory |
 | `/etc/systemd/system/bluetooth_2_usb.service` | Installed service unit |
+| `/run/bluetooth_2_usb/status.json` | Live relay and jiggler state for the desktop indicator |
+| `/etc/xdg/autostart/bluetooth_2_usb-tray.desktop` | Desktop indicator autostart entry (after `tray install`) |
 
 ## Development and release
 

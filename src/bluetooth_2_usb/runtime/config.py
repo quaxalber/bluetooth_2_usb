@@ -13,6 +13,9 @@ class RuntimeConfig:
     auto: bool
     grab: bool
     shortcut: tuple[str, ...]
+    mouse_jiggler: bool
+    jiggler_shortcut: tuple[str, ...]
+    jiggler_led: str
     debug: bool
 
 
@@ -22,5 +25,8 @@ def runtime_config_from_args(args: Arguments) -> RuntimeConfig:
         auto=args.auto,
         grab=args.grab,
         shortcut=tuple(args.shortcut or ()),
+        mouse_jiggler=getattr(args, "mouse_jiggler", False),
+        jiggler_shortcut=tuple(getattr(args, "jiggler_shortcut", None) or ()),
+        jiggler_led=getattr(args, "jiggler_led", None) or "scroll_lock",
         debug=args.debug,
     )

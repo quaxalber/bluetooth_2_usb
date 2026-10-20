@@ -16,6 +16,7 @@ class ManagedPaths:
     persist_bluetooth_subdir: str = "bluetooth"
     bluetooth_bind_mount_unit: Path = Path("/etc/systemd/system/var-lib-bluetooth.mount")
     bluetooth_service_dropin_dir: Path = Path("/etc/systemd/system/bluetooth.service.d")
+    tray_autostart: Path = Path("/etc/xdg/autostart/bluetooth_2_usb-tray.desktop")
     bluetooth_service_dropin: Path = field(init=False)
 
     def __post_init__(self) -> None:
@@ -26,6 +27,14 @@ class ManagedPaths:
     @property
     def venv_python(self) -> Path:
         return self.install_dir / "venv/bin/python"
+
+    @property
+    def tray_script(self) -> Path:
+        return self.install_dir / "desktop/bluetooth_2_usb_tray.py"
+
+    @property
+    def tray_desktop_entry(self) -> Path:
+        return self.install_dir / "desktop/bluetooth_2_usb-tray.desktop"
 
     @property
     def default_persist_bluetooth_dir(self) -> Path:

@@ -21,6 +21,8 @@ ProtectHome=true
 ProtectSystem=full
 LogsDirectory=bluetooth_2_usb
 StateDirectory=bluetooth_2_usb
+RuntimeDirectory=bluetooth_2_usb
+RuntimeDirectoryMode=0755
 ReadWritePaths=/var/lib/bluetooth /var/lib/bluetooth_2_usb
 
 [Install]

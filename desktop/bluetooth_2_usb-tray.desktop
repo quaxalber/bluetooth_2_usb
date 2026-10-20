@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Bluetooth-2-USB indicator
+Comment=Show mouse jiggler and relay state of bluetooth_2_usb in the panel
+Exec=/usr/bin/python3 /opt/bluetooth_2_usb/desktop/bluetooth_2_usb_tray.py
+Icon=input-mouse
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

@@ -18,8 +18,11 @@ from .readonly import (
     print_readonly_status,
     setup_persistent_bluetooth_state,
 )
+from .tray import install_tray, uninstall_tray
 
-OPERATIONAL_COMMANDS = frozenset({"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev", "device"})
+OPERATIONAL_COMMANDS = frozenset(
+    {"install", "update", "uninstall", "smoketest", "debug", "readonly", "udev", "device", "tray"}
+)
 
 
 def run() -> None:
@@ -82,6 +85,11 @@ def _main(argv: list[str], *, prog: str) -> int:
         help=("Repository root containing udev/70-bluetooth_2_usb_hidapi.rules. " + f"Default: {PATHS.install_dir}"),
     )
 
+    tray_parser = _command_parser(subparsers, "tray", "Manage the desktop tray indicator on the Pi.")
+    tray_subparsers = tray_parser.add_subparsers(dest="tray_command", required=True)
+    _command_parser(tray_subparsers, "install", "Install and autostart the tray indicator for desktop users.")
+    _command_parser(tray_subparsers, "uninstall", "Remove the tray indicator autostart entry.")
+
     namespace, remainder = parser.parse_known_args(argv)
     if remainder:
         parser.error(f"unrecognized arguments: {' '.join(remainder)}")
@@ -102,6 +110,8 @@ def _main(argv: list[str], *, prog: str) -> int:
         ("readonly", "enable"),
         ("readonly", "disable"),
         ("readonly", "migrate"),
+        ("tray", "install"),
+        ("tray", "uninstall"),
     }
     if command_path == ("smoketest",) and namespace.output == "json":
         prepare_command_log = False
@@ -137,6 +147,10 @@ def _main(argv: list[str], *, prog: str) -> int:
         disable_readonly()
     elif command_path == ("readonly", "migrate"):
         migrate_bluetooth_state_to_rootfs()
+    elif command_path == ("tray", "install"):
+        install_tray()
+    elif command_path == ("tray", "uninstall"):
+        uninstall_tray()
     elif command_path == ("udev", "install"):
         ensure_root()
         repo_root = Path(namespace.repo_root).resolve() if namespace.repo_root else None
@@ -151,6 +165,8 @@ def _command_path(namespace: argparse.Namespace) -> tuple[str, ...]:
         return (namespace.command, namespace.readonly_command)
     if namespace.command == "udev":
         return (namespace.command, namespace.udev_command)
+    if namespace.command == "tray":
+        return (namespace.command, namespace.tray_command)
     return (namespace.command,)
 
 

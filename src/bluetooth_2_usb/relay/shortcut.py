@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from ..evdev import find_key_name
 from ..evdev.types import KeyEvent
 from ..logging import get_logger
+from .chord import ChordToggler
 from .gate import RelayGate
 
 logger = get_logger(__name__)
@@ -18,43 +18,26 @@ class ShortcutToggler:
         :param shortcut_keys: A set of evdev-style key names to detect
         :param relay_gate: RelayGate controlling whether relaying is active
         """
-        self._shortcut_keys = shortcut_keys
         self._relay_gate = relay_gate
-
-        self._currently_pressed: set[str] = set()
-        self._suppressed_keys: set[str] = set()
-        self._shortcut_armed = True
+        self._chord = ChordToggler(shortcut_keys, on_trigger=self.toggle_relaying)
 
     def handle_key_event(self, event: KeyEvent) -> bool:
         """
         Process a key press or release to detect the toggle shortcut.
 
+        Only the trigger key (the one whose key-down completes the shortcut)
+        is suppressed. The other shortcut keys were already forwarded to the
+        host when pressed, so their key-ups are forwarded too, instead of
+        being swallowed and leaving a stuck modifier on the host. The toggle
+        itself still waits until every shortcut key has been released (not
+        the initial key-down), so the device grab state only changes once
+        the local terminal has seen a complete press+release cycle for every
+        modifier.
+
         :param event: The incoming KeyEvent from evdev
         :type event: KeyEvent
         """
-        key_name = find_key_name(event)
-        if key_name is None:
-            return False
-
-        if event.keystate == KeyEvent.key_down:
-            self._currently_pressed.add(key_name)
-        elif event.keystate == KeyEvent.key_up:
-            self._currently_pressed.discard(key_name)
-            if key_name in self._suppressed_keys:
-                self._suppressed_keys.discard(key_name)
-                if not self._suppressed_keys:
-                    self._shortcut_armed = True
-                return True
-            if self._shortcut_keys and key_name in self._shortcut_keys:
-                self._shortcut_armed = True
-
-        if self._shortcut_armed and self._shortcut_keys and self._shortcut_keys.issubset(self._currently_pressed):
-            self._shortcut_armed = False
-            self._suppressed_keys.update(self._shortcut_keys)
-            self.toggle_relaying()
-            return True
-
-        return key_name in self._suppressed_keys
+        return self._chord.handle_key_event(event)
 
     def toggle_relaying(self) -> None:
         """

@@ -15,6 +15,7 @@ from .readonly import (
     remove_bluetooth_persist_dropin,
     remove_persist_mount_unit,
 )
+from .tray import refresh_tray_autostart
 
 DEFAULT_ENV_TEXT = """# Structured runtime configuration for bluetooth_2_usb.service.
 B2U_AUTO=true
@@ -138,6 +139,7 @@ def install(*, recreate_venv: bool = False) -> None:
     canonicalize_service_settings_bools(PATHS.env_file)
     run([PATHS.venv_python, "-m", "bluetooth_2_usb.service_settings", "--check"], capture=True)
     install_cli_links()
+    refresh_tray_autostart()
     run(["systemctl", "daemon-reload"])
     activate_service_unit()
     ok(f"Service {PATHS.service_unit} enabled and started")
@@ -198,6 +200,7 @@ def uninstall() -> None:
     PATHS.readonly_env_file.unlink(missing_ok=True)
     Path("/usr/local/bin/bluetooth_2_usb").unlink(missing_ok=True)
     Path("/usr/local/bin/bluetooth_2_usb.loopback").unlink(missing_ok=True)
+    PATHS.tray_autostart.unlink(missing_ok=True)
     remove_bluetooth_persist_dropin()
     remove_bluetooth_bind_mount_unit()
     remove_persist_mount_unit(config.persist_mount)
@@ -228,6 +231,7 @@ def uninstall() -> None:
         Path("/usr/local/bin/bluetooth_2_usb.loopback"),
         "bluetooth_2_usb.loopback stale CLI link still exists after uninstall",
     )
+    _assert_absent(PATHS.tray_autostart, "Tray indicator autostart entry still exists after uninstall")
     _assert_absent(PATHS.bluetooth_bind_mount_unit, "Bluetooth bind-mount unit still exists after uninstall")
     _assert_absent(PATHS.bluetooth_service_dropin, "bluetooth.service drop-in still exists after uninstall")
     if run(["systemctl", "is-enabled", PATHS.service_unit], check=False, capture=True).returncode == 0:

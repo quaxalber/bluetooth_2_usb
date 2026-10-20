@@ -8,11 +8,14 @@ from ..gadgets.identity import load_or_create_usb_identity
 from ..gadgets.manager import HidGadgets
 from ..logging import get_logger
 from ..relay.gate import RelayGate
+from ..relay.jiggler import JigglerToggler, MouseJiggler
+from ..relay.led import KeyboardLedBlinker, resolve_led_name
 from ..relay.shortcut import ShortcutToggler
 from ..relay.supervisor import RelaySupervisor
 from .config import RuntimeConfig
 from .event_source import RuntimeEventSource
 from .events import RuntimeEvent, ShutdownRequested
+from .status import StatusPublisher
 
 logger = get_logger(__name__)
 
@@ -50,19 +53,37 @@ class Runtime:
         await hid_gadgets.enable()
 
         shortcut_toggler = self._build_shortcut_toggler(relay_gate)
+        mouse_jiggler, jiggler_toggler, led_blinker = self._build_jiggler(hid_gadgets, relay_gate)
         self._event_source = RuntimeEventSource(self._events)
+        status_publisher = StatusPublisher.from_environment(relay_gate, mouse_jiggler)
+        if status_publisher is not None:
+            logger.debug("Publishing runtime status to %s", status_publisher.path)
+            status_publisher.start()
 
         handlers = self._install_signal_handlers()
         try:
-            await self._run_tasks(self._event_source, hid_gadgets, relay_gate, shortcut_toggler)
+            await self._run_tasks(
+                self._event_source,
+                hid_gadgets,
+                relay_gate,
+                shortcut_toggler,
+                jiggler_toggler,
+                mouse_jiggler,
+                led_blinker,
+            )
         finally:
             self._restore_signal_handlers(handlers)
+            if status_publisher is not None:
+                status_publisher.stop()
 
     def _build_supervisor(
         self,
         hid_gadgets: HidGadgets,
         relay_gate: RelayGate,
         shortcut_toggler: ShortcutToggler | None,
+        jiggler_toggler: JigglerToggler | None,
+        mouse_jiggler: MouseJiggler | None,
+        led_blinker: KeyboardLedBlinker | None,
         task_group: asyncio.TaskGroup,
     ) -> RelaySupervisor:
         return RelaySupervisor(
@@ -73,6 +94,9 @@ class Runtime:
             auto_relay=self._config.auto,
             grab=self._config.grab,
             shortcut_toggler=shortcut_toggler,
+            jiggler_toggler=jiggler_toggler,
+            mouse_jiggler=mouse_jiggler,
+            led_blinker=led_blinker,
         )
 
     def _build_shortcut_toggler(self, relay_gate: RelayGate) -> ShortcutToggler | None:
@@ -83,22 +107,51 @@ class Runtime:
         logger.debug("Configuring global interrupt shortcut: %s", shortcut_keys)
         return ShortcutToggler(shortcut_keys=shortcut_keys, relay_gate=relay_gate)
 
+    def _build_jiggler(
+        self, hid_gadgets: HidGadgets, relay_gate: RelayGate
+    ) -> tuple[MouseJiggler | None, JigglerToggler | None, KeyboardLedBlinker | None]:
+        if not self._config.mouse_jiggler:
+            return None, None, None
+
+        logger.debug("Configuring mouse jiggler (base_interval=120s, jitter=±15s)")
+        mouse_jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=relay_gate)
+
+        jiggler_toggler: JigglerToggler | None = None
+        led_blinker: KeyboardLedBlinker | None = None
+        if self._config.jiggler_shortcut:
+            shortcut_keys = set(self._config.jiggler_shortcut)
+            logger.debug("Configuring jiggler toggle shortcut: %s", shortcut_keys)
+            jiggler_toggler = JigglerToggler(shortcut_keys=shortcut_keys, mouse_jiggler=mouse_jiggler)
+            # Toggling the jiggler has no other visible feedback, so blink a
+            # keyboard LED to confirm the shortcut was recognized.
+            led_blinker = KeyboardLedBlinker(led=resolve_led_name(self._config.jiggler_led))
+
+        return mouse_jiggler, jiggler_toggler, led_blinker
+
     async def _run_tasks(
         self,
         event_source: RuntimeEventSource,
         hid_gadgets: HidGadgets,
         relay_gate: RelayGate,
         shortcut_toggler: ShortcutToggler | None,
+        jiggler_toggler: JigglerToggler | None,
+        mouse_jiggler: MouseJiggler | None,
+        led_blinker: KeyboardLedBlinker | None = None,
     ) -> None:
         event_source_task: asyncio.Task[None] | None = None
         supervisor_task: asyncio.Task[None] | None = None
+        jiggler_task: asyncio.Task[None] | None = None
         supervisor: RelaySupervisor | None = None
         try:
             async with asyncio.TaskGroup() as task_group:
-                supervisor = self._build_supervisor(hid_gadgets, relay_gate, shortcut_toggler, task_group)
+                supervisor = self._build_supervisor(
+                    hid_gadgets, relay_gate, shortcut_toggler, jiggler_toggler, mouse_jiggler, led_blinker, task_group
+                )
                 self._supervisor = supervisor
                 event_source_task = task_group.create_task(event_source.run(), name="runtime event source")
                 supervisor_task = task_group.create_task(supervisor.run(self._events), name="relay supervisor")
+                if mouse_jiggler is not None:
+                    jiggler_task = task_group.create_task(mouse_jiggler.run(), name="mouse jiggler")
                 done, pending = await asyncio.wait(
                     {event_source_task, supervisor_task}, return_when=asyncio.FIRST_COMPLETED
                 )
@@ -110,7 +163,9 @@ class Runtime:
                         event_source.stop()
                     if task is supervisor_task:
                         self._events.put_nowait(ShutdownRequested("runtime"))
-                await self._wait_for_shutdown(supervisor_task, event_source_task)
+                if jiggler_task is not None and not jiggler_task.done():
+                    jiggler_task.cancel()
+                await self._wait_for_shutdown(supervisor_task, event_source_task, jiggler_task)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -120,12 +175,17 @@ class Runtime:
             event_source.stop()
             if supervisor is not None:
                 self._events.put_nowait(ShutdownRequested("runtime cleanup"))
-            await self._wait_for_shutdown(supervisor_task, event_source_task)
+            if jiggler_task is not None and not jiggler_task.done():
+                jiggler_task.cancel()
+            await self._wait_for_shutdown(supervisor_task, event_source_task, jiggler_task)
 
     async def _wait_for_shutdown(
-        self, supervisor_task: asyncio.Task[None] | None, event_source_task: asyncio.Task[None] | None
+        self,
+        supervisor_task: asyncio.Task[None] | None,
+        event_source_task: asyncio.Task[None] | None,
+        jiggler_task: asyncio.Task[None] | None = None,
     ) -> None:
-        tasks = [task for task in (supervisor_task, event_source_task) if task]
+        tasks = [task for task in (supervisor_task, event_source_task, jiggler_task) if task]
         if not tasks:
             return
 

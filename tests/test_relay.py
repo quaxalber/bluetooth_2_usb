@@ -9,6 +9,8 @@ from bluetooth_2_usb.hid.constants import HI_RES_WHEEL_UNITS_PER_DETENT
 from bluetooth_2_usb.hid.dispatch import HidDispatcher
 from bluetooth_2_usb.relay.gate import RelayGate, RelayInactiveReason
 from bluetooth_2_usb.relay.input import InputRelay
+from bluetooth_2_usb.relay.jiggler import JigglerToggler, MouseJiggler
+from bluetooth_2_usb.relay.led import KeyboardLedBlinker, resolve_led_name
 from bluetooth_2_usb.relay.shortcut import ShortcutToggler
 from bluetooth_2_usb.relay.supervisor import RelaySupervisor
 from bluetooth_2_usb.runtime.events import DeviceAdded, DeviceRemoved, ShutdownRequested, UdcState, UdcStateChanged
@@ -193,6 +195,36 @@ class _FakeGrabInputDevice:
         self.close_calls += 1
 
 
+class _FakeLedInputDevice:
+    def __init__(
+        self,
+        path: str = "/dev/input/event-led",
+        name: str = "led-test-device",
+        *,
+        leds: set[int] | None = None,
+        supported: bool = True,
+    ) -> None:
+        self.path = path
+        self.name = name
+        self._supported = supported
+        self._leds = set(leds or ())
+        self.set_led_calls: list[tuple[int, int]] = []
+
+    def capabilities(self, verbose: bool = False):
+        del verbose
+        return {ecodes.EV_LED: [ecodes.LED_SCROLLL]} if self._supported else {}
+
+    def leds(self):
+        return list(self._leds)
+
+    def set_led(self, led_num: int, value: int) -> None:
+        self.set_led_calls.append((led_num, value))
+        if value:
+            self._leds.add(led_num)
+        else:
+            self._leds.discard(led_num)
+
+
 class _TestKeyEvent:
     key_down = KeyEvent.key_down
     key_hold = KeyEvent.key_hold
@@ -240,15 +272,22 @@ class ShortcutTogglerTest(unittest.TestCase):
 
         self.assertFalse(toggler.handle_key_event(make_event(29, 1)))
         self.assertFalse(toggler.handle_key_event(make_event(42, 1)))
-        self.assertTrue(toggler.handle_key_event(make_event(88, 1)))
-        self.assertFalse(gate.state.user_enabled)
-        self.assertTrue(toggler.handle_key_event(make_event(88, 0)))
-        self.assertTrue(toggler.handle_key_event(make_event(42, 0)))
-        self.assertTrue(toggler.handle_key_event(make_event(29, 0)))
+        self.assertTrue(toggler.handle_key_event(make_event(88, 1)))  # trigger key-down is suppressed
+        self.assertTrue(gate.state.user_enabled)  # toggle fires on last key-up, not key-down
+        self.assertTrue(toggler.handle_key_event(make_event(88, 0)))  # trigger key-up is suppressed
+        # CTRL/SHIFT key-ups were already forwarded on press, so their releases
+        # must be forwarded too, instead of leaving them stuck "down" on the host.
+        self.assertFalse(toggler.handle_key_event(make_event(42, 0)))
+        self.assertFalse(toggler.handle_key_event(make_event(29, 0)))
+        self.assertFalse(gate.state.user_enabled)  # toggle fired when last key released
 
         self.assertFalse(toggler.handle_key_event(make_event(29, 1)))
         self.assertFalse(toggler.handle_key_event(make_event(42, 1)))
         self.assertTrue(toggler.handle_key_event(make_event(88, 1)))
+        self.assertFalse(gate.state.user_enabled)  # still waiting for key-ups
+        self.assertTrue(toggler.handle_key_event(make_event(88, 0)))
+        self.assertFalse(toggler.handle_key_event(make_event(42, 0)))
+        self.assertFalse(toggler.handle_key_event(make_event(29, 0)))
         self.assertTrue(gate.state.user_enabled)
 
     def test_toggle_only_changes_user_enabled_state(self) -> None:
@@ -409,7 +448,12 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         hid_gadgets = _FakeHidGadgets()
         toggler = ShortcutToggler(shortcut_keys={"KEY_F12"}, relay_gate=gate)
         input_device = _FakeGrabInputDevice(
-            [_TestRelEvent(ecodes.REL_X, 5), _TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down), _TestSynEvent()]
+            [
+                _TestRelEvent(ecodes.REL_X, 5),
+                _TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down),
+                _TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_up),
+                _TestSynEvent(),
+            ]
         )
         relay = InputRelay(input_device, hid_gadgets, grab=True, relay_gate=gate, shortcut_toggler=toggler)
 
@@ -428,8 +472,33 @@ class InputRelayTest(unittest.IsolatedAsyncioTestCase):
         dispatcher = HidDispatcher(_FakeHidGadgets(), gate, toggler)
 
         await dispatcher.dispatch(_TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_down))
+        await dispatcher.dispatch(_TestKeyEvent(UNKNOWN_KEY_CODE, _TestKeyEvent.key_up))
 
         self.assertTrue(gate.active)
+
+    async def test_shortcut_pause_forwards_final_modifier_release(self) -> None:
+        # Natural usage: hold CTRL+SHIFT, tap F12, release F12 first, then the
+        # modifiers. The last modifier released (CTRL) is also the event whose
+        # processing flips the relay gate inactive. That release must still
+        # reach the host - its press already did - or CTRL is left stuck down.
+        gate = _active_gate()
+        hid_gadgets = _FakeHidGadgets()
+        toggler = ShortcutToggler(shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F12"}, relay_gate=gate)
+        dispatcher = HidDispatcher(hid_gadgets, gate, toggler)
+
+        async def send(scancode, keystate):
+            await dispatcher.dispatch(_TestKeyEvent(scancode, keystate))
+
+        await send(ecodes.KEY_LEFTCTRL, _TestKeyEvent.key_down)
+        await send(ecodes.KEY_LEFTSHIFT, _TestKeyEvent.key_down)
+        await send(ecodes.KEY_F12, _TestKeyEvent.key_down)
+        await send(ecodes.KEY_F12, _TestKeyEvent.key_up)
+        await send(ecodes.KEY_LEFTSHIFT, _TestKeyEvent.key_up)
+        await send(ecodes.KEY_LEFTCTRL, _TestKeyEvent.key_up)
+
+        self.assertFalse(gate.active)
+        self.assertEqual(len(hid_gadgets.keyboard.presses), 2)  # CTRL, SHIFT (F12 never forwarded)
+        self.assertEqual(len(hid_gadgets.keyboard.releases), 2)  # both CTRL and SHIFT released
 
     async def test_input_device_removal_stops_reader_without_failing_task_group(self) -> None:
         gate = _active_gate()
@@ -745,6 +814,110 @@ class RelaySupervisorHotplugTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(device.close_calls, 1)
 
+    async def test_device_removed_while_active_releases_host_visible_hid_state(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        hid_gadgets = _FakeHidGadgets()
+        relay_started = asyncio.Event()
+        relay_exited = asyncio.Event()
+        device = _FakeInputHandle(path="/dev/input/event7", name="target keyboard")
+
+        class WaitingInputRelay:
+            def __init__(self, input_device, *_args, **_kwargs) -> None:
+                self.input_device = input_device
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                relay_exited.set()
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                relay_started.set()
+                await asyncio.Event().wait()
+
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", return_value=device),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+        ):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, task_group=task_group, devices=["target"])
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceAdded("/dev/input/event7"))
+                await asyncio.wait_for(relay_started.wait(), timeout=1)
+
+                # The BT source vanishes (e.g. it switched to a different host)
+                # mid-press, with no chance to relay the matching key-up.
+                events.put_nowait(DeviceRemoved("/dev/input/event7"))
+                await asyncio.wait_for(relay_exited.wait(), timeout=1)
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
+
+        self.assertEqual(hid_gadgets.release_all_calls, 1)
+        self.assertEqual(hid_gadgets.keyboard.release_all_calls, 1)
+
+    async def test_device_removed_for_unrelated_device_does_not_release_hid_state(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        hid_gadgets = _FakeHidGadgets()
+
+        with patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, task_group=task_group)
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceRemoved("/dev/input/event-not-active"))
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
+
+        self.assertEqual(hid_gadgets.release_all_calls, 0)
+
+    async def test_device_removed_while_another_device_still_active_does_not_release_hid_state(self) -> None:
+        # Regression test: gadget state is shared across all relayed devices,
+        # so proactively releasing on disconnect must not fire while another
+        # device is still actively relaying - that would release keys/buttons
+        # that device is legitimately holding down.
+        events: asyncio.Queue = asyncio.Queue()
+        hid_gadgets = _FakeHidGadgets()
+        device_a = _FakeInputHandle(path="/dev/input/event7", name="keyboard-a")
+        device_b = _FakeInputHandle(path="/dev/input/event8", name="keyboard-b")
+        relay_started = {device_a.path: asyncio.Event(), device_b.path: asyncio.Event()}
+
+        class WaitingInputRelay:
+            def __init__(self, input_device, *_args, **_kwargs) -> None:
+                self.input_device = input_device
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                relay_started[self.input_device.path].set()
+                await asyncio.Event().wait()
+
+        devices_by_path = {device_a.path: device_a, device_b.path: device_b}
+
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", side_effect=lambda path: devices_by_path[path]),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+        ):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(hid_gadgets=hid_gadgets, task_group=task_group, devices=["keyboard"])
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceAdded(device_a.path))
+                events.put_nowait(DeviceAdded(device_b.path))
+                await asyncio.wait_for(relay_started[device_a.path].wait(), timeout=1)
+                await asyncio.wait_for(relay_started[device_b.path].wait(), timeout=1)
+
+                # device_a vanishes while device_b is still actively relaying.
+                events.put_nowait(DeviceRemoved(device_a.path))
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
+
+        self.assertEqual(hid_gadgets.release_all_calls, 0)
+
     async def test_shutdown_request_releases_and_stops_active_relay(self) -> None:
         events: asyncio.Queue = asyncio.Queue()
         gate = _active_gate()
@@ -990,3 +1163,368 @@ class RelaySupervisorTaskGroupTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(raised.exception.exceptions[0]), "boom")
         self.assertFalse(gate.active)
         self.assertEqual(hid_gadgets.release_all_calls, 1)
+
+
+class MouseJigglerListenerTest(unittest.TestCase):
+    def test_toggle_notifies_listeners_with_new_state(self) -> None:
+        gate = _active_gate()
+        jiggler = MouseJiggler(hid_gadgets=_FakeHidGadgets(), relay_gate=gate)
+        seen: list[bool] = []
+        jiggler.add_listener(seen.append)
+
+        jiggler.toggle()
+        jiggler.toggle()
+
+        self.assertEqual(seen, [False, True])
+
+    def test_removed_listener_is_not_notified(self) -> None:
+        gate = _active_gate()
+        jiggler = MouseJiggler(hid_gadgets=_FakeHidGadgets(), relay_gate=gate)
+        seen: list[bool] = []
+        jiggler.add_listener(seen.append)
+        jiggler.remove_listener(seen.append)
+
+        jiggler.toggle()
+
+        self.assertEqual(seen, [])
+
+
+class JigglerTogglerTest(unittest.TestCase):
+    def test_shortcut_toggles_jiggler_on_last_key_up(self) -> None:
+        gate = _active_gate()
+        mouse_jiggler = MouseJiggler(hid_gadgets=_FakeHidGadgets(), relay_gate=gate)
+        toggler = JigglerToggler(
+            shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F11"}, mouse_jiggler=mouse_jiggler
+        )
+
+        make_event = lambda scancode, keystate: SimpleNamespace(scancode=scancode, keystate=keystate)
+
+        self.assertFalse(toggler.handle_key_event(make_event(29, 1)))  # CTRL down
+        self.assertFalse(toggler.handle_key_event(make_event(42, 1)))  # SHIFT down
+        self.assertTrue(toggler.handle_key_event(make_event(87, 1)))  # F11 down (trigger) is suppressed
+        self.assertTrue(mouse_jiggler.enabled)  # toggle fires on last key-up, not key-down
+        self.assertTrue(toggler.handle_key_event(make_event(87, 0)))  # trigger key-up is suppressed
+        self.assertFalse(toggler.handle_key_event(make_event(42, 0)))  # SHIFT up forwarded
+        self.assertFalse(toggler.handle_key_event(make_event(29, 0)))  # CTRL up forwarded
+        self.assertFalse(mouse_jiggler.enabled)  # toggled off once every key was released
+
+    def test_retapping_a_held_modifier_does_not_double_toggle(self) -> None:
+        # Regression test: JigglerToggler used to re-arm on release of *any*
+        # shortcut key (not just the trigger), so releasing and re-pressing a
+        # modifier while the rest of the chord was still held caused a
+        # spurious second toggle.
+        gate = _active_gate()
+        mouse_jiggler = MouseJiggler(hid_gadgets=_FakeHidGadgets(), relay_gate=gate)
+        toggler = JigglerToggler(
+            shortcut_keys={"KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_F11"}, mouse_jiggler=mouse_jiggler
+        )
+
+        make_event = lambda scancode, keystate: SimpleNamespace(scancode=scancode, keystate=keystate)
+
+        toggler.handle_key_event(make_event(29, 1))  # CTRL down
+        toggler.handle_key_event(make_event(42, 1))  # SHIFT down
+        toggler.handle_key_event(make_event(87, 1))  # F11 down, chord complete
+        self.assertTrue(mouse_jiggler.enabled)  # not toggled yet, waiting for releases
+
+        toggler.handle_key_event(make_event(42, 0))  # SHIFT up
+        toggler.handle_key_event(make_event(42, 1))  # SHIFT down again, chord still held
+        self.assertTrue(mouse_jiggler.enabled)  # must not have toggled from the bounce
+
+        toggler.handle_key_event(make_event(87, 0))  # F11 up
+        toggler.handle_key_event(make_event(42, 0))  # SHIFT up
+        toggler.handle_key_event(make_event(29, 0))  # CTRL up
+
+        self.assertFalse(mouse_jiggler.enabled)  # exactly one toggle for the whole gesture
+
+
+class MouseJigglerPerformJiggleTest(unittest.IsolatedAsyncioTestCase):
+    async def test_blocking_io_error_drops_jiggle_without_suspending_writes(self) -> None:
+        gate = _active_gate()
+        hid_gadgets = _FakeHidGadgets()
+        hid_gadgets.mouse.move = AsyncMock(side_effect=BlockingIOError())
+        jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=gate)
+
+        await jiggler._perform_jiggle()
+
+        self.assertFalse(gate.state.write_suspended)
+        self.assertTrue(gate.active)
+
+    async def test_broken_pipe_error_suspends_writes(self) -> None:
+        gate = _active_gate()
+        hid_gadgets = _FakeHidGadgets()
+        hid_gadgets.mouse.move = AsyncMock(side_effect=BrokenPipeError())
+        jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=gate)
+
+        await jiggler._perform_jiggle()
+
+        self.assertTrue(gate.state.write_suspended)
+        self.assertFalse(gate.active)
+
+
+class ResolveLedNameTest(unittest.TestCase):
+    def test_resolves_known_names(self) -> None:
+        self.assertEqual(resolve_led_name("caps_lock"), ecodes.LED_CAPSL)
+        self.assertEqual(resolve_led_name("num_lock"), ecodes.LED_NUML)
+        self.assertEqual(resolve_led_name("scroll_lock"), ecodes.LED_SCROLLL)
+
+    def test_unknown_name_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            resolve_led_name("caps-lock")
+
+
+class KeyboardLedBlinkerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_blink_restores_originally_off_led_state(self) -> None:
+        blinker = KeyboardLedBlinker(pulse_seconds=0, pulse_count=2)
+        device = _FakeLedInputDevice()
+
+        await blinker.blink([device])
+
+        self.assertEqual(
+            device.set_led_calls,
+            [(ecodes.LED_SCROLLL, 1), (ecodes.LED_SCROLLL, 0), (ecodes.LED_SCROLLL, 1), (ecodes.LED_SCROLLL, 0)],
+        )
+        self.assertEqual(device.leds(), [])
+
+    async def test_blink_restores_originally_on_led_state(self) -> None:
+        blinker = KeyboardLedBlinker(pulse_seconds=0, pulse_count=1)
+        device = _FakeLedInputDevice(leds={ecodes.LED_SCROLLL})
+
+        await blinker.blink([device])
+
+        self.assertEqual(device.set_led_calls, [(ecodes.LED_SCROLLL, 0), (ecodes.LED_SCROLLL, 1)])
+        self.assertEqual(device.leds(), [ecodes.LED_SCROLLL])
+
+    async def test_blink_skips_device_without_led_capability(self) -> None:
+        blinker = KeyboardLedBlinker(pulse_seconds=0)
+        device = _FakeLedInputDevice(supported=False)
+
+        await blinker.blink([device])
+
+        self.assertEqual(device.set_led_calls, [])
+
+    async def test_blink_continues_after_one_device_fails(self) -> None:
+        blinker = KeyboardLedBlinker(pulse_seconds=0, pulse_count=1)
+        failing_device = _FakeLedInputDevice(path="/dev/input/event-fail")
+        failing_device.set_led = Mock(side_effect=OSError("gone"))
+        working_device = _FakeLedInputDevice(path="/dev/input/event-ok")
+
+        await blinker.blink([failing_device, working_device])
+
+        self.assertEqual(working_device.set_led_calls, [(ecodes.LED_SCROLLL, 1), (ecodes.LED_SCROLLL, 0)])
+
+    async def test_cancelled_blink_restores_original_led_state(self) -> None:
+        blinker = KeyboardLedBlinker(pulse_seconds=10, pulse_count=3)
+        device = _FakeLedInputDevice()
+
+        task = asyncio.create_task(blinker.blink([device]))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        self.assertEqual(device.leds(), [ecodes.LED_SCROLLL])
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+
+        self.assertEqual(device.set_led_calls, [(ecodes.LED_SCROLLL, 1), (ecodes.LED_SCROLLL, 0)])
+        self.assertEqual(device.leds(), [])
+
+    async def test_blink_pulse_count_argument_overrides_configured_default(self) -> None:
+        blinker = KeyboardLedBlinker(pulse_seconds=0, pulse_count=5)
+        device = _FakeLedInputDevice()
+
+        await blinker.blink([device], pulse_count=1)
+
+        self.assertEqual(device.set_led_calls, [(ecodes.LED_SCROLLL, 1), (ecodes.LED_SCROLLL, 0)])
+
+
+class RelaySupervisorJigglerLedTest(unittest.IsolatedAsyncioTestCase):
+    async def test_jiggler_toggle_blinks_active_relayed_devices(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        hid_gadgets = _FakeHidGadgets()
+        gate = _active_gate()
+        mouse_jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=gate)
+        led_blinker = KeyboardLedBlinker(pulse_seconds=0, pulse_count=1)
+        relay_started = asyncio.Event()
+        device = _FakeLedInputDevice(name="target keyboard")
+
+        class WaitingInputRelay:
+            def __init__(self, input_device, *_args, **_kwargs) -> None:
+                self.input_device = input_device
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                relay_started.set()
+                await asyncio.Event().wait()
+
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", return_value=device),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+        ):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(
+                    hid_gadgets=hid_gadgets,
+                    relay_gate=gate,
+                    task_group=task_group,
+                    devices=["target"],
+                    mouse_jiggler=mouse_jiggler,
+                    led_blinker=led_blinker,
+                )
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceAdded(device.path))
+                await asyncio.wait_for(relay_started.wait(), timeout=1)
+
+                mouse_jiggler.toggle()
+                await asyncio.sleep(0)
+                await asyncio.sleep(0)
+
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
+
+        self.assertIn((ecodes.LED_SCROLLL, 1), device.set_led_calls)
+        self.assertIn((ecodes.LED_SCROLLL, 0), device.set_led_calls)
+
+    async def test_jiggler_toggle_uses_long_glow_on_enable_and_slow_blinks_on_disable(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        hid_gadgets = _FakeHidGadgets()
+        gate = _active_gate()
+        mouse_jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=gate)
+        led_blinker = KeyboardLedBlinker()
+        led_blinker.blink = AsyncMock()
+        relay_started = asyncio.Event()
+        device = _FakeLedInputDevice(name="target keyboard")
+
+        class WaitingInputRelay:
+            def __init__(self, input_device, *_args, **_kwargs) -> None:
+                self.input_device = input_device
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                relay_started.set()
+                await asyncio.Event().wait()
+
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", return_value=device),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+        ):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(
+                    hid_gadgets=hid_gadgets,
+                    relay_gate=gate,
+                    task_group=task_group,
+                    devices=["target"],
+                    mouse_jiggler=mouse_jiggler,
+                    led_blinker=led_blinker,
+                )
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceAdded(device.path))
+                await asyncio.wait_for(relay_started.wait(), timeout=1)
+
+                mouse_jiggler.toggle()  # starts enabled, so this disables it
+                await asyncio.sleep(0)
+                mouse_jiggler.toggle()  # and this re-enables it
+                await asyncio.sleep(0)
+
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
+
+        patterns = [
+            (call_args.kwargs["pulse_count"], call_args.kwargs["pulse_seconds"])
+            for call_args in led_blinker.blink.call_args_list
+        ]
+        self.assertEqual(patterns, [(3, 0.5), (1, 1.5)])
+
+    async def test_new_jiggler_toggle_supersedes_running_blink_and_restores_led(self) -> None:
+        events: asyncio.Queue = asyncio.Queue()
+        hid_gadgets = _FakeHidGadgets()
+        gate = _active_gate()
+        mouse_jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=gate)
+        led_blinker = KeyboardLedBlinker()
+        relay_started = asyncio.Event()
+        device = _FakeLedInputDevice(name="target keyboard")
+
+        class WaitingInputRelay:
+            def __init__(self, input_device, *_args, **_kwargs) -> None:
+                self.input_device = input_device
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args) -> bool:
+                return False
+
+            async def async_relay_events_loop(self) -> None:
+                relay_started.set()
+                await asyncio.Event().wait()
+
+        with (
+            patch(f"{RELAY_SUPERVISOR}.list_input_devices", return_value=[]),
+            patch(f"{RELAY_SUPERVISOR}.InputDevice", return_value=device),
+            patch(f"{RELAY_SUPERVISOR}.InputRelay", WaitingInputRelay),
+            patch(f"{RELAY_SUPERVISOR}.JIGGLER_DISABLED_LED_PULSE_SEC", 10),
+            patch(f"{RELAY_SUPERVISOR}.JIGGLER_ENABLED_LED_PULSE_SEC", 0),
+        ):
+            async with asyncio.TaskGroup() as task_group:
+                supervisor = _relay_supervisor(
+                    hid_gadgets=hid_gadgets,
+                    relay_gate=gate,
+                    task_group=task_group,
+                    devices=["target"],
+                    mouse_jiggler=mouse_jiggler,
+                    led_blinker=led_blinker,
+                )
+                run_task = task_group.create_task(supervisor.run(events))
+                events.put_nowait(DeviceAdded(device.path))
+                await asyncio.wait_for(relay_started.wait(), timeout=1)
+
+                mouse_jiggler.toggle()  # disable: slow blink, now stuck mid-pulse with the LED on
+                for _ in range(3):
+                    await asyncio.sleep(0)
+                self.assertEqual(device.leds(), [ecodes.LED_SCROLLL])
+
+                mouse_jiggler.toggle()  # enable: must cancel the slow blink first
+                for _ in range(10):
+                    await asyncio.sleep(0)
+
+                events.put_nowait(ShutdownRequested("test"))
+                await asyncio.wait_for(run_task, timeout=1)
+
+        self.assertEqual(
+            device.set_led_calls,
+            [
+                (ecodes.LED_SCROLLL, 1),  # slow blink starts
+                (ecodes.LED_SCROLLL, 0),  # restored on cancellation
+                (ecodes.LED_SCROLLL, 1),  # glow
+                (ecodes.LED_SCROLLL, 0),
+            ],
+        )
+        self.assertEqual(device.leds(), [])
+
+    async def test_jiggler_toggle_before_supervisor_running_schedules_no_blink(self) -> None:
+        gate = _active_gate()
+        hid_gadgets = _FakeHidGadgets()
+        mouse_jiggler = MouseJiggler(hid_gadgets=hid_gadgets, relay_gate=gate)
+        led_blinker = KeyboardLedBlinker()
+        task_group = _FakeTaskGroup()
+        supervisor = _relay_supervisor(
+            hid_gadgets=hid_gadgets,
+            relay_gate=gate,
+            task_group=task_group,
+            mouse_jiggler=mouse_jiggler,
+            led_blinker=led_blinker,
+        )
+        del supervisor
+
+        mouse_jiggler.toggle()
+
+        self.assertEqual(task_group.created, [])

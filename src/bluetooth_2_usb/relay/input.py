@@ -7,6 +7,7 @@ from ..gadgets.manager import HidGadgets
 from ..hid.dispatch import HidDispatcher
 from ..logging import get_logger
 from .gate import RelayGate
+from .jiggler import JigglerToggler, MouseJiggler
 from .shortcut import ShortcutToggler
 
 logger = get_logger(__name__)
@@ -27,6 +28,8 @@ class InputRelay:
         relay_gate: RelayGate,
         grab: bool = False,
         shortcut_toggler: ShortcutToggler | None = None,
+        jiggler_toggler: JigglerToggler | None = None,
+        mouse_jiggler: MouseJiggler | None = None,
     ) -> None:
         """
         :param input_device: The evdev input device
@@ -34,9 +37,11 @@ class InputRelay:
         :param grab: Whether to grab the device for exclusive access
         :param relay_gate: RelayGate that indicates whether relaying is active
         :param shortcut_toggler: Optional handler for toggling relay via a shortcut
+        :param jiggler_toggler: Optional handler for toggling the mouse jiggler via a shortcut
+        :param mouse_jiggler: Optional MouseJiggler to reset on input activity
         """
         self._input_device = input_device
-        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler)
+        self._dispatcher = HidDispatcher(hid_gadgets, relay_gate, shortcut_toggler, jiggler_toggler, mouse_jiggler)
         self._grab = grab
         self._relay_gate = relay_gate
 

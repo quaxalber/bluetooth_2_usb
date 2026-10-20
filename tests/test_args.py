@@ -24,3 +24,19 @@ class ParseArgsTest(unittest.TestCase):
         args = parse_args(["--version"])
 
         self.assertTrue(args.version)
+
+    def test_jiggler_led_defaults_to_scroll_lock(self) -> None:
+        args = parse_args(["--version"])
+
+        self.assertEqual(args.jiggler_led, "scroll_lock")
+
+    def test_jiggler_led_accepts_known_choice_case_insensitively(self) -> None:
+        args = parse_args(["--jiggler-led", "CAPS_LOCK", "--version"])
+
+        self.assertEqual(args.jiggler_led, "caps_lock")
+
+    def test_invalid_jiggler_led_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            parse_args(["--jiggler-led", "nope"])
+
+        self.assertEqual(ctx.exception.code, 2)

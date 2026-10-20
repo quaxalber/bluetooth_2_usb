@@ -7,6 +7,7 @@ from ..evdev import ecodes, evdev_to_usb_hid, is_consumer_key, is_mouse_button
 from ..evdev.types import InputEvent, KeyEvent, RelEvent, categorize
 from ..logging import get_logger
 from ..relay.gate import RelayGate
+from ..relay.jiggler import JigglerToggler, MouseJiggler
 from ..relay.shortcut import ShortcutToggler
 from .mouse_delta import MouseDelta, MouseDeltaAccumulator
 
@@ -25,11 +26,18 @@ class HidDispatcher:
     """
 
     def __init__(
-        self, hid_gadgets: HidGadgets, relay_gate: RelayGate, shortcut_toggler: ShortcutToggler | None = None
+        self,
+        hid_gadgets: HidGadgets,
+        relay_gate: RelayGate,
+        shortcut_toggler: ShortcutToggler | None = None,
+        jiggler_toggler: JigglerToggler | None = None,
+        mouse_jiggler: MouseJiggler | None = None,
     ) -> None:
         self._hid_gadgets = hid_gadgets
         self._relay_gate = relay_gate
         self._shortcut_toggler = shortcut_toggler
+        self._jiggler_toggler = jiggler_toggler
+        self._mouse_jiggler = mouse_jiggler
         self._mouse_delta = MouseDeltaAccumulator()
         self._hid_write_failures = 0
 
@@ -40,11 +48,23 @@ class HidDispatcher:
     async def dispatch(self, raw_event: InputEvent) -> None:
         event = categorize(raw_event)
 
+        # A shortcut key event can itself flip relay_gate (pause/resume) as a
+        # side effect of handle_key_event(). Snapshot the state from before
+        # that flip: a non-suppressed modifier release that completes the
+        # shortcut happened while the old state was still in effect, and must
+        # be forwarded (or dropped) accordingly, not based on the state it
+        # just caused.
+        relay_was_active = self._relay_gate.active
+
         if self._shortcut_toggler and isinstance(event, KeyEvent):
             if self._shortcut_toggler.handle_key_event(event):
                 return
 
-        if not self._relay_gate.active:
+        if self._jiggler_toggler and isinstance(event, KeyEvent):
+            if self._jiggler_toggler.handle_key_event(event):
+                return
+
+        if not relay_was_active:
             self.discard_pending()
             return
 
@@ -93,8 +113,10 @@ class HidDispatcher:
         await self._write_hid_report(mouse.move, "Mouse movement", delta, *delta)
 
     async def _process_key_event(self, event: KeyEvent) -> None:
-        if not self._relay_gate.active:
-            return
+        # Callers already gate on the relay-active snapshot taken before this
+        # event ran through the togglers; re-checking the (possibly now
+        # stale) live gate state here would drop the very key-up that a
+        # shortcut's own completion is supposed to still forward.
         await self._write_hid_report(self._dispatch_key_event, "Key event", event, event)
 
     async def _write_hid_report(
@@ -102,6 +124,8 @@ class HidDispatcher:
     ) -> None:
         try:
             await operation(*args)
+            if self._mouse_jiggler:
+                self._mouse_jiggler.reset_timer()
         except BlockingIOError:
             self._hid_write_failures += 1
             logger.debug("%s HID write blocked; dropping %s", description, context)

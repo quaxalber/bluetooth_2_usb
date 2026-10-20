@@ -13,6 +13,10 @@ class RelayGateListener(Protocol):
     def __call__(self, active: bool) -> None: ...
 
 
+class RelayGateStateListener(Protocol):
+    def __call__(self, state: RelayGateState) -> None: ...
+
+
 class RelayInactiveReason(StrEnum):
     HOST_NOT_CONFIGURED = "host_not_configured"
     USER_PAUSED = "user_paused"
@@ -53,6 +57,7 @@ class RelayGate:
     def __init__(self) -> None:
         self._state = RelayGateState()
         self._listeners: list[RelayGateListener] = []
+        self._state_listeners: list[RelayGateStateListener] = []
 
     @property
     def state(self) -> RelayGateState:
@@ -73,6 +78,17 @@ class RelayGate:
     def remove_listener(self, listener: RelayGateListener) -> None:
         try:
             self._listeners.remove(listener)
+        except ValueError:
+            pass
+
+    def add_state_listener(self, listener: RelayGateStateListener) -> None:
+        """Register a callback invoked with a state snapshot on every state change, not just active flips."""
+        if listener not in self._state_listeners:
+            self._state_listeners.append(listener)
+
+    def remove_state_listener(self, listener: RelayGateStateListener) -> None:
+        try:
+            self._state_listeners.remove(listener)
         except ValueError:
             pass
 
@@ -102,6 +118,8 @@ class RelayGate:
         if previous_state == self._state:
             return
         self._log_state_change(previous_state)
+        for state_listener in list(self._state_listeners):
+            state_listener(self.state)
         active = self.active
         if active == previous_state.active:
             return
