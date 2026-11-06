@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from bluetooth_2_usb.evdev.ecodes import ecodes
 from bluetooth_2_usb.inputs.battery import extract_bluetooth_mac, read_device_battery_percent
+from bluetooth_2_usb.inputs.mqtt import MqttConfig, build_ha_battery_messages, load_mqtt_config
 from bluetooth_2_usb.relay.leds import KeyboardLedMirror
 
 
@@ -104,6 +105,20 @@ class KeyboardLedMirrorTest(unittest.TestCase):
         self.assertEqual(len(logs.output), 1)
         self.assertIn("Low battery on BT Mouse (/dev/input/event8): 10%", logs.output[0])
         self.assertTrue(keyboard.calls)
+
+    def test_mqtt_config_and_home_assistant_discovery_messages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / "bluetooth_2_usb_mqtt"
+            text = "B2U_MQTT_HOST=homeassistant.local\nB2U_MQTT_USERNAME=mqtt\nB2U_MQTT_PASSWORD=secret\n"
+            env_file.write_text(text, encoding="utf-8")
+            config = load_mqtt_config(env_file)
+
+        self.assertEqual(config, MqttConfig(host="homeassistant.local", username="mqtt", password="secret"))
+        device = SimpleNamespace(path="/dev/input/event5", name="MX Keys", uniq="AA:BB:CC:DD:EE:FF", phys="")
+        messages = build_ha_battery_messages(config, device, 85)
+        self.assertEqual(messages[0][0], "homeassistant/sensor/bluetooth_2_usb_aabbccddeeff/battery/config")
+        self.assertIn('"unique_id":"bluetooth_2_usb_aabbccddeeff_battery"', messages[0][1])
+        self.assertEqual(messages[1], ("bluetooth_2_usb/aabbccddeeff/battery", "85"))
 
 
 if __name__ == "__main__":

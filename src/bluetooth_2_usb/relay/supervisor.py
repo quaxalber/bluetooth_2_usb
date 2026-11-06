@@ -10,6 +10,7 @@ from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
 from ..inputs.battery import LOW_BATTERY_THRESHOLD_PERCENT, read_device_battery_percent
 from ..inputs.filter import DeviceFilter
+from ..inputs.mqtt import publish_device_battery
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
@@ -236,6 +237,7 @@ class RelaySupervisor:
         battery = read_device_battery_percent(device)
         if battery is None:
             return
+        publish_device_battery(device, battery)
         if battery > self.LOW_BATTERY_THRESHOLD_PERCENT:
             self._low_battery_warned_devices.discard(device.path)
             return
