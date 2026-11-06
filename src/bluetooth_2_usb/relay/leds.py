@@ -123,4 +123,3 @@ class KeyboardLedMirror:
         finally:
             loop.remove_reader(fd)
             os.close(fd)
-
