@@ -11,7 +11,7 @@ from ..hid.mouse import ExtendedMouse
 from ..logging import get_logger
 from .config import rebuild_gadget
 from .identity import UsbIdentity
-from .layout import build_default_layout
+from .layout import HID_FUNC_INDEX_KEYBOARD, build_default_layout
 
 logger = get_logger(__name__)
 
@@ -37,6 +37,16 @@ class HidGadgets:
     def _clear_gadget_state(self) -> None:
         self._gadgets = {"keyboard": None, "mouse": None, "consumer": None}
         self._enabled = False
+        self._keyboard_hidg_path: Path | None = None
+
+    @property
+    def keyboard_hidg_path(self) -> Path | None:
+        """
+        Get the /dev/hidg node of the keyboard gadget, which also carries host LED output reports.
+
+        :return: The keyboard gadget node path, or None if not initialized
+        """
+        return self._keyboard_hidg_path
 
     def requested_devices(self):
         """
@@ -159,6 +169,14 @@ class HidGadgets:
             enabled_devices = list(rebuild_gadget(build_default_layout(self._identity)))
             await self.validate_hidg_nodes(enabled_devices)
 
+        self._keyboard_hidg_path = next(
+            (
+                self._hidg_path(device)
+                for device in enabled_devices
+                if getattr(device, "function_index", None) == HID_FUNC_INDEX_KEYBOARD
+            ),
+            None,
+        )
         self._gadgets["keyboard"] = ExtendedKeyboard(enabled_devices)
         self._gadgets["mouse"] = ExtendedMouse(enabled_devices)
         self._gadgets["consumer"] = ExtendedConsumerControl(enabled_devices)

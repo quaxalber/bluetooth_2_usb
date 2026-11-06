@@ -19,6 +19,7 @@ from ..logging import get_logger
 from ..runtime.events import DeviceAdded, DeviceRemoved, RuntimeEvent, ShutdownRequested, UdcState, UdcStateChanged
 from .gate import RelayGate
 from .input import InputRelay
+from .leds import KeyboardLedMirror
 from .shortcut import ShortcutToggler
 
 logger = get_logger(__name__)
@@ -94,6 +95,8 @@ class RelaySupervisor:
 
         self._active_relays: dict[str, _ActiveRelay] = {}
         self._hotplug_probe_tasks: dict[str, asyncio.Task[None]] = {}
+        self._led_mirror = KeyboardLedMirror(getattr(hid_gadgets, "keyboard_hidg_path", None))
+        self._led_mirror_task: asyncio.Task[None] | None = None
 
     def _shutdown_requested(self) -> bool:
         return self._state in (_SupervisorState.STOPPING, _SupervisorState.STOPPED)
@@ -127,6 +130,7 @@ class RelaySupervisor:
             raise
         finally:
             try:
+                self._cancel_led_mirror()
                 self._cancel_all_pending_hotplug_probes()
                 for device_path, active_relay in list(self._active_relays.items()):
                     self._relay_task_done(device_path, active_relay.task)
@@ -142,6 +146,7 @@ class RelaySupervisor:
 
         if not self._shutdown_requested():
             self._state = _SupervisorState.RUNNING
+            self._start_led_mirror()
 
         for device in initial_devices:
             if self._shutdown_requested():
@@ -183,6 +188,7 @@ class RelaySupervisor:
             return
 
         self._state = _SupervisorState.STOPPING
+        self._cancel_led_mirror()
         self._cancel_all_pending_hotplug_probes()
 
         was_configured = self._relay_gate.state.host_configured
@@ -192,6 +198,19 @@ class RelaySupervisor:
 
         for device_path in list(self._active_relays):
             self._cancel_active_relay(device_path)
+
+    def _start_led_mirror(self) -> None:
+        if self._led_mirror_task is not None:
+            return
+        try:
+            self._led_mirror_task = self._task_group.create_task(self._led_mirror.run(), name="keyboard led mirror")
+        except RuntimeError:
+            logger.debug("Skipping keyboard LED mirroring; TaskGroup is shutting down.")
+
+    def _cancel_led_mirror(self) -> None:
+        task, self._led_mirror_task = self._led_mirror_task, None
+        if task is not None and not task.done():
+            task.cancel()
 
     def _device_added(self, device_path: str) -> None:
         if self._state is not _SupervisorState.RUNNING:
@@ -337,7 +356,11 @@ class RelaySupervisor:
                 shortcut_toggler=self._shortcut_toggler,
             ) as relay:
                 logger.info("Activated %s", relay)
-                await relay.async_relay_events_loop()
+                self._led_mirror.register(device)
+                try:
+                    await relay.async_relay_events_loop()
+                finally:
+                    self._led_mirror.unregister(device.path)
         except OSError as exc:
             if exc.errno not in DEVICE_DISCONNECT_ERRNOS:
                 logger.exception("Unhandled OS error in relay for %s.", device)
