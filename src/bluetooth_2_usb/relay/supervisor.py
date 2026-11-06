@@ -10,13 +10,13 @@ from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
 from ..inputs.battery import LOW_BATTERY_THRESHOLD_PERCENT, read_device_battery_percent
 from ..inputs.filter import DeviceFilter
-from ..inputs.mqtt import publish_device_battery
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
     DeviceEnumerationError,
     auto_relay_exclusion_reason,
     list_input_devices,
 )
+from ..inputs.mqtt import publish_device_battery
 from ..logging import get_logger
 from ..runtime.events import DeviceAdded, DeviceRemoved, RuntimeEvent, ShutdownRequested, UdcState, UdcStateChanged
 from .gate import RelayGate
