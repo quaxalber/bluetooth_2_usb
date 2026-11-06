@@ -29,6 +29,9 @@ HID_LED_BITS: tuple[tuple[int, int], ...] = (
 """HID LED usage bit -> evdev LED code, in boot-keyboard output report order."""
 
 LED_REPORT_READ_SIZE = 64
+WARNING_BLINK_MASK = 0x07
+WARNING_BLINK_COUNT = 3
+WARNING_BLINK_INTERVAL_SEC = 0.15
 
 
 def _supports_leds(device: InputDevice) -> tuple[int, ...]:
@@ -72,8 +75,26 @@ class KeyboardLedMirror:
             return
         self._led_state = state
         logger.debug("Host keyboard LED state changed: 0x%02x", state)
+        self._apply_all(state)
+
+    def _apply_all(self, state: int) -> None:
         for device, supported in list(self._devices.values()):
             self._apply_to(device, supported, state)
+
+    async def blink_warning(
+        self, count: int = WARNING_BLINK_COUNT, interval_sec: float = WARNING_BLINK_INTERVAL_SEC
+    ) -> None:
+        """Blink lock LEDs on all registered keyboards and restore the host LED state."""
+        if not self._devices or count <= 0:
+            return
+        try:
+            for _ in range(count):
+                self._apply_all(WARNING_BLINK_MASK)
+                await asyncio.sleep(interval_sec)
+                self._apply_all(0)
+                await asyncio.sleep(interval_sec)
+        finally:
+            self._apply_all(self._led_state or 0)
 
     def _apply_to(self, device: InputDevice, supported: tuple[int, ...], state: int) -> None:
         for bit, led_code in HID_LED_BITS:

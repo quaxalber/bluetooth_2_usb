@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..logging import get_logger
+from .battery import read_device_battery_percent
 
 logger = get_logger(__name__)
 
@@ -45,6 +46,7 @@ class InputDeviceMetadata:
     capabilities: list[str]
     relay_candidate: bool
     exclusion_reason: str | None
+    battery_percent: int | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -118,6 +120,7 @@ def describe_input_devices(
                     capabilities=capabilities,
                     relay_candidate=exclusion_reason is None,
                     exclusion_reason=exclusion_reason,
+                    battery_percent=read_device_battery_percent(device),
                 )
             )
         finally:
@@ -131,16 +134,19 @@ def inventory_to_text(devices: list[InputDeviceMetadata]) -> str:
     table.add_column("Device", min_width=18, overflow="fold")
     table.add_column("Phys", min_width=16, overflow="fold")
     table.add_column("Uniq", min_width=16, overflow="fold")
+    table.add_column("Battery", no_wrap=True, width=7)
     table.add_column("Path", min_width=18, overflow="fold")
     table.add_column("Exclusion Reason", min_width=20, overflow="fold")
 
     for device in devices:
         status = "relay" if device.relay_candidate else "skip"
+        battery = f"{device.battery_percent}%" if device.battery_percent is not None else "-"
         table.add_row(
             status,
             device.name or "-",
             device.phys or "-",
             device.uniq or "-",
+            battery,
             device.path,
             device.exclusion_reason or "",
         )

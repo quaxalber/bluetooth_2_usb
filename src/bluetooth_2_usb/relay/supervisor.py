@@ -8,6 +8,7 @@ from enum import Enum, auto
 
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
+from ..inputs.battery import LOW_BATTERY_THRESHOLD_PERCENT, read_device_battery_percent
 from ..inputs.filter import DeviceFilter
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
@@ -51,6 +52,8 @@ class RelaySupervisor:
 
     HOTPLUG_ADD_RETRY_DELAY_SEC = 0.2
     HOTPLUG_ADD_MAX_RETRIES = 10
+    LOW_BATTERY_THRESHOLD_PERCENT = LOW_BATTERY_THRESHOLD_PERCENT
+    BATTERY_CHECK_INTERVAL_SEC = 300.0
 
     def __init__(
         self,
@@ -97,6 +100,8 @@ class RelaySupervisor:
         self._hotplug_probe_tasks: dict[str, asyncio.Task[None]] = {}
         self._led_mirror = KeyboardLedMirror(getattr(hid_gadgets, "keyboard_hidg_path", None))
         self._led_mirror_task: asyncio.Task[None] | None = None
+        self._battery_monitor_task: asyncio.Task[None] | None = None
+        self._low_battery_warned_devices: set[str] = set()
 
     def _shutdown_requested(self) -> bool:
         return self._state in (_SupervisorState.STOPPING, _SupervisorState.STOPPED)
@@ -200,17 +205,45 @@ class RelaySupervisor:
             self._cancel_active_relay(device_path)
 
     def _start_led_mirror(self) -> None:
-        if self._led_mirror_task is not None:
-            return
-        try:
-            self._led_mirror_task = self._task_group.create_task(self._led_mirror.run(), name="keyboard led mirror")
-        except RuntimeError:
-            logger.debug("Skipping keyboard LED mirroring; TaskGroup is shutting down.")
+        if self._led_mirror_task is None:
+            try:
+                self._led_mirror_task = self._task_group.create_task(self._led_mirror.run(), name="keyboard led mirror")
+            except RuntimeError:
+                logger.debug("Skipping keyboard LED mirroring; TaskGroup is shutting down.")
+        if self._battery_monitor_task is None:
+            try:
+                self._battery_monitor_task = self._task_group.create_task(
+                    self._run_battery_monitor(), name="battery monitor"
+                )
+            except RuntimeError:
+                logger.debug("Skipping battery monitor; TaskGroup is shutting down.")
 
     def _cancel_led_mirror(self) -> None:
         task, self._led_mirror_task = self._led_mirror_task, None
         if task is not None and not task.done():
             task.cancel()
+        battery_task, self._battery_monitor_task = self._battery_monitor_task, None
+        if battery_task is not None and not battery_task.done():
+            battery_task.cancel()
+
+    async def _run_battery_monitor(self) -> None:
+        while self._state is _SupervisorState.RUNNING:
+            await asyncio.sleep(self.BATTERY_CHECK_INTERVAL_SEC)
+            for active_relay in list(self._active_relays.values()):
+                await self._check_device_battery(active_relay.device)
+
+    async def _check_device_battery(self, device: InputDevice) -> None:
+        battery = read_device_battery_percent(device)
+        if battery is None:
+            return
+        if battery > self.LOW_BATTERY_THRESHOLD_PERCENT:
+            self._low_battery_warned_devices.discard(device.path)
+            return
+        if device.path in self._low_battery_warned_devices:
+            return
+        self._low_battery_warned_devices.add(device.path)
+        logger.warning("Low battery on %s (%s): %s%%", device.name or device.path, device.path, battery)
+        await self._led_mirror.blink_warning()
 
     def _device_added(self, device_path: str) -> None:
         if self._state is not _SupervisorState.RUNNING:
@@ -358,8 +391,10 @@ class RelaySupervisor:
                 logger.info("Activated %s", relay)
                 self._led_mirror.register(device)
                 try:
+                    await self._check_device_battery(device)
                     await relay.async_relay_events_loop()
                 finally:
+                    self._low_battery_warned_devices.discard(device.path)
                     self._led_mirror.unregister(device.path)
         except OSError as exc:
             if exc.errno not in DEVICE_DISCONNECT_ERRNOS:

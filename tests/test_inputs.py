@@ -114,7 +114,10 @@ class InputInventoryTest(unittest.TestCase):
         mouse = _FakeInputDevice(path="/dev/input/event2", name="Mouse", capabilities={ecodes.EV_REL: []})
         broken = _FakeInputDevice(path="/dev/input/event3", name="Broken", capabilities=OSError("permission denied"))
 
-        with patch(f"{INPUTS_INVENTORY}.list_input_devices", return_value=[keyboard, mouse, broken]):
+        with (
+            patch(f"{INPUTS_INVENTORY}.list_input_devices", return_value=[keyboard, mouse, broken]),
+            patch(f"{INPUTS_INVENTORY}.read_device_battery_percent", side_effect=[85, None, None]),
+        ):
             devices = describe_input_devices()
 
         self.assertEqual(
@@ -122,6 +125,7 @@ class InputInventoryTest(unittest.TestCase):
         )
         self.assertEqual([device.capabilities for device in devices], [["EV_KEY"], ["EV_REL"], []])
         self.assertEqual([device.relay_candidate for device in devices], [True, True, False])
+        self.assertEqual([device.battery_percent for device in devices], [85, None, None])
         self.assertEqual(devices[0].uniq, "AA-BB")
         self.assertIn("permission denied", devices[2].exclusion_reason or "")
         self.assertTrue(all(device.closed for device in (keyboard, mouse, broken)))

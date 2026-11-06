@@ -106,7 +106,9 @@ those events and owns all per-device relay tasks.
 
 Keyboard lock LEDs (Num Lock, Caps Lock, Scroll Lock) follow the USB host: the
 supervisor reads the host's LED output reports from the keyboard gadget node and
-applies them to every relayed input device that exposes LEDs.
+applies them to every relayed input device that exposes LEDs. When a relayed
+device reports a low battery (`<= 15%`), the supervisor logs a warning and
+briefly blinks the keyboard lock LEDs before restoring the host LED state.
 
 For implementation details, see
 [docs/runtime-architecture.md](docs/runtime-architecture.md).

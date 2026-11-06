@@ -1,6 +1,11 @@
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from bluetooth_2_usb.evdev.ecodes import ecodes
+from bluetooth_2_usb.inputs.battery import extract_bluetooth_mac, read_device_battery_percent
 from bluetooth_2_usb.relay.leds import KeyboardLedMirror
 
 
@@ -49,6 +54,56 @@ class KeyboardLedMirrorTest(unittest.TestCase):
 
         self.assertEqual(mouse.calls, [])
         self.assertEqual(keyboard.calls, [])
+
+    def test_blink_warning_flashes_and_restores_host_led_state(self):
+        mirror = KeyboardLedMirror(None)
+        device = _LedDevice(leds=(ecodes.LED_CAPSL,))
+        mirror.register(device)
+        mirror.handle_report(bytes([0x02]))
+        device.calls.clear()
+
+        with patch("bluetooth_2_usb.relay.leds.asyncio.sleep", new=AsyncMock()), self.assertRaises(StopIteration):
+            mirror.blink_warning(count=1, interval_sec=0.0).send(None)
+
+        self.assertEqual(device.calls, [(ecodes.LED_CAPSL, 1), (ecodes.LED_CAPSL, 0), (ecodes.LED_CAPSL, 1)])
+
+    def test_read_device_battery_percent_from_sysfs_power_supply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            input_root = Path(tmp) / "input"
+            power_root = Path(tmp) / "power_supply"
+            supply_dir = power_root / "hid-aa-bb-cc-dd-ee-ff-battery"
+            supply_dir.mkdir(parents=True)
+            (supply_dir / "capacity").write_text("12\n", encoding="utf-8")
+            device = SimpleNamespace(path="/dev/input/event9", uniq="AA-BB-CC-DD-EE-FF", phys="")
+
+            self.assertEqual(extract_bluetooth_mac(device), "aa:bb:cc:dd:ee:ff")
+            battery = read_device_battery_percent(device, sys_class_input=input_root, sys_class_power_supply=power_root)
+            self.assertEqual(battery, 12)
+
+    def test_supervisor_low_battery_warns_once_and_blinks_leds(self):
+        from bluetooth_2_usb.relay.gate import RelayGate
+        from bluetooth_2_usb.relay.supervisor import RelaySupervisor
+
+        task_group = SimpleNamespace(create_task=lambda coro, name=None: coro.close())
+        gadgets = SimpleNamespace(keyboard_hidg_path=None)
+        supervisor = RelaySupervisor(gadgets, RelayGate(), task_group)
+        keyboard = _LedDevice(leds=(ecodes.LED_CAPSL,))
+        supervisor._led_mirror.register(keyboard)
+        mouse = SimpleNamespace(path="/dev/input/event8", name="BT Mouse", uniq="aa:bb:cc:dd:ee:ff", phys="")
+
+        with (
+            patch("bluetooth_2_usb.relay.supervisor.read_device_battery_percent", return_value=10),
+            patch("bluetooth_2_usb.relay.leds.asyncio.sleep", new=AsyncMock()),
+            self.assertLogs("bluetooth_2_usb", level="WARNING") as logs,
+        ):
+            with self.assertRaises(StopIteration):
+                supervisor._check_device_battery(mouse).send(None)
+            with self.assertRaises(StopIteration):
+                supervisor._check_device_battery(mouse).send(None)
+
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("Low battery on BT Mouse (/dev/input/event8): 10%", logs.output[0])
+        self.assertTrue(keyboard.calls)
 
 
 if __name__ == "__main__":
