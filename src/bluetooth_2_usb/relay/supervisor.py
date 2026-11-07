@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
-from ..inputs.battery import LOW_BATTERY_THRESHOLD_PERCENT, read_device_battery_percent
+from ..inputs.battery import LOW_BATTERY_THRESHOLD_PERCENT, extract_bluetooth_mac, read_device_battery_percent
 from ..inputs.filter import DeviceFilter
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
@@ -106,6 +106,7 @@ class RelaySupervisor:
         self._battery_monitor_task: asyncio.Task[None] | None = None
         self._low_battery_warned_devices: set[str] = set()
         self._pending_battery_retries: dict[str, int] = {}
+        self._last_published_battery: dict[str, int] = {}
 
     def _shutdown_requested(self) -> bool:
         return self._state in (_SupervisorState.STOPPING, _SupervisorState.STOPPED)
@@ -232,26 +233,47 @@ class RelaySupervisor:
 
     async def _run_battery_monitor(self) -> None:
         while self._state is _SupervisorState.RUNNING:
-            delay = (
-                self.BATTERY_INITIAL_RETRY_DELAY_SEC
-                if self._pending_battery_retries
-                else self.BATTERY_CHECK_INTERVAL_SEC
-            )
+            retrying_paths = set(self._pending_battery_retries)
+            delay = self.BATTERY_INITIAL_RETRY_DELAY_SEC if retrying_paths else self.BATTERY_CHECK_INTERVAL_SEC
             await asyncio.sleep(delay)
+            seen_macs: set[str] = set()
             for active_relay in list(self._active_relays.values()):
-                await self._check_device_battery(active_relay.device)
+                device = active_relay.device
+                if retrying_paths and device.path not in retrying_paths:
+                    continue
+                mac = extract_bluetooth_mac(device)
+                if mac is not None:
+                    if mac in seen_macs:
+                        self._pending_battery_retries.pop(device.path, None)
+                        continue
+                    seen_macs.add(mac)
+                await self._check_device_battery(device)
 
-    async def _check_device_battery(self, device: InputDevice) -> None:
+    def _read_and_publish_battery(self, device: InputDevice) -> int | None:
         battery = read_device_battery_percent(device)
         if battery is None:
+            return None
+        key = extract_bluetooth_mac(device) or device.path
+        if self._last_published_battery.get(key) != battery and publish_device_battery(device, battery):
+            self._last_published_battery[key] = battery
+        return battery
+
+    async def _check_device_battery(self, device: InputDevice) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            battery = self._read_and_publish_battery(device)
+        else:
+            del loop
+            battery = await asyncio.to_thread(self._read_and_publish_battery, device)
+        if battery is None:
             remaining = self._pending_battery_retries.get(device.path, 0) - 1
-            if remaining > 0:
+            if remaining > 0 and extract_bluetooth_mac(device) is not None:
                 self._pending_battery_retries[device.path] = remaining
             else:
                 self._pending_battery_retries.pop(device.path, None)
             return
         self._pending_battery_retries.pop(device.path, None)
-        publish_device_battery(device, battery)
         if battery > self.LOW_BATTERY_THRESHOLD_PERCENT:
             self._low_battery_warned_devices.discard(device.path)
             return
@@ -406,9 +428,9 @@ class RelaySupervisor:
             ) as relay:
                 logger.info("Activated %s", relay)
                 self._led_mirror.register(device)
-                self._pending_battery_retries[device.path] = self.BATTERY_INITIAL_MAX_RETRIES
+                if extract_bluetooth_mac(device) is not None:
+                    self._pending_battery_retries[device.path] = self.BATTERY_INITIAL_MAX_RETRIES
                 try:
-                    await self._check_device_battery(device)
                     await relay.async_relay_events_loop()
                 finally:
                     self._pending_battery_retries.pop(device.path, None)
