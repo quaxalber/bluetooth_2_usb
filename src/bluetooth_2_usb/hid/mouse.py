@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from ..logging import get_logger
 from . import timing
@@ -73,15 +74,16 @@ class ExtendedMouse:
                 self.report[MOUSE_Y_REPORT_SLICE] = partial_y.to_bytes(2, "little", signed=True)
                 self.report[MOUSE_WHEEL_REPORT_SLICE] = partial_wheel.to_bytes(1, "little", signed=True)
                 self.report[MOUSE_PAN_REPORT_SLICE] = partial_pan.to_bytes(1, "little", signed=True)
-                logger.debug(
-                    "Sending mouse movement to gadget: buttons=0x%02x x=%s y=%s " + "wheel=%s pan=%s report=%s",
-                    self.report[MOUSE_BUTTON_REPORT_INDEX],
-                    partial_x,
-                    partial_y,
-                    partial_wheel,
-                    partial_pan,
-                    self.report.hex(" "),
-                )
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "Sending mouse movement to gadget: buttons=0x%02x x=%s y=%s " + "wheel=%s pan=%s report=%s",
+                        self.report[MOUSE_BUTTON_REPORT_INDEX],
+                        partial_x,
+                        partial_y,
+                        partial_wheel,
+                        partial_pan,
+                        self.report.hex(" "),
+                    )
                 await self._send_report()
                 x -= partial_x
                 y -= partial_y

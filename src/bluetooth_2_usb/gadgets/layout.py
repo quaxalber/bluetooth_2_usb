@@ -14,6 +14,7 @@ References:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -116,6 +117,7 @@ class GadgetHidDevice(usb_hid.Device):
         self.subclass = subclass
         self.configfs_report_length = configfs_report_length
         self.wakeup_on_write = wakeup_on_write
+        self._write_fd: int | None = None
 
     @classmethod
     def from_existing(
@@ -159,9 +161,45 @@ class GadgetHidDevice(usb_hid.Device):
         )
 
     def get_device_path(self, _report_id=None):
+        cached_path = getattr(self, "path", None)
+        if cached_path:
+            return str(cached_path)
         function_root = Path(usb_hid.gadget_root) / f"functions/hid.usb{self.function_index}"
         device = function_root.joinpath("dev").read_text(encoding="utf-8").strip()
         return f"/dev/hidg{device.split(':')[1]}"
+
+    def close(self) -> None:
+        fd = getattr(self, "_write_fd", None)
+        if fd is None:
+            return
+        self._write_fd = None
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+    def send_report(self, report, report_id=None) -> None:
+        if report_id is None:
+            report_id = self.report_ids[0]
+        if report_id not in self.report_ids:
+            raise ValueError("Invalid report_id")
+        report_index = self.report_ids.index(report_id)
+        if len(report) != self.in_report_lengths[report_index]:
+            raise ValueError(f"Report length incorrect. Should be {self.in_report_lengths[report_index]} bytes.")
+
+        payload = report_id.to_bytes(1, "little") + bytes(report) if report_id > 0 else report
+        fd = getattr(self, "_write_fd", None)
+        if fd is None:
+            device_path = self.get_device_path(report_id)
+            fd = os.open(device_path, os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
+            self._write_fd = fd
+        try:
+            os.write(fd, payload)
+        except BlockingIOError:
+            raise
+        except OSError:
+            self.close()
+            raise
 
 
 @dataclass(frozen=True, slots=True)

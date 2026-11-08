@@ -10,6 +10,7 @@ LOW_BATTERY_THRESHOLD_PERCENT = 15
 
 _MAC_PATTERN = re.compile(r"([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})")
 _BLUETOOTHCTL_BATTERY_PATTERN = re.compile(r"Battery Percentage:.*?\((\d+)\)|Battery Percentage:\s*(\d+)%")
+_BUSCTL_BATTERY_PATTERN = re.compile(r"^y\s+(\d+)\b")
 
 
 def extract_bluetooth_mac(device: Any) -> str | None:
@@ -69,7 +70,29 @@ def _read_sysfs_mac_battery(mac: str, sys_class_power_supply: Path) -> int | Non
     return None
 
 
+def _read_busctl_battery(mac: str) -> int | None:
+    dev_node = "dev_" + mac.upper().replace(":", "_")
+    cmd = ["busctl", "get-property", "org.bluez", f"/org/bluez/hci0/{dev_node}", "org.bluez.Battery1", "Percentage"]
+    try:
+        completed = subprocess.run(cmd, capture_output=True, text=True, timeout=0.5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    match = _BUSCTL_BATTERY_PATTERN.match(completed.stdout.strip())
+    if not match:
+        return None
+    try:
+        value = int(match.group(1))
+    except ValueError:
+        return None
+    return value if 0 <= value <= 100 else None
+
+
 def _read_bluetoothctl_battery(mac: str) -> int | None:
+    busctl_value = _read_busctl_battery(mac)
+    if busctl_value is not None:
+        return busctl_value
     cmd = ["bluetoothctl", "info", mac]
     try:
         completed = subprocess.run(cmd, capture_output=True, text=True, timeout=1.0, check=False)
