@@ -8,6 +8,7 @@ from enum import Enum, auto
 
 from ..evdev.types import InputDevice
 from ..gadgets.manager import HidGadgets
+from ..inputs.battery import LOW_BATTERY_THRESHOLD_PERCENT, extract_bluetooth_mac, read_device_battery_percent
 from ..inputs.filter import DeviceFilter
 from ..inputs.inventory import (
     DEFAULT_SKIP_NAME_PREFIXES,
@@ -15,10 +16,12 @@ from ..inputs.inventory import (
     auto_relay_exclusion_reason,
     list_input_devices,
 )
+from ..inputs.mqtt import publish_device_battery
 from ..logging import get_logger
 from ..runtime.events import DeviceAdded, DeviceRemoved, RuntimeEvent, ShutdownRequested, UdcState, UdcStateChanged
 from .gate import RelayGate
 from .input import InputRelay
+from .leds import KeyboardLedMirror
 from .shortcut import ShortcutToggler
 
 logger = get_logger(__name__)
@@ -50,6 +53,10 @@ class RelaySupervisor:
 
     HOTPLUG_ADD_RETRY_DELAY_SEC = 0.2
     HOTPLUG_ADD_MAX_RETRIES = 10
+    LOW_BATTERY_THRESHOLD_PERCENT = LOW_BATTERY_THRESHOLD_PERCENT
+    BATTERY_CHECK_INTERVAL_SEC = 300.0
+    BATTERY_INITIAL_RETRY_DELAY_SEC = 5.0
+    BATTERY_INITIAL_MAX_RETRIES = 6
 
     def __init__(
         self,
@@ -94,6 +101,12 @@ class RelaySupervisor:
 
         self._active_relays: dict[str, _ActiveRelay] = {}
         self._hotplug_probe_tasks: dict[str, asyncio.Task[None]] = {}
+        self._led_mirror = KeyboardLedMirror(getattr(hid_gadgets, "keyboard_hidg_path", None))
+        self._led_mirror_task: asyncio.Task[None] | None = None
+        self._battery_monitor_task: asyncio.Task[None] | None = None
+        self._low_battery_warned_devices: set[str] = set()
+        self._pending_battery_retries: dict[str, int] = {}
+        self._last_published_battery: dict[str, int] = {}
 
     def _shutdown_requested(self) -> bool:
         return self._state in (_SupervisorState.STOPPING, _SupervisorState.STOPPED)
@@ -127,6 +140,7 @@ class RelaySupervisor:
             raise
         finally:
             try:
+                self._cancel_led_mirror()
                 self._cancel_all_pending_hotplug_probes()
                 for device_path, active_relay in list(self._active_relays.items()):
                     self._relay_task_done(device_path, active_relay.task)
@@ -142,6 +156,7 @@ class RelaySupervisor:
 
         if not self._shutdown_requested():
             self._state = _SupervisorState.RUNNING
+            self._start_led_mirror()
 
         for device in initial_devices:
             if self._shutdown_requested():
@@ -183,6 +198,7 @@ class RelaySupervisor:
             return
 
         self._state = _SupervisorState.STOPPING
+        self._cancel_led_mirror()
         self._cancel_all_pending_hotplug_probes()
 
         was_configured = self._relay_gate.state.host_configured
@@ -192,6 +208,80 @@ class RelaySupervisor:
 
         for device_path in list(self._active_relays):
             self._cancel_active_relay(device_path)
+
+    def _start_led_mirror(self) -> None:
+        if self._led_mirror_task is None:
+            try:
+                self._led_mirror_task = self._task_group.create_task(self._led_mirror.run(), name="keyboard led mirror")
+            except RuntimeError:
+                logger.debug("Skipping keyboard LED mirroring; TaskGroup is shutting down.")
+        if self._battery_monitor_task is None:
+            try:
+                self._battery_monitor_task = self._task_group.create_task(
+                    self._run_battery_monitor(), name="battery monitor"
+                )
+            except RuntimeError:
+                logger.debug("Skipping battery monitor; TaskGroup is shutting down.")
+
+    def _cancel_led_mirror(self) -> None:
+        task, self._led_mirror_task = self._led_mirror_task, None
+        if task is not None and not task.done():
+            task.cancel()
+        battery_task, self._battery_monitor_task = self._battery_monitor_task, None
+        if battery_task is not None and not battery_task.done():
+            battery_task.cancel()
+
+    async def _run_battery_monitor(self) -> None:
+        while self._state is _SupervisorState.RUNNING:
+            retrying_paths = set(self._pending_battery_retries)
+            delay = self.BATTERY_INITIAL_RETRY_DELAY_SEC if retrying_paths else self.BATTERY_CHECK_INTERVAL_SEC
+            await asyncio.sleep(delay)
+            seen_macs: set[str] = set()
+            for active_relay in list(self._active_relays.values()):
+                device = active_relay.device
+                if retrying_paths and device.path not in retrying_paths:
+                    continue
+                mac = extract_bluetooth_mac(device)
+                if mac is not None:
+                    if mac in seen_macs:
+                        self._pending_battery_retries.pop(device.path, None)
+                        continue
+                    seen_macs.add(mac)
+                await self._check_device_battery(device)
+
+    def _read_and_publish_battery(self, device: InputDevice) -> int | None:
+        battery = read_device_battery_percent(device)
+        if battery is None:
+            return None
+        key = extract_bluetooth_mac(device) or device.path
+        if self._last_published_battery.get(key) != battery and publish_device_battery(device, battery):
+            self._last_published_battery[key] = battery
+        return battery
+
+    async def _check_device_battery(self, device: InputDevice) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            battery = self._read_and_publish_battery(device)
+        else:
+            del loop
+            battery = await asyncio.to_thread(self._read_and_publish_battery, device)
+        if battery is None:
+            remaining = self._pending_battery_retries.get(device.path, 0) - 1
+            if remaining > 0 and extract_bluetooth_mac(device) is not None:
+                self._pending_battery_retries[device.path] = remaining
+            else:
+                self._pending_battery_retries.pop(device.path, None)
+            return
+        self._pending_battery_retries.pop(device.path, None)
+        if battery > self.LOW_BATTERY_THRESHOLD_PERCENT:
+            self._low_battery_warned_devices.discard(device.path)
+            return
+        if device.path in self._low_battery_warned_devices:
+            return
+        self._low_battery_warned_devices.add(device.path)
+        logger.warning("Low battery on %s (%s): %s%%", device.name or device.path, device.path, battery)
+        await self._led_mirror.blink_warning()
 
     def _device_added(self, device_path: str) -> None:
         if self._state is not _SupervisorState.RUNNING:
@@ -337,7 +427,15 @@ class RelaySupervisor:
                 shortcut_toggler=self._shortcut_toggler,
             ) as relay:
                 logger.info("Activated %s", relay)
-                await relay.async_relay_events_loop()
+                self._led_mirror.register(device)
+                if extract_bluetooth_mac(device) is not None:
+                    self._pending_battery_retries[device.path] = self.BATTERY_INITIAL_MAX_RETRIES
+                try:
+                    await relay.async_relay_events_loop()
+                finally:
+                    self._pending_battery_retries.pop(device.path, None)
+                    self._low_battery_warned_devices.discard(device.path)
+                    self._led_mirror.unregister(device.path)
         except OSError as exc:
             if exc.errno not in DEVICE_DISCONNECT_ERRNOS:
                 logger.exception("Unhandled OS error in relay for %s.", device)

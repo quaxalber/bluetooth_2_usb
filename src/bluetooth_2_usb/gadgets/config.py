@@ -139,6 +139,10 @@ def _maybe_write_wakeup_on_write(device_root: Path, enabled: bool) -> None:
 
 
 def rebuild_gadget(layout: GadgetLayout) -> tuple[GadgetHidDevice, ...]:
+    for device in layout.devices:
+        if hasattr(device, "close"):
+            device.close()
+        device.path = None
     _teardown_existing_gadget()
 
     function_root = USB_GADGET_ROOT / "functions"

@@ -104,6 +104,15 @@ The service runs one asyncio runtime that turns UDC cable state, input hotplug,
 and shutdown signals into typed runtime events. A relay supervisor consumes
 those events and owns all per-device relay tasks.
 
+Keyboard lock LEDs (Num Lock, Caps Lock, Scroll Lock) follow the USB host: the
+supervisor reads the host's LED output reports from the keyboard gadget node and
+applies them to every relayed input device that exposes LEDs. When a relayed
+device reports a low battery (`<= 15%`), the supervisor logs a warning and
+briefly blinks the keyboard lock LEDs before restoring the host LED state. If
+`/etc/default/bluetooth_2_usb_mqtt` is configured (`B2U_MQTT_HOST`, optional
+`B2U_MQTT_PORT`, `B2U_MQTT_USERNAME`, `B2U_MQTT_PASSWORD`), battery levels are
+also published to MQTT with Home Assistant Auto-Discovery.
+
 For implementation details, see
 [docs/runtime-architecture.md](docs/runtime-architecture.md).
 
